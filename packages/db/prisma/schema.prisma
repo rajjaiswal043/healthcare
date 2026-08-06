@@ -1,0 +1,435 @@
+// HealthCloud — data model
+//
+// Two rules govern everything in this file:
+//
+// 1. TENANCY (ADR-005). Every tenant-scoped model carries `tenantId`, and every
+//    corresponding table gets row-level security in the migration. `pnpm
+//    rls:check` fails the build if a table has one without the other. The only
+//    tables allowed to skip this are listed explicitly in scripts/rls-check.mjs.
+//
+// 2. FHIR ALIGNMENT (ADR-013). Model and field names follow FHIR R4 concepts so
+//    ABDM record exchange later becomes a mapping exercise rather than a
+//    migration. Where FHIR and Indian clinic reality disagree, our model wins
+//    and the mapper absorbs it — but we start from FHIR's vocabulary.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+// Connection URLs live in prisma.config.ts as of Prisma 7 — `url` and
+// `directUrl` are no longer valid here.
+//
+// The two-role split (ADR-005) is preserved by WHERE each URL is read:
+//
+//   prisma.config.ts  → CLI only (migrate, introspect, studio) → OWNER role
+//   src/client.ts     → runtime application client            → APP role, RLS applies
+//
+// This is a sharper boundary than directUrl gave us: application code has no
+// path to the owning role at all.
+datasource db {
+  provider = "postgresql"
+}
+
+/// A customer: one hospital or clinic group. This is the root of tenancy.
+///
+/// Deliberately NOT tenant-scoped — it is the table that defines tenants, so it
+/// cannot be filtered by one. It is on the rls-check allowlist for that reason,
+/// and access to it is restricted at the application layer instead.
+///
+/// FHIR: maps to Organization.
+model Tenant {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// URL-safe identifier, e.g. "sunrise-clinic". Stable; used in subdomains later.
+  slug      String   @unique @db.VarChar(63)
+  legalName String   @map("legal_name") @db.VarChar(255)
+  /// Display name — what staff and patients actually see.
+  name      String   @db.VarChar(255)
+  status    TenantStatus @default(ACTIVE)
+
+  /// UHID configuration (FR-P36-01: "auto-generate a configurable UHID per tenant").
+  /// Prefix is cosmetic but matters to clinics — it appears on every card and bill.
+  uhidPrefix String @default("P") @map("uhid_prefix") @db.VarChar(8)
+  /// Zero-padded width of the numeric part, e.g. 6 -> SNC000123.
+  uhidPadding Int   @default(6) @map("uhid_padding")
+  /// Last issued number. Incremented atomically via UPDATE ... RETURNING so two
+  /// concurrent registrations can never be handed the same UHID.
+  uhidCounter BigInt @default(0) @map("uhid_counter")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  locations Location[]
+
+  @@map("tenant")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+
+  @@map("tenant_status")
+}
+
+/// A physical site belonging to a tenant — a clinic, a branch, a hospital block.
+///
+/// This is the first tenant-scoped table, and it is what the cross-tenant
+/// isolation suite exercises. If RLS is wrong, these tests fail before any
+/// patient data model exists.
+///
+/// FHIR: maps to Location (and, for the facility itself, Organization).
+model Location {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  name      String   @db.VarChar(255)
+  /// Free-text for now; structured address arrives with the registration screen.
+  addressLine String? @map("address_line") @db.VarChar(500)
+  city      String?  @db.VarChar(120)
+  state     String?  @db.VarChar(120)
+  postalCode String? @map("postal_code") @db.VarChar(12)
+  /// Health Facility Registry ID. Null until the clinic registers with ABDM —
+  /// their task, not ours (BRD A-03), but the field exists from day one.
+  hfrId     String?  @map("hfr_id") @db.VarChar(64)
+  isActive  Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  // tenant_id leads every index. RLS adds `tenant_id = ...` to every query, so a
+  // tenant-first composite index is what keeps those queries index-only rather
+  // than filtered-after-scan.
+  @@index([tenantId, isActive])
+  @@unique([tenantId, name])
+  @@map("location")
+}
+
+// =============================================================================
+// PATIENT 360 — Module 1
+// =============================================================================
+
+/// FHIR AdministrativeGender. Kept to the standard's value set rather than
+/// inventing our own, because this field crosses the ABDM boundary.
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+
+  @@map("gender")
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+  UNKNOWN
+
+  @@map("blood_group")
+}
+
+/// A person receiving care. FHIR: Patient.
+///
+/// Two India-specific choices worth explaining:
+///
+/// 1. `name` is a single field, mapping to FHIR HumanName.text. Splitting into
+///    given/family is wrong for much of India, where many people use a single
+///    name, and forcing a split at the front desk produces garbage data. The
+///    optional structured fields exist for when we exchange records and can
+///    populate them properly.
+///
+/// 2. `birthDate` is nullable and `ageYears` exists alongside it. A large share
+///    of Indian OPD patients do not know their date of birth. The alternative —
+///    a mandatory DOB — means receptionists typing 01/01/1980 for everyone,
+///    which is worse than an honest "approximately 45".
+model Patient {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Facility-local identifier, generated per tenant. Unique within a tenant,
+  /// deliberately not globally.
+  uhid String @db.VarChar(32)
+
+  name       String  @db.VarChar(200)
+  givenName  String? @map("given_name") @db.VarChar(100)
+  familyName String? @map("family_name") @db.VarChar(100)
+
+  gender    Gender
+  birthDate DateTime? @map("birth_date") @db.Date
+  ageYears  Int?      @map("age_years")
+
+  /// Indian mobile, stored as 10 digits without country code. Normalised on the
+  /// way in so that duplicate detection actually works — "+91 98765 43210" and
+  /// "9876543210" are the same person walking in twice.
+  mobile String  @db.VarChar(10)
+  email  String? @db.VarChar(255)
+
+  addressLine String? @map("address_line") @db.VarChar(500)
+  city        String? @db.VarChar(120)
+  state       String? @db.VarChar(120)
+  postalCode  String? @map("postal_code") @db.VarChar(12)
+
+  bloodGroup BloodGroup @default(UNKNOWN) @map("blood_group")
+
+  emergencyContactName   String? @map("emergency_contact_name") @db.VarChar(200)
+  emergencyContactMobile String? @map("emergency_contact_mobile") @db.VarChar(10)
+
+  /// ABHA identity (BRD FR-P36-10/11). Null until linked; ABDM work is Phase 4.
+  /// The columns exist from day one so linking later is an UPDATE, not a
+  /// migration on a table full of patient data.
+  /// The raw Aadhaar number is NEVER stored — see BRD section 7.5.
+  abhaNumber  String? @map("abha_number") @db.VarChar(17)
+  abhaAddress String? @map("abha_address") @db.VarChar(100)
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  consents ConsentRecord[]
+
+  @@unique([tenantId, uhid])
+  @@index([tenantId, mobile])
+  @@index([tenantId, createdAt])
+  /// Trigram index backing fuzzy duplicate detection and name search. Declared
+  /// here as well as created in the migration so the datamodel and the database
+  /// agree — otherwise `migrate:check` reports permanent drift and the gate
+  /// becomes noise people learn to ignore.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "patient_name_trgm_idx")
+  @@map("patient")
+}
+
+/// DPDP purposes. Separate consent per purpose is a legal requirement, not a
+/// UX preference — BRD section 7.1 requires "purpose-wise consent notices".
+enum ConsentPurpose {
+  CARE_DELIVERY
+  COMMUNICATIONS
+  MARKETING
+  ABDM_LINKING
+  TELEHEALTH
+
+  @@map("consent_purpose")
+}
+
+/// A recorded consent decision. FHIR: Consent.
+///
+/// Append-only in spirit: withdrawal sets `withdrawnAt` rather than deleting the
+/// row, because proving what was consented to, when, and by whom is the entire
+/// point. A deleted consent record is indistinguishable from one that never
+/// existed, which is exactly the position you do not want to be in.
+model ConsentRecord {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  patientId String         @map("patient_id") @db.Uuid
+  purpose   ConsentPurpose
+  granted   Boolean
+
+  /// Version of the notice text shown at the time. Without this, "they
+  /// consented" is unprovable, because the wording changes.
+  noticeVersion String @map("notice_version") @db.VarChar(32)
+  noticeLocale  String @default("en-IN") @map("notice_locale") @db.VarChar(12)
+
+  grantedAt   DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  withdrawnAt DateTime? @map("withdrawn_at") @db.Timestamptz(6)
+
+  /// Who captured it. Nullable only until auth lands.
+  capturedByUserId String? @map("captured_by_user_id") @db.Uuid
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, patientId, purpose])
+  @@map("consent_record")
+}
+
+/// Every read and write of patient-identifiable data (BRD FR-P36-19, NFR-07).
+///
+/// Tenant-scoped and under RLS like everything else: one hospital must not read
+/// another's audit trail either.
+///
+/// NOTE ON PARTITIONING: the plan called for monthly partitions with a year
+/// retained online. This is a plain table for now — partitioning is worth doing
+/// before production volume, not before the first screen exists. The BRIN index
+/// on occurred_at keeps it cheap in the meantime. Tracked as a Phase 5 item.
+model AuditEvent {
+  id       BigInt @id @default(autoincrement())
+  tenantId String @map("tenant_id") @db.Uuid
+
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  /// Null for unauthenticated or system actions; populated once auth lands.
+  actorUserId String? @map("actor_user_id") @db.Uuid
+  actorLabel  String? @map("actor_label") @db.VarChar(200)
+
+  action       String  @db.VarChar(64)
+  resourceType String  @map("resource_type") @db.VarChar(64)
+  resourceId   String? @map("resource_id") @db.VarChar(64)
+
+  /// The patient whose data was touched, when there is one. Indexed because
+  /// "who looked at this patient's record" is the question that actually gets
+  /// asked, usually by a lawyer.
+  patientId String? @map("patient_id") @db.Uuid
+
+  /// Changed field names only — never values. An audit log full of patient data
+  /// is a second copy of the thing you are trying to protect.
+  changedFields String[] @map("changed_fields")
+
+  /// Required for break-glass access (FR-USR-04).
+  reason String? @db.VarChar(500)
+
+  ipAddress     String? @map("ip_address") @db.VarChar(45)
+  userAgent     String? @map("user_agent") @db.VarChar(500)
+  correlationId String? @map("correlation_id") @db.VarChar(64)
+
+  @@index([tenantId, patientId, occurredAt])
+  @@index([tenantId, occurredAt])
+  /// BRIN, not B-tree: audit rows are written in time order, so a block-range
+  /// index is a fraction of the size while still making time-window queries fast.
+  @@index([occurredAt], type: Brin, map: "audit_event_occurred_at_brin_idx")
+  @@map("audit_event")
+}
+
+// =============================================================================
+// IDENTITY, ACCESS AND SESSIONS — BRD 9.7.3
+// =============================================================================
+
+/// A staff member. Tenant-scoped: the same person working at two clinics has
+/// two user records, because their permissions, roles and audit trail are
+/// per-clinic. Sharing one identity across tenants would mean a session that
+/// spans a tenant boundary — the exact thing ADR-005 exists to prevent.
+model User {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Unique per tenant, not globally.
+  email    String @db.VarChar(255)
+  fullName String @map("full_name") @db.VarChar(200)
+  mobile   String? @db.VarChar(10)
+
+  /// scrypt, encoded as `scrypt$N$r$p$salt$hash`. Never a bare digest.
+  passwordHash String @map("password_hash") @db.VarChar(512)
+
+  /// Forces a password change at next login — used for invited and reset users.
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+
+  /// TOTP shared secret, base32. Null until enrolled.
+  /// Mandatory for roles that require it (FR-USR-02); enrolment is enforced at
+  /// login rather than at user creation, so an admin cannot be created without
+  /// eventually setting it up.
+  mfaSecret    String?   @map("mfa_secret") @db.VarChar(64)
+  mfaEnabledAt DateTime? @map("mfa_enabled_at") @db.Timestamptz(6)
+
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(6)
+
+  /// Consecutive failed attempts, and a lockout window. Throttling login at the
+  /// account level complements the IP-level rate limit: one stops a spray
+  /// against many accounts, the other a focused attack on one.
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  roles    UserRole[]
+  sessions Session[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, isActive])
+  @@map("app_user")
+}
+
+/// A named bundle of permissions. Seeded per tenant to match the BRD's personas,
+/// then editable — FR-USR-01 requires tenant-customisable permissions down to
+/// module and action.
+model Role {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  key         String  @db.VarChar(64)
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+
+  /// Permission strings, e.g. "patient:read". A string array rather than a join
+  /// table: permissions are a fixed vocabulary defined in code, not user data,
+  /// and the array keeps the common question — "what can this role do" — a
+  /// single row read.
+  permissions String[]
+
+  /// System roles are seeded and cannot be deleted, only edited.
+  isSystem Boolean @default(false) @map("is_system")
+
+  /// Whether holders of this role must have TOTP enrolled (FR-USR-02: mandatory
+  /// for admin roles, optional per tenant for others).
+  requiresMfa Boolean @default(false) @map("requires_mfa")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users UserRole[]
+
+  @@unique([tenantId, key])
+  @@map("role")
+}
+
+model UserRole {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([tenantId, userId])
+  @@map("user_role")
+}
+
+/// A refresh-token session (FR-USR-03: device list with remote sign-out).
+///
+/// The refresh token itself is never stored — only a SHA-256 hash of it, for the
+/// same reason passwords are not stored: a database dump must not yield working
+/// credentials.
+///
+/// Rotation with reuse detection: every refresh issues a new token and marks the
+/// old one used. Presenting an already-used token means it was captured, so ALL
+/// of that user's sessions are revoked. That converts a stolen refresh token
+/// from a silent long-lived compromise into a forced logout somebody notices.
+model Session {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+
+  refreshTokenHash String @map("refresh_token_hash") @db.VarChar(64)
+
+  /// Chains rotated tokens together, so reuse of any ancestor is detectable.
+  familyId String @map("family_id") @db.Uuid
+
+  issuedAt  DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedReason String? @map("revoked_reason") @db.VarChar(120)
+
+  ipAddress String? @map("ip_address") @db.VarChar(45)
+  userAgent String? @map("user_agent") @db.VarChar(500)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([refreshTokenHash])
+  @@index([tenantId, userId, revokedAt])
+  @@index([familyId])
+  @@map("session")
+}

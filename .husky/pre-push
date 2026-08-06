@@ -1,0 +1,14 @@
+# Quality gate — ADR-016.
+#
+# Everything the checklists ask a CI pipeline to do runs here instead, because
+# Narveer pushes and deploys personally and there is no runner in the loop.
+#
+# If this is slow, that is a defect to fix, not a reason to skip it. A slow gate
+# is a bypassed gate.
+#
+# Genuine emergency escape hatch:  git push --no-verify
+# If you find yourself reaching for it more than rarely, enable the CI workflow
+# in .github/workflows/ instead.
+
+echo "Running pnpm verify before push (ADR-016)..."
+pnpm verify

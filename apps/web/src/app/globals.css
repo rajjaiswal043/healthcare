@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* tailwind.config.ts carries the tokens. This file holds the base layer —
+   warm paper page, ink text, a visible focus ring on everything, and the
+   reduced-motion guarantee — plus the small set of component classes that would
+   otherwise be repeated across every screen. */
+
+@layer base {
+  html {
+    color-scheme: light;
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg font-sans text-ink antialiased;
+    margin: 0;
+    min-height: 100%;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-display;
+    line-height: 1.08;
+  }
+
+  /* Non-negotiable: the front desk is keyboard-first (NFR-08). If you cannot
+     see where focus is, it is not keyboard-first. */
+  :focus-visible {
+    outline: 2.5px solid theme('colors.clinical.DEFAULT');
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: theme('colors.clinical.soft');
+  }
+
+  /* Numbers that sit in columns — UHIDs, mobiles, amounts — must line up. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* The signature micro-label: tiny, uppercase, mono. Used for field labels,
+     section eyebrows and table headers so they recede behind the data. */
+  .mono-label {
+    @apply font-mono text-[10.5px] font-medium uppercase tracking-label text-ink-40;
+  }
+
+  .eyebrow {
+    @apply mono-label flex items-center gap-2 text-clinical-text;
+  }
+  .eyebrow::before {
+    content: '';
+    @apply inline-block h-1.5 w-1.5 rounded-full bg-clinical;
+  }
+
+  /* Heading motif: wrap the last words in <em class="accent-words">. */
+  .accent-words {
+    @apply not-italic text-clinical-text;
+  }
+
+  /* ---- Fields ------------------------------------------------------------ */
+
+  .field-label {
+    @apply mono-label mb-1.5 block;
+  }
+
+  .field-input {
+    @apply w-full rounded-panel border-[1.5px] border-ink/12 bg-white px-3.5 py-2.5 text-[15px]
+           text-ink transition-colors placeholder:text-ink-20
+           focus:border-clinical/50 focus:outline-none focus:ring-4 focus:ring-clinical/10
+           disabled:bg-bg-soft disabled:text-ink-40;
+  }
+
+  /* Input with a leading icon. */
+  .field-input-icon {
+    @apply field-input pl-10;
+  }
+
+  .field-hint {
+    @apply mt-1 text-[12.5px] text-ink-40;
+  }
+
+  .field-error {
+    @apply mt-1 text-[12.5px] text-coral-text;
+  }
+
+  /* ---- Buttons ----------------------------------------------------------- */
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill px-5 py-2.5 text-[14px]
+           font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-55;
+  }
+
+  .btn-primary {
+    @apply btn bg-clinical text-white shadow-sm hover:bg-clinical-text hover:shadow
+           active:translate-y-px;
+  }
+
+  .btn-secondary {
+    @apply btn border-[1.5px] border-ink/12 bg-white text-ink hover:border-ink/25 hover:bg-bg-soft;
+  }
+
+  .btn-ghost {
+    @apply btn px-3 text-ink-60 hover:bg-ink/5 hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply btn border-[1.5px] border-coral/30 bg-white text-coral-text hover:bg-coral/5;
+  }
+
+  /* ---- Surfaces ---------------------------------------------------------- */
+
+  .card {
+    @apply rounded-card border border-ink/8 bg-card shadow-sm;
+  }
+
+  .card-flat {
+    @apply rounded-card border border-ink/8 bg-bg-soft;
+  }
+
+  /* ---- Badges ------------------------------------------------------------ */
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 font-mono text-[10.5px]
+           font-medium uppercase tracking-label;
+  }
+  .badge-clinical {
+    @apply badge bg-clinical-soft text-clinical-text;
+  }
+  .badge-amber {
+    @apply badge bg-amber-soft text-amber-text;
+  }
+  .badge-coral {
+    @apply badge bg-coral-soft text-coral-text;
+  }
+  .badge-green {
+    @apply badge bg-green-soft text-green-text;
+  }
+  .badge-neutral {
+    @apply badge bg-ink/6 text-ink-60;
+  }
+
+  /* ---- Auth stage -------------------------------------------------------- */
+
+  /* Slow drifting colour behind the sign-in card. Killed entirely by the
+     reduced-motion rule above. */
+  .auth-blob {
+    animation: auth-drift 16s ease-in-out infinite;
+  }
+  .auth-blob-slow {
+    animation: auth-drift-rev 22s ease-in-out infinite;
+  }
+}
+
+@keyframes auth-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(38px, -28px) scale(1.06);
+  }
+}
+
+@keyframes auth-drift-rev {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-34px, 26px) scale(1.04);
+  }
+}
+
+/* Skeleton shimmer for loading rows. */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  @apply relative overflow-hidden rounded bg-ink/6;
+}
+.skeleton::after {
+  content: '';
+  @apply absolute inset-0 -translate-x-full;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: shimmer 1.5s infinite;
+}

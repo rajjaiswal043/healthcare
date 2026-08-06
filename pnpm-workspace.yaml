@@ -1,0 +1,35 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm blocks dependency postinstall scripts by default — a good default, since
+# an install script is arbitrary code execution from a package you may not have
+# read. This is the explicit, reviewed allowlist. Add to it only with a reason.
+#
+#   @prisma/engines / prisma — download the query engine binary at install time.
+#   esbuild                  — compiles its native binary (used by vitest).
+#   @swc/core                — native binary; compiles the API. Needed because
+#                              esbuild cannot emit decorator metadata, which
+#                              NestJS dependency injection depends on.
+allowBuilds:
+  '@prisma/engines': true
+  '@swc/core': true
+  esbuild: true
+  prisma: true
+  # sharp — native image codecs, used by next/image optimisation.
+  sharp: true
+
+# Forced versions of transitive dependencies, to pull in security fixes ahead of
+# the parent package shipping them. Each entry should say what it fixes and be
+# removed once the parent catches up.
+#
+#   find-my-way — GHSA-c96f-x56v-gq3h, HTTP/2 DDoS, fixed in 9.6.1.
+#                 Reached via @nestjs/platform-fastify, which still permits <=9.6.0.
+#   sharp       — inherited libvips vulnerabilities, fixed in 0.35.0.
+#                 Reached via next (image optimisation).
+#   postcss     — arbitrary file read + source-map path traversal, fixed in 8.5.18.
+#                 Reached via next.
+overrides:
+  find-my-way: '>=9.6.1'
+  sharp: '>=0.35.0'
+  postcss: '>=8.5.18'
