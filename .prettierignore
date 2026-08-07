@@ -3,6 +3,7 @@ dist/
 build/
 .next/
 .next-build/
+.next-dev/
 .turbo/
 coverage/
 pnpm-lock.yaml

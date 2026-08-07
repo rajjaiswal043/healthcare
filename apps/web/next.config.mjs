@@ -3,16 +3,26 @@ const nextConfig = {
   reactStrictMode: true,
 
   /**
-   * Production builds write to `.next-build`; `next dev` keeps `.next`.
+   * Output directory, set by scripts/next-with-dist.mjs.
    *
-   * They shared one directory, and that caused real breakage twice: running
-   * `pnpm verify` (which runs `next build`) while `pnpm dev` was running left
-   * the dev server with a half-rewritten module graph, surfacing as
-   * `__webpack_modules__[moduleId] is not a function` or 404s on every chunk.
+   *   pnpm dev    -> .next-dev
+   *   pnpm build  -> .next-build
+   *   anything else (a bare `next build` run by hand) -> .next
    *
-   * That is not an edge case — the pre-push hook runs `pnpm verify`, and you
-   * push while the dev server is running. Separating the outputs makes the
-   * collision impossible rather than something to remember.
+   * Dev and build shared one directory originally, and it broke the running dev
+   * server twice: `pnpm verify` builds, the pre-push hook runs verify, and you
+   * push while developing. The result was a half-rewritten module graph —
+   * `Cannot find module './501.js'` or 404s on every chunk.
+   *
+   * The variable is read from the environment rather than derived from
+   * NEXT_PHASE or process.argv because Next loads this config in worker
+   * processes too. Only `process.env` is inherited by those workers; NEXT_PHASE
+   * is undefined during a build in 15.5, and a worker's argv is
+   * `processChild.js`. Both were tried, both silently fell back, and both let
+   * the collision happen again.
+   *
+   * The `.next` fallback matters: without it this config throws whenever the
+   * variable is absent, which breaks any direct `next build`.
    */
   distDir: process.env.NEXT_DIST_DIR ?? '.next',
 

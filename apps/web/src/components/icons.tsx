@@ -180,3 +180,58 @@ export const IconStethoscope = (p: IconProps) => (
     <circle cx="10" cy="17" r="2" />
   </Svg>
 );
+
+export const IconCalendar = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 10h18M8 3v4M16 3v4" />
+  </Svg>
+);
+
+export const IconClock = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3.5 2" />
+  </Svg>
+);
+
+/** A till receipt, torn along the bottom. Used for billing and collections. */
+export const IconReceipt = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 3h14v18l-2.3-1.6L14.4 21l-2.4-1.6L9.6 21l-2.3-1.6L5 21z" />
+    <path d="M9 8h6M9 12h6" />
+  </Svg>
+);
+
+export const IconBell = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M18 15V10a6 6 0 10-12 0v5l-1.5 3h15L18 15z" />
+    <path d="M10 21h4" />
+  </Svg>
+);
+
+/** Call the next patient in. */
+export const IconCallNext = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 4l12 8-12 8V4z" />
+  </Svg>
+);
+
+export const IconCheckCircle = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8 12.5l2.5 2.5L16 9.5" />
+  </Svg>
+);
+
+export const IconRefresh = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M20 11a8 8 0 10-2.3 6M20 5v6h-6" />
+  </Svg>
+);
+
+export const IconArrowLeft = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M15 5l-7 7 7 7" />
+  </Svg>
+);

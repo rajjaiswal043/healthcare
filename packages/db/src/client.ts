@@ -40,7 +40,28 @@ function requireAppDatabaseUrl(): string {
 
 export function createPrismaClient(databaseUrl?: string): PrismaClient {
   const connectionString = databaseUrl ?? requireAppDatabaseUrl();
-  const adapter = new PrismaPg({ connectionString });
+
+  /**
+   * Pin the database session to UTC.
+   *
+   * PostgreSQL renders `timestamptz` in the SESSION timezone, and the driver
+   * then parses that rendering. Left at the server's local zone, an appointment
+   * stored correctly as 03:30Z came back as 23:30Z on a machine running EDT —
+   * off by exactly the local offset.
+   *
+   * This is worse than an ordinary bug because it hides: a UTC production
+   * server gets the right answer by accident, so the fault only appears on a
+   * developer's machine, or on the first server that is not UTC. Every
+   * appointment time, audit timestamp and session expiry depends on it.
+   *
+   * Conversion to clinic-local time is the application's job (see the tenant
+   * timezone and apps/api/src/scheduling/clinic-time.ts). The database speaks
+   * UTC and nothing else.
+   */
+  const adapter = new PrismaPg({
+    connectionString,
+    options: '-c timezone=UTC',
+  });
 
   return new PrismaClient({
     adapter,

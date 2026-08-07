@@ -37,6 +37,54 @@ export interface PatientSummary {
   createdAt: Date;
 }
 
+/**
+ * The whole record, for the patient detail screen.
+ *
+ * Separate from `PatientSummary` on purpose. A search result is a list row and
+ * should stay cheap — widening it would mean every keystroke of a live search
+ * pulling addresses, consents and visit history for twenty patients nobody has
+ * opened yet.
+ */
+export interface PatientDetail extends PatientSummary {
+  givenName: string | null;
+  familyName: string | null;
+  email: string | null;
+  addressLine: string | null;
+  state: string | null;
+  postalCode: string | null;
+  bloodGroup: string;
+  emergencyContactName: string | null;
+  emergencyContactMobile: string | null;
+  abhaAddress: string | null;
+  isActive: boolean;
+  updatedAt: Date;
+  /** Current decision per purpose — see the note in `detail` on why latest wins. */
+  consents: Array<{
+    purpose: string;
+    granted: boolean;
+    noticeVersion: string;
+    grantedAt: Date;
+    withdrawnAt: Date | null;
+  }>;
+  appointments: Array<{
+    id: string;
+    startAt: Date;
+    status: string;
+    visitType: string;
+    source: string;
+    tokenNumber: number | null;
+    reasonForVisit: string | null;
+    practitioner: { id: string; fullName: string; prefix: string | null };
+    /** Null when the visit produced no clinical note. */
+    encounterId: string | null;
+  }>;
+  stats: {
+    totalVisits: number;
+    completedVisits: number;
+    lastVisitAt: Date | null;
+  };
+}
+
 export interface RequestMeta {
   correlationId?: string;
   ipAddress?: string;
@@ -323,6 +371,122 @@ export class PatientsService {
       });
 
       return toSummary(patient);
+    });
+  }
+
+  /**
+   * The full record for the patient detail screen.
+   *
+   * One round trip's worth of related data rather than four endpoints the client
+   * would have to stitch together: a screen that assembles a patient from four
+   * requests shows four different loading states and can render a half-patient
+   * if one of them fails.
+   *
+   * Visits are capped. A patient with a decade of monthly follow-ups would
+   * otherwise send several hundred rows to draw a list nobody scrolls; the count
+   * in `stats` stays accurate regardless, so the page can say "showing 20 of
+   * 137" rather than quietly implying there were only 20.
+   */
+  async detail(tenantId: string, id: string, meta: RequestMeta = {}): Promise<PatientDetail> {
+    const VISIT_LIMIT = 20;
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const patient = await tx.patient.findUnique({ where: { id } });
+
+      // RLS makes this a genuine 404 for another tenant's patient, not a 403:
+      // the row is simply not visible, and we must not confirm it exists.
+      if (!patient) throw new NotFoundException('Patient not found');
+
+      const [consentRows, appointments, totalVisits, completedVisits] = await Promise.all([
+        tx.consentRecord.findMany({
+          where: { patientId: id },
+          orderBy: { grantedAt: 'desc' },
+        }),
+        tx.appointment.findMany({
+          where: { patientId: id },
+          orderBy: { startAt: 'desc' },
+          take: VISIT_LIMIT,
+          select: {
+            id: true,
+            startAt: true,
+            status: true,
+            visitType: true,
+            source: true,
+            tokenNumber: true,
+            reasonForVisit: true,
+            practitioner: { select: { id: true, fullName: true, prefix: true } },
+            encounter: { select: { id: true } },
+          },
+        }),
+        tx.appointment.count({ where: { patientId: id } }),
+        tx.appointment.count({ where: { patientId: id, status: 'FULFILLED' } }),
+      ]);
+
+      /**
+       * Latest decision per purpose.
+       *
+       * Consent records are append-only — withdrawing writes a new row rather
+       * than deleting the old one, because proving what was consented to and
+       * when is the entire point. So the CURRENT position is the most recent row
+       * for each purpose, and the history stays intact underneath it.
+       */
+      const latestByPurpose = new Map<string, (typeof consentRows)[number]>();
+      for (const row of consentRows) {
+        if (!latestByPurpose.has(row.purpose)) latestByPurpose.set(row.purpose, row);
+      }
+
+      const lastCompleted = appointments.find((a) => a.status === 'FULFILLED');
+
+      await this.audit.record(tx, tenantId, {
+        action: 'patient.view',
+        resourceType: 'Patient',
+        resourceId: patient.id,
+        patientId: patient.id,
+        changedFields: [],
+        ...meta,
+      });
+
+      return {
+        ...toSummary(patient),
+        givenName: patient.givenName,
+        familyName: patient.familyName,
+        email: patient.email,
+        addressLine: patient.addressLine,
+        state: patient.state,
+        postalCode: patient.postalCode,
+        bloodGroup: patient.bloodGroup,
+        emergencyContactName: patient.emergencyContactName,
+        emergencyContactMobile: patient.emergencyContactMobile,
+        abhaAddress: patient.abhaAddress,
+        isActive: patient.isActive,
+        updatedAt: patient.updatedAt,
+
+        consents: [...latestByPurpose.values()].map((c) => ({
+          purpose: c.purpose,
+          granted: c.granted,
+          noticeVersion: c.noticeVersion,
+          grantedAt: c.grantedAt,
+          withdrawnAt: c.withdrawnAt,
+        })),
+
+        appointments: appointments.map((a) => ({
+          id: a.id,
+          startAt: a.startAt,
+          status: a.status,
+          visitType: a.visitType,
+          source: a.source,
+          tokenNumber: a.tokenNumber,
+          reasonForVisit: a.reasonForVisit,
+          practitioner: a.practitioner,
+          encounterId: a.encounter?.id ?? null,
+        })),
+
+        stats: {
+          totalVisits,
+          completedVisits,
+          lastVisitAt: lastCompleted?.startAt ?? null,
+        },
+      };
     });
   }
 

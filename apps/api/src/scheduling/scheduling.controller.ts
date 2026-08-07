@@ -1,0 +1,213 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
+import {
+  CurrentTenant,
+  CurrentUser,
+  RequirePermissions,
+  type AuthenticatedUser,
+} from '../platform/auth/decorators.js';
+import { PERMISSIONS } from '../platform/auth/permissions.js';
+import { PrismaService } from '../platform/database/prisma.service.js';
+import { AvailabilityService } from './availability.service.js';
+import { AppointmentsService, type RequestMeta } from './appointments.service.js';
+import {
+  AvailabilityQueryDto,
+  BookAppointmentDto,
+  CancelAppointmentDto,
+  QueueQueryDto,
+  RescheduleAppointmentDto,
+  WalkInDto,
+} from './dto.js';
+
+@Controller()
+export class SchedulingController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly availability: AvailabilityService,
+    private readonly appointments: AppointmentsService,
+  ) {}
+
+  // --- masters -------------------------------------------------------------
+
+  /** Departments, for the first step of booking. */
+  @Get('departments')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
+  async departments(@CurrentTenant() tenantId: string) {
+    const departments = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.department.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true },
+      }),
+    );
+    return { departments };
+  }
+
+  /** Doctors, optionally narrowed to one department. */
+  @Get('practitioners')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
+  async practitioners(
+    @CurrentTenant() tenantId: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    const practitioners = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.practitioner.findMany({
+        where: { isActive: true, ...(departmentId ? { departmentId } : {}) },
+        orderBy: { fullName: 'asc' },
+        select: {
+          id: true,
+          fullName: true,
+          prefix: true,
+          specialty: true,
+          qualification: true,
+          registrationNumber: true,
+          department: { select: { id: true, name: true } },
+        },
+      }),
+    );
+    return { practitioners };
+  }
+
+  /** Locations, for choosing where the visit happens. */
+  @Get('locations')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
+  async locations(@CurrentTenant() tenantId: string) {
+    const locations = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.location.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, city: true },
+      }),
+    );
+    return { locations };
+  }
+
+  // --- availability --------------------------------------------------------
+
+  @Get('availability')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
+  async availabilityForDay(
+    @CurrentTenant() tenantId: string,
+    @Query() query: AvailabilityQueryDto,
+  ) {
+    return this.availability.forDay(tenantId, query);
+  }
+
+  // --- appointments --------------------------------------------------------
+
+  @Post('appointments')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async book(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: BookAppointmentDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.book(tenantId, dto, metaFrom(req, user));
+  }
+
+  @Post('appointments/walk-in')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async walkIn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: WalkInDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.walkIn(tenantId, dto, metaFrom(req, user));
+  }
+
+  @Patch('appointments/:id/check-in')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async checkIn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.checkIn(tenantId, id, metaFrom(req, user));
+  }
+
+  @Patch('appointments/:id/call')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async call(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.call(tenantId, id, metaFrom(req, user));
+  }
+
+  @Patch('appointments/:id/complete')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async complete(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.complete(tenantId, id, metaFrom(req, user));
+  }
+
+  @Patch('appointments/:id/no-show')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async noShow(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.markNoShow(tenantId, id, metaFrom(req, user));
+  }
+
+  @Patch('appointments/:id/cancel')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_CANCEL)
+  async cancel(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CancelAppointmentDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.cancel(tenantId, id, dto.reason, metaFrom(req, user));
+  }
+
+  @Patch('appointments/:id/reschedule')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async reschedule(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: RescheduleAppointmentDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.reschedule(tenantId, id, dto, metaFrom(req, user));
+  }
+
+  // --- the queue -----------------------------------------------------------
+
+  @Get('queue')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
+  async queue(@CurrentTenant() tenantId: string, @Query() query: QueueQueryDto) {
+    return this.appointments.queue(tenantId, query.practitionerId, query.date);
+  }
+}
+
+function metaFrom(req: FastifyRequest, user: AuthenticatedUser): RequestMeta {
+  const meta: RequestMeta = { correlationId: req.id, actorUserId: user.userId };
+  if (req.ip) meta.ipAddress = req.ip;
+  const ua = req.headers['user-agent'];
+  if (typeof ua === 'string') meta.userAgent = ua.slice(0, 500);
+  return meta;
+}

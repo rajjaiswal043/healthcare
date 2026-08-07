@@ -14,7 +14,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,yml,yaml}\"",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=1",
     "migrate:check": "turbo run migrate:check",
     "rls:check": "turbo run rls:check",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm migrate:check && pnpm rls:check && pnpm test && pnpm audit --audit-level=high",

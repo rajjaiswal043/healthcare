@@ -146,7 +146,15 @@ function PatientSearch() {
                       {p.uhid}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="font-semibold text-ink">{p.name}</span>
+                      {/* The name is the link. A separate "view" column would
+                          add a click target for the thing the whole row already
+                          means. */}
+                      <Link
+                        href={`/patients/${p.id}`}
+                        className="font-semibold text-ink underline-offset-2 hover:text-clinical-text hover:underline"
+                      >
+                        {p.name}
+                      </Link>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-ink-60">
                       {formatAge(p)} · {genderInitial(p.gender)}

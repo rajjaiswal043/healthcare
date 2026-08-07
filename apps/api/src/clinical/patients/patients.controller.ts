@@ -46,6 +46,14 @@ export class PatientsController {
     return { patients };
   }
 
+  /**
+   * The full record, for the patient detail screen.
+   *
+   * Demographics, current consent position and recent visits in one response.
+   * The alternative — four endpoints the client stitches together — gives the
+   * screen four loading states and lets it render half a patient when one of
+   * them fails.
+   */
   @Get(':id')
   @RequirePermissions(PERMISSIONS.PATIENT_READ)
   async findOne(
@@ -54,7 +62,7 @@ export class PatientsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: FastifyRequest,
   ) {
-    return this.patients.findOne(tenantId, id, metaFrom(req, user));
+    return this.patients.detail(tenantId, id, metaFrom(req, user));
   }
 }
 

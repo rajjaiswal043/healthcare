@@ -1,0 +1,840 @@
+/**
+ * The clinical note, over HTTP.
+ *
+ * The centre of this file is `a signed consultation cannot be changed`. That
+ * property is the whole justification for the module's design — see
+ * docs/02-consultation-plan.md section 2.1 — and it is worth exactly as much as
+ * the enforcement behind it. A lock implemented as a disabled button is not a
+ * lock, so it is asserted here against every write endpoint rather than trusted
+ * because the service has an `if`.
+ */
+
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import {
+  clinicDate,
+  closeTestApp,
+  createTestApp,
+  login,
+  ownerQuery,
+  resetAppointments,
+  seedFixtures,
+  type Fixtures,
+  type Session,
+} from './harness.js';
+
+let app: NestFastifyApplication;
+let fx: Fixtures;
+let frontDesk: Session;
+let doctor: Session;
+let nurse: Session;
+let otherDoctor: Session;
+
+const DAY = clinicDate(7);
+
+beforeAll(async () => {
+  fx = await seedFixtures();
+  app = await createTestApp();
+
+  frontDesk = await login(app, fx.main.slug, 'frontdesk@main.test');
+  doctor = await login(app, fx.main.slug, 'doctor@main.test');
+  nurse = await login(app, fx.main.slug, 'nurse@main.test');
+  otherDoctor = await login(app, fx.other.slug, 'doctor@other.test');
+});
+
+afterAll(async () => {
+  await closeTestApp(app);
+});
+
+beforeEach(async () => {
+  await resetAppointments();
+});
+
+// --- helpers ----------------------------------------------------------------
+
+async function bookAndArrive(patientIndex = 0, slotIndex = 0): Promise<string> {
+  const day = await app.inject({
+    method: 'GET',
+    url: `/api/v1/availability?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+    headers: { cookie: frontDesk.cookie },
+  });
+
+  const booked = await app.inject({
+    method: 'POST',
+    url: '/api/v1/appointments',
+    headers: { cookie: frontDesk.cookie },
+    payload: {
+      patientId: fx.main.patientIds[patientIndex],
+      practitionerId: fx.main.practitionerId,
+      locationId: fx.main.locationId,
+      startAt: day.json().slots[slotIndex].startAt,
+      reasonForVisit: 'Fever and body ache',
+    },
+  });
+
+  const id = booked.json().id;
+
+  await app.inject({
+    method: 'PATCH',
+    url: `/api/v1/appointments/${id}/check-in`,
+    headers: { cookie: frontDesk.cookie },
+  });
+
+  return id;
+}
+
+function open(appointmentId: string, session: Session = doctor) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/v1/encounters',
+    headers: { cookie: session.cookie },
+    payload: { appointmentId },
+  });
+}
+
+/** Book, check in, open — the state most tests start from. */
+async function openConsultation(patientIndex = 0, slotIndex = 0) {
+  const appointmentId = await bookAndArrive(patientIndex, slotIndex);
+  const res = await open(appointmentId);
+  expect(res.statusCode).toBe(201);
+  return { appointmentId, encounter: res.json() };
+}
+
+const domainCode = (res: { json: () => { error: { details?: { code?: string } } } }) =>
+  res.json().error.details?.code;
+
+// --- opening ----------------------------------------------------------------
+
+describe('opening a consultation', () => {
+  it('refuses a patient who has not checked in', async () => {
+    const day = await app.inject({
+      method: 'GET',
+      url: `/api/v1/availability?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const booked = await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        patientId: fx.main.patientIds[0],
+        practitionerId: fx.main.practitionerId,
+        locationId: fx.main.locationId,
+        startAt: day.json().slots[0].startAt,
+      },
+    });
+
+    const res = await open(booked.json().id);
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOT_ARRIVED');
+  });
+
+  it('calls the patient in as a side effect', async () => {
+    const { appointmentId, encounter } = await openConsultation();
+
+    expect(encounter.status).toBe('IN_PROGRESS');
+    expect(encounter.patient.uhid).toBe('T000001');
+
+    // Opening the consultation IS calling the patient in. Making the doctor
+    // press two buttons on two screens is bookkeeping the software should do.
+    const [appointment] = await ownerQuery<{ status: string; called_at: Date | null }>(
+      fx.main.id,
+      `SELECT status, called_at FROM appointment WHERE id = $1`,
+      [appointmentId],
+    );
+    expect(appointment?.status).toBe('IN_PROGRESS');
+    expect(appointment?.called_at).toBeInstanceOf(Date);
+  });
+
+  it('resumes the same draft rather than starting a second', async () => {
+    const appointmentId = await bookAndArrive();
+
+    const first = await open(appointmentId);
+    const second = await open(appointmentId);
+
+    // A double-click must not produce two half-written notes with no way to tell
+    // which is real.
+    expect(second.json().id).toBe(first.json().id);
+
+    const rows = await ownerQuery(
+      fx.main.id,
+      `SELECT id FROM encounter WHERE appointment_id = $1`,
+      [appointmentId],
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it('refuses a cancelled appointment', async () => {
+    const appointmentId = await bookAndArrive();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appointmentId}/cancel`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reason: 'Patient unwell' },
+    });
+
+    const res = await open(appointmentId);
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOT_CONSULTABLE');
+  });
+});
+
+// --- recording --------------------------------------------------------------
+
+describe('recording the visit', () => {
+  it('saves the narrative', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        chiefComplaint: 'Fever for three days',
+        historyOfPresentIllness: 'Intermittent, worse at night. No travel history.',
+        examinationFindings: 'Throat congested. Chest clear.',
+        advice: 'Plenty of fluids. Return if fever persists beyond 48 hours.',
+        followUpDate: clinicDate(14),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().chiefComplaint).toBe('Fever for three days');
+    expect(String(res.json().followUpDate)).toContain(clinicDate(14));
+  });
+
+  it('derives BMI without storing it', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/vitals`,
+      headers: { cookie: nurse.cookie },
+      payload: {
+        heightCm: 170,
+        weightKg: 72.5,
+        systolicMmHg: 128,
+        diastolicMmHg: 82,
+        pulseBpm: 88,
+        temperatureC: 38.4,
+        spo2Percent: 97,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    const latest = res.json().latestVitals;
+    // 72.5 / 1.70^2 = 25.09...
+    expect(latest.bmi).toBe(25.1);
+    expect(latest.heightCm).toBe(170);
+    expect(latest.temperatureC).toBe(38.4);
+
+    // Derived at read time. Storing it means two numbers that disagree the
+    // moment either input is corrected.
+    const columns = await ownerQuery<{ column_name: string }>(
+      fx.main.id,
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'vitals_observation' AND column_name ILIKE '%bmi%'`,
+    );
+    expect(columns).toHaveLength(0);
+  });
+
+  it('rejects an impossible reading', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/vitals`,
+      headers: { cookie: nurse.cookie },
+      payload: { weightKg: 700 },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('makes the first diagnosis primary when none is marked', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/diagnoses`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        diagnoses: [
+          { code: 'J06.9', display: 'Upper respiratory tract infection' },
+          { code: 'R50.9', display: 'Fever, unspecified' },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const diagnoses = res.json().diagnoses;
+    expect(diagnoses.filter((d: { isPrimary: boolean }) => d.isPrimary)).toHaveLength(1);
+    expect(diagnoses[0].code).toBe('J06.9');
+    expect(diagnoses[0].codeSystem).toBe('ICD-10');
+  });
+
+  it('keeps exactly one primary even when two are marked', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/diagnoses`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        diagnoses: [
+          { code: 'J06.9', display: 'URTI', isPrimary: true },
+          { code: 'R50.9', display: 'Fever', isPrimary: true },
+        ],
+      },
+    });
+
+    // The partial unique index would reject two; the service settles it first so
+    // the doctor gets a saved note rather than a database error.
+    expect(res.statusCode).toBe(200);
+    expect(res.json().diagnoses.filter((d: { isPrimary: boolean }) => d.isPrimary)).toHaveLength(1);
+  });
+
+  it('honours a primary marked on something other than the first entry', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/diagnoses`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        diagnoses: [
+          { code: 'R50.9', display: 'Fever' },
+          { code: 'J06.9', display: 'URTI', isPrimary: true },
+        ],
+      },
+    });
+
+    /**
+     * The "Set primary" case, and the reason it is its own test.
+     *
+     * The two tests above both pass against an implementation that always makes
+     * entry zero primary — one marks nothing, the other marks the first. Only
+     * promoting a LATER entry distinguishes correct from nearly-correct, and the
+     * first implementation failed exactly here: the button appeared to do
+     * nothing, because index 0 reclaimed the flag before the loop reached the
+     * row the doctor picked.
+     */
+    const primary = res.json().diagnoses.filter((d: { isPrimary: boolean }) => d.isPrimary);
+    expect(primary).toHaveLength(1);
+    expect(primary[0].code).toBe('J06.9');
+  });
+
+  it('replaces the diagnosis list rather than appending to it', async () => {
+    const { encounter } = await openConsultation();
+    const url = `/api/v1/encounters/${encounter.id}/diagnoses`;
+
+    await app.inject({
+      method: 'PUT',
+      url,
+      headers: { cookie: doctor.cookie },
+      payload: { diagnoses: [{ code: 'J06.9', display: 'URTI' }] },
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { cookie: doctor.cookie },
+      payload: { diagnoses: [{ code: 'A09', display: 'Gastroenteritis' }] },
+    });
+
+    expect(res.json().diagnoses).toHaveLength(1);
+    expect(res.json().diagnoses[0].code).toBe('A09');
+  });
+
+  it('records a structured prescription', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/prescriptions`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        prescriptions: [
+          {
+            drugName: 'Dolo 650',
+            strength: '650 mg',
+            form: 'TABLET',
+            dose: '1 tablet',
+            frequency: '1-0-1',
+            durationDays: 5,
+            instructions: 'After food',
+          },
+          {
+            drugName: 'Azithral 500',
+            strength: '500 mg',
+            form: 'TABLET',
+            dose: '1 tablet',
+            frequency: '0-1-0',
+            durationDays: 3,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const items = res.json().prescriptions;
+    expect(items).toHaveLength(2);
+    // Order is the doctor's, and it is preserved.
+    expect(items.map((p: { drugName: string }) => p.drugName)).toEqual([
+      'Dolo 650',
+      'Azithral 500',
+    ]);
+    expect(items[0].route).toBe('ORAL');
+    expect(items[0].durationDays).toBe(5);
+  });
+
+  it('refuses a prescription with neither a duration nor a quantity', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/prescriptions`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        prescriptions: [{ drugName: 'Dolo 650', dose: '1 tablet', frequency: '1-0-1' }],
+      },
+    });
+
+    // The pharmacist has to know how much. "As directed" is not a quantity.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('duration');
+  });
+
+  it('adds a typed-in drug to the clinic’s formulary', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/prescriptions`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        prescriptions: [
+          {
+            drugName: 'Zzyxil Forte',
+            strength: '250 mg',
+            dose: '1 tablet',
+            frequency: '1-0-1',
+            durationDays: 5,
+          },
+        ],
+      },
+    });
+
+    // This is how the list grows into what the clinic actually prescribes,
+    // instead of staying whatever we seeded.
+    const [row] = await ownerQuery<{ name: string; is_custom: boolean }>(
+      fx.main.id,
+      `SELECT name, is_custom FROM formulary_item WHERE name = $1`,
+      ['Zzyxil Forte'],
+    );
+    expect(row?.is_custom).toBe(true);
+
+    // And it is the clinic's own list, not everyone's.
+    const theirs = await ownerQuery(
+      fx.other.id,
+      `SELECT name FROM formulary_item WHERE name = $1`,
+      ['Zzyxil Forte'],
+    );
+    expect(theirs).toHaveLength(0);
+  });
+});
+
+// --- signing ----------------------------------------------------------------
+
+describe('signing', () => {
+  it('refuses to sign an empty note', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOTHING_TO_SIGN');
+  });
+
+  it('signs, attributes, and closes the visit', async () => {
+    const { appointmentId, encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fever for three days' },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('SIGNED');
+    expect(res.json().signedAt).toBeTruthy();
+    expect(res.json().signedByUserId).toBeTruthy();
+
+    // The visit is over. Asking the doctor to close it separately is how a queue
+    // ends the day full of patients who were seen an hour ago.
+    const [appointment] = await ownerQuery<{ status: string }>(
+      fx.main.id,
+      `SELECT status FROM appointment WHERE id = $1`,
+      [appointmentId],
+    );
+    expect(appointment?.status).toBe('FULFILLED');
+  });
+
+  it('a signed consultation cannot be changed', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fever for three days' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    /**
+     * Every write path, not a representative one.
+     *
+     * The lock lives in `loadDraft`, and the value of routing every mutation
+     * through it is precisely that a new endpoint cannot forget the check. This
+     * test is what turns that from an intention into a fact — add a write
+     * endpoint that skips it and this fails.
+     */
+    const attempts: Array<[string, string, Record<string, unknown> | undefined]> = [
+      ['PATCH', '', { chiefComplaint: 'Changed my mind' }],
+      ['POST', '/vitals', { pulseBpm: 70 }],
+      ['PUT', '/diagnoses', { diagnoses: [{ code: 'A09', display: 'Gastroenteritis' }] }],
+      [
+        'PUT',
+        '/prescriptions',
+        {
+          prescriptions: [
+            { drugName: 'Dolo 650', dose: '1 tablet', frequency: '1-0-1', durationDays: 3 },
+          ],
+        },
+      ],
+      ['POST', '/sign', undefined],
+    ];
+
+    for (const [method, suffix, payload] of attempts) {
+      const res = await app.inject({
+        method: method as 'PATCH' | 'POST' | 'PUT',
+        url: `/api/v1/encounters/${encounter.id}${suffix}`,
+        headers: { cookie: doctor.cookie },
+        ...(payload ? { payload } : {}),
+      });
+
+      expect(res.statusCode, `${method} ${suffix || '(narrative)'} after signing`).toBe(409);
+      expect(domainCode(res), `${method} ${suffix || '(narrative)'} after signing`).toBe(
+        'ALREADY_SIGNED',
+      );
+    }
+
+    // And the record is genuinely untouched.
+    const [row] = await ownerQuery<{ chief_complaint: string }>(
+      fx.main.id,
+      `SELECT chief_complaint FROM encounter WHERE id = $1`,
+      [encounter.id],
+    );
+    expect(row?.chief_complaint).toBe('Fever for three days');
+  });
+
+  it('the database refuses a signature with no author', async () => {
+    const { encounter } = await openConsultation();
+
+    // Belt and braces with the service. The constraint is what holds if a future
+    // code path sets one field and forgets the other.
+    await expect(
+      ownerQuery(
+        fx.main.id,
+        `UPDATE encounter SET status = 'SIGNED', signed_at = now() WHERE id = $1`,
+        [encounter.id],
+      ),
+    ).rejects.toThrow(/encounter_signature_complete/);
+  });
+});
+
+// --- addenda ----------------------------------------------------------------
+
+describe('correcting a signed note', () => {
+  async function signedEncounter() {
+    const { encounter } = await openConsultation();
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fever for three days' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+    return encounter.id as string;
+  }
+
+  it('appends an attributed addendum', async () => {
+    const id = await signedEncounter();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${id}/addenda`,
+      headers: { cookie: doctor.cookie },
+      payload: { text: 'Blood report received after the visit — Hb 9.2, iron deficiency likely.' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().addenda).toHaveLength(1);
+    // The author's name is captured at write time. Their user record may be
+    // renamed; who wrote this did not change.
+    expect(res.json().addenda[0].authorLabel).toBe('Asha Menon');
+  });
+
+  it('refuses an addendum on a draft', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/addenda`,
+      headers: { cookie: doctor.cookie },
+      payload: { text: 'Something worth noting' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOT_SIGNED');
+  });
+
+  it('cannot be edited or deleted, by anyone', async () => {
+    const id = await signedEncounter();
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${id}/addenda`,
+      headers: { cookie: doctor.cookie },
+      payload: { text: 'Original wording' },
+    });
+
+    // The application role is granted SELECT and INSERT on this table and
+    // nothing else, so an addendum is append-only regardless of what the service
+    // layer does. This asserts the grant, which is the guarantee that survives a
+    // bug in the code above it.
+    const grants = await ownerQuery<{ privilege_type: string }>(
+      fx.main.id,
+      `SELECT privilege_type FROM information_schema.role_table_grants
+        WHERE table_name = 'encounter_addendum' AND grantee = 'healthcloud_app'`,
+    );
+
+    const privileges = grants.map((g) => g.privilege_type).sort();
+    expect(privileges).toEqual(['INSERT', 'SELECT']);
+  });
+});
+
+// --- permissions ------------------------------------------------------------
+
+describe('who may do what', () => {
+  it('lets a nurse record vitals but not write the note', async () => {
+    const { encounter } = await openConsultation();
+
+    const vitals = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/vitals`,
+      headers: { cookie: nurse.cookie },
+      payload: { pulseBpm: 78 },
+    });
+    expect(vitals.statusCode).toBe(201);
+
+    const narrative = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: nurse.cookie },
+      payload: { chiefComplaint: 'Not the nurse’s to write' },
+    });
+    expect(narrative.statusCode).toBe(403);
+    expect(narrative.json().error.message).toContain('consultation:write');
+
+    const prescribing = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/prescriptions`,
+      headers: { cookie: nurse.cookie },
+      payload: {
+        prescriptions: [
+          { drugName: 'Dolo 650', dose: '1 tablet', frequency: '1-0-1', durationDays: 3 },
+        ],
+      },
+    });
+    expect(prescribing.statusCode).toBe(403);
+    expect(prescribing.json().error.message).toContain('prescription:write');
+  });
+
+  it('keeps the clinical note away from the front desk', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // A receptionist books, checks in and cancels. They have no business reading
+    // what the doctor wrote, and "they could see it over the shoulder anyway" is
+    // not a reason to grant it in the model.
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toContain('consultation:read');
+  });
+
+  it('records who read the note', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    // FR-P36-19 asks for reads, not only writes. "Who opened this record" is the
+    // question that actually gets asked, usually by a lawyer.
+    const rows = await ownerQuery<{ actor_user_id: string }>(
+      fx.main.id,
+      `SELECT actor_user_id FROM audit_event
+        WHERE action = 'encounter.read' AND resource_id = $1`,
+      [encounter.id],
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0]?.actor_user_id).toBeTruthy();
+  });
+});
+
+// --- tenant isolation -------------------------------------------------------
+
+describe('one clinic cannot read another’s notes', () => {
+  it('refuses to open another clinic’s appointment', async () => {
+    const appointmentId = await bookAndArrive();
+
+    const res = await open(appointmentId, otherDoctor);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('refuses to read another clinic’s consultation', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: otherDoctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+// --- reference data and history ---------------------------------------------
+
+describe('reference data', () => {
+  it('ranks the obvious diagnosis first', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnosis-codes?q=fever',
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // A doctor typing "fever" wants R50.9, not "Typhoid fever" or "Dengue fever"
+    // — a plain substring match returns those first.
+    expect(res.json().codes[0].code).toBe('R50.9');
+  });
+
+  it('finds a diagnosis by its code', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnosis-codes?q=E11',
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.json().codes[0].code).toBe('E11.9');
+  });
+
+  it('finds a drug by its generic name', async () => {
+    // The formulary starts empty in tests; add one the way a doctor would.
+    const { encounter } = await openConsultation();
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/prescriptions`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        prescriptions: [
+          {
+            drugName: 'Dolo 650',
+            strength: '650 mg',
+            dose: '1 tablet',
+            frequency: '1-0-1',
+            durationDays: 3,
+          },
+        ],
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/formulary?q=dolo',
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items[0].name).toBe('Dolo 650');
+  });
+});
+
+describe('patient history', () => {
+  it('lists past consultations with their primary diagnosis', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fever for three days' },
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/diagnoses`,
+      headers: { cookie: doctor.cookie },
+      payload: { diagnoses: [{ code: 'J06.9', display: 'URTI' }] },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/patients/${fx.main.patientIds[0]}/encounters`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const [first] = res.json().encounters;
+    expect(first.status).toBe('SIGNED');
+    expect(first.chiefComplaint).toBe('Fever for three days');
+    expect(first.diagnoses[0].code).toBe('J06.9');
+  });
+});

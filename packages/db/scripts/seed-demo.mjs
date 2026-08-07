@@ -257,7 +257,9 @@ try {
 
   console.log('Resetting demo data...');
   await client.query(
-    `TRUNCATE TABLE session, user_role, app_user, role,
+    `TRUNCATE TABLE appointment, queue_counter, schedule_exception,
+                    practitioner_schedule, practitioner, department,
+                    session, user_role, app_user, role,
                     audit_event, consent_record, patient, location, tenant
      RESTART IDENTITY CASCADE`,
   );

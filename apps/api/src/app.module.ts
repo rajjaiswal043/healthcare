@@ -6,6 +6,9 @@ import { HealthController } from './platform/health/health.controller.js';
 import { AuthGuard } from './platform/auth/auth.guard.js';
 import { AuthModule } from './platform/auth/auth.module.js';
 import { PatientsModule } from './clinical/patients/patients.module.js';
+import { ConsultationsModule } from './clinical/consultations/consultations.module.js';
+import { SchedulingModule } from './scheduling/scheduling.module.js';
+import { BillingModule } from './billing/billing.module.js';
 import { loadEnv } from './config/env.js';
 
 const env = loadEnv();
@@ -45,6 +48,9 @@ const env = loadEnv();
     DatabaseModule,
     AuthModule,
     PatientsModule,
+    ConsultationsModule,
+    SchedulingModule,
+    BillingModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
 import {
+  IconCalendar,
   IconChevronRight,
+  IconClock,
   IconIdCard,
   IconSearch,
   IconShield,
@@ -15,6 +17,22 @@ export default function HomePage() {
   const { can } = useAuth();
 
   const actions = [
+    {
+      href: '/queue',
+      permission: 'appointment:read',
+      icon: <IconClock size={20} />,
+      title: "Today's queue",
+      body: 'Who is waiting, who is with the doctor, who has been seen.',
+      meta: 'Live, refreshes itself',
+    },
+    {
+      href: '/appointments/new',
+      permission: 'appointment:write',
+      icon: <IconCalendar size={20} />,
+      title: 'Book an appointment',
+      body: 'Pick a doctor and a slot — or add a walk-in straight to the queue.',
+      meta: 'Walk-ins welcome',
+    },
     {
       href: '/patients/register',
       permission: 'patient:write',

@@ -1,0 +1,185 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
+import {
+  CurrentTenant,
+  CurrentUser,
+  RequirePermissions,
+  type AuthenticatedUser,
+} from '../platform/auth/decorators.js';
+import { PERMISSIONS } from '../platform/auth/permissions.js';
+import { PrismaService } from '../platform/database/prisma.service.js';
+import { BillingService, type RequestMeta } from './billing.service.js';
+import {
+  AddLineDto,
+  CollectPaymentDto,
+  DayCollectionQueryDto,
+  InvoiceExceptionDto,
+  RefundDto,
+} from './dto.js';
+
+@Controller()
+export class BillingController {
+  constructor(
+    private readonly billing: BillingService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  /** The chargeable catalogue, for adding items to a bill. */
+  @Get('services')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async services(@CurrentTenant() tenantId: string) {
+    const services = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.service.findMany({
+        where: { isActive: true },
+        orderBy: [{ category: 'asc' }, { name: 'asc' }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          category: true,
+          pricePaise: true,
+          taxRateBasisPoints: true,
+        },
+      }),
+    );
+    return { services };
+  }
+
+  @Get('invoices/:id')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async get(@CurrentTenant() tenantId: string, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.billing.get(tenantId, id);
+  }
+
+  /** The bill for a visit — what the queue board links to. */
+  @Get('appointments/:id/invoice')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async forAppointment(
+    @CurrentTenant() tenantId: string,
+    @Param('id', new ParseUUIDPipe()) appointmentId: string,
+  ) {
+    return this.billing.getForAppointment(tenantId, appointmentId);
+  }
+
+  @Post('invoices/:id/lines')
+  @RequirePermissions(PERMISSIONS.INVOICE_WRITE)
+  async addLine(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: AddLineDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.addLine(tenantId, id, dto, meta(req, user));
+  }
+
+  @Delete('invoices/:id/lines/:lineId')
+  @RequirePermissions(PERMISSIONS.INVOICE_WRITE)
+  async removeLine(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('lineId', new ParseUUIDPipe()) lineId: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.removeLine(tenantId, id, lineId, meta(req, user));
+  }
+
+  @Post('invoices/:id/payments')
+  @RequirePermissions(PERMISSIONS.PAYMENT_COLLECT)
+  async collect(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CollectPaymentDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.collect(tenantId, id, dto, meta(req, user));
+  }
+
+  /**
+   * Refunds, waivers and deferrals each sit behind their own permission.
+   *
+   * Every one of them is a way for money to leave without a service behind it,
+   * so the person at the desk cannot authorise their own exception.
+   */
+  @Post('invoices/:id/refunds')
+  @RequirePermissions(PERMISSIONS.PAYMENT_REFUND)
+  async refund(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: RefundDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.refund(tenantId, id, dto, meta(req, user));
+  }
+
+  @Post('invoices/:id/waive')
+  @RequirePermissions(PERMISSIONS.INVOICE_WAIVE)
+  async waive(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: InvoiceExceptionDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.setException(tenantId, id, 'WAIVED', dto.reason, meta(req, user));
+  }
+
+  @Post('invoices/:id/defer')
+  @RequirePermissions(PERMISSIONS.INVOICE_DEFER)
+  async defer(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: InvoiceExceptionDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.setException(tenantId, id, 'DEFERRED', dto.reason, meta(req, user));
+  }
+
+  @Post('invoices/:id/cancel')
+  @RequirePermissions(PERMISSIONS.INVOICE_WAIVE)
+  async cancel(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: InvoiceExceptionDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.setException(tenantId, id, 'CANCELLED', dto.reason, meta(req, user));
+  }
+
+  /** What the clinic took today, by mode and by collector (FR-BIL-09). */
+  @Get('reports/day-collection')
+  @RequirePermissions(PERMISSIONS.REPORT_REVENUE)
+  async dayCollection(@CurrentTenant() tenantId: string, @Query() query: DayCollectionQueryDto) {
+    return this.billing.dayCollection(tenantId, query.date);
+  }
+
+  /** Everything still owed, for the front desk to chase (FR-BIL-10). */
+  @Get('invoices')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async outstanding(@CurrentTenant() tenantId: string) {
+    return this.billing.outstanding(tenantId);
+  }
+}
+
+function meta(req: FastifyRequest, user: AuthenticatedUser): RequestMeta {
+  const out: RequestMeta = { correlationId: req.id, actorUserId: user.userId };
+  if (req.ip) out.ipAddress = req.ip;
+  const ua = req.headers['user-agent'];
+  if (typeof ua === 'string') out.userAgent = ua.slice(0, 500);
+  return out;
+}
