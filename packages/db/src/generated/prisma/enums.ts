@@ -52,3 +52,124 @@ export const ConsentPurpose = {
 } as const
 
 export type ConsentPurpose = (typeof ConsentPurpose)[keyof typeof ConsentPurpose]
+
+
+export const VisitType = {
+  NEW: 'NEW',
+  FOLLOW_UP: 'FOLLOW_UP',
+  PROCEDURE: 'PROCEDURE'
+} as const
+
+export type VisitType = (typeof VisitType)[keyof typeof VisitType]
+
+
+export const ScheduleExceptionType = {
+  LEAVE: 'LEAVE',
+  BLOCK: 'BLOCK',
+  EXTRA: 'EXTRA'
+} as const
+
+export type ScheduleExceptionType = (typeof ScheduleExceptionType)[keyof typeof ScheduleExceptionType]
+
+
+export const AppointmentStatus = {
+  BOOKED: 'BOOKED',
+  ARRIVED: 'ARRIVED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  FULFILLED: 'FULFILLED',
+  CANCELLED: 'CANCELLED',
+  NO_SHOW: 'NO_SHOW'
+} as const
+
+export type AppointmentStatus = (typeof AppointmentStatus)[keyof typeof AppointmentStatus]
+
+
+export const AppointmentSource = {
+  FRONT_DESK: 'FRONT_DESK',
+  WALK_IN: 'WALK_IN',
+  PORTAL: 'PORTAL'
+} as const
+
+export type AppointmentSource = (typeof AppointmentSource)[keyof typeof AppointmentSource]
+
+
+export const EncounterStatus = {
+  IN_PROGRESS: 'IN_PROGRESS',
+  SIGNED: 'SIGNED'
+} as const
+
+export type EncounterStatus = (typeof EncounterStatus)[keyof typeof EncounterStatus]
+
+
+export const MedicationForm = {
+  TABLET: 'TABLET',
+  CAPSULE: 'CAPSULE',
+  SYRUP: 'SYRUP',
+  INJECTION: 'INJECTION',
+  DROPS: 'DROPS',
+  OINTMENT: 'OINTMENT',
+  INHALER: 'INHALER',
+  SACHET: 'SACHET',
+  OTHER: 'OTHER'
+} as const
+
+export type MedicationForm = (typeof MedicationForm)[keyof typeof MedicationForm]
+
+
+export const MedicationRoute = {
+  ORAL: 'ORAL',
+  TOPICAL: 'TOPICAL',
+  INTRAVENOUS: 'INTRAVENOUS',
+  INTRAMUSCULAR: 'INTRAMUSCULAR',
+  SUBCUTANEOUS: 'SUBCUTANEOUS',
+  INHALED: 'INHALED',
+  OPHTHALMIC: 'OPHTHALMIC',
+  OTIC: 'OTIC',
+  NASAL: 'NASAL',
+  RECTAL: 'RECTAL',
+  OTHER: 'OTHER'
+} as const
+
+export type MedicationRoute = (typeof MedicationRoute)[keyof typeof MedicationRoute]
+
+
+export const ServiceCategory = {
+  CONSULTATION: 'CONSULTATION',
+  PROCEDURE: 'PROCEDURE',
+  DIAGNOSTIC: 'DIAGNOSTIC',
+  CONSUMABLE: 'CONSUMABLE',
+  OTHER: 'OTHER'
+} as const
+
+export type ServiceCategory = (typeof ServiceCategory)[keyof typeof ServiceCategory]
+
+
+export const InvoiceStatus = {
+  UNPAID: 'UNPAID',
+  PARTIALLY_PAID: 'PARTIALLY_PAID',
+  PAID: 'PAID',
+  WAIVED: 'WAIVED',
+  DEFERRED: 'DEFERRED',
+  CANCELLED: 'CANCELLED'
+} as const
+
+export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus]
+
+
+export const PaymentMode = {
+  CASH: 'CASH',
+  UPI: 'UPI',
+  CARD: 'CARD',
+  BANK_TRANSFER: 'BANK_TRANSFER',
+  OTHER: 'OTHER'
+} as const
+
+export type PaymentMode = (typeof PaymentMode)[keyof typeof PaymentMode]
+
+
+export const PaymentDirection = {
+  IN: 'IN',
+  REFUND: 'REFUND'
+} as const
+
+export type PaymentDirection = (typeof PaymentDirection)[keyof typeof PaymentDirection]

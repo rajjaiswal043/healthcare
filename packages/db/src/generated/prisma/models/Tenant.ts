@@ -51,6 +51,7 @@ export type TenantMinAggregateOutputType = {
   uhidPrefix: string | null
   uhidPadding: number | null
   uhidCounter: bigint | null
+  timezone: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -64,6 +65,7 @@ export type TenantMaxAggregateOutputType = {
   uhidPrefix: string | null
   uhidPadding: number | null
   uhidCounter: bigint | null
+  timezone: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -77,6 +79,7 @@ export type TenantCountAggregateOutputType = {
   uhidPrefix: number
   uhidPadding: number
   uhidCounter: number
+  timezone: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -102,6 +105,7 @@ export type TenantMinAggregateInputType = {
   uhidPrefix?: true
   uhidPadding?: true
   uhidCounter?: true
+  timezone?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -115,6 +119,7 @@ export type TenantMaxAggregateInputType = {
   uhidPrefix?: true
   uhidPadding?: true
   uhidCounter?: true
+  timezone?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -128,6 +133,7 @@ export type TenantCountAggregateInputType = {
   uhidPrefix?: true
   uhidPadding?: true
   uhidCounter?: true
+  timezone?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -228,6 +234,7 @@ export type TenantGroupByOutputType = {
   uhidPrefix: string
   uhidPadding: number
   uhidCounter: bigint
+  timezone: string
   createdAt: Date
   updatedAt: Date
   _count: TenantCountAggregateOutputType | null
@@ -264,6 +271,7 @@ export type TenantWhereInput = {
   uhidPrefix?: Prisma.StringFilter<"Tenant"> | string
   uhidPadding?: Prisma.IntFilter<"Tenant"> | number
   uhidCounter?: Prisma.BigIntFilter<"Tenant"> | bigint | number
+  timezone?: Prisma.StringFilter<"Tenant"> | string
   createdAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   locations?: Prisma.LocationListRelationFilter
@@ -278,6 +286,7 @@ export type TenantOrderByWithRelationInput = {
   uhidPrefix?: Prisma.SortOrder
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
+  timezone?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   locations?: Prisma.LocationOrderByRelationAggregateInput
@@ -295,6 +304,7 @@ export type TenantWhereUniqueInput = Prisma.AtLeast<{
   uhidPrefix?: Prisma.StringFilter<"Tenant"> | string
   uhidPadding?: Prisma.IntFilter<"Tenant"> | number
   uhidCounter?: Prisma.BigIntFilter<"Tenant"> | bigint | number
+  timezone?: Prisma.StringFilter<"Tenant"> | string
   createdAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   locations?: Prisma.LocationListRelationFilter
@@ -309,6 +319,7 @@ export type TenantOrderByWithAggregationInput = {
   uhidPrefix?: Prisma.SortOrder
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
+  timezone?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.TenantCountOrderByAggregateInput
@@ -330,6 +341,7 @@ export type TenantScalarWhereWithAggregatesInput = {
   uhidPrefix?: Prisma.StringWithAggregatesFilter<"Tenant"> | string
   uhidPadding?: Prisma.IntWithAggregatesFilter<"Tenant"> | number
   uhidCounter?: Prisma.BigIntWithAggregatesFilter<"Tenant"> | bigint | number
+  timezone?: Prisma.StringWithAggregatesFilter<"Tenant"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Tenant"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Tenant"> | Date | string
 }
@@ -343,6 +355,7 @@ export type TenantCreateInput = {
   uhidPrefix?: string
   uhidPadding?: number
   uhidCounter?: bigint | number
+  timezone?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
@@ -357,6 +370,7 @@ export type TenantUncheckedCreateInput = {
   uhidPrefix?: string
   uhidPadding?: number
   uhidCounter?: bigint | number
+  timezone?: string
   createdAt?: Date | string
   updatedAt?: Date | string
   locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
@@ -371,6 +385,7 @@ export type TenantUpdateInput = {
   uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
@@ -385,6 +400,7 @@ export type TenantUncheckedUpdateInput = {
   uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
@@ -399,6 +415,7 @@ export type TenantCreateManyInput = {
   uhidPrefix?: string
   uhidPadding?: number
   uhidCounter?: bigint | number
+  timezone?: string
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -412,6 +429,7 @@ export type TenantUpdateManyMutationInput = {
   uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -425,6 +443,7 @@ export type TenantUncheckedUpdateManyInput = {
   uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -438,6 +457,7 @@ export type TenantCountOrderByAggregateInput = {
   uhidPrefix?: Prisma.SortOrder
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
+  timezone?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -456,6 +476,7 @@ export type TenantMaxOrderByAggregateInput = {
   uhidPrefix?: Prisma.SortOrder
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
+  timezone?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -469,6 +490,7 @@ export type TenantMinOrderByAggregateInput = {
   uhidPrefix?: Prisma.SortOrder
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
+  timezone?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -534,6 +556,7 @@ export type TenantCreateWithoutLocationsInput = {
   uhidPrefix?: string
   uhidPadding?: number
   uhidCounter?: bigint | number
+  timezone?: string
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -547,6 +570,7 @@ export type TenantUncheckedCreateWithoutLocationsInput = {
   uhidPrefix?: string
   uhidPadding?: number
   uhidCounter?: bigint | number
+  timezone?: string
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -576,6 +600,7 @@ export type TenantUpdateWithoutLocationsInput = {
   uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -589,6 +614,7 @@ export type TenantUncheckedUpdateWithoutLocationsInput = {
   uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -633,6 +659,7 @@ export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   uhidPrefix?: boolean
   uhidPadding?: boolean
   uhidCounter?: boolean
+  timezone?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   locations?: boolean | Prisma.Tenant$locationsArgs<ExtArgs>
@@ -648,6 +675,7 @@ export type TenantSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   uhidPrefix?: boolean
   uhidPadding?: boolean
   uhidCounter?: boolean
+  timezone?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["tenant"]>
@@ -661,6 +689,7 @@ export type TenantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   uhidPrefix?: boolean
   uhidPadding?: boolean
   uhidCounter?: boolean
+  timezone?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["tenant"]>
@@ -674,11 +703,12 @@ export type TenantSelectScalar = {
   uhidPrefix?: boolean
   uhidPadding?: boolean
   uhidCounter?: boolean
+  timezone?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type TenantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "slug" | "legalName" | "name" | "status" | "uhidPrefix" | "uhidPadding" | "uhidCounter" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
+export type TenantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "slug" | "legalName" | "name" | "status" | "uhidPrefix" | "uhidPadding" | "uhidCounter" | "timezone" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
 export type TenantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   locations?: boolean | Prisma.Tenant$locationsArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
@@ -717,6 +747,13 @@ export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
      * concurrent registrations can never be handed the same UHID.
      */
     uhidCounter: bigint
+    /**
+     * IANA timezone. Schedule templates store wall-clock times ("09:00") which
+     * are meaningless without one — this is what converts them to the instants
+     * stored on appointments. India is a single timezone, but hard-coding it
+     * would be a bug waiting for the first customer who isn't.
+     */
+    timezone: string
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["tenant"]>
@@ -1151,6 +1188,7 @@ export interface TenantFieldRefs {
   readonly uhidPrefix: Prisma.FieldRef<"Tenant", 'String'>
   readonly uhidPadding: Prisma.FieldRef<"Tenant", 'Int'>
   readonly uhidCounter: Prisma.FieldRef<"Tenant", 'BigInt'>
+  readonly timezone: Prisma.FieldRef<"Tenant", 'String'>
   readonly createdAt: Prisma.FieldRef<"Tenant", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Tenant", 'DateTime'>
 }

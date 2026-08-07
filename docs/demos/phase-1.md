@@ -102,6 +102,38 @@ Sign in as **admin@demo.local** to see two-factor being _required_, not offered:
 
 ---
 
+## 3b. The OPD day — the part a clinic lives in
+
+**Today's queue** in the sidebar.
+
+This is the screen that would be open on a monitor all day. It refreshes itself every 15 seconds.
+
+- **Now serving** is the big one — token number, patient, and why they came.
+- **Waiting** is ordered by _token_, which is arrival order. Note token 9 in the list: a walk-in, sitting among booked patients.
+- **Yet to arrive** are booked patients who have not walked in.
+
+**Try it:**
+
+1. **Finish visit** on the current patient — "Seen today" ticks up and the doctor becomes free.
+2. **Call** on the top of the waiting list — they move into Now serving.
+3. **Check in** someone from Yet to arrive — they get the next token and join the queue.
+
+Notice **Call is disabled while a patient is with the doctor.** One person in the room at a time; the interface will not let you pretend otherwise.
+
+**What to say**
+
+> The appointment gives a patient a time. The token gives them a position, and position is decided by arrival — which is why the token is issued at check-in, not at booking. Book at 11:00 but arrive at 09:30 and you are seen before the 09:45 who is stuck in traffic. That is how the room actually works, so that is how the software works.
+
+### Booking
+
+**Book** in the sidebar. Department → doctor → day → slot. Taken slots are struck through; available ones are live.
+
+The same form has an **Add as walk-in** button — no slot, straight into today's queue with the next token. One screen for both, because at a front desk they are the same conversation.
+
+Pick a doctor on a day they do not sit, and it says so plainly rather than showing an empty grid.
+
+---
+
 ## 4. Tenant isolation — the one that matters to a hospital's IT committee
 
 Note a patient's name in **Sunrise Clinic**. Sign out, and sign in to **lotus-polyclinic** with the same email.
@@ -140,7 +172,9 @@ Point out: the audit log stores **field names, never values**. An audit log full
 
 Say this plainly — a demo that oversells gets found out at the pilot.
 
-- **No appointments, consultation, prescriptions or billing.** Foundation first.
+- **No consultation, prescriptions or billing.** This branch gets the patient in front of the doctor and stops there.
+- **No appointment reminders.** The no-show rate this is meant to cut will not move until a WhatsApp channel exists — that needs the clinic's own DLT and BSP registration.
+- **No patient self-booking.** Every booking is staff-entered until the patient portal exists.
 - **No user management UI.** Users and roles are seeded; creating and inviting them is API-only so far.
 - **No password reset or change-password flow.** The `mustChangePassword` flag exists and is unused.
 - **ABHA fields exist but aren't wired to ABDM.** The columns are in place so linking later is an update, not a migration on live patient data. The NHA sandbox application is a separate track.

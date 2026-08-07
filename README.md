@@ -108,20 +108,60 @@ Then follow [docs/demos/phase-1.md](docs/demos/phase-1.md).
 
 ## Commands
 
-| Command                                   | What it does                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------ |
-| `pnpm dev`                                | Preflight, then start everything                                   |
-| `pnpm verify`                             | **The quality gate** — format, lint, typecheck, test, build, audit |
-| `pnpm preflight`                          | Environment check on its own                                       |
-| `pnpm build`                              | Build all apps and packages                                        |
-| `pnpm test`                               | Run tests                                                          |
-| `pnpm typecheck`                          | `tsc --noEmit`, strict, everywhere                                 |
-| `pnpm format`                             | Apply Prettier                                                     |
-| `pnpm --filter @healthcloud/db seed:demo` | Reset the demo clinics                                             |
-| `pnpm --filter @healthcloud/db rls:check` | Prove every tenant table is protected                              |
-| `pnpm --filter @healthcloud/db test`      | Cross-tenant isolation suite                                       |
+| Command                                         | What it does                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                                      | Preflight, then start everything                                   |
+| `pnpm verify`                                   | **The quality gate** — format, lint, typecheck, test, build, audit |
+| `pnpm preflight`                                | Environment check on its own                                       |
+| `pnpm build`                                    | Build all apps and packages                                        |
+| `pnpm test`                                     | Run tests                                                          |
+| `pnpm typecheck`                                | `tsc --noEmit`, strict, everywhere                                 |
+| `pnpm format`                                   | Apply Prettier                                                     |
+| `pnpm --filter @healthcloud/db seed:demo`       | Reset the demo clinics                                             |
+| `pnpm --filter @healthcloud/db seed:scheduling` | Restore just the demo queue, after clicking through it             |
+| `pnpm --filter @healthcloud/db rls:check`       | Prove every tenant table is protected                              |
+| `pnpm --filter @healthcloud/db test`            | Cross-tenant isolation suite                                       |
+| `pnpm --filter @healthcloud/api test`           | API integration suite — real HTTP, real database                   |
 
 `pnpm verify` runs automatically on `git push` via a husky hook. It's the whole CI pipeline, executed locally — see [ADR-016](docs/adr/ADR-016-local-quality-gates.md).
+
+### The API integration suite
+
+`apps/api/src/__tests__/` boots the **real** application — the same one `main.ts`
+serves, assembled by `bootstrap.ts` — and drives it through Fastify's in-process
+`inject()`. No port is opened, nothing is mocked: requests pass through helmet,
+CORS, the validation pipe, the auth guard, the services, and PostgreSQL with
+row-level security applied. Fixtures are written through a separate owner-role
+connection, because the app role cannot see across tenants to set up a
+cross-tenant test — which is the property those tests exist to prove.
+
+It runs against `healthcloud_test` and refuses to start against any other
+database name, because it truncates tables and this PostgreSQL server is shared.
+
+**`pnpm test` is `turbo run test --concurrency=1`, and the flag is load-bearing.**
+The db package's isolation suite and the API suite use the same
+`healthcloud_test` database — deliberately, since both are testing behaviour of
+the real schema under row-level security. Run in parallel, one suite's `TRUNCATE`
+lands in the middle of the other's assertions, and the symptom is a dozen
+unrelated tests failing with 401s from a `app_user` table that was emptied
+underneath them. Within each package vitest already sets `fileParallelism:
+false` for the same reason.
+
+Three bugs from the scheduling branch have a test each. The first two were
+verified by deleting the fix and watching the test fail; the third guards a
+server behaviour the client fix depends on, since that fix lives in the web app:
+
+| Test                                                   | Guards                                                                                                                                                                                                                                 |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sees an appointment that was written outside the API` | Timestamps read back in the session timezone, so booked slots showed as free                                                                                                                                                           |
+| `allows every method the queue board uses`             | CORS preflight refusing PATCH, invisible to curl                                                                                                                                                                                       |
+| `accepts a PATCH with no body`                         | Bodyless check-in rejected before any handler ran. Fastify refuses an empty body when `Content-Type: application/json` is set, so the web client must only send that header when there is something to send — both halves are asserted |
+
+The first one is worth understanding before adding tests here. Booking through
+the API and reading it back is symmetric — a driver that misreads a timestamp
+also miswrites one, and the two cancel out. The bug only appeared because the
+demo seed writes with raw SQL and the app reads through Prisma. A test that sets
+up its data exclusively through the API cannot catch it.
 
 ---
 

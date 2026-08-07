@@ -205,3 +205,54 @@
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
   animation: shimmer 1.5s infinite;
 }
+
+/* =============================================================================
+   PRINT
+   =============================================================================
+   The prescription is printed from the consultation screen itself: the print
+   stylesheet hides the application and reveals the one hidden block that holds
+   the prescription markup.
+
+   The alternative was a popup window rendering a second copy of that markup.
+   Popups are blocked by default in most browsers, and a second copy is a second
+   thing to keep correct — on a document that carries a doctor's registration
+   number and gets dispensed against, that is not a trade worth making.
+
+   Nothing here is loaded on screen: `.print-only` stays `display: none` until
+   the print media query applies. */
+@media print {
+  /* Backgrounds and shadows waste toner and read badly on paper. */
+  * {
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #000 !important;
+  }
+
+  .no-print,
+  header[data-app-shell],
+  nav,
+  aside {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  @page {
+    size: A4;
+    /* Indian clinics commonly overprint onto letterhead; the top margin leaves
+       room for one rather than assuming a blank sheet. */
+    margin: 18mm 14mm 14mm;
+  }
+}

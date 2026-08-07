@@ -1,0 +1,677 @@
+/**
+ * Scheduling and the OPD queue, over HTTP.
+ *
+ * Three of the bugs this module shipped with were invisible to a unit test and
+ * to curl, and each has a test here that fails without its fix:
+ *
+ *   - Timestamps read back from PostgreSQL in the session timezone rather than
+ *     UTC, so booked slots still showed as free. `takes the slot out of
+ *     availability` is that test, and it is the reason availability is asserted
+ *     after every booking rather than trusted.
+ *   - Permission strings drifted between the API and the seed, so every
+ *     endpoint returned 403. Roles here come from the shared definition, so a
+ *     drift breaks the suite instead of the product.
+ *   - A bodyless PATCH was refused before any handler ran.
+ *
+ * The domain error code lives at `error.details.code`; the top-level
+ * `error.code` is the HTTP status name. See AllExceptionsFilter.
+ */
+
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import {
+  clinicDate,
+  closeTestApp,
+  createTestApp,
+  login,
+  ownerQuery,
+  resetAppointments,
+  seedFixtures,
+  type Fixtures,
+  type Session,
+} from './harness.js';
+
+let app: NestFastifyApplication;
+let fx: Fixtures;
+let frontDesk: Session;
+let nurse: Session;
+let doctor: Session;
+let otherFrontDesk: Session;
+
+/** The clinic day every test books into. The doctor sits every weekday. */
+const DAY = clinicDate(7);
+
+beforeAll(async () => {
+  fx = await seedFixtures();
+  app = await createTestApp();
+
+  frontDesk = await login(app, fx.main.slug, 'frontdesk@main.test');
+  nurse = await login(app, fx.main.slug, 'nurse@main.test');
+  doctor = await login(app, fx.main.slug, 'doctor@main.test');
+  otherFrontDesk = await login(app, fx.other.slug, 'frontdesk@other.test');
+});
+
+afterAll(async () => {
+  await closeTestApp(app);
+});
+
+beforeEach(async () => {
+  // Each test starts with an empty diary. Tests that share booked state read as
+  // passing until someone reorders them.
+  await resetAppointments();
+});
+
+// --- helpers ----------------------------------------------------------------
+
+interface Slot {
+  time: string;
+  startAt: string;
+  capacity: number;
+  booked: number;
+  available: number;
+}
+
+async function availability(
+  session: Session,
+  practitionerId = fx.main.practitionerId,
+  date = DAY,
+): Promise<{ slots: Slot[]; timezone: string; unavailableReason: string | null }> {
+  const res = await app.inject({
+    method: 'GET',
+    url: `/api/v1/availability?practitionerId=${practitionerId}&date=${date}`,
+    headers: { cookie: session.cookie },
+  });
+
+  expect(res.statusCode).toBe(200);
+  return res.json();
+}
+
+async function book(
+  session: Session,
+  options: { patientIndex?: number; slotIndex?: number; startAt?: string } = {},
+) {
+  const startAt =
+    options.startAt ??
+    (await availability(session)).slots[options.slotIndex ?? 0]?.startAt ??
+    (() => {
+      throw new Error('no slot to book');
+    })();
+
+  return app.inject({
+    method: 'POST',
+    url: '/api/v1/appointments',
+    headers: { cookie: session.cookie },
+    payload: {
+      patientId: fx.main.patientIds[options.patientIndex ?? 0],
+      practitionerId: fx.main.practitionerId,
+      locationId: fx.main.locationId,
+      departmentId: fx.main.departmentId,
+      startAt,
+      reasonForVisit: 'Fever for three days',
+    },
+  });
+}
+
+const domainCode = (res: { json: () => { error: { details?: { code?: string } } } }) =>
+  res.json().error.details?.code;
+
+// --- availability -----------------------------------------------------------
+
+describe('availability', () => {
+  it('derives slots from the weekly template', async () => {
+    const day = await availability(frontDesk);
+
+    // 09:00–12:00 in 15-minute slots.
+    expect(day.slots).toHaveLength(12);
+    expect(day.slots[0]?.time).toBe('09:00');
+    expect(day.slots.at(-1)?.time).toBe('11:45');
+    expect(day.timezone).toBe('Asia/Kolkata');
+    expect(day.unavailableReason).toBeNull();
+  });
+
+  it('reports the slot start as an instant matching the clinic wall clock', async () => {
+    const day = await availability(frontDesk);
+    const first = day.slots[0] as Slot;
+
+    // 09:00 IST is 03:30 UTC. Written out rather than recomputed with the same
+    // helper the server used — a test that reuses the implementation cannot
+    // catch the implementation being wrong.
+    expect(new Date(first.startAt).toISOString()).toBe(`${DAY}T03:30:00.000Z`);
+  });
+
+  it('sees an appointment that was written outside the API', async () => {
+    /**
+     * The timezone regression, in the shape it actually occurred.
+     *
+     * Booking through the API and reading it back is symmetric: if the driver
+     * misreads a timestamp it also miswrites one, and the two cancel out. The
+     * bug appeared because the DEMO SEED writes appointments with raw SQL and
+     * the API reads them through Prisma. Twelve seeded appointments showed as
+     * booked in the database and every slot showed as free on the screen.
+     *
+     * So this row is inserted the way the seed inserts one, and read the way
+     * the app reads one. 05:00Z is 10:30 in Kolkata — a half-hour offset, which
+     * also catches a whole-hour zone being applied by mistake.
+     */
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO appointment
+         (tenant_id, patient_id, practitioner_id, location_id, start_at, end_at,
+          status, visit_type, source, updated_at)
+       VALUES ($1, $2, $3, $4, $5::timestamptz, $6::timestamptz,
+               'BOOKED', 'NEW', 'FRONT_DESK', now())`,
+      [
+        fx.main.id,
+        fx.main.patientIds[0],
+        fx.main.practitionerId,
+        fx.main.locationId,
+        `${DAY}T05:00:00Z`,
+        `${DAY}T05:15:00Z`,
+      ],
+    );
+
+    const day = await availability(frontDesk);
+    const slot = day.slots.find((s) => s.time === '10:30') as Slot;
+
+    expect(slot.booked).toBe(1);
+    expect(slot.available).toBe(0);
+    expect(day.slots.filter((s) => s.available === 0)).toHaveLength(1);
+
+    const queue = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(queue.json().yetToArrive[0].localTime).toBe('10:30');
+  });
+
+  it('is refused without the read permission', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/availability?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+    });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('rejects a malformed date', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/availability?practitionerId=${fx.main.practitionerId}&date=07-08-2026`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('YYYY-MM-DD');
+  });
+});
+
+// --- booking ----------------------------------------------------------------
+
+describe('booking', () => {
+  it('takes the slot out of availability', async () => {
+    const before = await availability(frontDesk);
+    const target = before.slots[3] as Slot;
+
+    const res = await book(frontDesk, { slotIndex: 3 });
+    expect(res.statusCode).toBe(201);
+
+    const created = res.json();
+    expect(created.status).toBe('BOOKED');
+    expect(created.tokenNumber).toBeNull(); // tokens are issued at check-in
+
+    // The wall clock the receptionist sees must equal the one they picked. This
+    // is the timezone regression: reading start_at back in the session timezone
+    // instead of UTC shifted this by five and a half hours, and — because
+    // availability buckets bookings by local time — left every booked slot
+    // looking free.
+    expect(created.localTime).toBe(target.time);
+    expect(new Date(created.startAt).toISOString()).toBe(new Date(target.startAt).toISOString());
+
+    const after = await availability(frontDesk);
+    const sameSlot = after.slots.find((s) => s.time === target.time) as Slot;
+    expect(sameSlot.booked).toBe(1);
+    expect(sameSlot.available).toBe(0);
+
+    // And nothing else moved.
+    expect(after.slots.filter((s) => s.available === 0)).toHaveLength(1);
+  });
+
+  it('refuses a second patient in a full slot', async () => {
+    await book(frontDesk, { slotIndex: 0, patientIndex: 0 });
+    const res = await book(frontDesk, { slotIndex: 0, patientIndex: 1 });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('SLOT_FULL');
+  });
+
+  it('refuses the same patient twice with the same doctor that day', async () => {
+    await book(frontDesk, { slotIndex: 0, patientIndex: 0 });
+    const res = await book(frontDesk, { slotIndex: 5, patientIndex: 0 });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('ALREADY_BOOKED');
+    // The receptionist needs to find the existing one, not just be refused.
+    expect(res.json().error.details.existingAppointmentId).toBeTruthy();
+  });
+
+  it('refuses a time outside the doctor’s sessions', async () => {
+    // 20:00 IST — the doctor sits 09:00–12:00.
+    const res = await book(frontDesk, { startAt: `${DAY}T14:30:00.000Z` });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('SLOT_NOT_AVAILABLE');
+  });
+
+  it('frees the slot again when the appointment is cancelled', async () => {
+    const created = (await book(frontDesk, { slotIndex: 2 })).json();
+
+    const cancelled = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${created.id}/cancel`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reason: 'Patient unwell' },
+    });
+    expect(cancelled.statusCode).toBe(200);
+
+    const after = await availability(frontDesk);
+    expect(after.slots.every((s) => s.available === 1)).toBe(true);
+  });
+
+  it('rejects a field the API does not recognise', async () => {
+    // forbidNonWhitelisted. A request carrying fields we do not understand is
+    // one we should not guess at — that is how mass-assignment bugs happen.
+    const day = await availability(frontDesk);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        patientId: fx.main.patientIds[0],
+        practitionerId: fx.main.practitionerId,
+        locationId: fx.main.locationId,
+        startAt: day.slots[0]?.startAt,
+        tenantId: fx.other.id,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// --- the queue --------------------------------------------------------------
+
+describe('check-in and the queue', () => {
+  it('issues tokens in arrival order, not appointment order', async () => {
+    const late = (await book(frontDesk, { slotIndex: 8, patientIndex: 0 })).json();
+    const early = (await book(frontDesk, { slotIndex: 1, patientIndex: 1 })).json();
+
+    // The 11:00 patient walks in before the 09:15 one.
+    const first = await checkIn(late.id);
+    const second = await checkIn(early.id);
+
+    expect(first.json().tokenNumber).toBe(1);
+    expect(second.json().tokenNumber).toBe(2);
+
+    const queue = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(queue.statusCode).toBe(200);
+    const body = queue.json();
+    expect(body.waiting.map((a: { tokenNumber: number }) => a.tokenNumber)).toEqual([1, 2]);
+    expect(body.stats.waiting).toBe(2);
+    // Nobody has been called yet, so there is no wait to average. Reporting 0
+    // here would be a number the front desk repeats to patients.
+    expect(body.stats.averageWaitMinutes).toBeNull();
+  });
+
+  it('accepts a PATCH with no body', async () => {
+    const appt = (await book(frontDesk)).json();
+
+    // Check-in carries no payload. Fastify refuses an empty body when
+    // `Content-Type: application/json` is set, which is why the web client only
+    // sets that header when there is something to send — this asserts the API
+    // half of that contract.
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/check-in`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('ARRIVED');
+
+    // The other half of the contract, asserted so a change in Fastify's
+    // behaviour is caught here rather than in the browser: announcing a JSON
+    // body and sending none is refused before any handler runs.
+    const appt2 = (await book(frontDesk, { slotIndex: 4, patientIndex: 1 })).json();
+    const announcingAnEmptyBody = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt2.id}/check-in`,
+      headers: { cookie: frontDesk.cookie, 'content-type': 'application/json' },
+    });
+
+    expect(announcingAnEmptyBody.statusCode).toBe(400);
+  });
+
+  it('refuses to check the same patient in twice', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+
+    const again = await checkIn(appt.id);
+    expect(again.statusCode).toBe(409);
+    expect(domainCode(again)).toBe('NOT_CHECKABLE');
+  });
+
+  it('walks a patient through called and completed', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+
+    const called = await transition(appt.id, 'call', doctor);
+    expect(called.statusCode).toBe(200);
+    expect(called.json().status).toBe('IN_PROGRESS');
+    expect(called.json().calledAt).toBeTruthy();
+
+    const completed = await transition(appt.id, 'complete', doctor);
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json().status).toBe('FULFILLED');
+  });
+
+  it('refuses to call a patient who has not arrived', async () => {
+    const appt = (await book(frontDesk)).json();
+
+    const res = await transition(appt.id, 'call', doctor);
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('INVALID_TRANSITION');
+  });
+
+  it('registers a walk-in as arrived with a token', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments/walk-in',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        patientId: fx.main.patientIds[2],
+        practitionerId: fx.main.practitionerId,
+        locationId: fx.main.locationId,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('ARRIVED');
+    expect(res.json().source).toBe('WALK_IN');
+    expect(res.json().tokenNumber).toBe(1);
+
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments/walk-in',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        patientId: fx.main.patientIds[2],
+        practitionerId: fx.main.practitionerId,
+        locationId: fx.main.locationId,
+      },
+    });
+
+    expect(duplicate.statusCode).toBe(409);
+    expect(domainCode(duplicate)).toBe('ALREADY_IN_QUEUE');
+  });
+});
+
+// --- rescheduling and cancelling -------------------------------------------
+
+describe('rescheduling', () => {
+  it('frees the old slot and takes the new one', async () => {
+    const before = await availability(frontDesk);
+    const from = before.slots[1] as Slot;
+    const to = before.slots[9] as Slot;
+
+    const appt = (await book(frontDesk, { slotIndex: 1 })).json();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/reschedule`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { startAt: to.startAt, reason: 'Patient requested a different time' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().localTime).toBe(to.time);
+
+    // Implemented as cancel-then-book, so the result is a NEW appointment and
+    // the original stays in the record with its reason.
+    expect(res.json().id).not.toBe(appt.id);
+
+    const after = await availability(frontDesk);
+    expect(after.slots.find((s) => s.time === from.time)?.available).toBe(1);
+    expect(after.slots.find((s) => s.time === to.time)?.available).toBe(0);
+
+    const [original] = await ownerQuery<{ status: string; cancel_reason: string }>(
+      fx.main.id,
+      `SELECT status, cancel_reason FROM appointment WHERE id = $1`,
+      [appt.id],
+    );
+    expect(original?.status).toBe('CANCELLED');
+    expect(original?.cancel_reason).toContain('Rescheduled');
+  });
+
+  it('refuses to move a patient who has already arrived', async () => {
+    const day = await availability(frontDesk);
+    const appt = (await book(frontDesk, { slotIndex: 0 })).json();
+    await checkIn(appt.id);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/reschedule`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { startAt: day.slots[6]?.startAt, reason: 'Doctor running late' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOT_RESCHEDULABLE');
+  });
+
+  it('requires a reason to cancel', async () => {
+    const appt = (await book(frontDesk)).json();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/cancel`,
+      headers: { cookie: frontDesk.cookie },
+      payload: {},
+    });
+
+    // FR-APT-03 wants reason codes, and a cancellation history of empty strings
+    // tells a clinic nothing about why its slots go unused.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('reason');
+  });
+
+  it('refuses a cancellation from a role without the permission', async () => {
+    const appt = (await book(frontDesk)).json();
+
+    // A doctor may call and complete, but cancelling is a front-desk action.
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/cancel`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'Patient unwell' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toContain('appointment:cancel');
+  });
+
+  it('refuses every write from a read-only role', async () => {
+    const appt = (await book(frontDesk)).json();
+
+    for (const action of ['check-in', 'call', 'complete', 'no-show']) {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${appt.id}/${action}`,
+        headers: { cookie: nurse.cookie },
+      });
+
+      expect(res.statusCode, `nurse should not be able to ${action}`).toBe(403);
+    }
+  });
+});
+
+// --- tenant isolation -------------------------------------------------------
+
+describe('one clinic cannot reach another', () => {
+  it('cannot read another clinic’s availability', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/availability?practitionerId=${fx.other.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // Not 403 — 404. Under row-level security the other tenant's doctor does not
+    // exist as far as this session is concerned, which is the stronger answer:
+    // it confirms nothing about what the id refers to.
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('cannot act on another clinic’s appointment', async () => {
+    const theirs = await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments/walk-in',
+      headers: { cookie: otherFrontDesk.cookie },
+      payload: {
+        patientId: fx.other.patientIds[0],
+        practitionerId: fx.other.practitionerId,
+        locationId: fx.other.locationId,
+      },
+    });
+    expect(theirs.statusCode).toBe(201);
+    const theirAppointmentId = theirs.json().id;
+
+    for (const action of ['check-in', 'call', 'complete', 'no-show']) {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${theirAppointmentId}/${action}`,
+        headers: { cookie: frontDesk.cookie },
+      });
+      expect(res.statusCode, `${action} across tenants`).toBe(404);
+    }
+
+    const cancel = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${theirAppointmentId}/cancel`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reason: 'Not mine to cancel' },
+    });
+    expect(cancel.statusCode).toBe(404);
+
+    // And it is untouched. Read under the OTHER tenant's context — this is the
+    // only place in the suite that legitimately looks at their data.
+    const [row] = await ownerQuery<{ status: string }>(
+      fx.other.id,
+      `SELECT status FROM appointment WHERE id = $1`,
+      [theirAppointmentId],
+    );
+    expect(row?.status).toBe('ARRIVED');
+  });
+
+  it('cannot book one clinic’s patient into another clinic’s diary', async () => {
+    const day = await availability(frontDesk);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        patientId: fx.other.patientIds[0],
+        practitionerId: fx.main.practitionerId,
+        locationId: fx.main.locationId,
+        startAt: day.slots[0]?.startAt,
+      },
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('shows an empty queue for another clinic’s doctor', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments/walk-in',
+      headers: { cookie: otherFrontDesk.cookie },
+      payload: {
+        patientId: fx.other.patientIds[0],
+        practitionerId: fx.other.practitionerId,
+        locationId: fx.other.locationId,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.other.practitionerId}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // A queue endpoint filters rather than looks up, so the honest result is an
+    // empty board rather than an error. What matters is that no row crosses.
+    expect(res.statusCode).toBe(200);
+    expect(res.json().waiting).toHaveLength(0);
+    expect(res.json().stats.total).toBe(0);
+  });
+
+  it('lists only its own doctors and departments', async () => {
+    const practitioners = await app.inject({
+      method: 'GET',
+      url: '/api/v1/practitioners',
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const ids = practitioners.json().practitioners.map((p: { id: string }) => p.id);
+    expect(ids).toEqual([fx.main.practitionerId]);
+  });
+});
+
+// --- audit ------------------------------------------------------------------
+
+describe('the audit trail', () => {
+  it('attributes the booking to the user who made it', async () => {
+    const appt = (await book(frontDesk)).json();
+
+    const [event] = await ownerQuery<{
+      action: string;
+      actor_user_id: string | null;
+      patient_id: string | null;
+      changed_fields: string[];
+    }>(
+      fx.main.id,
+      `SELECT action, actor_user_id, patient_id, changed_fields
+         FROM audit_event
+        WHERE resource_id = $1 AND action = 'appointment.book'`,
+      [appt.id],
+    );
+
+    expect(event?.actor_user_id).toBeTruthy();
+    expect(event?.patient_id).toBe(fx.main.patientIds[0]);
+
+    // Field NAMES only. An audit log holding values is a second copy of the data
+    // it exists to protect.
+    expect(event?.changed_fields).toContain('startAt');
+  });
+});
+
+// --- shared request helpers -------------------------------------------------
+
+function checkIn(appointmentId: string) {
+  return transition(appointmentId, 'check-in', frontDesk);
+}
+
+function transition(appointmentId: string, action: string, session: Session) {
+  return app.inject({
+    method: 'PATCH',
+    url: `/api/v1/appointments/${appointmentId}/${action}`,
+    headers: { cookie: session.cookie },
+  });
+}

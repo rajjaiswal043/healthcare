@@ -26,3 +26,37 @@ export function formatAge(p: { ageYears: number | null; birthDate: string | null
 export function genderInitial(gender: string): string {
   return gender === 'UNKNOWN' ? '?' : (gender.charAt(0) ?? '?');
 }
+
+/**
+ * Paise → "₹500.00".
+ *
+ * The ONLY place money becomes a display string. Everything else — the API, the
+ * client, the components — works in integer paise, because a division scattered
+ * through the UI is a rounding error waiting to disagree with the cash drawer.
+ *
+ * Indian digit grouping (₹1,00,000 rather than ₹100,000) comes from the en-IN
+ * locale, which is what a clinic expects to read.
+ */
+export function formatPaise(paise: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+  }).format(paise / 100);
+}
+
+/**
+ * "500" or "500.50" → paise, or null if it is not a number.
+ *
+ * Parsing happens once, here, on the way in. `Math.round` is what stops
+ * `4.35 * 100 = 434.99999999999994` becoming 434 paise.
+ */
+export function parseRupeesToPaise(input: string): number | null {
+  const trimmed = input.trim().replace(/[₹,\s]/g, '');
+  if (trimmed === '') return null;
+
+  const rupees = Number(trimmed);
+  if (!Number.isFinite(rupees) || rupees < 0) return null;
+
+  return Math.round(rupees * 100);
+}

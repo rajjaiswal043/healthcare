@@ -136,3 +136,152 @@ export type UserRole = Prisma.UserRoleModel
  * from a silent long-lived compromise into a forced logout somebody notices.
  */
 export type Session = Prisma.SessionModel
+/**
+ * Model Department
+ * A clinical department: General Medicine, Paediatrics, Orthopaedics.
+ * 
+ * The first step of booking is "which department", so this is not decoration â€”
+ * it is how a receptionist narrows a list of doctors when the patient says
+ * "something with my knee".
+ * 
+ * FHIR: HealthcareService.
+ */
+export type Department = Prisma.DepartmentModel
+/**
+ * Model Practitioner
+ * A doctor. FHIR: Practitioner (+ PractitionerRole for the department link).
+ * 
+ * registrationNumber is not optional in spirit: the Telemedicine Guidelines and
+ * the Drugs rules both require a doctor's registration number on prescriptions
+ * (BRD 7.3, 7.5). It is nullable only because a clinic may add a doctor before
+ * someone finds the number.
+ */
+export type Practitioner = Prisma.PractitionerModel
+/**
+ * Model PractitionerSchedule
+ * A recurring weekly session: "Dr Rao, Kothrud, Mondays 09:00-13:00, 15-minute
+ * slots". FHIR: Schedule.
+ * 
+ * SLOTS ARE NOT STORED. Availability is computed from this template minus
+ * exceptions minus existing appointments, at read time. Materialising slots
+ * would mean a generation job, a rebuild whenever a doctor changes their hours,
+ * and rows that can silently disagree with the template. See
+ * docs/01-appointments-opd-queue-plan.md section 2.
+ */
+export type PractitionerSchedule = Prisma.PractitionerScheduleModel
+/**
+ * Model ScheduleException
+ * Leave, blocks and one-off extra sessions (FR-APT-02).
+ * 
+ * A date RANGE rather than a single date, because "on leave 10-14 August" is
+ * how leave is actually taken, and five rows for one absence is how a clinic
+ * ends up with four deleted and one forgotten.
+ */
+export type ScheduleException = Prisma.ScheduleExceptionModel
+/**
+ * Model Appointment
+ * A booked or walked-in visit. FHIR: Appointment.
+ * 
+ * Walk-ins are Appointments too, created at the moment of arrival with
+ * source = WALK_IN. One record type means one queue and one worklist query,
+ * rather than two code paths that drift apart.
+ */
+export type Appointment = Prisma.AppointmentModel
+/**
+ * Model Encounter
+ * One visit's clinical record. FHIR: Encounter.
+ * 
+ * The narrative fields live here rather than in a separate note table. They are
+ * one-to-one with the encounter and are always read together, so a second table
+ * would buy a join and nothing else.
+ */
+export type Encounter = Prisma.EncounterModel
+/**
+ * Model VitalsObservation
+ * A set of readings taken at one moment. FHIR: Observation (vital-signs).
+ * 
+ * Its own table rather than columns on Encounter, because a nurse records these
+ * before the doctor sees the patient, they can be repeated within a visit, and
+ * the same shape will later carry readings taken outside a consultation.
+ * 
+ * BMI is absent deliberately. It is derived from height and weight at read
+ * time; storing it means two numbers that disagree the moment either is
+ * corrected.
+ */
+export type VitalsObservation = Prisma.VitalsObservationModel
+/**
+ * Model Diagnosis
+ * What the doctor concluded. FHIR: Condition.
+ * 
+ * Coded AND free text, not one or the other. The code is what makes the data
+ * answerable later and exchangeable over ABDM; the free text is what the doctor
+ * actually meant, which no code set ever fully captures.
+ */
+export type Diagnosis = Prisma.DiagnosisModel
+/**
+ * Model FormularyItem
+ * The clinic's drug list. FHIR: Medication.
+ * 
+ * Per-tenant and editable, because no seeded list survives contact with what a
+ * particular clinic actually stocks.
+ */
+export type FormularyItem = Prisma.FormularyItemModel
+/**
+ * Model Prescription
+ * One prescribed drug. FHIR: MedicationRequest.
+ * 
+ * Structured rather than a line of free text. A textarea would be faster to
+ * build and every clinic would accept it, but interaction checking, repeat
+ * prescriptions, ABDM exchange and "how much of this did we prescribe last
+ * month" all read these fields — and none of it can be recovered from prose
+ * afterwards. See docs/02-consultation-plan.md section 2.2.
+ */
+export type Prescription = Prisma.PrescriptionModel
+/**
+ * Model EncounterAddendum
+ * A correction to a signed encounter. FHIR: the amendment half of Provenance.
+ * 
+ * This exists so the encounter itself never has to change. Append-only by
+ * construction — there is no update path in the service, and the migration
+ * grants none.
+ */
+export type EncounterAddendum = Prisma.EncounterAddendumModel
+/**
+ * Model Service
+ * Something the clinic charges for. FHIR: ChargeItemDefinition.
+ */
+export type Service = Prisma.ServiceModel
+/**
+ * Model Invoice
+ * A bill. FHIR: Invoice.
+ */
+export type Invoice = Prisma.InvoiceModel
+/**
+ * Model InvoiceLine
+ * One charged item. FHIR: Invoice.lineItem.
+ */
+export type InvoiceLine = Prisma.InvoiceLineModel
+/**
+ * Model Payment
+ * One tender against an invoice. FHIR: PaymentReconciliation.
+ */
+export type Payment = Prisma.PaymentModel
+/**
+ * Model InvoiceCounter
+ * Per-tenant serial invoice numbers.
+ * 
+ * Same atomic INSERT ... ON CONFLICT DO UPDATE ... RETURNING pattern as the
+ * UHID and queue-token counters, for the same reason: a receipt number that
+ * repeats is a financial document that repeats.
+ */
+export type InvoiceCounter = Prisma.InvoiceCounterModel
+/**
+ * Model QueueCounter
+ * Per-doctor, per-day token counter.
+ * 
+ * A counter row updated with INSERT ... ON CONFLICT DO UPDATE ... RETURNING is
+ * atomic; SELECT max(token)+1 is not, and two receptionists checking patients
+ * in at 9am would be handed the same number. Same reasoning as the UHID counter
+ * on tenant.
+ */
+export type QueueCounter = Prisma.QueueCounterModel

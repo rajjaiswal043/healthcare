@@ -6,11 +6,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './auth-provider';
 import { LogoMark } from './auth-shell';
 import {
+  IconCalendar,
   IconChevronRight,
+  IconClock,
   IconHome,
   IconLogout,
   IconMenu,
   IconPanelLeft,
+  IconReceipt,
   IconSearch,
   IconUserPlus,
   IconUsers,
@@ -37,8 +40,27 @@ const SECTIONS: NavSection[] = [
     items: [
       { key: 'home', label: 'Home', href: '/', icon: <IconHome size={16} /> },
       {
+        key: 'queue',
+        label: "Today's queue",
+        href: '/queue',
+        icon: <IconClock size={16} />,
+        permission: 'appointment:read',
+      },
+      {
+        key: 'book',
+        label: 'Book',
+        href: '/appointments/new',
+        icon: <IconCalendar size={16} />,
+        permission: 'appointment:write',
+      },
+    ],
+  },
+  {
+    title: 'Patients',
+    items: [
+      {
         key: 'patients',
-        label: 'Patients',
+        label: 'Find a patient',
         href: '/patients',
         icon: <IconUsers size={16} />,
         permission: 'patient:read',
@@ -52,12 +74,28 @@ const SECTIONS: NavSection[] = [
       },
     ],
   },
+  {
+    title: 'Billing',
+    items: [
+      {
+        key: 'collections',
+        label: 'Collections',
+        href: '/reports/collections',
+        icon: <IconReceipt size={16} />,
+        // Owners and administrators only. The front desk takes the money; it
+        // does not need the day's revenue on a screen anyone can walk past.
+        permission: 'report:revenue',
+      },
+    ],
+  },
 ];
 
 const BREADCRUMBS: Record<string, string> = {
   '/': 'Home',
   '/patients': 'Patients',
   '/patients/register': 'Register a patient',
+  '/queue': "Today's queue",
+  '/appointments/new': 'Book an appointment',
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {

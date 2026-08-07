@@ -45,61 +45,11 @@ async function hashPassword(plain) {
   return ['scrypt', N, R, P, salt.toString('base64'), derived.toString('base64')].join('$');
 }
 
-const PERMISSIONS = {
-  PATIENT_READ: 'patient:read',
-  PATIENT_WRITE: 'patient:write',
-  PATIENT_MERGE: 'patient:merge',
-  CONSENT_READ: 'consent:read',
-  CONSENT_WRITE: 'consent:write',
-  AUDIT_READ: 'audit:read',
-  USER_MANAGE: 'user:manage',
-  ROLE_MANAGE: 'role:manage',
-  TENANT_CONFIGURE: 'tenant:configure',
-};
-const ALL = Object.values(PERMISSIONS);
-
-const ROLES = [
-  {
-    key: 'front_desk',
-    name: 'Front desk',
-    description: 'Registers patients, searches records, manages the queue.',
-    permissions: [
-      PERMISSIONS.PATIENT_READ,
-      PERMISSIONS.PATIENT_WRITE,
-      PERMISSIONS.CONSENT_READ,
-      PERMISSIONS.CONSENT_WRITE,
-    ],
-    requiresMfa: false,
-  },
-  {
-    key: 'doctor',
-    name: 'Doctor',
-    description: 'Sees the day list, reviews history, records consultations.',
-    permissions: [PERMISSIONS.PATIENT_READ, PERMISSIONS.PATIENT_WRITE, PERMISSIONS.CONSENT_READ],
-    requiresMfa: false,
-  },
-  {
-    key: 'nurse',
-    name: 'Nurse',
-    description: 'Captures vitals, supports clinical workflow.',
-    permissions: [PERMISSIONS.PATIENT_READ, PERMISSIONS.CONSENT_READ],
-    requiresMfa: false,
-  },
-  {
-    key: 'administrator',
-    name: 'Administrator',
-    description: 'Configures the clinic, manages users and roles.',
-    permissions: ALL,
-    requiresMfa: true,
-  },
-  {
-    key: 'owner',
-    name: 'Owner / management',
-    description: 'Oversight and reporting. Read-only over clinical data.',
-    permissions: [PERMISSIONS.PATIENT_READ, PERMISSIONS.AUDIT_READ, PERMISSIONS.CONSENT_READ],
-    requiresMfa: true,
-  },
-];
+// Permissions and roles come from @healthcloud/db so there is ONE definition.
+// They used to be copied here, and the copies drifted: appointment permissions
+// were added to the API but not to this file, so every scheduling endpoint
+// returned 403 against freshly seeded roles.
+const { SYSTEM_ROLES: ROLES } = await import('@healthcloud/db');
 
 /**
  * Demo users.
