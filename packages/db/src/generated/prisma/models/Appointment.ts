@@ -53,6 +53,14 @@ export type AppointmentMinAggregateOutputType = {
   reasonForVisit: string | null
   tokenNumber: number | null
   queueDate: Date | null
+  readyAt: Date | null
+  priorityReasonCode: $Enums.QueuePriorityReason | null
+  priorityNote: string | null
+  prioritySetAt: Date | null
+  prioritySetByUserId: string | null
+  sentOutAt: Date | null
+  sentOutReason: string | null
+  returnedAt: Date | null
   checkedInAt: Date | null
   calledAt: Date | null
   completedAt: Date | null
@@ -81,6 +89,14 @@ export type AppointmentMaxAggregateOutputType = {
   reasonForVisit: string | null
   tokenNumber: number | null
   queueDate: Date | null
+  readyAt: Date | null
+  priorityReasonCode: $Enums.QueuePriorityReason | null
+  priorityNote: string | null
+  prioritySetAt: Date | null
+  prioritySetByUserId: string | null
+  sentOutAt: Date | null
+  sentOutReason: string | null
+  returnedAt: Date | null
   checkedInAt: Date | null
   calledAt: Date | null
   completedAt: Date | null
@@ -109,6 +125,14 @@ export type AppointmentCountAggregateOutputType = {
   reasonForVisit: number
   tokenNumber: number
   queueDate: number
+  readyAt: number
+  priorityReasonCode: number
+  priorityNote: number
+  prioritySetAt: number
+  prioritySetByUserId: number
+  sentOutAt: number
+  sentOutReason: number
+  returnedAt: number
   checkedInAt: number
   calledAt: number
   completedAt: number
@@ -147,6 +171,14 @@ export type AppointmentMinAggregateInputType = {
   reasonForVisit?: true
   tokenNumber?: true
   queueDate?: true
+  readyAt?: true
+  priorityReasonCode?: true
+  priorityNote?: true
+  prioritySetAt?: true
+  prioritySetByUserId?: true
+  sentOutAt?: true
+  sentOutReason?: true
+  returnedAt?: true
   checkedInAt?: true
   calledAt?: true
   completedAt?: true
@@ -175,6 +207,14 @@ export type AppointmentMaxAggregateInputType = {
   reasonForVisit?: true
   tokenNumber?: true
   queueDate?: true
+  readyAt?: true
+  priorityReasonCode?: true
+  priorityNote?: true
+  prioritySetAt?: true
+  prioritySetByUserId?: true
+  sentOutAt?: true
+  sentOutReason?: true
+  returnedAt?: true
   checkedInAt?: true
   calledAt?: true
   completedAt?: true
@@ -203,6 +243,14 @@ export type AppointmentCountAggregateInputType = {
   reasonForVisit?: true
   tokenNumber?: true
   queueDate?: true
+  readyAt?: true
+  priorityReasonCode?: true
+  priorityNote?: true
+  prioritySetAt?: true
+  prioritySetByUserId?: true
+  sentOutAt?: true
+  sentOutReason?: true
+  returnedAt?: true
   checkedInAt?: true
   calledAt?: true
   completedAt?: true
@@ -318,6 +366,14 @@ export type AppointmentGroupByOutputType = {
   reasonForVisit: string | null
   tokenNumber: number | null
   queueDate: Date | null
+  readyAt: Date | null
+  priorityReasonCode: $Enums.QueuePriorityReason | null
+  priorityNote: string | null
+  prioritySetAt: Date | null
+  prioritySetByUserId: string | null
+  sentOutAt: Date | null
+  sentOutReason: string | null
+  returnedAt: Date | null
   checkedInAt: Date | null
   calledAt: Date | null
   completedAt: Date | null
@@ -369,6 +425,14 @@ export type AppointmentWhereInput = {
   reasonForVisit?: Prisma.StringNullableFilter<"Appointment"> | string | null
   tokenNumber?: Prisma.IntNullableFilter<"Appointment"> | number | null
   queueDate?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  readyAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  priorityReasonCode?: Prisma.EnumQueuePriorityReasonNullableFilter<"Appointment"> | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.StringNullableFilter<"Appointment"> | string | null
+  prioritySetAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  prioritySetByUserId?: Prisma.UuidNullableFilter<"Appointment"> | string | null
+  sentOutAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  sentOutReason?: Prisma.StringNullableFilter<"Appointment"> | string | null
+  returnedAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   checkedInAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   calledAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
@@ -402,6 +466,14 @@ export type AppointmentOrderByWithRelationInput = {
   reasonForVisit?: Prisma.SortOrderInput | Prisma.SortOrder
   tokenNumber?: Prisma.SortOrderInput | Prisma.SortOrder
   queueDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  readyAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  priorityReasonCode?: Prisma.SortOrderInput | Prisma.SortOrder
+  priorityNote?: Prisma.SortOrderInput | Prisma.SortOrder
+  prioritySetAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  prioritySetByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  sentOutAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  sentOutReason?: Prisma.SortOrderInput | Prisma.SortOrder
+  returnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   checkedInAt?: Prisma.SortOrderInput | Prisma.SortOrder
   calledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -439,6 +511,14 @@ export type AppointmentWhereUniqueInput = Prisma.AtLeast<{
   reasonForVisit?: Prisma.StringNullableFilter<"Appointment"> | string | null
   tokenNumber?: Prisma.IntNullableFilter<"Appointment"> | number | null
   queueDate?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  readyAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  priorityReasonCode?: Prisma.EnumQueuePriorityReasonNullableFilter<"Appointment"> | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.StringNullableFilter<"Appointment"> | string | null
+  prioritySetAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  prioritySetByUserId?: Prisma.UuidNullableFilter<"Appointment"> | string | null
+  sentOutAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  sentOutReason?: Prisma.StringNullableFilter<"Appointment"> | string | null
+  returnedAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   checkedInAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   calledAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
@@ -472,6 +552,14 @@ export type AppointmentOrderByWithAggregationInput = {
   reasonForVisit?: Prisma.SortOrderInput | Prisma.SortOrder
   tokenNumber?: Prisma.SortOrderInput | Prisma.SortOrder
   queueDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  readyAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  priorityReasonCode?: Prisma.SortOrderInput | Prisma.SortOrder
+  priorityNote?: Prisma.SortOrderInput | Prisma.SortOrder
+  prioritySetAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  prioritySetByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  sentOutAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  sentOutReason?: Prisma.SortOrderInput | Prisma.SortOrder
+  returnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   checkedInAt?: Prisma.SortOrderInput | Prisma.SortOrder
   calledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -508,6 +596,14 @@ export type AppointmentScalarWhereWithAggregatesInput = {
   reasonForVisit?: Prisma.StringNullableWithAggregatesFilter<"Appointment"> | string | null
   tokenNumber?: Prisma.IntNullableWithAggregatesFilter<"Appointment"> | number | null
   queueDate?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
+  readyAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
+  priorityReasonCode?: Prisma.EnumQueuePriorityReasonNullableWithAggregatesFilter<"Appointment"> | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.StringNullableWithAggregatesFilter<"Appointment"> | string | null
+  prioritySetAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
+  prioritySetByUserId?: Prisma.UuidNullableWithAggregatesFilter<"Appointment"> | string | null
+  sentOutAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
+  sentOutReason?: Prisma.StringNullableWithAggregatesFilter<"Appointment"> | string | null
+  returnedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
   checkedInAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
   calledAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Appointment"> | Date | string | null
@@ -533,6 +629,14 @@ export type AppointmentCreateInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -566,6 +670,14 @@ export type AppointmentUncheckedCreateInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -593,6 +705,14 @@ export type AppointmentUpdateInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -626,6 +746,14 @@ export type AppointmentUncheckedUpdateInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -656,6 +784,14 @@ export type AppointmentCreateManyInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -681,6 +817,14 @@ export type AppointmentUpdateManyMutationInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -709,6 +853,14 @@ export type AppointmentUncheckedUpdateManyInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -754,6 +906,14 @@ export type AppointmentCountOrderByAggregateInput = {
   reasonForVisit?: Prisma.SortOrder
   tokenNumber?: Prisma.SortOrder
   queueDate?: Prisma.SortOrder
+  readyAt?: Prisma.SortOrder
+  priorityReasonCode?: Prisma.SortOrder
+  priorityNote?: Prisma.SortOrder
+  prioritySetAt?: Prisma.SortOrder
+  prioritySetByUserId?: Prisma.SortOrder
+  sentOutAt?: Prisma.SortOrder
+  sentOutReason?: Prisma.SortOrder
+  returnedAt?: Prisma.SortOrder
   checkedInAt?: Prisma.SortOrder
   calledAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
@@ -786,6 +946,14 @@ export type AppointmentMaxOrderByAggregateInput = {
   reasonForVisit?: Prisma.SortOrder
   tokenNumber?: Prisma.SortOrder
   queueDate?: Prisma.SortOrder
+  readyAt?: Prisma.SortOrder
+  priorityReasonCode?: Prisma.SortOrder
+  priorityNote?: Prisma.SortOrder
+  prioritySetAt?: Prisma.SortOrder
+  prioritySetByUserId?: Prisma.SortOrder
+  sentOutAt?: Prisma.SortOrder
+  sentOutReason?: Prisma.SortOrder
+  returnedAt?: Prisma.SortOrder
   checkedInAt?: Prisma.SortOrder
   calledAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
@@ -814,6 +982,14 @@ export type AppointmentMinOrderByAggregateInput = {
   reasonForVisit?: Prisma.SortOrder
   tokenNumber?: Prisma.SortOrder
   queueDate?: Prisma.SortOrder
+  readyAt?: Prisma.SortOrder
+  priorityReasonCode?: Prisma.SortOrder
+  priorityNote?: Prisma.SortOrder
+  prioritySetAt?: Prisma.SortOrder
+  prioritySetByUserId?: Prisma.SortOrder
+  sentOutAt?: Prisma.SortOrder
+  sentOutReason?: Prisma.SortOrder
+  returnedAt?: Prisma.SortOrder
   checkedInAt?: Prisma.SortOrder
   calledAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
@@ -979,6 +1155,10 @@ export type EnumAppointmentSourceFieldUpdateOperationsInput = {
   set?: $Enums.AppointmentSource
 }
 
+export type NullableEnumQueuePriorityReasonFieldUpdateOperationsInput = {
+  set?: $Enums.QueuePriorityReason | null
+}
+
 export type AppointmentCreateNestedOneWithoutEncounterInput = {
   create?: Prisma.XOR<Prisma.AppointmentCreateWithoutEncounterInput, Prisma.AppointmentUncheckedCreateWithoutEncounterInput>
   connectOrCreate?: Prisma.AppointmentCreateOrConnectWithoutEncounterInput
@@ -1021,6 +1201,14 @@ export type AppointmentCreateWithoutPatientInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1052,6 +1240,14 @@ export type AppointmentUncheckedCreateWithoutPatientInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1111,6 +1307,14 @@ export type AppointmentScalarWhereInput = {
   reasonForVisit?: Prisma.StringNullableFilter<"Appointment"> | string | null
   tokenNumber?: Prisma.IntNullableFilter<"Appointment"> | number | null
   queueDate?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  readyAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  priorityReasonCode?: Prisma.EnumQueuePriorityReasonNullableFilter<"Appointment"> | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.StringNullableFilter<"Appointment"> | string | null
+  prioritySetAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  prioritySetByUserId?: Prisma.UuidNullableFilter<"Appointment"> | string | null
+  sentOutAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
+  sentOutReason?: Prisma.StringNullableFilter<"Appointment"> | string | null
+  returnedAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   checkedInAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   calledAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"Appointment"> | Date | string | null
@@ -1136,6 +1340,14 @@ export type AppointmentCreateWithoutDepartmentInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1167,6 +1379,14 @@ export type AppointmentUncheckedCreateWithoutDepartmentInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1220,6 +1440,14 @@ export type AppointmentCreateWithoutPractitionerInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1251,6 +1479,14 @@ export type AppointmentUncheckedCreateWithoutPractitionerInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1304,6 +1540,14 @@ export type AppointmentCreateWithoutEncounterInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1336,6 +1580,14 @@ export type AppointmentUncheckedCreateWithoutEncounterInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1378,6 +1630,14 @@ export type AppointmentUpdateWithoutEncounterInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1410,6 +1670,14 @@ export type AppointmentUncheckedUpdateWithoutEncounterInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1436,6 +1704,14 @@ export type AppointmentCreateWithoutInvoiceInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1468,6 +1744,14 @@ export type AppointmentUncheckedCreateWithoutInvoiceInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1510,6 +1794,14 @@ export type AppointmentUpdateWithoutInvoiceInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1542,6 +1834,14 @@ export type AppointmentUncheckedUpdateWithoutInvoiceInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1570,6 +1870,14 @@ export type AppointmentCreateManyPatientInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1595,6 +1903,14 @@ export type AppointmentUpdateWithoutPatientInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1626,6 +1942,14 @@ export type AppointmentUncheckedUpdateWithoutPatientInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1655,6 +1979,14 @@ export type AppointmentUncheckedUpdateManyWithoutPatientInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1682,6 +2014,14 @@ export type AppointmentCreateManyDepartmentInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1707,6 +2047,14 @@ export type AppointmentUpdateWithoutDepartmentInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1738,6 +2086,14 @@ export type AppointmentUncheckedUpdateWithoutDepartmentInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1767,6 +2123,14 @@ export type AppointmentUncheckedUpdateManyWithoutDepartmentInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1794,6 +2158,14 @@ export type AppointmentCreateManyPractitionerInput = {
   reasonForVisit?: string | null
   tokenNumber?: number | null
   queueDate?: Date | string | null
+  readyAt?: Date | string | null
+  priorityReasonCode?: $Enums.QueuePriorityReason | null
+  priorityNote?: string | null
+  prioritySetAt?: Date | string | null
+  prioritySetByUserId?: string | null
+  sentOutAt?: Date | string | null
+  sentOutReason?: string | null
+  returnedAt?: Date | string | null
   checkedInAt?: Date | string | null
   calledAt?: Date | string | null
   completedAt?: Date | string | null
@@ -1819,6 +2191,14 @@ export type AppointmentUpdateWithoutPractitionerInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1850,6 +2230,14 @@ export type AppointmentUncheckedUpdateWithoutPractitionerInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1879,6 +2267,14 @@ export type AppointmentUncheckedUpdateManyWithoutPractitionerInput = {
   reasonForVisit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tokenNumber?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   queueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  readyAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  priorityReasonCode?: Prisma.NullableEnumQueuePriorityReasonFieldUpdateOperationsInput | $Enums.QueuePriorityReason | null
+  priorityNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prioritySetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  prioritySetByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sentOutAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  sentOutReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  returnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   checkedInAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   calledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1909,6 +2305,14 @@ export type AppointmentSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   reasonForVisit?: boolean
   tokenNumber?: boolean
   queueDate?: boolean
+  readyAt?: boolean
+  priorityReasonCode?: boolean
+  priorityNote?: boolean
+  prioritySetAt?: boolean
+  prioritySetByUserId?: boolean
+  sentOutAt?: boolean
+  sentOutReason?: boolean
+  returnedAt?: boolean
   checkedInAt?: boolean
   calledAt?: boolean
   completedAt?: boolean
@@ -1942,6 +2346,14 @@ export type AppointmentSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   reasonForVisit?: boolean
   tokenNumber?: boolean
   queueDate?: boolean
+  readyAt?: boolean
+  priorityReasonCode?: boolean
+  priorityNote?: boolean
+  prioritySetAt?: boolean
+  prioritySetByUserId?: boolean
+  sentOutAt?: boolean
+  sentOutReason?: boolean
+  returnedAt?: boolean
   checkedInAt?: boolean
   calledAt?: boolean
   completedAt?: boolean
@@ -1973,6 +2385,14 @@ export type AppointmentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   reasonForVisit?: boolean
   tokenNumber?: boolean
   queueDate?: boolean
+  readyAt?: boolean
+  priorityReasonCode?: boolean
+  priorityNote?: boolean
+  prioritySetAt?: boolean
+  prioritySetByUserId?: boolean
+  sentOutAt?: boolean
+  sentOutReason?: boolean
+  returnedAt?: boolean
   checkedInAt?: boolean
   calledAt?: boolean
   completedAt?: boolean
@@ -2004,6 +2424,14 @@ export type AppointmentSelectScalar = {
   reasonForVisit?: boolean
   tokenNumber?: boolean
   queueDate?: boolean
+  readyAt?: boolean
+  priorityReasonCode?: boolean
+  priorityNote?: boolean
+  prioritySetAt?: boolean
+  prioritySetByUserId?: boolean
+  sentOutAt?: boolean
+  sentOutReason?: boolean
+  returnedAt?: boolean
   checkedInAt?: boolean
   calledAt?: boolean
   completedAt?: boolean
@@ -2017,7 +2445,7 @@ export type AppointmentSelectScalar = {
   updatedAt?: boolean
 }
 
-export type AppointmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "practitionerId" | "locationId" | "departmentId" | "startAt" | "endAt" | "status" | "visitType" | "source" | "reasonForVisit" | "tokenNumber" | "queueDate" | "checkedInAt" | "calledAt" | "completedAt" | "cancelledAt" | "cancelReason" | "cancelledByUserId" | "noShowAt" | "bookedByUserId" | "reminderSentAt" | "createdAt" | "updatedAt", ExtArgs["result"]["appointment"]>
+export type AppointmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "practitionerId" | "locationId" | "departmentId" | "startAt" | "endAt" | "status" | "visitType" | "source" | "reasonForVisit" | "tokenNumber" | "queueDate" | "readyAt" | "priorityReasonCode" | "priorityNote" | "prioritySetAt" | "prioritySetByUserId" | "sentOutAt" | "sentOutReason" | "returnedAt" | "checkedInAt" | "calledAt" | "completedAt" | "cancelledAt" | "cancelReason" | "cancelledByUserId" | "noShowAt" | "bookedByUserId" | "reminderSentAt" | "createdAt" | "updatedAt", ExtArgs["result"]["appointment"]>
 export type AppointmentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   practitioner?: boolean | Prisma.PractitionerDefaultArgs<ExtArgs>
@@ -2059,8 +2487,12 @@ export type $AppointmentPayload<ExtArgs extends runtime.Types.Extensions.Interna
     source: $Enums.AppointmentSource
     reasonForVisit: string | null
     /**
-     * Issued at CHECK-IN, not at booking: the appointment gives a time, the
-     * token gives a position, and position is decided by arrival.
+     * The patient's identity for this visit, NOT their position in the queue.
+     * 
+     * Issued at booking (or at walk-in registration) so the patient can be given
+     * it on a slip and called by it. Position is `readyAt` — see
+     * docs/05-token-queue-plan.md section 1 for why conflating the two broke as
+     * soon as tokens moved earlier than arrival.
      */
     tokenNumber: number | null
     /**
@@ -2068,6 +2500,29 @@ export type $AppointmentPayload<ExtArgs extends runtime.Types.Extensions.Interna
      * uniqueness is per practitioner per day.
      */
     queueDate: Date | null
+    /**
+     * When the patient became ready to be seen — stamped at check-in, and
+     * re-stamped when they come back from an investigation. This is what the
+     * waiting list sorts on.
+     */
+    readyAt: Date | null
+    /**
+     * Null means no flag, which is the ordinary case.
+     */
+    priorityReasonCode: $Enums.QueuePriorityReason | null
+    /**
+     * Optional colour beside the code. The code is what is countable.
+     */
+    priorityNote: string | null
+    prioritySetAt: Date | null
+    /**
+     * Who authorised the jump. Not nullable when a code is set — CHECK
+     * constraint appointment_priority_is_attributed.
+     */
+    prioritySetByUserId: string | null
+    sentOutAt: Date | null
+    sentOutReason: string | null
+    returnedAt: Date | null
     checkedInAt: Date | null
     calledAt: Date | null
     completedAt: Date | null
@@ -2526,6 +2981,14 @@ export interface AppointmentFieldRefs {
   readonly reasonForVisit: Prisma.FieldRef<"Appointment", 'String'>
   readonly tokenNumber: Prisma.FieldRef<"Appointment", 'Int'>
   readonly queueDate: Prisma.FieldRef<"Appointment", 'DateTime'>
+  readonly readyAt: Prisma.FieldRef<"Appointment", 'DateTime'>
+  readonly priorityReasonCode: Prisma.FieldRef<"Appointment", 'QueuePriorityReason'>
+  readonly priorityNote: Prisma.FieldRef<"Appointment", 'String'>
+  readonly prioritySetAt: Prisma.FieldRef<"Appointment", 'DateTime'>
+  readonly prioritySetByUserId: Prisma.FieldRef<"Appointment", 'String'>
+  readonly sentOutAt: Prisma.FieldRef<"Appointment", 'DateTime'>
+  readonly sentOutReason: Prisma.FieldRef<"Appointment", 'String'>
+  readonly returnedAt: Prisma.FieldRef<"Appointment", 'DateTime'>
   readonly checkedInAt: Prisma.FieldRef<"Appointment", 'DateTime'>
   readonly calledAt: Prisma.FieldRef<"Appointment", 'DateTime'>
   readonly completedAt: Prisma.FieldRef<"Appointment", 'DateTime'>

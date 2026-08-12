@@ -140,7 +140,7 @@ export class BillingService {
   }
 
   /**
-   * May this appointment be checked in?
+   * May this appointment join the queue?
    *
    * The whole point of the module, in one function. Returns null when the visit
    * may proceed, or a reason when it may not.
@@ -164,7 +164,10 @@ export class BillingService {
     const { balancePaise } = await this.totals(tx, invoice.id, invoice.totalPaise);
     if (balancePaise <= 0) return null;
 
-    return `${formatPaise(balancePaise)} outstanding on invoice ${invoice.number}. Collect payment before issuing a token.`;
+    // "before issuing a token" until 12 Aug 2026, when tokens moved to booking.
+    // The gate did not move; the sentence had to, because by check-in the
+    // patient is already holding their token.
+    return `${formatPaise(balancePaise)} outstanding on invoice ${invoice.number}. Collect payment before adding them to the queue.`;
   }
 
   async getForAppointment(tenantId: string, appointmentId: string) {

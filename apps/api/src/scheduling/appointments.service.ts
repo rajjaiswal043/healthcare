@@ -32,7 +32,15 @@ export interface AppointmentView {
   endAt: Date;
   localTime: string;
   reasonForVisit: string | null;
+  /** Identity, not position. Held from booking onwards. */
   tokenNumber: number | null;
+  /** When they became ready to be seen. What the waiting list sorts on. */
+  readyAt: Date | null;
+  /** Set when this visit has been flagged to be seen next. */
+  priority: { reasonCode: string; note: string | null; setAt: Date } | null;
+  /** Set while the patient is out for an investigation. */
+  sentOut: { at: Date; reason: string } | null;
+  returnedAt: Date | null;
   checkedInAt: Date | null;
   calledAt: Date | null;
   completedAt: Date | null;
@@ -147,6 +155,18 @@ export class AppointmentsService {
         });
       }
 
+      /**
+       * The token is issued here, at booking — not at check-in.
+       *
+       * Allocated after the capacity and duplicate checks so a refused booking
+       * does not consume a number, and before the INSERT so the row is never
+       * briefly tokenless. A cancellation still leaves a gap in the series, and
+       * that is fine: a token is an identifier, not a receipt number. Renumbering
+       * to close a gap would move a token out from under a patient already
+       * holding a slip with it printed.
+       */
+      const token = await this.allocateToken(tx, tenantId, input.practitionerId, date);
+
       const created = await tx.appointment.create({
         data: {
           tenantId,
@@ -161,6 +181,10 @@ export class AppointmentsService {
           source: 'FRONT_DESK',
           reasonForVisit: input.reasonForVisit ?? null,
           bookedByUserId: meta.actorUserId ?? null,
+          tokenNumber: token,
+          // The token belongs to the day of the visit, in clinic time — not to
+          // the day the booking was taken, which may be weeks earlier.
+          queueDate: new Date(`${date}T00:00:00Z`),
         },
         include: APPOINTMENT_INCLUDE,
       });
@@ -176,7 +200,7 @@ export class AppointmentsService {
         resourceType: 'Appointment',
         resourceId: created.id,
         patientId: created.patientId,
-        changedFields: ['practitionerId', 'startAt', 'visitType'],
+        changedFields: ['practitionerId', 'startAt', 'visitType', 'tokenNumber'],
         ...meta,
       });
 
@@ -234,14 +258,15 @@ export class AppointmentsService {
       /**
        * Created as BOOKED first, then admitted.
        *
-       * A walk-in used to arrive already ARRIVED with a token. Under the
-       * pay-first rule it cannot: the invoice needs the appointment to exist
-       * before it can reference it, and the token must not be issued until that
-       * invoice is settled. So the record is created, billed, and only then
-       * admitted — and if there is money outstanding it stays BOOKED, with the
-       * front desk collecting and checking in exactly as they would for a
-       * booked patient who has just walked through the door.
+       * The token comes with the record — a walk-in is registered and booked in
+       * the same act, so there is no moment at which they are a patient without
+       * a number. What the money still governs is the WAITING LIST: if there is
+       * anything outstanding the visit stays BOOKED with its token, and the
+       * front desk collects and checks them in exactly as for a booked patient
+       * who has just walked through the door.
        */
+      const token = await this.allocateToken(tx, tenantId, input.practitionerId, date);
+
       const created = await tx.appointment.create({
         data: {
           tenantId,
@@ -258,6 +283,8 @@ export class AppointmentsService {
           source: 'WALK_IN',
           reasonForVisit: input.reasonForVisit ?? null,
           bookedByUserId: meta.actorUserId ?? null,
+          tokenNumber: token,
+          queueDate: new Date(`${date}T00:00:00Z`),
         },
         select: { id: true, patientId: true },
       });
@@ -266,14 +293,12 @@ export class AppointmentsService {
       const unpaid = await this.billing.blockingReason(tx, created.id);
 
       if (!unpaid) {
-        const token = await this.allocateToken(tx, tenantId, input.practitionerId, date);
         await tx.appointment.update({
           where: { id: created.id },
           data: {
             status: 'ARRIVED',
-            tokenNumber: token,
-            queueDate: new Date(`${date}T00:00:00Z`),
             checkedInAt: now,
+            readyAt: now,
           },
         });
       }
@@ -296,7 +321,13 @@ export class AppointmentsService {
     });
   }
 
-  /** Mark arrival and issue the token (FR-APT-08). */
+  /**
+   * Mark arrival and admit the patient to the waiting list (FR-APT-08).
+   *
+   * This no longer issues the token — booking did that. What check-in does now
+   * is give the visit a POSITION: `readyAt` is the moment the patient became
+   * ready to be seen, and the waiting list sorts on it.
+   */
   async checkIn(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const tz = await this.timezone(tx, tenantId);
@@ -313,11 +344,13 @@ export class AppointmentsService {
       /**
        * The pay-first gate (FR-BIL-04).
        *
-       * No token until the visit is paid, waived or deferred. This is the point
-       * where an unpaid visit is stopped, and the point is WHO it stops: the
-       * receptionist, at the desk, with the patient in front of them — rather
-       * than the doctor, with the patient already in the room and nothing to do
-       * but send them back out.
+       * No PLACE IN THE QUEUE until the visit is paid, waived or deferred. The
+       * rule used to be phrased as "no token", which stopped being true when
+       * tokens moved to booking — but the gate itself has not moved, and neither
+       * has the reason for its position: it stops the visit at the desk, in
+       * front of the receptionist with a card machine to hand, rather than at
+       * the door of the consulting room with nothing to do but send the patient
+       * back out.
        *
        * A clinic that has priced nothing has no invoice, and the gate stays
        * open. See BillingService.ensureInvoiceForAppointment.
@@ -328,16 +361,25 @@ export class AppointmentsService {
       }
 
       const now = new Date();
-      const date = instantToLocalDate(now, tz);
-      const token = await this.allocateToken(tx, tenantId, appt.practitionerId, date);
+
+      /**
+       * Appointments booked before this rule changed carry no token, and so do
+       * rows written straight into the database by a seed. Issuing one here
+       * keeps them workable instead of putting a tokenless patient on the board
+       * — the migration backfills the diary, and this covers whatever it missed.
+       */
+      const date = instantToLocalDate(appt.startAt, tz);
+      const token =
+        appt.tokenNumber ?? (await this.allocateToken(tx, tenantId, appt.practitionerId, date));
 
       const updated = await tx.appointment.update({
         where: { id },
         data: {
           status: 'ARRIVED',
           tokenNumber: token,
-          queueDate: new Date(`${date}T00:00:00Z`),
+          queueDate: appt.queueDate ?? new Date(`${date}T00:00:00Z`),
           checkedInAt: now,
+          readyAt: now,
         },
         include: APPOINTMENT_INCLUDE,
       });
@@ -347,7 +389,7 @@ export class AppointmentsService {
         resourceType: 'Appointment',
         resourceId: id,
         patientId: updated.patientId,
-        changedFields: ['status', 'tokenNumber', 'checkedInAt'],
+        changedFields: ['status', 'checkedInAt', 'readyAt'],
         ...meta,
       });
 
@@ -358,6 +400,234 @@ export class AppointmentsService {
   /** Doctor calls the next patient in. */
   async call(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
     return this.transition(tenantId, id, 'ARRIVED', 'IN_PROGRESS', { calledAt: new Date() }, meta);
+  }
+
+  /**
+   * Send the patient out for an X-ray or a test, without ending the visit
+   * (FR-APT-14).
+   *
+   * The consultation stays a draft and the bill stays as it is — this is a
+   * pause, not a discharge. Signing the note would end the visit, which is
+   * exactly what the doctor does NOT want when they are waiting for a film.
+   *
+   * The patient leaves the waiting list: `readyAt` is cleared, because they are
+   * not ready to be seen while they are down the corridor. It is re-stamped
+   * when they come back, and that is what puts them back in the ordering.
+   */
+  async sendForTests(
+    tenantId: string,
+    id: string,
+    reason: string,
+    meta: RequestMeta,
+  ): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      // Only from the room. Sending out someone the doctor has not yet seen is
+      // not this feature — that patient is simply still waiting.
+      if (appt.status !== 'IN_PROGRESS') {
+        throw new ConflictException({
+          code: 'NOT_IN_CONSULTATION',
+          message: 'Only a patient currently with the doctor can be sent for tests.',
+        });
+      }
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: {
+          status: 'AWAITING_TESTS',
+          sentOutAt: new Date(),
+          sentOutReason: reason,
+          // A second leg — X-ray, then bloods — starts from a clean return.
+          returnedAt: null,
+          readyAt: null,
+        },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.send_for_tests',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: updated.patientId,
+        changedFields: ['status', 'sentOutAt', 'sentOutReason'],
+        reason,
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
+  }
+
+  /**
+   * The patient is back at the desk with their report (FR-APT-15).
+   *
+   * Where they land is a decision, not a rule — Narveer's call on 12 Aug 2026.
+   * `seeNext` is the ordinary case and the default at the desk: they have
+   * already waited once. Declining it puts them behind everyone currently
+   * waiting, which is what the desk chooses when the doctor is mid-consultation
+   * and the report is not urgent.
+   *
+   * Either way they keep their token, their draft note and their invoice.
+   */
+  async returnFromTests(
+    tenantId: string,
+    id: string,
+    input: { seeNext: boolean; note?: string },
+    meta: RequestMeta,
+  ): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      if (appt.status !== 'AWAITING_TESTS') {
+        throw new ConflictException({
+          code: 'NOT_AWAY',
+          message: 'This patient was not sent for tests, so there is nothing to bring back.',
+        });
+      }
+
+      const now = new Date();
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: {
+          status: 'ARRIVED',
+          returnedAt: now,
+          readyAt: now,
+          ...(input.seeNext
+            ? {
+                priorityReasonCode: 'BACK_FROM_TESTS',
+                priorityNote: input.note ?? null,
+                prioritySetAt: now,
+                prioritySetByUserId: meta.actorUserId ?? null,
+              }
+            : {}),
+        },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.return_from_tests',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: updated.patientId,
+        changedFields: input.seeNext
+          ? ['status', 'returnedAt', 'readyAt', 'priorityReasonCode']
+          : ['status', 'returnedAt', 'readyAt'],
+        reason: input.seeNext ? 'Back from tests — to be seen next' : 'Back from tests — queued',
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
+  }
+
+  /**
+   * Move a waiting patient to the front (FR-APT-16).
+   *
+   * Both the front desk and the doctor hold `queue:prioritise`, and both are
+   * recorded. The reason is a code rather than free text because this field is
+   * read by someone judging whether the jump was legitimate — and "urgent!!"
+   * cannot be counted.
+   *
+   * `prioritySetAt` is stamped now, which is what orders flagged patients among
+   * themselves: first flagged, first served. A later emergency queues behind a
+   * recall that was already promised "you are next" rather than displacing it.
+   */
+  async flagToBeSeenNext(
+    tenantId: string,
+    id: string,
+    input: { reasonCode: string; note?: string },
+    meta: RequestMeta,
+  ): Promise<AppointmentView> {
+    const setBy = meta.actorUserId;
+    if (!setBy) throw new BadRequestException('A priority needs an author.');
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      // Only someone in the waiting list has a position to change. Flagging a
+      // patient who has not arrived would promise a place they do not hold.
+      if (appt.status !== 'ARRIVED') {
+        throw new ConflictException({
+          code: 'NOT_WAITING',
+          message: 'Only a patient waiting to be seen can be moved up the queue.',
+        });
+      }
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: {
+          priorityReasonCode: input.reasonCode as never,
+          priorityNote: input.note ?? null,
+          prioritySetAt: new Date(),
+          prioritySetByUserId: setBy,
+        },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.prioritise',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: updated.patientId,
+        changedFields: ['priorityReasonCode', 'prioritySetAt'],
+        reason: input.note ? `${input.reasonCode}: ${input.note}` : input.reasonCode,
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
+  }
+
+  /**
+   * Take the flag back.
+   *
+   * Without an undo, a mis-click is repaired by cancelling and re-registering
+   * the patient — which loses their token and their bill. An expensive fix for
+   * a cheap mistake, and the reason this endpoint exists.
+   */
+  async clearPriority(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      if (!appt.prioritySetAt) {
+        throw new ConflictException({
+          code: 'NOT_PRIORITISED',
+          message: 'This patient is already in their normal position.',
+        });
+      }
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: {
+          priorityReasonCode: null,
+          priorityNote: null,
+          prioritySetAt: null,
+          prioritySetByUserId: null,
+        },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.clear_priority',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: updated.patientId,
+        changedFields: ['priorityReasonCode', 'prioritySetAt'],
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
   }
 
   /** Visit finished. */
@@ -465,9 +735,16 @@ export class AppointmentsService {
   /**
    * The live queue for one doctor.
    *
-   * Ordered by token, which is arrival order — not by appointment time. Someone
-   * who booked 11:00 but arrived at 09:30 is seen before someone who booked
-   * 09:45 and is still in traffic, which is how the room actually works.
+   * The waiting list is ordered by READINESS, not by token and not by
+   * appointment time. Someone who booked 11:00 but arrived at 09:30 is seen
+   * before someone who booked 09:45 and is still in traffic, which is how the
+   * room actually works — and now that tokens are issued at booking, the token
+   * cannot carry that ordering any more.
+   *
+   * Flagged patients come first, ordered by when they were flagged: first
+   * flagged, first served, so a late emergency does not displace someone who
+   * has already been told they are next. Token is the final tie-break, purely
+   * so the order is deterministic.
    */
   async queue(tenantId: string, practitionerId: string, date?: string) {
     return this.prisma.forTenant(tenantId, async (tx) => {
@@ -489,7 +766,14 @@ export class AppointmentsService {
           ],
         },
         include: APPOINTMENT_INCLUDE,
-        orderBy: [{ tokenNumber: 'asc' }, { startAt: 'asc' }],
+        // Serving order, in the database rather than in application code: this
+        // is the rule the display board will read too, and two implementations
+        // of it would disagree the first time one of them changed.
+        orderBy: [
+          { prioritySetAt: { sort: 'asc', nulls: 'last' } },
+          { readyAt: { sort: 'asc', nulls: 'last' } },
+          { tokenNumber: 'asc' },
+        ],
       });
 
       const views = rows.map((r) => toView(r, tz));
@@ -497,18 +781,29 @@ export class AppointmentsService {
       const waiting = views.filter((v) => v.status === 'ARRIVED');
       const inProgress = views.find((v) => v.status === 'IN_PROGRESS') ?? null;
       const completed = views.filter((v) => v.status === 'FULFILLED');
+      // Out for an X-ray. Not waiting, not finished, and the desk needs to see
+      // them or nobody knows who the clinic is still holding a room for.
+      const awayForTests = views
+        .filter((v) => v.status === 'AWAITING_TESTS')
+        .sort((a, b) => (a.sentOut?.at.getTime() ?? 0) - (b.sentOut?.at.getTime() ?? 0));
 
       return {
         date: day,
         timezone: tz,
         nowServing: inProgress,
         waiting,
-        yetToArrive: views.filter((v) => v.status === 'BOOKED'),
+        awayForTests,
+        // Nobody here is in the queue yet, so serving order says nothing about
+        // them. The front desk reads this list as a diary — by time.
+        yetToArrive: views
+          .filter((v) => v.status === 'BOOKED')
+          .sort((a, b) => a.startAt.getTime() - b.startAt.getTime()),
         completed,
         cancelled: views.filter((v) => v.status === 'CANCELLED' || v.status === 'NO_SHOW'),
         stats: {
           total: views.length,
           waiting: waiting.length,
+          awayForTests: awayForTests.length,
           completed: completed.length,
           /**
            * Mean minutes from check-in to being called, over patients already
@@ -619,6 +914,13 @@ function toView(
     endAt: Date;
     reasonForVisit: string | null;
     tokenNumber: number | null;
+    readyAt: Date | null;
+    priorityReasonCode: string | null;
+    priorityNote: string | null;
+    prioritySetAt: Date | null;
+    sentOutAt: Date | null;
+    sentOutReason: string | null;
+    returnedAt: Date | null;
     checkedInAt: Date | null;
     calledAt: Date | null;
     completedAt: Date | null;
@@ -638,6 +940,16 @@ function toView(
     localTime: instantToLocalTime(a.startAt, tz),
     reasonForVisit: a.reasonForVisit,
     tokenNumber: a.tokenNumber,
+    readyAt: a.readyAt,
+    // Null unless the visit has been flagged. The three columns move together —
+    // a CHECK constraint says so — but the view collapses them into one object
+    // so a client cannot render half a flag.
+    priority:
+      a.priorityReasonCode && a.prioritySetAt
+        ? { reasonCode: a.priorityReasonCode, note: a.priorityNote, setAt: a.prioritySetAt }
+        : null,
+    sentOut: a.sentOutAt && a.sentOutReason ? { at: a.sentOutAt, reason: a.sentOutReason } : null,
+    returnedAt: a.returnedAt,
     checkedInAt: a.checkedInAt,
     calledAt: a.calledAt,
     completedAt: a.completedAt,

@@ -29,6 +29,15 @@ export const PERMISSIONS = {
   APPOINTMENT_CANCEL: 'appointment:cancel',
   /** Changing a doctor's hours is a clinic setting, not a booking action. */
   SCHEDULE_MANAGE: 'schedule:manage',
+  /**
+   * Move a waiting patient to the front of the queue.
+   *
+   * Separate from `appointment:write` because it is the one queue action a
+   * whole waiting room can see the effect of. Held by the front desk and the
+   * doctor — both are physically present when a patient needs to jump — and
+   * every use carries a reason code and an author.
+   */
+  QUEUE_PRIORITISE: 'queue:prioritise',
 
   /**
    * The clinical note. Split three ways rather than one `consultation:write`,
@@ -63,6 +72,14 @@ export const PERMISSIONS = {
   USER_MANAGE: 'user:manage',
   ROLE_MANAGE: 'role:manage',
   TENANT_CONFIGURE: 'tenant:configure',
+  /**
+   * Pair a screen with the waiting room.
+   *
+   * Administrator only, and not because the data is sensitive — the screen shows
+   * tokens and nothing else. It is because pairing mints a credential that works
+   * without a login, and handing those out is an administrative act.
+   */
+  DISPLAY_MANAGE: 'display:manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -97,6 +114,9 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.APPOINTMENT_READ,
       PERMISSIONS.APPOINTMENT_WRITE,
       PERMISSIONS.APPOINTMENT_CANCEL,
+      // Puts a patient back at the front after they return from an X-ray, and
+      // handles the emergency who cannot wait. Recorded, never silent.
+      PERMISSIONS.QUEUE_PRIORITISE,
       // Raises the bill and takes the money. Cannot waive, defer or refund —
       // those are the ways money leaves without a service behind it.
       PERMISSIONS.INVOICE_READ,
@@ -116,6 +136,9 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.APPOINTMENT_READ,
       // Doctors call the next patient and mark a visit finished — both writes.
       PERMISSIONS.APPOINTMENT_WRITE,
+      // Sends a patient for an X-ray and decides who comes in next. The doctor
+      // can see the room; the software cannot.
+      PERMISSIONS.QUEUE_PRIORITISE,
       PERMISSIONS.CONSULTATION_READ,
       PERMISSIONS.CONSULTATION_WRITE,
       PERMISSIONS.VITALS_WRITE,

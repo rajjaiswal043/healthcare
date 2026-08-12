@@ -14,6 +14,7 @@ import {
 import { useAuth } from '@/components/auth-provider';
 import { AppointmentDialog } from '@/components/appointment-dialog';
 import { PaymentDialog } from '@/components/payment-dialog';
+import { QueuePriorityDialog, priorityLabel } from '@/components/queue-priority-dialog';
 import { formatAge, genderInitial } from '@/lib/format';
 import {
   IconCallNext,
@@ -43,6 +44,10 @@ export default function QueuePage() {
     appointment: Appointment;
   } | null>(null);
   const [payingFor, setPayingFor] = useState<Invoice | null>(null);
+  const [queueDialog, setQueueDialog] = useState<{
+    mode: 'return' | 'prioritise';
+    appointment: Appointment;
+  } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -96,6 +101,7 @@ export default function QueuePage() {
   const canCancel = can('appointment:cancel');
   const mayConsult = can('consultation:write');
   const mayBill = can('invoice:read');
+  const mayPrioritise = can('queue:prioritise');
 
   /**
    * Open the bill for a visit.
@@ -151,7 +157,7 @@ export default function QueuePage() {
           <p className="eyebrow">OPD</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Today&rsquo;s queue</h1>
           <p className="mt-1 text-[14px] text-ink-60">
-            Ordered by token, which is arrival order — not by appointment time.
+            Ordered by arrival — not by token, and not by appointment time.
           </p>
         </div>
 
@@ -198,9 +204,10 @@ export default function QueuePage() {
 
       {queue && (
         <>
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-5">
             <Stat label="In the queue" value={String(queue.stats.total)} />
             <Stat label="Waiting" value={String(queue.stats.waiting)} tone="amber" />
+            <Stat label="Away for tests" value={String(queue.stats.awayForTests)} />
             <Stat label="Seen today" value={String(queue.stats.completed)} tone="green" />
             <Stat
               label="Average wait"
@@ -328,10 +335,72 @@ export default function QueuePage() {
                         Call
                       </button>
                     )}
+                    {/* Flagging is its own permission because the whole waiting
+                        room can see what it does. The undo matters as much as
+                        the button: without it a mis-click is repaired by
+                        cancelling the visit, which loses the token and the bill. */}
+                    {mayPrioritise &&
+                      (a.priority ? (
+                        <button
+                          type="button"
+                          className="btn-ghost !px-2 !py-1.5 text-[12.5px]"
+                          disabled={busyId === a.id}
+                          title={`${priorityLabel(a.priority)} — put them back in their normal position`}
+                          onClick={() => void act(a.id, () => api.clearPriority(a.id))}
+                        >
+                          Move back
+                        </button>
+                      ) : (
+                        i > 0 && (
+                          <button
+                            type="button"
+                            className="btn-ghost !px-2 !py-1.5 text-[12.5px]"
+                            disabled={busyId === a.id}
+                            title="Move this patient to the front of the queue"
+                            onClick={() => setQueueDialog({ mode: 'prioritise', appointment: a })}
+                          >
+                            See next
+                          </button>
+                        )
+                      ))}
                   </div>
                 </Row>
               ))}
             </Panel>
+
+            {/* Only rendered when somebody is actually out. An empty panel here
+                every day would train the desk to stop reading this column. */}
+            {queue.awayForTests.length > 0 && (
+              <Panel
+                title="Away for tests"
+                count={queue.awayForTests.length}
+                empty=""
+                icon={<IconClock size={16} />}
+              >
+                {queue.awayForTests.map((a) => (
+                  <Row key={a.id} appointment={a}>
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      {a.sentOut && (
+                        <span className="max-w-[180px] truncate text-[12.5px] text-ink-40">
+                          {a.sentOut.reason}
+                        </span>
+                      )}
+                      {mayAct && (
+                        <button
+                          type="button"
+                          className="btn-primary !px-3 !py-1.5 text-[12.5px]"
+                          disabled={busyId === a.id}
+                          title="They are back with their report"
+                          onClick={() => setQueueDialog({ mode: 'return', appointment: a })}
+                        >
+                          Back at the desk
+                        </button>
+                      )}
+                    </div>
+                  </Row>
+                ))}
+              </Panel>
+            )}
 
             <Panel
               title="Yet to arrive"
@@ -414,6 +483,18 @@ export default function QueuePage() {
             </Panel>
           )}
         </>
+      )}
+
+      {queueDialog && (
+        <QueuePriorityDialog
+          mode={queueDialog.mode}
+          appointment={queueDialog.appointment}
+          onClose={() => setQueueDialog(null)}
+          onDone={() => {
+            setQueueDialog(null);
+            void load(doctorId);
+          }}
+        />
       )}
 
       {dialog && (
@@ -509,18 +590,29 @@ function Row({
 }) {
   return (
     <li className={`flex items-center gap-3 px-4 py-2.5 ${muted ? 'opacity-60' : ''}`}>
+      {/* The token is the patient's identity for the visit and is held from
+          booking, so it is shown the same way in every state — a number that
+          appears only once someone is admitted is a number nobody can be
+          called by at the desk. */}
       <span
         className={[
           'grid h-9 w-9 shrink-0 place-items-center rounded-tiny font-mono text-[13px] font-bold',
           a.tokenNumber === null ? 'bg-ink/5 text-ink-20' : 'bg-clinical-soft text-clinical-text',
         ].join(' ')}
-        title={a.tokenNumber === null ? 'No token until check-in' : `Token ${a.tokenNumber}`}
+        title={a.tokenNumber === null ? 'No token on this visit' : `Token ${a.tokenNumber}`}
       >
         {a.tokenNumber ?? '–'}
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-semibold text-ink">{a.patient.name}</p>
+        <p className="flex items-center gap-1.5 truncate text-[14px] font-semibold text-ink">
+          {a.patient.name}
+          {a.priority && (
+            <span className="badge-amber" title={priorityLabel(a.priority)}>
+              seen next
+            </span>
+          )}
+        </p>
         <p className="truncate text-[12.5px] text-ink-40">
           <span className="font-mono">{a.patient.uhid}</span>
           {' · '}

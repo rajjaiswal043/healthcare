@@ -62,6 +62,7 @@ const TABLES = [
   'vitals_observation',
   'encounter',
   'formulary_item',
+  'display_device',
   'appointment',
   'queue_counter',
   'schedule_exception',

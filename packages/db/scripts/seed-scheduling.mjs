@@ -325,17 +325,22 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
     const endAt = localToInstant(today, addMinutes(startHHmm, slot));
 
     const arrived = status !== 'BOOKED';
-    if (arrived) token += 1;
+
+    // Everybody holds a token from the moment they are booked, including the
+    // patients still to arrive — that is the rule as of 12 Aug 2026. What the
+    // ones yet to arrive do NOT have is a place in the queue: no ready_at, so
+    // they sit in the diary rather than the waiting list.
+    token += 1;
 
     const { id: appointmentId } = rows0(
       await client.query(
         `INSERT INTO appointment
          (tenant_id, patient_id, practitioner_id, location_id, department_id,
           start_at, end_at, status, visit_type, source, reason_for_visit,
-          token_number, queue_date, checked_in_at, called_at, completed_at,
+          token_number, queue_date, checked_in_at, ready_at, called_at, completed_at,
           updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::appointment_status,$9::visit_type,
-               $10::appointment_source,$11,$12,$13,$14,$15,$16, now())
+               $10::appointment_source,$11,$12,$13,$14,$15,$16,$17, now())
        RETURNING id`,
         [
           tenant.id,
@@ -356,8 +361,11 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
             'Stomach pain',
             null,
           ]),
-          arrived ? token : null,
-          arrived ? today : null,
+          token,
+          today,
+          arrived ? new Date(startAt.getTime() - 10 * 60000) : null,
+          // ready_at is the queue position, and it is deliberately the same
+          // instant as check-in: the waiting list is in arrival order.
           arrived ? new Date(startAt.getTime() - 10 * 60000) : null,
           status === 'FULFILLED' || status === 'IN_PROGRESS' ? startAt : null,
           status === 'FULFILLED' ? endAt : null,

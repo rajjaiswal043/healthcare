@@ -66,7 +66,8 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  locations Location[]
+  locations      Location[]
+  displayDevices DisplayDevice[]
 
   @@map("tenant")
 }
@@ -104,7 +105,8 @@ model Location {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  displayDevices DisplayDevice[]
 
   // tenant_id leads every index. RLS adds `tenant_id = ...` to every query, so a
   // tenant-first composite index is what keeps those queries index-only rather
@@ -112,6 +114,45 @@ model Location {
   @@index([tenantId, isActive])
   @@unique([tenantId, name])
   @@map("location")
+}
+
+/// A screen on a waiting-room wall. See docs/05-token-queue-plan.md, phase C.
+///
+/// It authenticates with its own key rather than a user session: a television
+/// cannot sign in, and a permanent staff session on an unattended screen in a
+/// public room is not a thing to build on purpose. What it may read is narrow by
+/// construction — the display endpoint returns token numbers and doctor names,
+/// never a patient name.
+model DisplayDevice {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  name String @db.VarChar(120)
+  /// Null means every location — a single-site clinic never has to think about it.
+  locationId String? @map("location_id") @db.Uuid
+
+  /// Which doctors this screen shows. Empty means all of them at that location.
+  practitionerIds String[] @default([]) @map("practitioner_ids") @db.Uuid
+
+  /// SHA-256 of `<tenantId>.<32 random bytes>`, stored exactly as a session
+  /// refresh token is. The plaintext is shown once at pairing and never again.
+  accessKeyHash String @unique @map("access_key_hash") @db.VarChar(64)
+
+  /// So an administrator can tell a dead screen from an idle one.
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(6)
+
+  isActive        Boolean   @default(true) @map("is_active")
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, isActive])
+  @@map("display_device")
 }
 
 // =============================================================================
@@ -632,11 +673,17 @@ model ScheduleException {
 
 /// FHIR Appointment.status, narrowed to the states this product uses.
 enum AppointmentStatus {
+  /// Booked and holding a token, but not yet in the waiting list. An unpaid
+  /// visit stays here — the pay-first gate is at check-in.
   BOOKED
-  /// Patient has arrived and been given a token.
+  /// Patient has arrived, been admitted to the waiting list, and is waiting.
   ARRIVED
   /// Doctor has called them in.
   IN_PROGRESS
+  /// Sent out mid-visit for an X-ray or a test. Still the same visit — same
+  /// token, same draft note, same bill — but out of the room and out of the
+  /// waiting list until they come back.
+  AWAITING_TESTS
   FULFILLED
   CANCELLED
   NO_SHOW
@@ -651,6 +698,24 @@ enum AppointmentSource {
   PORTAL
 
   @@map("appointment_source")
+}
+
+/// Why a patient was moved to the front of the queue.
+///
+/// A code rather than free text, because this field is read by someone judging
+/// whether the jump was legitimate: free text produces "urgent", "urgent!!" and
+/// "dr said", none of which can be counted. Kept deliberately small — a sixth
+/// reason should be a conversation, not a typing decision.
+enum QueuePriorityReason {
+  /// Set automatically when a patient returns from an investigation.
+  BACK_FROM_TESTS
+  EMERGENCY
+  FRAIL_OR_DISTRESSED
+  DOCTOR_REQUESTED
+  /// We lost their turn. Owning it in the record is the point.
+  CLINIC_ERROR
+
+  @@map("queue_priority_reason")
 }
 
 /// A booked or walked-in visit. FHIR: Appointment.
@@ -677,12 +742,45 @@ model Appointment {
   reasonForVisit String? @map("reason_for_visit") @db.VarChar(300)
 
   // --- queue -------------------------------------------------------------
-  /// Issued at CHECK-IN, not at booking: the appointment gives a time, the
-  /// token gives a position, and position is decided by arrival.
+  /// The patient's identity for this visit, NOT their position in the queue.
+  ///
+  /// Issued at booking (or at walk-in registration) so the patient can be given
+  /// it on a slip and called by it. Position is `readyAt` — see
+  /// docs/05-token-queue-plan.md section 1 for why conflating the two broke as
+  /// soon as tokens moved earlier than arrival.
   tokenNumber Int?      @map("token_number")
   /// The clinic-local date the token belongs to. Tokens restart each day, so
   /// uniqueness is per practitioner per day.
   queueDate   DateTime? @map("queue_date") @db.Date
+
+  /// When the patient became ready to be seen — stamped at check-in, and
+  /// re-stamped when they come back from an investigation. This is what the
+  /// waiting list sorts on.
+  readyAt DateTime? @map("ready_at") @db.Timestamptz(6)
+
+  // --- seen next -----------------------------------------------------------
+  //
+  // A flag, not a rank. An emergency and a patient back from X-ray occupy the
+  // same place — in front — and differ only in why. Flagged patients are
+  // ordered among themselves by `prioritySetAt`: first flagged, first served,
+  // so a late emergency cannot displace someone already told "you are next".
+  /// Null means no flag, which is the ordinary case.
+  priorityReasonCode  QueuePriorityReason? @map("priority_reason_code")
+  /// Optional colour beside the code. The code is what is countable.
+  priorityNote        String?              @map("priority_note") @db.VarChar(200)
+  prioritySetAt       DateTime?            @map("priority_set_at") @db.Timestamptz(6)
+  /// Who authorised the jump. Not nullable when a code is set — CHECK
+  /// constraint appointment_priority_is_attributed.
+  prioritySetByUserId String?              @map("priority_set_by_user_id") @db.Uuid
+
+  // --- sent out for an investigation ---------------------------------------
+  //
+  // Overwritten if the doctor sends the same patient out twice in one visit —
+  // an X-ray and then bloods. The audit trail keeps every leg; these columns
+  // answer "where are they now", which is what the desk is looking at.
+  sentOutAt     DateTime? @map("sent_out_at") @db.Timestamptz(6)
+  sentOutReason String?   @map("sent_out_reason") @db.VarChar(200)
+  returnedAt    DateTime? @map("returned_at") @db.Timestamptz(6)
 
   checkedInAt DateTime? @map("checked_in_at") @db.Timestamptz(6)
   calledAt    DateTime? @map("called_at") @db.Timestamptz(6)
@@ -718,6 +816,7 @@ model Appointment {
   @@index([tenantId, startAt])
   @@index([tenantId, patientId, startAt])
   @@index([tenantId, practitionerId, queueDate, status])
+  @@index([tenantId, practitionerId, queueDate, prioritySetAt, readyAt], map: "appointment_queue_order_idx")
   @@map("appointment")
 }
 

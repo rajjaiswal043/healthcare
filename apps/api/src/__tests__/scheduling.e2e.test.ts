@@ -219,7 +219,10 @@ describe('booking', () => {
 
     const created = res.json();
     expect(created.status).toBe('BOOKED');
-    expect(created.tokenNumber).toBeNull(); // tokens are issued at check-in
+    // The token comes with the booking, so the patient can be handed a number
+    // at the desk. What they do not have yet is a place in the queue.
+    expect(created.tokenNumber).toBe(1);
+    expect(created.readyAt).toBeNull();
 
     // The wall clock the receptionist sees must equal the one they picked. This
     // is the timezone regression: reading start_at back in the session timezone
@@ -304,16 +307,32 @@ describe('booking', () => {
 // --- the queue --------------------------------------------------------------
 
 describe('check-in and the queue', () => {
-  it('issues tokens in arrival order, not appointment order', async () => {
-    const late = (await book(frontDesk, { slotIndex: 8, patientIndex: 0 })).json();
+  /**
+   * The reason tokens and positions had to come apart.
+   *
+   * Tokens are handed out in BOOKING order, so the 09:15 patient booked first
+   * holds token 1. The waiting list is in ARRIVAL order, so the 11:00 patient
+   * who turned up early is seen first — holding token 2.
+   *
+   * A queue that sorted by token would put them the other way round, which is
+   * exactly the bug this split exists to prevent. The assertion is [2, 1] on
+   * purpose: an implementation that quietly fell back to token order would
+   * produce [1, 2] and pass every other test in this file.
+   */
+  it('orders the waiting list by arrival, not by token or appointment time', async () => {
     const early = (await book(frontDesk, { slotIndex: 1, patientIndex: 1 })).json();
+    const late = (await book(frontDesk, { slotIndex: 8, patientIndex: 0 })).json();
+
+    expect(early.tokenNumber).toBe(1);
+    expect(late.tokenNumber).toBe(2);
 
     // The 11:00 patient walks in before the 09:15 one.
     const first = await checkIn(late.id);
     const second = await checkIn(early.id);
 
-    expect(first.json().tokenNumber).toBe(1);
-    expect(second.json().tokenNumber).toBe(2);
+    // Their tokens did not change when they arrived — they are holding slips.
+    expect(first.json().tokenNumber).toBe(2);
+    expect(second.json().tokenNumber).toBe(1);
 
     const queue = await app.inject({
       method: 'GET',
@@ -323,11 +342,117 @@ describe('check-in and the queue', () => {
 
     expect(queue.statusCode).toBe(200);
     const body = queue.json();
-    expect(body.waiting.map((a: { tokenNumber: number }) => a.tokenNumber)).toEqual([1, 2]);
+    expect(body.waiting.map((a: { tokenNumber: number }) => a.tokenNumber)).toEqual([2, 1]);
     expect(body.stats.waiting).toBe(2);
     // Nobody has been called yet, so there is no wait to average. Reporting 0
     // here would be a number the front desk repeats to patients.
     expect(body.stats.averageWaitMinutes).toBeNull();
+  });
+
+  it('keeps the diary in time order even when arrivals are not', async () => {
+    // Booked out of order: the later slot is booked first and holds token 1.
+    await book(frontDesk, { slotIndex: 9, patientIndex: 0 });
+    await book(frontDesk, { slotIndex: 2, patientIndex: 1 });
+
+    const queue = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // Nobody has arrived, so "yet to arrive" is a diary and reads by the clock.
+    const times = queue.json().yetToArrive.map((a: { localTime: string }) => a.localTime);
+    expect(times).toEqual([...times].sort());
+  });
+
+  it('flags a patient to be seen next, ahead of everyone already waiting', async () => {
+    const first = (await book(frontDesk, { slotIndex: 0, patientIndex: 0 })).json();
+    const second = (await book(frontDesk, { slotIndex: 1, patientIndex: 1 })).json();
+
+    await checkIn(first.id);
+    await checkIn(second.id);
+
+    // Phase B gives the desk a button for this. The ordering it depends on is
+    // phase A's, so it is asserted here against the columns directly.
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE appointment
+          SET priority_reason_code = 'BACK_FROM_TESTS',
+              priority_set_at = now(),
+              priority_set_by_user_id = (SELECT id FROM app_user WHERE tenant_id = $2 LIMIT 1)
+        WHERE id = $1`,
+      [second.id, fx.main.id],
+    );
+
+    const queue = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const waiting = queue.json().waiting as Array<{
+      id: string;
+      priority: { reasonCode: string } | null;
+    }>;
+
+    expect(waiting.map((a) => a.id)).toEqual([second.id, first.id]);
+    expect(waiting[0]?.priority?.reasonCode).toBe('BACK_FROM_TESTS');
+    expect(waiting[1]?.priority).toBeNull();
+  });
+
+  it('takes the flag back off again', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+
+    const flagged = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/priority`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reasonCode: 'EMERGENCY', note: 'Chest pain' },
+    });
+    expect(flagged.statusCode).toBe(200);
+    expect(flagged.json().priority.reasonCode).toBe('EMERGENCY');
+    expect(flagged.json().priority.note).toBe('Chest pain');
+
+    // Without an undo, a mis-click is repaired by cancelling the visit — which
+    // costs the patient their token and their bill.
+    const cleared = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/appointments/${appt.id}/priority`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json().priority).toBeNull();
+    expect(cleared.json().tokenNumber).toBe(appt.tokenNumber);
+  });
+
+  it('refuses to flag a patient who is not waiting', async () => {
+    const appt = (await book(frontDesk)).json();
+
+    // Booked but not arrived: they hold no position, so there is none to move.
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/priority`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reasonCode: 'EMERGENCY' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOT_WAITING');
+  });
+
+  it('refuses a flag from a role without the permission', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/priority`,
+      headers: { cookie: nurse.cookie },
+      payload: { reasonCode: 'EMERGENCY' },
+    });
+
+    expect(res.statusCode).toBe(403);
   });
 
   it('accepts a PATCH with no body', async () => {
@@ -380,6 +505,210 @@ describe('check-in and the queue', () => {
     const completed = await transition(appt.id, 'complete', doctor);
     expect(completed.statusCode).toBe(200);
     expect(completed.json().status).toBe('FULFILLED');
+  });
+
+  /**
+   * The X-ray round trip, which is the whole reason phase B exists.
+   *
+   * The point being asserted is that this is ONE visit throughout: same token,
+   * same appointment, same encounter. Every temptation to model the return as a
+   * new arrival produces a second token here, and a second invoice behind it.
+   */
+  it('sends a patient out and brings them back as the same visit', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+    await transition(appt.id, 'call', doctor);
+
+    const sent = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray — left wrist' },
+    });
+
+    expect(sent.statusCode).toBe(200);
+    expect(sent.json().status).toBe('AWAITING_TESTS');
+    expect(sent.json().sentOut.reason).toBe('X-ray — left wrist');
+    // Out of the waiting list while they are gone: no position, so the doctor
+    // is not handed them, and the board does not count them as waiting.
+    expect(sent.json().readyAt).toBeNull();
+    expect(sent.json().tokenNumber).toBe(appt.tokenNumber);
+
+    const board = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(board.json().awayForTests).toHaveLength(1);
+    expect(board.json().waiting).toHaveLength(0);
+    // The room is free, which is the operational point of sending them out.
+    expect(board.json().nowServing).toBeNull();
+
+    const back = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/return`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { seeNext: true, note: 'Film in hand' },
+    });
+
+    expect(back.statusCode).toBe(200);
+    expect(back.json().status).toBe('ARRIVED');
+    expect(back.json().tokenNumber).toBe(appt.tokenNumber);
+    expect(back.json().priority.reasonCode).toBe('BACK_FROM_TESTS');
+    expect(back.json().readyAt).not.toBeNull();
+  });
+
+  it('puts a returning patient in front of everyone waiting', async () => {
+    const returning = (await book(frontDesk, { slotIndex: 0, patientIndex: 0 })).json();
+    const waitingAlready = (await book(frontDesk, { slotIndex: 1, patientIndex: 1 })).json();
+
+    await checkIn(returning.id);
+    await transition(returning.id, 'call', doctor);
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${returning.id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'Blood sugar' },
+    });
+
+    // Somebody else arrives while the first patient is away.
+    await checkIn(waitingAlready.id);
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${returning.id}/return`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { seeNext: true },
+    });
+
+    const board = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // Ahead of the patient who arrived while they were gone — they have already
+    // waited once, and that is what "see next" means.
+    expect(board.json().waiting.map((a: { id: string }) => a.id)).toEqual([
+      returning.id,
+      waitingAlready.id,
+    ]);
+  });
+
+  it('lets the desk decline to jump them', async () => {
+    const returning = (await book(frontDesk, { slotIndex: 0, patientIndex: 0 })).json();
+    const waitingAlready = (await book(frontDesk, { slotIndex: 1, patientIndex: 1 })).json();
+
+    await checkIn(returning.id);
+    await transition(returning.id, 'call', doctor);
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${returning.id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'ECG' },
+    });
+    await checkIn(waitingAlready.id);
+
+    // Where they land is the desk's decision, not the software's.
+    const back = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${returning.id}/return`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { seeNext: false },
+    });
+    expect(back.json().priority).toBeNull();
+
+    const board = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(board.json().waiting.map((a: { id: string }) => a.id)).toEqual([
+      waitingAlready.id,
+      returning.id,
+    ]);
+  });
+
+  it('serves two flagged patients in the order they were flagged', async () => {
+    const first = (await book(frontDesk, { slotIndex: 0, patientIndex: 0 })).json();
+    const second = (await book(frontDesk, { slotIndex: 1, patientIndex: 1 })).json();
+
+    await checkIn(first.id);
+    await checkIn(second.id);
+
+    // A recall promised "you are next"...
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${second.id}/priority`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reasonCode: 'BACK_FROM_TESTS' },
+    });
+
+    // ...then an emergency, a moment later. It queues BEHIND the promise rather
+    // than displacing it — the desk has already told that patient they are next,
+    // and breaking that is the thing this ordering exists to prevent.
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${first.id}/priority`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reasonCode: 'EMERGENCY' },
+    });
+
+    const board = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(board.json().waiting.map((a: { id: string }) => a.id)).toEqual([second.id, first.id]);
+  });
+
+  it('refuses to send out a patient who is not with the doctor', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOT_IN_CONSULTATION');
+  });
+
+  it('refuses a return for a patient who was never sent out', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+
+    // The guard that stops "back from tests" becoming the fast lane for anyone
+    // who complains: the flag is only reachable through a recorded send-out.
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/return`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { seeNext: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOT_AWAY');
+  });
+
+  it('refuses to send someone out with no reason', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+    await transition(appt.id, 'call', doctor);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: '' },
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 
   it('refuses to call a patient who has not arrived', async () => {

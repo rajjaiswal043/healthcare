@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -24,8 +25,11 @@ import {
   AvailabilityQueryDto,
   BookAppointmentDto,
   CancelAppointmentDto,
+  PrioritiseDto,
   QueueQueryDto,
   RescheduleAppointmentDto,
+  ReturnFromTestsDto,
+  SendForTestsDto,
   WalkInDto,
 } from './dto.js';
 
@@ -147,6 +151,78 @@ export class SchedulingController {
     @Req() req: FastifyRequest,
   ) {
     return this.appointments.call(tenantId, id, metaFrom(req, user));
+  }
+
+  /**
+   * Send the patient out for an X-ray without ending the visit (FR-APT-14).
+   *
+   * Behind `appointment:write` rather than a clinical permission: it is a queue
+   * movement, and the nurse — who is read-only on the queue — should not be
+   * making it.
+   */
+  @Patch('appointments/:id/send-for-tests')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async sendForTests(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: SendForTestsDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.sendForTests(tenantId, id, dto.reason, metaFrom(req, user));
+  }
+
+  /** Back at the desk with the report (FR-APT-15). */
+  @Patch('appointments/:id/return')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async returnFromTests(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ReturnFromTestsDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.returnFromTests(
+      tenantId,
+      id,
+      { seeNext: dto.seeNext, ...(dto.note ? { note: dto.note } : {}) },
+      metaFrom(req, user),
+    );
+  }
+
+  /**
+   * Move a waiting patient to the front (FR-APT-16).
+   *
+   * Its own permission, because this is the one queue action a whole waiting
+   * room can see the effect of.
+   */
+  @Patch('appointments/:id/priority')
+  @RequirePermissions(PERMISSIONS.QUEUE_PRIORITISE)
+  async prioritise(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: PrioritiseDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.flagToBeSeenNext(
+      tenantId,
+      id,
+      { reasonCode: dto.reasonCode, ...(dto.note ? { note: dto.note } : {}) },
+      metaFrom(req, user),
+    );
+  }
+
+  /** Undo the flag — a mis-click must not cost the patient their token. */
+  @Delete('appointments/:id/priority')
+  @RequirePermissions(PERMISSIONS.QUEUE_PRIORITISE)
+  async clearPriority(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.clearPriority(tenantId, id, metaFrom(req, user));
   }
 
   @Patch('appointments/:id/complete')

@@ -88,6 +88,19 @@ const SECTIONS: NavSection[] = [
       },
     ],
   },
+  {
+    title: 'Settings',
+    items: [
+      {
+        key: 'displays',
+        label: 'Waiting-room screens',
+        href: '/settings/displays',
+        icon: <IconClock size={16} />,
+        // Pairing mints a credential that works without a login.
+        permission: 'display:manage',
+      },
+    ],
+  },
 ];
 
 const BREADCRUMBS: Record<string, string> = {
@@ -96,6 +109,7 @@ const BREADCRUMBS: Record<string, string> = {
   '/patients/register': 'Register a patient',
   '/queue': "Today's queue",
   '/appointments/new': 'Book an appointment',
+  '/settings/displays': 'Waiting-room screens',
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {

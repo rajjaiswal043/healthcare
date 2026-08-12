@@ -225,14 +225,30 @@ export interface DayAvailability {
 
 export interface Appointment {
   id: string;
-  status: 'BOOKED' | 'ARRIVED' | 'IN_PROGRESS' | 'FULFILLED' | 'CANCELLED' | 'NO_SHOW';
+  status:
+    | 'BOOKED'
+    | 'ARRIVED'
+    | 'IN_PROGRESS'
+    /** Out for an X-ray or a test. Still the same visit. */
+    | 'AWAITING_TESTS'
+    | 'FULFILLED'
+    | 'CANCELLED'
+    | 'NO_SHOW';
   visitType: string;
   source: 'FRONT_DESK' | 'WALK_IN' | 'PORTAL';
   startAt: string;
   endAt: string;
   localTime: string;
   reasonForVisit: string | null;
+  /** Held from booking onwards. Identity, not position in the queue. */
   tokenNumber: number | null;
+  /** When they joined the waiting list. Null until they are checked in. */
+  readyAt: string | null;
+  /** Set when the visit has been flagged to be seen next. */
+  priority: { reasonCode: string; note: string | null; setAt: string } | null;
+  /** Set while the patient is out for an investigation. */
+  sentOut: { at: string; reason: string } | null;
+  returnedAt: string | null;
   checkedInAt: string | null;
   calledAt: string | null;
   completedAt: string | null;
@@ -253,16 +269,33 @@ export interface QueueView {
   timezone: string;
   nowServing: Appointment | null;
   waiting: Appointment[];
+  /** Out for an X-ray or a test — same visit, still open, not in the queue. */
+  awayForTests: Appointment[];
   yetToArrive: Appointment[];
   completed: Appointment[];
   cancelled: Appointment[];
   stats: {
     total: number;
     waiting: number;
+    awayForTests: number;
     completed: number;
     averageWaitMinutes: number | null;
   };
 }
+
+export interface DisplayDevice {
+  id: string;
+  name: string;
+  isActive: boolean;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  practitionerIds: string[];
+  location: { id: string; name: string } | null;
+}
+
+export type QueuePriorityReason =
+  'BACK_FROM_TESTS' | 'EMERGENCY' | 'FRAIL_OR_DISTRESSED' | 'DOCTOR_REQUESTED' | 'CLINIC_ERROR';
 
 // --- the consultation -------------------------------------------------------
 
@@ -533,6 +566,41 @@ export const api = {
     request<Appointment>(`/appointments/${id}/complete`, { method: 'PATCH' }),
   markNoShow: (id: string) =>
     request<Appointment>(`/appointments/${id}/no-show`, { method: 'PATCH' }),
+
+  /** Out for an X-ray. The visit stays open and the note stays a draft. */
+  sendForTests: (id: string, reason: string) =>
+    request<Appointment>(`/appointments/${id}/send-for-tests`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  /** Back at the desk. `seeNext` decides whether they go to the front. */
+  returnFromTests: (id: string, seeNext: boolean, note?: string) =>
+    request<Appointment>(`/appointments/${id}/return`, {
+      method: 'PATCH',
+      body: JSON.stringify({ seeNext, ...(note ? { note } : {}) }),
+    }),
+  prioritise: (id: string, reasonCode: QueuePriorityReason, note?: string) =>
+    request<Appointment>(`/appointments/${id}/priority`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reasonCode, ...(note ? { note } : {}) }),
+    }),
+  clearPriority: (id: string) =>
+    request<Appointment>(`/appointments/${id}/priority`, { method: 'DELETE' }),
+
+  // --- waiting-room screens -------------------------------------------------
+
+  displayDevices: () => request<{ devices: DisplayDevice[] }>('/display-devices'),
+  /** The key comes back ONCE. It is a hash in the database from here on. */
+  pairDisplay: (input: { name: string; locationId?: string; practitionerIds?: string[] }) =>
+    request<{ id: string; name: string; createdAt: string; accessKey: string }>(
+      '/display-devices',
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    ),
+  revokeDisplay: (id: string) =>
+    request<{ id: string; isActive: boolean }>(`/display-devices/${id}`, { method: 'DELETE' }),
   rescheduleAppointment: (id: string, startAt: string, reason: string) =>
     request<Appointment>(`/appointments/${id}/reschedule`, {
       method: 'PATCH',
