@@ -1,4 +1,4 @@
-# Resume here — state as of 7 Aug 2026
+# Resume here — state as of 12 Aug 2026
 
 A handover note to myself. What is built, what is not, and what to pick up next.
 
@@ -29,9 +29,10 @@ restores it on its own. Both that and `seed:formulary` are re-runnable.
 
 ## 2. What works, end to end
 
-Register a patient → book → check in → queue by token → open the consultation →
-vitals → complaint, history, examination → ICD-10 diagnosis → prescription from
-the formulary → sign → print. Verified in a browser, not only by test.
+Register a patient → book (token issued here) → pay → check in → the waiting list
+in arrival order → open the consultation → vitals → complaint, history,
+examination → ICD-10 diagnosis → prescription from the formulary → sign → print.
+Verified in a browser, not only by test.
 
 | Module                     | State                                                     |
 | -------------------------- | --------------------------------------------------------- |
@@ -40,18 +41,23 @@ the formulary → sign → print. Verified in a browser, not only by test.
 | Appointments and OPD queue | Done. `docs/01-appointments-opd-queue-plan.md`.           |
 | Consultation, prescription | Done. `docs/02-consultation-plan.md`.                     |
 | Billing — OPD, pay-first   | Done. `docs/04-billing-plan.md`.                          |
+| Tokens, recall, screen     | Done, all three phases. `docs/05-token-queue-plan.md`.    |
 | IPD, claims, ABDM          | Not started, deliberately parked.                         |
 
-**The clinic is pay-first.** Check-in refuses to issue a token while money is
-outstanding — that is the rule Narveer confirmed, and it lives in
+**The clinic is pay-first.** Check-in refuses to add a patient to the queue while
+money is outstanding — that is the rule Narveer confirmed, and it lives in
 `AppointmentsService.checkIn` via `BillingService.blockingReason`, not in the UI.
+Since 12 Aug the gate withholds a _position_, not a token: tokens are issued at
+booking, and what an unpaid visit lacks is `readyAt`.
 Billing is opt-in per tenant: a clinic with no priced services raises no invoices
 and the gate stays open, which is how the pre-billing tests still pass.
 
-`pnpm verify` exits 0: 127 API integration tests, 13 cross-tenant isolation tests,
+`pnpm verify` exits 0: 150 API integration tests, 13 cross-tenant isolation tests,
 format, lint, typecheck, build, migration drift, RLS coverage, audit.
 
-**Nothing is committed.** 72 changed files sit in the working tree.
+Everything through billing is committed on branch `Aug7HC` as `77521df`
+("Aug 7th Changes"), on top of `21d7f97`. Not merged to `main`, not pushed — that
+is Narveer's call (ADR-018).
 
 ---
 
@@ -87,6 +93,20 @@ resulting privilege list because the mistake is otherwise invisible.
 **`pnpm test` is `turbo run test --concurrency=1`.** The db and API suites share
 `healthcloud_test`; in parallel, one suite's TRUNCATE lands inside the other's
 assertions and a dozen unrelated tests fail with 401s.
+
+**A waiting-room screen is paired, not logged in.** Its key is
+`<tenantId>.<secret>`, hashed at rest, and shown exactly once at pairing —
+Settings → Waiting-room screens, administrator only. To pair one without walking
+an admin through TOTP on the command line, insert a `display_device` row with the
+SHA-256 of a key you generate; the API authenticates it identically. The screen
+shows tokens and doctor names only, and that is enforced by the query in
+`DisplayService.board`, not by the component.
+
+**A schema change needs `pnpm --filter @healthcloud/db build`, not `generate`.**
+`generate` writes the client into `src/generated`; the API imports the package's
+`dist`, so until the build runs every write carrying a new column fails with
+`Invalid ... invocation` and 44 tests go red for a reason that has nothing to do
+with the change. Same class of trap as `seed:auth` and `SYSTEM_ROLES`.
 
 **The demo queue empties at IST midnight, and it is not a bug.** The seed creates
 "today's" appointments in the clinic's timezone, and the machine runs on

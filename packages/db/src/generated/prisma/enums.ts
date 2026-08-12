@@ -76,6 +76,7 @@ export const AppointmentStatus = {
   BOOKED: 'BOOKED',
   ARRIVED: 'ARRIVED',
   IN_PROGRESS: 'IN_PROGRESS',
+  AWAITING_TESTS: 'AWAITING_TESTS',
   FULFILLED: 'FULFILLED',
   CANCELLED: 'CANCELLED',
   NO_SHOW: 'NO_SHOW'
@@ -91,6 +92,17 @@ export const AppointmentSource = {
 } as const
 
 export type AppointmentSource = (typeof AppointmentSource)[keyof typeof AppointmentSource]
+
+
+export const QueuePriorityReason = {
+  BACK_FROM_TESTS: 'BACK_FROM_TESTS',
+  EMERGENCY: 'EMERGENCY',
+  FRAIL_OR_DISTRESSED: 'FRAIL_OR_DISTRESSED',
+  DOCTOR_REQUESTED: 'DOCTOR_REQUESTED',
+  CLINIC_ERROR: 'CLINIC_ERROR'
+} as const
+
+export type QueuePriorityReason = (typeof QueuePriorityReason)[keyof typeof QueuePriorityReason]
 
 
 export const EncounterStatus = {

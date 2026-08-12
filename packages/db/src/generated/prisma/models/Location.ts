@@ -237,6 +237,7 @@ export type LocationWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Location"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Location"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
+  displayDevices?: Prisma.DisplayDeviceListRelationFilter
 }
 
 export type LocationOrderByWithRelationInput = {
@@ -252,6 +253,7 @@ export type LocationOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   tenant?: Prisma.TenantOrderByWithRelationInput
+  displayDevices?: Prisma.DisplayDeviceOrderByRelationAggregateInput
 }
 
 export type LocationWhereUniqueInput = Prisma.AtLeast<{
@@ -271,6 +273,7 @@ export type LocationWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Location"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Location"> | Date | string
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
+  displayDevices?: Prisma.DisplayDeviceListRelationFilter
 }, "id" | "tenantId_name">
 
 export type LocationOrderByWithAggregationInput = {
@@ -319,6 +322,7 @@ export type LocationCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   tenant: Prisma.TenantCreateNestedOneWithoutLocationsInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutLocationInput
 }
 
 export type LocationUncheckedCreateInput = {
@@ -333,6 +337,7 @@ export type LocationUncheckedCreateInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutLocationInput
 }
 
 export type LocationUpdateInput = {
@@ -347,6 +352,7 @@ export type LocationUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tenant?: Prisma.TenantUpdateOneRequiredWithoutLocationsNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutLocationNestedInput
 }
 
 export type LocationUncheckedUpdateInput = {
@@ -361,6 +367,7 @@ export type LocationUncheckedUpdateInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutLocationNestedInput
 }
 
 export type LocationCreateManyInput = {
@@ -461,6 +468,11 @@ export type LocationMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
 }
 
+export type LocationNullableScalarRelationFilter = {
+  is?: Prisma.LocationWhereInput | null
+  isNot?: Prisma.LocationWhereInput | null
+}
+
 export type LocationCreateNestedManyWithoutTenantInput = {
   create?: Prisma.XOR<Prisma.LocationCreateWithoutTenantInput, Prisma.LocationUncheckedCreateWithoutTenantInput> | Prisma.LocationCreateWithoutTenantInput[] | Prisma.LocationUncheckedCreateWithoutTenantInput[]
   connectOrCreate?: Prisma.LocationCreateOrConnectWithoutTenantInput | Prisma.LocationCreateOrConnectWithoutTenantInput[]
@@ -511,6 +523,22 @@ export type BoolFieldUpdateOperationsInput = {
   set?: boolean
 }
 
+export type LocationCreateNestedOneWithoutDisplayDevicesInput = {
+  create?: Prisma.XOR<Prisma.LocationCreateWithoutDisplayDevicesInput, Prisma.LocationUncheckedCreateWithoutDisplayDevicesInput>
+  connectOrCreate?: Prisma.LocationCreateOrConnectWithoutDisplayDevicesInput
+  connect?: Prisma.LocationWhereUniqueInput
+}
+
+export type LocationUpdateOneWithoutDisplayDevicesNestedInput = {
+  create?: Prisma.XOR<Prisma.LocationCreateWithoutDisplayDevicesInput, Prisma.LocationUncheckedCreateWithoutDisplayDevicesInput>
+  connectOrCreate?: Prisma.LocationCreateOrConnectWithoutDisplayDevicesInput
+  upsert?: Prisma.LocationUpsertWithoutDisplayDevicesInput
+  disconnect?: Prisma.LocationWhereInput | boolean
+  delete?: Prisma.LocationWhereInput | boolean
+  connect?: Prisma.LocationWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.LocationUpdateToOneWithWhereWithoutDisplayDevicesInput, Prisma.LocationUpdateWithoutDisplayDevicesInput>, Prisma.LocationUncheckedUpdateWithoutDisplayDevicesInput>
+}
+
 export type LocationCreateWithoutTenantInput = {
   id?: string
   name: string
@@ -522,6 +550,7 @@ export type LocationCreateWithoutTenantInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutLocationInput
 }
 
 export type LocationUncheckedCreateWithoutTenantInput = {
@@ -535,6 +564,7 @@ export type LocationUncheckedCreateWithoutTenantInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutLocationInput
 }
 
 export type LocationCreateOrConnectWithoutTenantInput = {
@@ -580,6 +610,78 @@ export type LocationScalarWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Location"> | Date | string
 }
 
+export type LocationCreateWithoutDisplayDevicesInput = {
+  id?: string
+  name: string
+  addressLine?: string | null
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+  hfrId?: string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  tenant: Prisma.TenantCreateNestedOneWithoutLocationsInput
+}
+
+export type LocationUncheckedCreateWithoutDisplayDevicesInput = {
+  id?: string
+  tenantId: string
+  name: string
+  addressLine?: string | null
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+  hfrId?: string | null
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type LocationCreateOrConnectWithoutDisplayDevicesInput = {
+  where: Prisma.LocationWhereUniqueInput
+  create: Prisma.XOR<Prisma.LocationCreateWithoutDisplayDevicesInput, Prisma.LocationUncheckedCreateWithoutDisplayDevicesInput>
+}
+
+export type LocationUpsertWithoutDisplayDevicesInput = {
+  update: Prisma.XOR<Prisma.LocationUpdateWithoutDisplayDevicesInput, Prisma.LocationUncheckedUpdateWithoutDisplayDevicesInput>
+  create: Prisma.XOR<Prisma.LocationCreateWithoutDisplayDevicesInput, Prisma.LocationUncheckedCreateWithoutDisplayDevicesInput>
+  where?: Prisma.LocationWhereInput
+}
+
+export type LocationUpdateToOneWithWhereWithoutDisplayDevicesInput = {
+  where?: Prisma.LocationWhereInput
+  data: Prisma.XOR<Prisma.LocationUpdateWithoutDisplayDevicesInput, Prisma.LocationUncheckedUpdateWithoutDisplayDevicesInput>
+}
+
+export type LocationUpdateWithoutDisplayDevicesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  addressLine?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  hfrId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutLocationsNestedInput
+}
+
+export type LocationUncheckedUpdateWithoutDisplayDevicesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  addressLine?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  city?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  hfrId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
 export type LocationCreateManyTenantInput = {
   id?: string
   name: string
@@ -604,6 +706,7 @@ export type LocationUpdateWithoutTenantInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutLocationNestedInput
 }
 
 export type LocationUncheckedUpdateWithoutTenantInput = {
@@ -617,6 +720,7 @@ export type LocationUncheckedUpdateWithoutTenantInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutLocationNestedInput
 }
 
 export type LocationUncheckedUpdateManyWithoutTenantInput = {
@@ -633,6 +737,35 @@ export type LocationUncheckedUpdateManyWithoutTenantInput = {
 }
 
 
+/**
+ * Count Type LocationCountOutputType
+ */
+
+export type LocationCountOutputType = {
+  displayDevices: number
+}
+
+export type LocationCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  displayDevices?: boolean | LocationCountOutputTypeCountDisplayDevicesArgs
+}
+
+/**
+ * LocationCountOutputType without action
+ */
+export type LocationCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the LocationCountOutputType
+   */
+  select?: Prisma.LocationCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * LocationCountOutputType without action
+ */
+export type LocationCountOutputTypeCountDisplayDevicesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.DisplayDeviceWhereInput
+}
+
 
 export type LocationSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -647,6 +780,8 @@ export type LocationSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   createdAt?: boolean
   updatedAt?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
+  displayDevices?: boolean | Prisma.Location$displayDevicesArgs<ExtArgs>
+  _count?: boolean | Prisma.LocationCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["location"]>
 
 export type LocationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -696,6 +831,8 @@ export type LocationSelectScalar = {
 export type LocationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "name" | "addressLine" | "city" | "state" | "postalCode" | "hfrId" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["location"]>
 export type LocationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
+  displayDevices?: boolean | Prisma.Location$displayDevicesArgs<ExtArgs>
+  _count?: boolean | Prisma.LocationCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type LocationIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
@@ -708,6 +845,7 @@ export type $LocationPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
   name: "Location"
   objects: {
     tenant: Prisma.$TenantPayload<ExtArgs>
+    displayDevices: Prisma.$DisplayDevicePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1123,6 +1261,7 @@ readonly fields: LocationFieldRefs;
 export interface Prisma__LocationClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   tenant<T extends Prisma.TenantDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TenantDefaultArgs<ExtArgs>>): Prisma.Prisma__TenantClient<runtime.Types.Result.GetResult<Prisma.$TenantPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  displayDevices<T extends Prisma.Location$displayDevicesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Location$displayDevicesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DisplayDevicePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1561,6 +1700,30 @@ export type LocationDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Inte
    * Limit how many Locations to delete.
    */
   limit?: number
+}
+
+/**
+ * Location.displayDevices
+ */
+export type Location$displayDevicesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DisplayDevice
+   */
+  select?: Prisma.DisplayDeviceSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the DisplayDevice
+   */
+  omit?: Prisma.DisplayDeviceOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DisplayDeviceInclude<ExtArgs> | null
+  where?: Prisma.DisplayDeviceWhereInput
+  orderBy?: Prisma.DisplayDeviceOrderByWithRelationInput | Prisma.DisplayDeviceOrderByWithRelationInput[]
+  cursor?: Prisma.DisplayDeviceWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.DisplayDeviceScalarFieldEnum | Prisma.DisplayDeviceScalarFieldEnum[]
 }
 
 /**

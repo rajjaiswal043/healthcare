@@ -74,7 +74,25 @@ export class ConsultationsService {
 
       // A finished visit can still be OPENED — that is how you read back what was
       // recorded. It just cannot be changed, which every write path enforces.
-      if (existing) return this.view(tx, existing.id);
+      if (existing) {
+        /**
+         * Resuming the note for a patient who is waiting calls them in.
+         *
+         * This is the second leg of the X-ray round trip: they were sent out,
+         * they came back, the desk put them in the queue, and the doctor is now
+         * opening the note they started an hour ago. Without this the board
+         * would still show them waiting while they sit in the room — and the
+         * next patient would never be called, because "now serving" was empty.
+         */
+        if (appointment.status === 'ARRIVED') {
+          await tx.appointment.update({
+            where: { id: appointmentId },
+            data: { status: 'IN_PROGRESS', calledAt: new Date() },
+          });
+        }
+
+        return this.view(tx, existing.id);
+      }
 
       if (appointment.status === 'BOOKED') {
         throw new ConflictException({
@@ -359,7 +377,20 @@ export class ConsultationsService {
         select: { status: true },
       });
 
-      if (appointment?.status === 'IN_PROGRESS' || appointment?.status === 'ARRIVED') {
+      /**
+       * Signing ends the visit, whatever state it was left in.
+       *
+       * `AWAITING_TESTS` is included deliberately: it is how the doctor closes
+       * out a patient who was sent for an X-ray and went home instead. Without
+       * it, that visit sits open forever, quietly inflating the day's counts and
+       * holding a note nobody can finish. The doctor signs what they have, and
+       * anything the report later adds goes in as an addendum.
+       */
+      if (
+        appointment?.status === 'IN_PROGRESS' ||
+        appointment?.status === 'ARRIVED' ||
+        appointment?.status === 'AWAITING_TESTS'
+      ) {
         await tx.appointment.update({
           where: { id: draft.appointmentId },
           data: { status: 'FULFILLED', completedAt: new Date() },

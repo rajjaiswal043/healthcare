@@ -10,6 +10,7 @@
  */
 export type * from './models/Tenant.js'
 export type * from './models/Location.js'
+export type * from './models/DisplayDevice.js'
 export type * from './models/Patient.js'
 export type * from './models/ConsentRecord.js'
 export type * from './models/AuditEvent.js'

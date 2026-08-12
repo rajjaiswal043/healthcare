@@ -53,6 +53,7 @@ export const AnyNull = runtime.AnyNull
 export const ModelName = {
   Tenant: 'Tenant',
   Location: 'Location',
+  DisplayDevice: 'DisplayDevice',
   Patient: 'Patient',
   ConsentRecord: 'ConsentRecord',
   AuditEvent: 'AuditEvent',
@@ -127,6 +128,24 @@ export const LocationScalarFieldEnum = {
 } as const
 
 export type LocationScalarFieldEnum = (typeof LocationScalarFieldEnum)[keyof typeof LocationScalarFieldEnum]
+
+
+export const DisplayDeviceScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  name: 'name',
+  locationId: 'locationId',
+  practitionerIds: 'practitionerIds',
+  accessKeyHash: 'accessKeyHash',
+  lastSeenAt: 'lastSeenAt',
+  isActive: 'isActive',
+  createdByUserId: 'createdByUserId',
+  revokedAt: 'revokedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type DisplayDeviceScalarFieldEnum = (typeof DisplayDeviceScalarFieldEnum)[keyof typeof DisplayDeviceScalarFieldEnum]
 
 
 export const PatientScalarFieldEnum = {
@@ -350,6 +369,14 @@ export const AppointmentScalarFieldEnum = {
   reasonForVisit: 'reasonForVisit',
   tokenNumber: 'tokenNumber',
   queueDate: 'queueDate',
+  readyAt: 'readyAt',
+  priorityReasonCode: 'priorityReasonCode',
+  priorityNote: 'priorityNote',
+  prioritySetAt: 'prioritySetAt',
+  prioritySetByUserId: 'prioritySetByUserId',
+  sentOutAt: 'sentOutAt',
+  sentOutReason: 'sentOutReason',
+  returnedAt: 'returnedAt',
   checkedInAt: 'checkedInAt',
   calledAt: 'calledAt',
   completedAt: 'completedAt',

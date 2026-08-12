@@ -40,6 +40,17 @@ export type Tenant = Prisma.TenantModel
  */
 export type Location = Prisma.LocationModel
 /**
+ * Model DisplayDevice
+ * A screen on a waiting-room wall. See docs/05-token-queue-plan.md, phase C.
+ * 
+ * It authenticates with its own key rather than a user session: a television
+ * cannot sign in, and a permanent staff session on an unattended screen in a
+ * public room is not a thing to build on purpose. What it may read is narrow by
+ * construction — the display endpoint returns token numbers and doctor names,
+ * never a patient name.
+ */
+export type DisplayDevice = Prisma.DisplayDeviceModel
+/**
  * Model Patient
  * A person receiving care. FHIR: Patient.
  * 

@@ -57,6 +57,7 @@ export default function NewAppointmentPage() {
     token: number | null;
     time: string;
     walkIn: boolean;
+    inQueue: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -139,7 +140,15 @@ export default function NewAppointmentPage() {
             ...(reason ? { reasonForVisit: reason } : {}),
           });
 
-      setBooked({ token: result.tokenNumber, time: result.localTime, walkIn });
+      setBooked({
+        token: result.tokenNumber,
+        time: result.localTime,
+        walkIn,
+        // A walk-in with an unpaid bill is registered and holds a token, but is
+        // not in the waiting list yet. Saying "added to the queue" there would
+        // be a lie the front desk discovers at the check-in gate.
+        inQueue: result.status === 'ARRIVED',
+      });
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not reach the server.');
     } finally {
@@ -156,26 +165,29 @@ export default function NewAppointmentPage() {
               <IconCheck size={26} />
             </span>
             <p className="mono-label mt-4 !text-clinical-text">
-              {booked.walkIn ? 'Added to the queue' : 'Appointment booked'}
+              {booked.inQueue ? 'Added to the queue' : 'Appointment booked'}
             </p>
-            {booked.token !== null ? (
+
+            {/* The token is the number the patient walks away with, so it is
+                the biggest thing on this screen. It exists from booking now —
+                there is no longer a case where a confirmed visit has none. */}
+            {booked.token !== null && (
               <>
                 <p className="mt-3 font-mono text-[44px] font-bold leading-none text-clinical-text">
                   {booked.token}
                 </p>
                 <p className="mono-label mt-1">token number</p>
               </>
-            ) : (
-              <p className="mt-3 font-display text-[30px] font-bold text-clinical-text">
-                {booked.time}
-              </p>
             )}
+
             <p className="mt-3 font-display text-[19px] font-bold">{patient?.name}</p>
-            {!booked.walkIn && (
-              <p className="mt-1 text-[13px] text-ink-60">
-                A token is issued when they arrive and check in.
-              </p>
-            )}
+            <p className="mt-1 text-[13px] text-ink-60">
+              {booked.inQueue
+                ? 'Waiting to be called.'
+                : booked.walkIn
+                  ? 'Collect payment, then check them in to join the queue.'
+                  : `${booked.time} — they join the queue when they arrive and check in.`}
+            </p>
           </div>
           <div className="flex flex-wrap justify-center gap-3 p-6">
             <button

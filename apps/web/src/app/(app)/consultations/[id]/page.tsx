@@ -45,6 +45,9 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
+  const [sendOutOpen, setSendOutOpen] = useState(false);
+  const [sendOutReason, setSendOutReason] = useState('');
+  const [sendingOut, setSendingOut] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [narrative, setNarrative] = useState<Record<string, string>>({});
 
@@ -101,6 +104,31 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  /**
+   * Send the patient out for an investigation.
+   *
+   * The reason is required and goes on the board: the front desk is about to be
+   * asked what the patient is waiting for, and "the doctor sent them somewhere"
+   * is not an answer.
+   */
+  async function sendForTests() {
+    if (!encounter || !sendOutReason.trim()) return;
+    setSendingOut(true);
+    setError(null);
+    try {
+      await api.sendForTests(encounter.appointment.id, sendOutReason.trim());
+      setSendOutOpen(false);
+      setSendOutReason('');
+      applyEncounter(await api.getEncounter(encounter.id));
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError ? err.error.message : 'Could not send them for tests.',
+      );
+    } finally {
+      setSendingOut(false);
+    }
+  }
+
   async function sign() {
     if (!encounter) return;
     setSigning(true);
@@ -129,6 +157,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
   }
 
   const signed = encounter.status === 'SIGNED';
+  const awaitingTests = encounter.appointment.status === 'AWAITING_TESTS';
 
   return (
     <div className="space-y-5">
@@ -194,12 +223,36 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 Print prescription
               </button>
             )}
+            {/* Sending for an X-ray pauses the visit rather than ending it. The
+                note stays a draft, the bill stays as it is, and the patient
+                keeps their token — signing here would close a consultation the
+                doctor has not finished. */}
+            {editable && encounter.appointment.status === 'IN_PROGRESS' && (
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={sendingOut}
+                onClick={() => setSendOutOpen(true)}
+              >
+                Send for tests
+              </button>
+            )}
+            {awaitingTests && (
+              <span className="badge badge-amber">
+                <IconClock size={11} /> Out for tests
+              </span>
+            )}
             {editable && (
               <button
                 type="button"
                 className="btn-primary"
                 disabled={signing}
                 onClick={() => void sign()}
+                title={
+                  awaitingTests
+                    ? 'Close the visit with what is recorded — for a patient who did not come back'
+                    : undefined
+                }
               >
                 <IconCheckCircle size={16} />
                 {signing ? 'Signing…' : 'Sign and finish'}
@@ -207,6 +260,45 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
             )}
           </div>
         </header>
+
+        {sendOutOpen && (
+          <div className="mt-4 rounded-panel border border-amber/30 bg-amber-soft/40 p-4">
+            <p className="mono-label">What are they being sent for?</p>
+            <p className="mt-1 text-[13px] text-ink-60">
+              The visit stays open and this note stays a draft. They keep their token, and the front
+              desk brings them back when they return.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                className="field-input min-w-[240px] flex-1"
+                value={sendOutReason}
+                onChange={(e) => setSendOutReason(e.target.value)}
+                maxLength={200}
+                placeholder="X-ray — left wrist"
+                autoFocus
+              />
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={sendingOut || sendOutReason.trim().length < 3}
+                onClick={() => void sendForTests()}
+              >
+                {sendingOut ? 'Saving…' : 'Send them'}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={sendingOut}
+                onClick={() => {
+                  setSendOutOpen(false);
+                  setSendOutReason('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div

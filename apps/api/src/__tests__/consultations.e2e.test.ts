@@ -130,6 +130,91 @@ describe('opening a consultation', () => {
     expect(domainCode(res)).toBe('NOT_ARRIVED');
   });
 
+  /**
+   * The clinical half of the X-ray round trip.
+   *
+   * The note is the reason the visit must not end when the patient walks out:
+   * the doctor has already written the complaint and the examination, and if
+   * sending for an X-ray closed the encounter, that work would either be lost or
+   * be signed prematurely into an immutable record.
+   */
+  it('keeps the draft note across a trip to X-ray', async () => {
+    const { appointmentId, encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fell on outstretched hand' },
+    });
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appointmentId}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray — left wrist' },
+    });
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appointmentId}/return`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { seeNext: true },
+    });
+
+    // Reopening resumes the SAME note, still a draft, with the text intact.
+    const resumed = await open(appointmentId);
+    expect(resumed.statusCode).toBe(201);
+    expect(resumed.json().id).toBe(encounter.id);
+    expect(resumed.json().status).toBe('IN_PROGRESS');
+    expect(resumed.json().chiefComplaint).toBe('Fell on outstretched hand');
+
+    // And resuming calls them back in, so the board does not still show them
+    // waiting while they sit in the room.
+    const [appointment] = await ownerQuery<{ status: string }>(
+      fx.main.id,
+      `SELECT status FROM appointment WHERE id = $1`,
+      [appointmentId],
+    );
+    expect(appointment?.status).toBe('IN_PROGRESS');
+  });
+
+  it('lets the doctor sign off a patient who never came back', async () => {
+    const { appointmentId, encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Wrist pain after a fall' },
+    });
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appointmentId}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray — left wrist' },
+    });
+
+    // They went home instead. Without this the visit sits open forever, holding
+    // a note nobody can finish and inflating the day's counts.
+    const signed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(signed.statusCode).toBe(201);
+    expect(signed.json().status).toBe('SIGNED');
+
+    const [appointment] = await ownerQuery<{ status: string }>(
+      fx.main.id,
+      `SELECT status FROM appointment WHERE id = $1`,
+      [appointmentId],
+    );
+    expect(appointment?.status).toBe('FULFILLED');
+  });
+
   it('calls the patient in as a side effect', async () => {
     const { appointmentId, encounter } = await openConsultation();
 

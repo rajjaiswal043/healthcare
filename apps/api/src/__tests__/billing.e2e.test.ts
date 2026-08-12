@@ -1,10 +1,14 @@
 /**
  * Billing, over HTTP.
  *
- * The centre of this file is `refuses to issue a token while money is
+ * The centre of this file is `refuses a place in the queue while money is
  * outstanding`. Narveer's clinic collects before the consultation, and that rule
  * is worth exactly as much as the enforcement behind it — a disabled button is
  * not a gate.
+ *
+ * The gate withholds a POSITION, not a token: since 12 Aug 2026 the token is
+ * issued at booking and the patient is holding it long before they reach the
+ * desk. What an unpaid visit does not get is `ready_at`.
  *
  * Everything here is in paise. `50000` is ₹500.00. There is no float in this
  * file, and there should never be one.
@@ -187,7 +191,7 @@ describe('raising the bill', () => {
 // --- the gate ---------------------------------------------------------------
 
 describe('the pay-first gate', () => {
-  it('refuses to issue a token while money is outstanding', async () => {
+  it('refuses a place in the queue while money is outstanding', async () => {
     const appointmentId = await book();
 
     const res = await checkIn(appointmentId);
@@ -198,14 +202,24 @@ describe('the pay-first gate', () => {
     expect(res.json().error.message).toContain('₹500.00');
     expect(res.json().error.message).toMatch(/INV-\d{6}/);
 
-    // And nothing moved.
-    const [appointment] = await ownerQuery<{ status: string; token_number: number | null }>(
-      fx.main.id,
-      `SELECT status, token_number FROM appointment WHERE id = $1`,
-      [appointmentId],
-    );
+    /**
+     * And nothing moved.
+     *
+     * The token is NOT the thing being withheld — it was issued at booking and
+     * the patient is holding it. What is withheld is `ready_at`: without it they
+     * have no position, so they are not on the waiting list and the doctor will
+     * not be handed them.
+     */
+    const [appointment] = await ownerQuery<{
+      status: string;
+      token_number: number | null;
+      ready_at: Date | null;
+    }>(fx.main.id, `SELECT status, token_number, ready_at FROM appointment WHERE id = $1`, [
+      appointmentId,
+    ]);
     expect(appointment?.status).toBe('BOOKED');
-    expect(appointment?.token_number).toBeNull();
+    expect(appointment?.token_number).not.toBeNull();
+    expect(appointment?.ready_at).toBeNull();
   });
 
   it('lets the patient in once the bill is settled', async () => {
@@ -247,18 +261,22 @@ describe('the pay-first gate', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    // A walk-in used to arrive already admitted with a token. Under pay-first it
-    // cannot — the bill has to be settled first, and the queue must not show a
-    // token for someone who has not paid.
+    // Registered and holding a token — a walk-in is booked and registered in one
+    // act. What the money governs is the WAITING LIST, so the visit stays BOOKED
+    // with no readyAt until the bill is settled.
     expect(res.json().status).toBe('BOOKED');
-    expect(res.json().tokenNumber).toBeNull();
+    expect(res.json().tokenNumber).toBe(1);
+    expect(res.json().readyAt).toBeNull();
 
     const invoice = await invoiceFor(res.json().id);
     await pay(invoice.id, CONSULT_FEE);
 
     const admitted = await checkIn(res.json().id);
     expect(admitted.statusCode).toBe(200);
+    // The same token they were given at the desk. Re-issuing one here would
+    // hand back a different number from the one on their slip.
     expect(admitted.json().tokenNumber).toBe(1);
+    expect(admitted.json().readyAt).not.toBeNull();
   });
 
   it('opens for a waived charge', async () => {

@@ -399,6 +399,7 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 export const ModelName = {
   Tenant: 'Tenant',
   Location: 'Location',
+  DisplayDevice: 'DisplayDevice',
   Patient: 'Patient',
   ConsentRecord: 'ConsentRecord',
   AuditEvent: 'AuditEvent',
@@ -438,7 +439,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "tenant" | "location" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter"
+    modelProps: "tenant" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -587,6 +588,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.LocationCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.LocationCountAggregateOutputType> | number
+        }
+      }
+    }
+    DisplayDevice: {
+      payload: Prisma.$DisplayDevicePayload<ExtArgs>
+      fields: Prisma.DisplayDeviceFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.DisplayDeviceFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.DisplayDeviceFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>
+        }
+        findFirst: {
+          args: Prisma.DisplayDeviceFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.DisplayDeviceFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>
+        }
+        findMany: {
+          args: Prisma.DisplayDeviceFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>[]
+        }
+        create: {
+          args: Prisma.DisplayDeviceCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>
+        }
+        createMany: {
+          args: Prisma.DisplayDeviceCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.DisplayDeviceCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>[]
+        }
+        delete: {
+          args: Prisma.DisplayDeviceDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>
+        }
+        update: {
+          args: Prisma.DisplayDeviceUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>
+        }
+        deleteMany: {
+          args: Prisma.DisplayDeviceDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.DisplayDeviceUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.DisplayDeviceUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>[]
+        }
+        upsert: {
+          args: Prisma.DisplayDeviceUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DisplayDevicePayload>
+        }
+        aggregate: {
+          args: Prisma.DisplayDeviceAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateDisplayDevice>
+        }
+        groupBy: {
+          args: Prisma.DisplayDeviceGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DisplayDeviceGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.DisplayDeviceCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DisplayDeviceCountAggregateOutputType> | number
         }
       }
     }
@@ -2439,6 +2514,24 @@ export const LocationScalarFieldEnum = {
 export type LocationScalarFieldEnum = (typeof LocationScalarFieldEnum)[keyof typeof LocationScalarFieldEnum]
 
 
+export const DisplayDeviceScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  name: 'name',
+  locationId: 'locationId',
+  practitionerIds: 'practitionerIds',
+  accessKeyHash: 'accessKeyHash',
+  lastSeenAt: 'lastSeenAt',
+  isActive: 'isActive',
+  createdByUserId: 'createdByUserId',
+  revokedAt: 'revokedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type DisplayDeviceScalarFieldEnum = (typeof DisplayDeviceScalarFieldEnum)[keyof typeof DisplayDeviceScalarFieldEnum]
+
+
 export const PatientScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -2660,6 +2753,14 @@ export const AppointmentScalarFieldEnum = {
   reasonForVisit: 'reasonForVisit',
   tokenNumber: 'tokenNumber',
   queueDate: 'queueDate',
+  readyAt: 'readyAt',
+  priorityReasonCode: 'priorityReasonCode',
+  priorityNote: 'priorityNote',
+  prioritySetAt: 'prioritySetAt',
+  prioritySetByUserId: 'prioritySetByUserId',
+  sentOutAt: 'sentOutAt',
+  sentOutReason: 'sentOutReason',
+  returnedAt: 'returnedAt',
   checkedInAt: 'checkedInAt',
   calledAt: 'calledAt',
   completedAt: 'completedAt',
@@ -3087,6 +3188,20 @@ export type ListEnumAppointmentSourceFieldRefInput<$PrismaModel> = FieldRefInput
 
 
 /**
+ * Reference to a field of type 'QueuePriorityReason'
+ */
+export type EnumQueuePriorityReasonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueuePriorityReason'>
+    
+
+
+/**
+ * Reference to a field of type 'QueuePriorityReason[]'
+ */
+export type ListEnumQueuePriorityReasonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueuePriorityReason[]'>
+    
+
+
+/**
  * Reference to a field of type 'EncounterStatus'
  */
 export type EnumEncounterStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EncounterStatus'>
@@ -3364,6 +3479,7 @@ export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaC
 export type GlobalOmitConfig = {
   tenant?: Prisma.TenantOmit
   location?: Prisma.LocationOmit
+  displayDevice?: Prisma.DisplayDeviceOmit
   patient?: Prisma.PatientOmit
   consentRecord?: Prisma.ConsentRecordOmit
   auditEvent?: Prisma.AuditEventOmit
