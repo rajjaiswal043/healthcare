@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
+import { ClinicLogo } from '@/components/clinic-logo';
 
 /**
  * The waiting-room screen.
@@ -115,14 +116,27 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
 
   return (
     <main className="min-h-screen bg-[#0d1b1a] px-[3vw] py-[3vh] text-white">
-      <header className="flex flex-wrap items-baseline justify-between gap-4 border-b border-white/10 pb-[2vh]">
-        <div>
-          <h1 className="font-display text-[clamp(28px,3.2vw,52px)] font-bold leading-none">
-            {board.clinic}
-          </h1>
-          {board.location && (
-            <p className="mt-2 text-[clamp(14px,1.2vw,22px)] text-white/45">{board.location}</p>
-          )}
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-[2vh]">
+        <div className="flex items-center gap-[1.6vw]">
+          {/* On a white chip rather than bare on the dark ground.
+              A JPEG carries no transparency, so its own background paints as a
+              hard rectangle against this screen whatever colour it is; a
+              deliberate white panel makes that read as a badge instead of an
+              artefact, and it works for a dark logo, a light one and a colour
+              one without anybody having to prepare the file. Inverting would
+              have been fine for a monochrome mark and ruinous for this one. */}
+          <span className="grid shrink-0 place-items-center rounded-[0.8vw] bg-white p-[0.5vw]">
+            <ClinicLogo size={56} />
+          </span>
+
+          <div>
+            <h1 className="font-display text-[clamp(28px,3.2vw,52px)] font-bold leading-none">
+              {board.clinic}
+            </h1>
+            {board.location && (
+              <p className="mt-2 text-[clamp(14px,1.2vw,22px)] text-white/45">{board.location}</p>
+            )}
+          </div>
         </div>
 
         {/* The screen says when it last heard from the clinic, and only when that

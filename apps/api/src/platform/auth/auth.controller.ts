@@ -31,6 +31,26 @@ class ConfirmMfaDto extends LoginDto {
   declare totpCode: string;
 }
 
+class ChangePasswordDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  currentPassword!: string;
+
+  /**
+   * Twelve characters, and no composition rules.
+   *
+   * Length is the property that actually resists an offline attack; forcing a
+   * symbol and a digit mostly produces Password1! and a sticky note. NIST
+   * dropped composition rules for this reason, and the accounts here belong to
+   * people who type on a shared clinic PC in a hurry.
+   */
+  @IsString()
+  @MinLength(12, { message: 'Use at least 12 characters — length matters more than symbols.' })
+  @MaxLength(200)
+  newPassword!: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -112,14 +132,55 @@ export class AuthController {
     void reply.status(204).send();
   }
 
-  /** Who am I — used by the console on load to restore session state. */
+  /**
+   * Who am I — used by the console on load to restore session state.
+   *
+   * Permissions come from the verified token; the name and roles are read from
+   * the database, because the console shows them in its chrome and a role that
+   * changed an hour ago should not still be painting the screen.
+   */
   @Get('me')
-  me(@CurrentUser() user: AuthenticatedUser) {
+  async me(@CurrentUser() user: AuthenticatedUser) {
+    const profile = await this.auth.profile(user.tenantId, user.userId);
+
     return {
       userId: user.userId,
       tenantId: user.tenantId,
       permissions: user.permissions,
+      fullName: profile.fullName,
+      roles: profile.roles,
+      // The console gates every screen on this, so it has to survive a reload —
+      // a gate that only exists in the login response is one refresh away from
+      // being bypassed.
+      mustChangePassword: profile.mustChangePassword,
     };
+  }
+
+  /**
+   * Change your own password (FR-USR-05).
+   *
+   * The one write a user forced into a password change is allowed to make — the
+   * console blocks every other screen until `mustChangePassword` clears, and
+   * this is the endpoint that clears it.
+   */
+  @Post('password')
+  @HttpCode(204)
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+    @Req() req: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ) {
+    await this.auth.changePassword(
+      user.tenantId,
+      user.userId,
+      user.sessionId,
+      dto.currentPassword,
+      dto.newPassword,
+      metaFrom(req),
+    );
+
+    void reply.status(204).send();
   }
 
   /** Active sessions for this user (FR-USR-03). */

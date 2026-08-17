@@ -9,6 +9,8 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/Tenant.js'
+export type * from './models/PlatformUser.js'
+export type * from './models/PlatformSession.js'
 export type * from './models/Location.js'
 export type * from './models/DisplayDevice.js'
 export type * from './models/Patient.js'
@@ -16,6 +18,7 @@ export type * from './models/ConsentRecord.js'
 export type * from './models/AuditEvent.js'
 export type * from './models/User.js'
 export type * from './models/Role.js'
+export type * from './models/TenantSeatLimit.js'
 export type * from './models/UserRole.js'
 export type * from './models/Session.js'
 export type * from './models/Department.js'

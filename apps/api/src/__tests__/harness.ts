@@ -51,6 +51,11 @@ export interface Fixtures {
  * worse than one that fails.
  */
 const TABLES = [
+  // Platform tier first: platform_user is referenced by tenant, and
+  // tenant_seat_limit by role. TRUNCATE ... CASCADE would sort this out on its
+  // own, but the list is explicit for the reason in the comment above.
+  'platform_session',
+  'tenant_seat_limit',
   'payment',
   'invoice_line',
   'invoice',
@@ -287,6 +292,20 @@ async function seedTenant(input: {
       );
       patientIds.push(row.id);
     }
+
+    /**
+     * Move the tenant's UHID counter past what was just inserted.
+     *
+     * These patients are written directly, so `next_uhid()` never saw them and
+     * would hand T000001 to the first patient registered through the API —
+     * colliding with the fixture. Nothing noticed until a test registered a
+     * patient rather than reading a seeded one, which is exactly the kind of
+     * fixture bug that waits for the test that needed it.
+     */
+    await tx.query(`UPDATE tenant SET uhid_counter = $2 WHERE id = $1`, [
+      input.id,
+      patients.length,
+    ]);
 
     // Roles come from the shared definition rather than a copy. The last time
     // these two drifted, every scheduling endpoint returned 403 with nothing to

@@ -515,14 +515,6 @@ export type LocationUncheckedUpdateManyWithoutTenantNestedInput = {
   deleteMany?: Prisma.LocationScalarWhereInput | Prisma.LocationScalarWhereInput[]
 }
 
-export type NullableStringFieldUpdateOperationsInput = {
-  set?: string | null
-}
-
-export type BoolFieldUpdateOperationsInput = {
-  set?: boolean
-}
-
 export type LocationCreateNestedOneWithoutDisplayDevicesInput = {
   create?: Prisma.XOR<Prisma.LocationCreateWithoutDisplayDevicesInput, Prisma.LocationUncheckedCreateWithoutDisplayDevicesInput>
   connectOrCreate?: Prisma.LocationCreateOrConnectWithoutDisplayDevicesInput

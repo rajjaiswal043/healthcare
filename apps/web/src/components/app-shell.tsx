@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './auth-provider';
 import { LogoMark } from './auth-shell';
+import { initialsOf } from '@/lib/role-signature';
 import {
   IconCalendar,
   IconChevronRight,
   IconClock,
   IconHome,
+  IconKey,
   IconLogout,
   IconMenu,
   IconPanelLeft,
@@ -92,6 +94,21 @@ const SECTIONS: NavSection[] = [
     title: 'Settings',
     items: [
       {
+        key: 'staff',
+        label: 'Staff',
+        href: '/settings/users',
+        icon: <IconUsers size={16} />,
+        permission: 'user:manage',
+      },
+      {
+        key: 'doctors',
+        label: 'Doctors and hours',
+        href: '/settings/doctors',
+        icon: <IconCalendar size={16} />,
+        // A doctor's hours and fees are a clinic setting, not a booking action.
+        permission: 'schedule:manage',
+      },
+      {
         key: 'displays',
         label: 'Waiting-room screens',
         href: '/settings/displays',
@@ -110,10 +127,13 @@ const BREADCRUMBS: Record<string, string> = {
   '/queue': "Today's queue",
   '/appointments/new': 'Book an appointment',
   '/settings/displays': 'Waiting-room screens',
+  '/settings/users': 'Staff',
+  '/settings/doctors': 'Doctors and hours',
+  '/change-password': 'Choose a password',
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { session, loading, can, signOut } = useAuth();
+  const { session, loading, can, signOut, signature } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -161,11 +181,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     items: s.items.filter((i) => !i.permission || can(i.permission)),
   })).filter((s) => s.items.length > 0);
 
-  const initials = 'HC';
+  const initials = initialsOf(session.fullName);
   const crumb = BREADCRUMBS[pathname] ?? 'HealthCloud';
 
   return (
-    <div className="flex min-h-screen bg-bg">
+    /**
+     * `data-role` is the whole mechanism: it selects the --role custom
+     * properties in globals.css, and everything below asks for those rather than
+     * knowing anything about personas. An unrecognised role sets no attribute
+     * and inherits the house teal.
+     */
+    <div
+      className="flex min-h-screen bg-bg"
+      {...(signature.key ? { 'data-role': signature.key } : {})}
+    >
       {mobileOpen && (
         <button
           type="button"
@@ -176,9 +205,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      {/* The rail is where the persona lives: white at the top fading into the
+          role's palest tint, so the colour is present without the nav becoming a
+          block of it. */}
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-50 flex flex-col gap-5 border-r border-ink/8 bg-gradient-to-b from-white to-bg-soft px-3 py-4 shadow-rail transition-[width,transform] duration-200 lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 flex flex-col gap-5 border-r border-ink/8 bg-gradient-to-b from-white to-[var(--role-tint)] px-3 py-4 shadow-rail transition-[width,transform] duration-200 lg:static lg:translate-x-0',
           collapsed ? 'lg:w-[76px]' : 'lg:w-[236px]',
           mobileOpen ? 'w-[236px] translate-x-0' : 'w-[236px] -translate-x-full',
         ].join(' ')}
@@ -220,22 +252,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className={[
                       'group relative flex items-center gap-2.5 rounded-panel border px-2.5 py-2 transition-all',
                       active
-                        ? 'border-clinical/20 bg-clinical-tint text-clinical-text'
+                        ? 'border-[color-mix(in_srgb,var(--role)_20%,transparent)] bg-[var(--role-soft)] text-[var(--role-text)]'
                         : 'border-transparent text-ink-60 hover:border-ink/10 hover:bg-white',
                     ].join(' ')}
                   >
                     {active && (
                       <span
                         aria-hidden="true"
-                        className="absolute left-0 top-1/2 h-[55%] w-[3px] -translate-y-1/2 rounded-pill bg-clinical"
+                        className="absolute left-0 top-1/2 h-[55%] w-[3px] -translate-y-1/2 rounded-pill bg-[var(--role)]"
                       />
                     )}
                     <span
                       className={[
                         'grid h-8 w-8 shrink-0 place-items-center rounded-tiny transition-colors',
                         active
-                          ? 'bg-clinical text-white'
-                          : 'bg-ink/5 text-ink-40 group-hover:bg-clinical-soft group-hover:text-clinical-text',
+                          ? 'bg-[var(--role)] text-white'
+                          : 'bg-ink/5 text-ink-40 group-hover:bg-[var(--role-soft)] group-hover:text-[var(--role-text)]',
                       ].join(' ')}
                     >
                       {item.icon}
@@ -265,7 +297,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Main ────────────────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[58px] items-center gap-3 border-b border-ink/8 bg-white/85 px-4 backdrop-blur-md sm:px-6">
+        {/* The peripheral signal. Three pixels, full width, directly above the
+            content — the thing you register from across a desk without reading
+            anything on the screen. */}
+        <div aria-hidden="true" className="sticky top-0 z-30 h-[3px] shrink-0 bg-[var(--role)]" />
+
+        <header className="sticky top-[3px] z-30 flex h-[58px] items-center gap-3 border-b border-ink/8 bg-white/85 px-4 backdrop-blur-md sm:px-6">
           <button
             type="button"
             className="btn-ghost !px-1.5 !py-1.5 lg:hidden"
@@ -321,11 +358,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-clinical font-mono text-[11px] font-bold text-white">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--role)] font-mono text-[11px] font-bold text-white">
                 {initials}
               </span>
-              <span className="hidden text-[12.5px] font-semibold text-ink-60 sm:block">
-                Signed in
+              {/* The role is written, not just coloured. Five personas is more
+                  than colour can carry on its own, and this is the text the
+                  colour confirms. */}
+              <span className="hidden text-left leading-tight sm:block">
+                <span className="block text-[12.5px] font-semibold text-ink">
+                  {session.fullName}
+                </span>
+                <span className="block text-[10.5px] font-semibold text-[var(--role-text)]">
+                  {signature.label}
+                </span>
               </span>
             </button>
 
@@ -334,9 +379,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 role="menu"
                 className="absolute right-0 top-[calc(100%+8px)] w-60 overflow-hidden rounded-card border border-ink/10 bg-white shadow-lg"
               >
-                <div className="border-b border-ink/8 bg-bg-soft px-4 py-3">
-                  <p className="mono-label">Session</p>
-                  <p className="mt-1 font-mono text-[11px] text-ink-60">
+                <div className="border-b border-ink/8 bg-[var(--role-tint)] px-4 py-3">
+                  <p className="mono-label">Signed in as</p>
+                  <p className="mt-1 text-[13.5px] font-semibold text-ink">{session.fullName}</p>
+                  <p className="text-[12px] font-semibold text-[var(--role-text)]">
+                    {signature.label}
+                  </p>
+                  <p className="mt-1.5 font-mono text-[11px] text-ink-60">
                     {session.permissions.length} permissions
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -352,6 +401,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                   </div>
                 </div>
+                <Link
+                  href="/change-password"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13.5px] transition-colors hover:bg-bg-soft"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <IconKey size={15} />
+                  Change my password
+                </Link>
                 <button
                   type="button"
                   role="menuitem"

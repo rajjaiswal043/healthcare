@@ -221,6 +221,7 @@ export type RoleWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Role"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Role"> | Date | string
   users?: Prisma.UserRoleListRelationFilter
+  seatLimits?: Prisma.TenantSeatLimitListRelationFilter
 }
 
 export type RoleOrderByWithRelationInput = {
@@ -235,6 +236,7 @@ export type RoleOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   users?: Prisma.UserRoleOrderByRelationAggregateInput
+  seatLimits?: Prisma.TenantSeatLimitOrderByRelationAggregateInput
 }
 
 export type RoleWhereUniqueInput = Prisma.AtLeast<{
@@ -253,6 +255,7 @@ export type RoleWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Role"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Role"> | Date | string
   users?: Prisma.UserRoleListRelationFilter
+  seatLimits?: Prisma.TenantSeatLimitListRelationFilter
 }, "id" | "tenantId_key">
 
 export type RoleOrderByWithAggregationInput = {
@@ -299,6 +302,7 @@ export type RoleCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   users?: Prisma.UserRoleCreateNestedManyWithoutRoleInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutRoleInput
 }
 
 export type RoleUncheckedCreateInput = {
@@ -313,6 +317,7 @@ export type RoleUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   users?: Prisma.UserRoleUncheckedCreateNestedManyWithoutRoleInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutRoleInput
 }
 
 export type RoleUpdateInput = {
@@ -327,6 +332,7 @@ export type RoleUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   users?: Prisma.UserRoleUpdateManyWithoutRoleNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutRoleNestedInput
 }
 
 export type RoleUncheckedUpdateInput = {
@@ -341,6 +347,7 @@ export type RoleUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   users?: Prisma.UserRoleUncheckedUpdateManyWithoutRoleNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutRoleNestedInput
 }
 
 export type RoleCreateManyInput = {
@@ -438,6 +445,20 @@ export type RoleUpdatepermissionsInput = {
   push?: string | string[]
 }
 
+export type RoleCreateNestedOneWithoutSeatLimitsInput = {
+  create?: Prisma.XOR<Prisma.RoleCreateWithoutSeatLimitsInput, Prisma.RoleUncheckedCreateWithoutSeatLimitsInput>
+  connectOrCreate?: Prisma.RoleCreateOrConnectWithoutSeatLimitsInput
+  connect?: Prisma.RoleWhereUniqueInput
+}
+
+export type RoleUpdateOneRequiredWithoutSeatLimitsNestedInput = {
+  create?: Prisma.XOR<Prisma.RoleCreateWithoutSeatLimitsInput, Prisma.RoleUncheckedCreateWithoutSeatLimitsInput>
+  connectOrCreate?: Prisma.RoleCreateOrConnectWithoutSeatLimitsInput
+  upsert?: Prisma.RoleUpsertWithoutSeatLimitsInput
+  connect?: Prisma.RoleWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.RoleUpdateToOneWithWhereWithoutSeatLimitsInput, Prisma.RoleUpdateWithoutSeatLimitsInput>, Prisma.RoleUncheckedUpdateWithoutSeatLimitsInput>
+}
+
 export type RoleCreateNestedOneWithoutUsersInput = {
   create?: Prisma.XOR<Prisma.RoleCreateWithoutUsersInput, Prisma.RoleUncheckedCreateWithoutUsersInput>
   connectOrCreate?: Prisma.RoleCreateOrConnectWithoutUsersInput
@@ -452,6 +473,78 @@ export type RoleUpdateOneRequiredWithoutUsersNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.RoleUpdateToOneWithWhereWithoutUsersInput, Prisma.RoleUpdateWithoutUsersInput>, Prisma.RoleUncheckedUpdateWithoutUsersInput>
 }
 
+export type RoleCreateWithoutSeatLimitsInput = {
+  id?: string
+  tenantId: string
+  key: string
+  name: string
+  description?: string | null
+  permissions?: Prisma.RoleCreatepermissionsInput | string[]
+  isSystem?: boolean
+  requiresMfa?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  users?: Prisma.UserRoleCreateNestedManyWithoutRoleInput
+}
+
+export type RoleUncheckedCreateWithoutSeatLimitsInput = {
+  id?: string
+  tenantId: string
+  key: string
+  name: string
+  description?: string | null
+  permissions?: Prisma.RoleCreatepermissionsInput | string[]
+  isSystem?: boolean
+  requiresMfa?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  users?: Prisma.UserRoleUncheckedCreateNestedManyWithoutRoleInput
+}
+
+export type RoleCreateOrConnectWithoutSeatLimitsInput = {
+  where: Prisma.RoleWhereUniqueInput
+  create: Prisma.XOR<Prisma.RoleCreateWithoutSeatLimitsInput, Prisma.RoleUncheckedCreateWithoutSeatLimitsInput>
+}
+
+export type RoleUpsertWithoutSeatLimitsInput = {
+  update: Prisma.XOR<Prisma.RoleUpdateWithoutSeatLimitsInput, Prisma.RoleUncheckedUpdateWithoutSeatLimitsInput>
+  create: Prisma.XOR<Prisma.RoleCreateWithoutSeatLimitsInput, Prisma.RoleUncheckedCreateWithoutSeatLimitsInput>
+  where?: Prisma.RoleWhereInput
+}
+
+export type RoleUpdateToOneWithWhereWithoutSeatLimitsInput = {
+  where?: Prisma.RoleWhereInput
+  data: Prisma.XOR<Prisma.RoleUpdateWithoutSeatLimitsInput, Prisma.RoleUncheckedUpdateWithoutSeatLimitsInput>
+}
+
+export type RoleUpdateWithoutSeatLimitsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  permissions?: Prisma.RoleUpdatepermissionsInput | string[]
+  isSystem?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  requiresMfa?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  users?: Prisma.UserRoleUpdateManyWithoutRoleNestedInput
+}
+
+export type RoleUncheckedUpdateWithoutSeatLimitsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  permissions?: Prisma.RoleUpdatepermissionsInput | string[]
+  isSystem?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  requiresMfa?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  users?: Prisma.UserRoleUncheckedUpdateManyWithoutRoleNestedInput
+}
+
 export type RoleCreateWithoutUsersInput = {
   id?: string
   tenantId: string
@@ -463,6 +556,7 @@ export type RoleCreateWithoutUsersInput = {
   requiresMfa?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutRoleInput
 }
 
 export type RoleUncheckedCreateWithoutUsersInput = {
@@ -476,6 +570,7 @@ export type RoleUncheckedCreateWithoutUsersInput = {
   requiresMfa?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutRoleInput
 }
 
 export type RoleCreateOrConnectWithoutUsersInput = {
@@ -505,6 +600,7 @@ export type RoleUpdateWithoutUsersInput = {
   requiresMfa?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutRoleNestedInput
 }
 
 export type RoleUncheckedUpdateWithoutUsersInput = {
@@ -518,6 +614,7 @@ export type RoleUncheckedUpdateWithoutUsersInput = {
   requiresMfa?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutRoleNestedInput
 }
 
 
@@ -527,10 +624,12 @@ export type RoleUncheckedUpdateWithoutUsersInput = {
 
 export type RoleCountOutputType = {
   users: number
+  seatLimits: number
 }
 
 export type RoleCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   users?: boolean | RoleCountOutputTypeCountUsersArgs
+  seatLimits?: boolean | RoleCountOutputTypeCountSeatLimitsArgs
 }
 
 /**
@@ -550,6 +649,13 @@ export type RoleCountOutputTypeCountUsersArgs<ExtArgs extends runtime.Types.Exte
   where?: Prisma.UserRoleWhereInput
 }
 
+/**
+ * RoleCountOutputType without action
+ */
+export type RoleCountOutputTypeCountSeatLimitsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TenantSeatLimitWhereInput
+}
+
 
 export type RoleSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -563,6 +669,7 @@ export type RoleSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   createdAt?: boolean
   updatedAt?: boolean
   users?: boolean | Prisma.Role$usersArgs<ExtArgs>
+  seatLimits?: boolean | Prisma.Role$seatLimitsArgs<ExtArgs>
   _count?: boolean | Prisma.RoleCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["role"]>
 
@@ -608,6 +715,7 @@ export type RoleSelectScalar = {
 export type RoleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "key" | "name" | "description" | "permissions" | "isSystem" | "requiresMfa" | "createdAt" | "updatedAt", ExtArgs["result"]["role"]>
 export type RoleInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   users?: boolean | Prisma.Role$usersArgs<ExtArgs>
+  seatLimits?: boolean | Prisma.Role$seatLimitsArgs<ExtArgs>
   _count?: boolean | Prisma.RoleCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type RoleIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -617,6 +725,7 @@ export type $RolePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   name: "Role"
   objects: {
     users: Prisma.$UserRolePayload<ExtArgs>[]
+    seatLimits: Prisma.$TenantSeatLimitPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1037,6 +1146,7 @@ readonly fields: RoleFieldRefs;
 export interface Prisma__RoleClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   users<T extends Prisma.Role$usersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Role$usersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  seatLimits<T extends Prisma.Role$seatLimitsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Role$seatLimitsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TenantSeatLimitPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1490,6 +1600,30 @@ export type Role$usersArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs
   take?: number
   skip?: number
   distinct?: Prisma.UserRoleScalarFieldEnum | Prisma.UserRoleScalarFieldEnum[]
+}
+
+/**
+ * Role.seatLimits
+ */
+export type Role$seatLimitsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TenantSeatLimit
+   */
+  select?: Prisma.TenantSeatLimitSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TenantSeatLimit
+   */
+  omit?: Prisma.TenantSeatLimitOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TenantSeatLimitInclude<ExtArgs> | null
+  where?: Prisma.TenantSeatLimitWhereInput
+  orderBy?: Prisma.TenantSeatLimitOrderByWithRelationInput | Prisma.TenantSeatLimitOrderByWithRelationInput[]
+  cursor?: Prisma.TenantSeatLimitWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.TenantSeatLimitScalarFieldEnum | Prisma.TenantSeatLimitScalarFieldEnum[]
 }
 
 /**

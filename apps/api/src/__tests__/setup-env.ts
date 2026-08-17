@@ -76,6 +76,22 @@ process.env.NODE_ENV = 'test';
 // Quiet, but not silent: a genuine error during a test should still be visible.
 process.env.LOG_LEVEL = 'error';
 
+/**
+ * Neutralise the two-factor escape hatches for the whole suite.
+ *
+ * Both are ordinary conveniences on a developer machine — a phone is not always
+ * to hand — and both are read by the running API, so a suite that inherited them
+ * would quietly stop testing authentication. It would pass on the machine where
+ * the flags are set and fail on the one where they are not, which is the worst
+ * possible way for a security test to behave.
+ *
+ * So the suite always runs as production does. If somebody ever needs to test
+ * the flags themselves, that is a test that sets them deliberately, not an
+ * ambient state everything else inherits.
+ */
+process.env.DEV_DISABLE_MFA = '';
+process.env.DEV_DISABLE_PLATFORM_MFA = '';
+
 // The app refuses to start without these; a developer whose .env predates auth
 // should get that message from here rather than a stack trace inside Nest.
 for (const key of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET']) {

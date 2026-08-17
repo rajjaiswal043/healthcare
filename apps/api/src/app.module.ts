@@ -4,7 +4,10 @@ import { LoggerModule } from 'nestjs-pino';
 import { DatabaseModule } from './platform/database/database.module.js';
 import { HealthController } from './platform/health/health.controller.js';
 import { AuthGuard } from './platform/auth/auth.guard.js';
+import { SuspensionGuard } from './platform/auth/suspension.guard.js';
 import { AuthModule } from './platform/auth/auth.module.js';
+import { UsersModule } from './platform/users/users.module.js';
+import { PlatformModule } from './platform/tier/platform.module.js';
 import { PatientsModule } from './clinical/patients/patients.module.js';
 import { ConsultationsModule } from './clinical/consultations/consultations.module.js';
 import { SchedulingModule } from './scheduling/scheduling.module.js';
@@ -47,6 +50,8 @@ const env = loadEnv();
     }),
     DatabaseModule,
     AuthModule,
+    UsersModule,
+    PlatformModule,
     PatientsModule,
     ConsultationsModule,
     SchedulingModule,
@@ -59,6 +64,11 @@ const env = loadEnv();
     // is greppable — the inverse would mean a forgotten decorator silently
     // exposes patient data.
     { provide: APP_GUARD, useClass: AuthGuard },
+
+    // Then: is this clinic allowed to WRITE? Registered after the auth guard so
+    // it can read the session's tenant. A suspended clinic reads normally and
+    // writes nothing — see docs/06 section 2.6.
+    { provide: APP_GUARD, useClass: SuspensionGuard },
   ],
 })
 export class AppModule {}

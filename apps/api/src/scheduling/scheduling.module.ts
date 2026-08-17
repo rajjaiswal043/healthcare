@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { SchedulingController } from './scheduling.controller.js';
 import { DisplayController } from './display.controller.js';
+import { ClinicSetupController } from './setup/clinic-setup.controller.js';
+import { ClinicSetupService } from './setup/clinic-setup.service.js';
 import { AvailabilityService } from './availability.service.js';
 import { AppointmentsService } from './appointments.service.js';
 import { DisplayService } from './display.service.js';
@@ -15,7 +17,13 @@ import { BillingModule } from '../billing/billing.module.js';
 // clinic's real order rather than a parallel implementation of it.
 @Module({
   imports: [BillingModule],
-  controllers: [SchedulingController, DisplayController],
-  providers: [AvailabilityService, AppointmentsService, DisplayService, AuditService],
+  controllers: [SchedulingController, DisplayController, ClinicSetupController],
+  providers: [
+    AvailabilityService,
+    AppointmentsService,
+    DisplayService,
+    ClinicSetupService,
+    AuditService,
+  ],
 })
 export class SchedulingModule {}

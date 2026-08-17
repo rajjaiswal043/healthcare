@@ -51,6 +51,27 @@ export { Prisma }
  */
 export type Tenant = Prisma.TenantModel
 /**
+ * Model PlatformUser
+ * doctorsdesk.in staff. Deliberately NOT a user of any clinic.
+ * 
+ * `app_user` is tenant-scoped and every policy in this database assumes a row
+ * there belongs to exactly one clinic. A super admin flag on one of those rows
+ * would mean weakening the policies or carrying an exception through all of
+ * them forever — so platform staff live here instead, sign in at their own
+ * endpoint, and hold their own kind of session.
+ * 
+ * What they can do is provision: create a clinic, set its seat limits, create
+ * its first administrator, suspend and reactivate. What they cannot do is open
+ * a patient, a queue, an invoice or a clinical note.
+ */
+export type PlatformUser = Prisma.PlatformUserModel
+/**
+ * Model PlatformSession
+ * A platform sign-in. Separate from `Session` so a clinic refresh token can
+ * never be presented as a platform one, whatever a bug in either path does.
+ */
+export type PlatformSession = Prisma.PlatformSessionModel
+/**
  * Model Location
  * A physical site belonging to a tenant — a clinic, a branch, a hospital block.
  * 
@@ -128,6 +149,19 @@ export type User = Prisma.UserModel
  * module and action.
  */
 export type Role = Prisma.RoleModel
+/**
+ * Model TenantSeatLimit
+ * How many people a clinic may have holding a role. Absent means unlimited.
+ * 
+ * Checked against ACTIVE users only, which is what makes deactivate a distinct
+ * action from delete: a clinic that loses a doctor frees the seat by
+ * deactivating them, and the old user survives because their name is on signed
+ * consultations and issued receipts.
+ * 
+ * Read-only to the application role. A clinic that can raise its own seat limit
+ * does not have one — writes belong to the platform tier.
+ */
+export type TenantSeatLimit = Prisma.TenantSeatLimitModel
 /**
  * Model UserRole
  * 

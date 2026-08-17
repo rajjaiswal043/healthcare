@@ -42,6 +42,8 @@ Verified in a browser, not only by test.
 | Consultation, prescription | Done. `docs/02-consultation-plan.md`.                     |
 | Billing — OPD, pay-first   | Done. `docs/04-billing-plan.md`.                          |
 | Tokens, recall, screen     | Done, all three phases. `docs/05-token-queue-plan.md`.    |
+| Staff management           | Done. Settings → Staff. `docs/06-platform-...-plan.md`.   |
+| Platform tier, onboarding  | Done. `/platform`. Per-clinic logo upload deferred.       |
 | IPD, claims, ABDM          | Not started, deliberately parked.                         |
 
 **The clinic is pay-first.** Check-in refuses to add a patient to the queue while
@@ -94,6 +96,43 @@ resulting privilege list because the mistake is otherwise invisible.
 `healthcloud_test`; in parallel, one suite's TRUNCATE lands inside the other's
 assertions and a dozen unrelated tests fail with 401s.
 
+**`DEV_DISABLE_MFA=true` in `.env` turns off two-factor on clinic sign-in.** It
+is read in two places, and needs both: `seed-auth.mjs` seeds roles with
+`requires_mfa = false`, and the **running API** skips enrolment and the code
+prompt. The second is what covers a clinic created through the platform console —
+its roles come straight from `SYSTEM_ROLES` and never touch the seed, so the
+flag looked broken for exactly that case until the API honoured it too.
+
+`DEV_DISABLE_PLATFORM_MFA=true` does the same for `/platform/login`.
+
+Both weaken live authentication, so they are guarded harder than anything else in
+the environment: **`loadEnv` refuses to start the API** if either is set with
+`NODE_ENV=production`, and every sign-in they permit logs a warning naming the
+account. `setup-env.ts` clears both for the integration suite, so the tests
+always exercise the shipped behaviour rather than whatever is in a developer's
+`.env`. The product default in `permissions.ts` is unchanged.
+
+**A SECURITY DEFINER function still gets row-level security applied to it.**
+FORCE RLS applies to the table's OWNER, which is who a SECURITY DEFINER function
+runs as — so a function that reads `patient` without setting `app.tenant_id`
+matches zero rows and reports success. This has now bitten three times:
+`auth_lookup_user`, the token backfill, and `platform_clinic_stats`. The fix is
+always the same shape — resolve the tenant, `set_config(..., true)`, then read
+inside the policy.
+
+**Platform accounts are not clinic accounts.** `/platform` is a separate console
+with its own table, its own token realm and its own cookies (`hc_pat`), so a
+clinic session cannot reach it and a platform session cannot read a patient.
+Create the first one with
+`pnpm --filter @healthcloud/db platform:user -- <email> "<name>"`.
+
+MFA is mandatory there in production. `DEV_DISABLE_PLATFORM_MFA=true` in `.env`
+skips it locally — that flag is read by the RUNNING API, unlike `DEV_DISABLE_MFA`
+which only ever reached the seed script, so it genuinely weakens live auth.
+`loadEnv` therefore **refuses to start the API** if it is set with
+`NODE_ENV=production`, and every sign-in that uses it logs a warning naming the
+account.
+
 **A waiting-room screen is paired, not logged in.** Its key is
 `<tenantId>.<secret>`, hashed at rest, and shown exactly once at pairing —
 Settings → Waiting-room screens, administrator only. To pair one without walking
@@ -127,6 +166,7 @@ miswrites one and the two cancel out.
 | Gap                              | Note                                                                            |
 | -------------------------------- | ------------------------------------------------------------------------------- |
 | Printed receipt                  | Invoices are numbered and complete; nothing prints one yet.                     |
+| Per-clinic logo                  | One default for everyone at `apps/web/public/branding/`. Upload waits on S3.    |
 | Editing a patient                | The detail page is read-only. Registration is the only way demographics get in. |
 | User management UI               | Roles and users are seeded only. No invite, no edit.                            |
 | Password reset                   | No flow at all.                                                                 |

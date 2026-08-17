@@ -49,6 +49,17 @@ const ALLOWLIST = new Map([
       'must resolve a slug before any tenant context can exist. Holds no patient ' +
       'data; which rows a session may see is enforced by the auth guard.',
   ],
+  [
+    'platform_user',
+    'doctorsdesk.in staff, who are not users of any clinic — that is the whole ' +
+      'point of the table. Scoping it to a tenant would mean the account that ' +
+      'onboards a clinic has to belong to one first. Holds no patient data.',
+  ],
+  [
+    'platform_session',
+    'Sessions for platform_user. Separate from `session` so a clinic refresh ' +
+      'token can never be presented as a platform one. Holds no patient data.',
+  ],
 ]);
 
 const red = (s) => `\x1b[31m${s}\x1b[0m`;

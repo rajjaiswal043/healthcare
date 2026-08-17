@@ -29,7 +29,16 @@ allowBuilds:
 #                 Reached via next (image optimisation).
 #   postcss     — arbitrary file read + source-map path traversal, fixed in 8.5.18.
 #                 Reached via next.
+#   nanoid      — GHSA-2v37-7h3g-55p8, a custom generator loops forever when
+#                 asked for size zero, fixed in 3.3.18. Reached only through
+#                 postcss, so it is build tooling rather than anything shipped —
+#                 but `pnpm audit --audit-level=high` is part of `verify`, which
+#                 the pre-push hook runs, and a gate that is routinely red stops
+#                 being read. Remove once postcss requires 3.3.18 itself.
 overrides:
   find-my-way: '>=9.6.1'
   sharp: '>=0.35.0'
   postcss: '>=8.5.18'
+  # Caret, not '>=': an open range resolved to nanoid 6, which is ESM-only and
+  # not what postcss expects. The fix shipped in the 3.x line, so stay in it.
+  nanoid: '^3.3.18'
