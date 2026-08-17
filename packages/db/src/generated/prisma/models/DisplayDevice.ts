@@ -574,10 +574,6 @@ export type DisplayDeviceUpdatepractitionerIdsInput = {
   push?: string | string[]
 }
 
-export type NullableDateTimeFieldUpdateOperationsInput = {
-  set?: Date | string | null
-}
-
 export type DisplayDeviceCreateWithoutTenantInput = {
   id?: string
   name: string

@@ -2,6 +2,7 @@
 
 import type { Encounter } from '@/lib/api';
 import { formatAge, genderInitial } from '@/lib/format';
+import { ClinicLogo } from './clinic-logo';
 
 /**
  * The printed prescription.
@@ -24,21 +25,29 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
   return (
     <div className="print-only hidden text-ink">
       <header className="flex items-start justify-between border-b-2 border-ink pb-3">
-        <div>
-          <p className="font-display text-[20px] font-bold leading-tight">
-            {practitioner.prefix} {practitioner.fullName}
-          </p>
-          <p className="text-[12px]">{practitioner.qualification ?? ''}</p>
-          {practitioner.specialty && <p className="text-[12px]">{practitioner.specialty}</p>}
+        <div className="flex items-start gap-3">
+          {/* One default for every clinic until per-clinic upload exists —
+              see apps/web/public/branding/README.md. Sized in millimetres
+              rather than pixels because this element only ever exists on
+              paper. */}
+          <ClinicLogo size={52} className="mt-0.5 shrink-0" />
 
-          {practitioner.registrationNumber ? (
-            <p className="mt-1 text-[11.5px]">Reg. No. {practitioner.registrationNumber}</p>
-          ) : (
-            <p className="mt-1 border border-black px-1 py-0.5 text-[11.5px] font-bold">
-              REGISTRATION NUMBER MISSING — this prescription is not valid for dispensing. Add it to
-              the doctor&rsquo;s record and print again.
+          <div>
+            <p className="font-display text-[20px] font-bold leading-tight">
+              {practitioner.prefix} {practitioner.fullName}
             </p>
-          )}
+            <p className="text-[12px]">{practitioner.qualification ?? ''}</p>
+            {practitioner.specialty && <p className="text-[12px]">{practitioner.specialty}</p>}
+
+            {practitioner.registrationNumber ? (
+              <p className="mt-1 text-[11.5px]">Reg. No. {practitioner.registrationNumber}</p>
+            ) : (
+              <p className="mt-1 border border-black px-1 py-0.5 text-[11.5px] font-bold">
+                REGISTRATION NUMBER MISSING — this prescription is not valid for dispensing. Add it
+                to the doctor&rsquo;s record and print again.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="text-right text-[11.5px]">

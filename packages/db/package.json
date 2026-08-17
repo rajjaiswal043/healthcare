@@ -23,6 +23,7 @@
     "db:reset": "prisma migrate reset --force",
     "seed:demo": "node scripts/seed-demo.mjs && node scripts/seed-auth.mjs && node scripts/seed-billing.mjs && node scripts/seed-scheduling.mjs && node scripts/seed-formulary.mjs",
     "seed:auth": "node scripts/seed-auth.mjs",
+    "platform:user": "node scripts/create-platform-user.mjs",
     "seed:scheduling": "node scripts/seed-scheduling.mjs",
     "seed:formulary": "node scripts/seed-formulary.mjs",
     "seed:billing": "node scripts/seed-billing.mjs",

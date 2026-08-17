@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 // otplib v13 exposes a functional API — the v12 `authenticator` singleton is gone.
 import { generateSecret, generateURI, verify as verifyOtp } from 'otplib';
 import { PrismaService } from '../database/prisma.service.js';
@@ -103,6 +103,26 @@ export class AuthService {
     }
 
     // --- MFA -----------------------------------------------------------------
+
+    /**
+     * The local escape hatch (DEV_DISABLE_MFA).
+     *
+     * Skips enrolment AND the code prompt, so an administrator on a developer
+     * machine signs in with a password alone. Both halves matter: skipping only
+     * enrolment would still prompt anybody who had already set an authenticator
+     * up, which is how this looked broken the first time.
+     *
+     * `loadEnv` refuses to start the API with this set under NODE_ENV=production,
+     * so the only way to reach this branch is locally. Logged every time — a
+     * weakened login that leaves no trace is how one stays on for a fortnight.
+     */
+    if (env.DEV_DISABLE_MFA) {
+      this.logger.warn(
+        `DEV_DISABLE_MFA: signed ${email} in without two-factor. Local development only.`,
+      );
+      return this.issueSession(row, password, meta, env);
+    }
+
     const requiresMfa = await this.roleRequiresMfa(row.tenant_id, row.user_id);
     const enrolled = Boolean(row.mfa_secret && row.mfa_enabled_at);
 
@@ -137,6 +157,28 @@ export class AuthService {
     }
 
     // --- Success -------------------------------------------------------------
+    return this.issueSession(row, password, meta, env);
+  }
+
+  /**
+   * Everything that happens once authentication has actually succeeded.
+   *
+   * Extracted so the MFA path and the DEV_DISABLE_MFA path cannot drift: a
+   * second copy of "record the login, rotate the session, write the audit entry"
+   * is a place for one of them to forget the audit entry.
+   */
+  private async issueSession(
+    row: {
+      user_id: string;
+      tenant_id: string;
+      password_hash: string;
+      must_change_password: boolean;
+      full_name: string;
+    },
+    password: string,
+    meta: RequestMeta,
+    env: { JWT_ACCESS_SECRET: string },
+  ): Promise<LoginResult> {
     const permissions = await this.permissionsFor(row.tenant_id, row.user_id);
 
     return this.prisma.forTenant(row.tenant_id, async (tx) => {
@@ -398,6 +440,106 @@ export class AuthService {
     });
 
     return { refreshToken, sessionId: session.id };
+  }
+
+  /**
+   * Change your own password.
+   *
+   * The current password is required even though the caller already holds a
+   * valid session: a session is proof somebody was authenticated once, not proof
+   * they are still the account's owner. An unattended desk is the ordinary case
+   * in a clinic, and without this check anyone walking past a signed-in machine
+   * owns that account permanently.
+   *
+   * Every OTHER session is ended. If the reason for the change is that somebody
+   * else knew the old password, leaving their session alive achieves nothing.
+   */
+  async changePassword(
+    tenantId: string,
+    userId: string,
+    sessionId: string,
+    currentPassword: string,
+    newPassword: string,
+    meta: RequestMeta,
+  ): Promise<void> {
+    await this.prisma.forTenant(tenantId, async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { passwordHash: true, fullName: true },
+      });
+
+      if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+        throw new UnauthorizedException('That is not your current password.');
+      }
+
+      if (await verifyPassword(newPassword, user.passwordHash)) {
+        throw new BadRequestException({
+          code: 'PASSWORD_UNCHANGED',
+          message: 'Choose a password you have not just been using.',
+        });
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: await hashPassword(newPassword),
+          // The whole point of the temporary password: it stops being required
+          // the moment a real one is set.
+          mustChangePassword: false,
+        },
+      });
+
+      await tx.session.updateMany({
+        where: { userId, revokedAt: null, id: { not: sessionId } },
+        data: { revokedAt: new Date() },
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'auth.password_change',
+        resourceType: 'User',
+        resourceId: userId,
+        actorUserId: userId,
+        actorLabel: user.fullName,
+        changedFields: ['passwordHash'],
+        ...meta,
+      });
+    });
+  }
+
+  /**
+   * Who is signed in — name and roles, for the console's own chrome.
+   *
+   * A database read rather than more claims in the access token. The token is
+   * verified on EVERY request and carries permissions because the guard needs
+   * them on the hot path; a display name and role labels are read once when the
+   * console loads, so putting them in the token would pay for them on every
+   * request to save one query per page load. It also keeps a renamed user or a
+   * changed role from being stale for the life of a token.
+   */
+  async profile(
+    tenantId: string,
+    userId: string,
+  ): Promise<{
+    fullName: string;
+    roles: Array<{ key: string; name: string }>;
+    mustChangePassword: boolean;
+  }> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: {
+          fullName: true,
+          mustChangePassword: true,
+          roles: { select: { role: { select: { key: true, name: true } } } },
+        },
+      });
+
+      return {
+        fullName: user.fullName,
+        roles: user.roles.map((r) => r.role),
+        mustChangePassword: user.mustChangePassword,
+      };
+    });
   }
 
   private async permissionsFor(tenantId: string, userId: string): Promise<string[]> {

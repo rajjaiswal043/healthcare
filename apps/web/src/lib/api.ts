@@ -82,6 +82,80 @@ export interface SessionUser {
   mustChangePassword: boolean;
 }
 
+/** `GET /auth/me` — what the console restores itself from on load. */
+export interface CurrentSession {
+  userId: string;
+  tenantId: string;
+  permissions: string[];
+  fullName: string;
+  /** Every role held, in no particular order. The console picks one to wear. */
+  roles: Array<{ key: string; name: string }>;
+  /** While true, the console shows nothing but the change-password screen. */
+  mustChangePassword: boolean;
+}
+
+export interface StaffUser {
+  id: string;
+  email: string;
+  fullName: string;
+  mobile: string | null;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+  /** Non-null only while a lockout is actually in force. */
+  lockedUntil: string | null;
+  mfaEnrolled: boolean;
+  createdAt: string;
+  roles: Array<{ key: string; name: string }>;
+}
+
+export interface WeeklySession {
+  id: string;
+  locationId: string;
+  /** 0 = Sunday, matching JavaScript's getDay(). */
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  slotMinutes: number;
+  capacityPerSlot: number;
+  validFrom: string;
+  validTo: string | null;
+}
+
+export interface SetupPractitioner {
+  id: string;
+  fullName: string;
+  prefix: string | null;
+  registrationNumber: string | null;
+  qualification: string | null;
+  specialty: string | null;
+  departmentId: string | null;
+  userId: string | null;
+  consultationFeePaise: number | null;
+  followUpFeePaise: number | null;
+  overbookPerSession: number;
+  isActive: boolean;
+  department: { id: string; name: string } | null;
+  schedules: WeeklySession[];
+}
+
+/** A doctor login not yet attached to a bookable practitioner. */
+export interface LinkableUser {
+  id: string;
+  fullName: string;
+  email: string;
+}
+
+export interface SeatUsage {
+  key: string;
+  name: string;
+  description: string | null;
+  requiresMfa: boolean;
+  used: number;
+  /** Null means unlimited — a clinic nobody has priced yet. */
+  limit: number | null;
+}
+
 export interface LoginResponse {
   user: SessionUser;
   tenant: { id: string; slug: string };
@@ -751,7 +825,90 @@ export const api = {
 
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
 
-  me: () => request<{ userId: string; tenantId: string; permissions: string[] }>('/auth/me'),
+  me: () => request<CurrentSession>('/auth/me'),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  // --- staff accounts -------------------------------------------------------
+
+  staff: () => request<{ users: StaffUser[]; seats: SeatUsage[] }>('/users'),
+
+  /** The temporary password comes back ONCE. */
+  createStaff: (input: { email: string; fullName: string; mobile?: string; roleKeys: string[] }) =>
+    request<{ id: string; email: string; fullName: string; temporaryPassword: string }>('/users', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  setStaffActive: (id: string, isActive: boolean) =>
+    request<StaffUser>(`/users/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+
+  // --- clinic setup ---------------------------------------------------------
+
+  setupPractitioners: () =>
+    request<{ practitioners: SetupPractitioner[]; linkableUsers: LinkableUser[] }>(
+      '/setup/practitioners',
+    ),
+
+  createDepartment: (name: string) =>
+    request<Department>('/departments', { method: 'POST', body: JSON.stringify({ name }) }),
+
+  createPractitioner: (input: {
+    fullName: string;
+    prefix?: string;
+    registrationNumber?: string;
+    qualification?: string;
+    specialty?: string;
+    departmentId?: string;
+    userId?: string;
+    consultationFeePaise?: number;
+    followUpFeePaise?: number;
+  }) =>
+    request<{ id: string; fullName: string }>('/setup/practitioners', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  updatePractitioner: (id: string, input: Record<string, unknown>) =>
+    request<{ id: string }>(`/setup/practitioners/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  addSchedule: (
+    practitionerId: string,
+    input: {
+      locationId: string;
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+      slotMinutes?: number;
+      capacityPerSlot?: number;
+    },
+  ) =>
+    request<{ id: string }>(`/setup/practitioners/${practitionerId}/schedules`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  removeSchedule: (id: string) =>
+    request<{ id: string }>(`/setup/schedules/${id}`, { method: 'DELETE' }),
+
+  upsertService: (input: { code: string; name: string; category: string; pricePaise: number }) =>
+    request<{ id: string }>('/setup/services', { method: 'POST', body: JSON.stringify(input) }),
+
+  resetStaffPassword: (id: string) =>
+    request<{ id: string; fullName: string; email: string; temporaryPassword: string }>(
+      `/users/${id}/reset-password`,
+      { method: 'POST' },
+    ),
 
   searchPatients: (q: string) =>
     request<{ patients: PatientSummary[] }>(`/patients?q=${encodeURIComponent(q)}`),

@@ -398,6 +398,8 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   Tenant: 'Tenant',
+  PlatformUser: 'PlatformUser',
+  PlatformSession: 'PlatformSession',
   Location: 'Location',
   DisplayDevice: 'DisplayDevice',
   Patient: 'Patient',
@@ -405,6 +407,7 @@ export const ModelName = {
   AuditEvent: 'AuditEvent',
   User: 'User',
   Role: 'Role',
+  TenantSeatLimit: 'TenantSeatLimit',
   UserRole: 'UserRole',
   Session: 'Session',
   Department: 'Department',
@@ -439,7 +442,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "tenant" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter"
+    modelProps: "tenant" | "platformUser" | "platformSession" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "tenantSeatLimit" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -514,6 +517,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.TenantCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.TenantCountAggregateOutputType> | number
+        }
+      }
+    }
+    PlatformUser: {
+      payload: Prisma.$PlatformUserPayload<ExtArgs>
+      fields: Prisma.PlatformUserFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PlatformUserFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PlatformUserFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>
+        }
+        findFirst: {
+          args: Prisma.PlatformUserFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PlatformUserFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>
+        }
+        findMany: {
+          args: Prisma.PlatformUserFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>[]
+        }
+        create: {
+          args: Prisma.PlatformUserCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>
+        }
+        createMany: {
+          args: Prisma.PlatformUserCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PlatformUserCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>[]
+        }
+        delete: {
+          args: Prisma.PlatformUserDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>
+        }
+        update: {
+          args: Prisma.PlatformUserUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>
+        }
+        deleteMany: {
+          args: Prisma.PlatformUserDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PlatformUserUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PlatformUserUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>[]
+        }
+        upsert: {
+          args: Prisma.PlatformUserUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformUserPayload>
+        }
+        aggregate: {
+          args: Prisma.PlatformUserAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePlatformUser>
+        }
+        groupBy: {
+          args: Prisma.PlatformUserGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlatformUserGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PlatformUserCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlatformUserCountAggregateOutputType> | number
+        }
+      }
+    }
+    PlatformSession: {
+      payload: Prisma.$PlatformSessionPayload<ExtArgs>
+      fields: Prisma.PlatformSessionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PlatformSessionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PlatformSessionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>
+        }
+        findFirst: {
+          args: Prisma.PlatformSessionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PlatformSessionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>
+        }
+        findMany: {
+          args: Prisma.PlatformSessionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>[]
+        }
+        create: {
+          args: Prisma.PlatformSessionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>
+        }
+        createMany: {
+          args: Prisma.PlatformSessionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PlatformSessionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>[]
+        }
+        delete: {
+          args: Prisma.PlatformSessionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>
+        }
+        update: {
+          args: Prisma.PlatformSessionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>
+        }
+        deleteMany: {
+          args: Prisma.PlatformSessionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PlatformSessionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PlatformSessionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>[]
+        }
+        upsert: {
+          args: Prisma.PlatformSessionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlatformSessionPayload>
+        }
+        aggregate: {
+          args: Prisma.PlatformSessionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePlatformSession>
+        }
+        groupBy: {
+          args: Prisma.PlatformSessionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlatformSessionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PlatformSessionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlatformSessionCountAggregateOutputType> | number
         }
       }
     }
@@ -1032,6 +1183,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.RoleCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.RoleCountAggregateOutputType> | number
+        }
+      }
+    }
+    TenantSeatLimit: {
+      payload: Prisma.$TenantSeatLimitPayload<ExtArgs>
+      fields: Prisma.TenantSeatLimitFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TenantSeatLimitFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TenantSeatLimitFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>
+        }
+        findFirst: {
+          args: Prisma.TenantSeatLimitFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TenantSeatLimitFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>
+        }
+        findMany: {
+          args: Prisma.TenantSeatLimitFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>[]
+        }
+        create: {
+          args: Prisma.TenantSeatLimitCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>
+        }
+        createMany: {
+          args: Prisma.TenantSeatLimitCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TenantSeatLimitCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>[]
+        }
+        delete: {
+          args: Prisma.TenantSeatLimitDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>
+        }
+        update: {
+          args: Prisma.TenantSeatLimitUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>
+        }
+        deleteMany: {
+          args: Prisma.TenantSeatLimitDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TenantSeatLimitUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TenantSeatLimitUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>[]
+        }
+        upsert: {
+          args: Prisma.TenantSeatLimitUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TenantSeatLimitPayload>
+        }
+        aggregate: {
+          args: Prisma.TenantSeatLimitAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTenantSeatLimit>
+        }
+        groupBy: {
+          args: Prisma.TenantSeatLimitGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TenantSeatLimitGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TenantSeatLimitCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TenantSeatLimitCountAggregateOutputType> | number
         }
       }
     }
@@ -2490,11 +2715,50 @@ export const TenantScalarFieldEnum = {
   uhidPadding: 'uhidPadding',
   uhidCounter: 'uhidCounter',
   timezone: 'timezone',
+  contactEmail: 'contactEmail',
+  contactMobile: 'contactMobile',
+  onboardedByPlatformUserId: 'onboardedByPlatformUserId',
+  suspendedAt: 'suspendedAt',
+  suspendedReason: 'suspendedReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type TenantScalarFieldEnum = (typeof TenantScalarFieldEnum)[keyof typeof TenantScalarFieldEnum]
+
+
+export const PlatformUserScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  fullName: 'fullName',
+  passwordHash: 'passwordHash',
+  mfaSecret: 'mfaSecret',
+  mfaEnabledAt: 'mfaEnabledAt',
+  isActive: 'isActive',
+  lastLoginAt: 'lastLoginAt',
+  failedLoginCount: 'failedLoginCount',
+  lockedUntil: 'lockedUntil',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PlatformUserScalarFieldEnum = (typeof PlatformUserScalarFieldEnum)[keyof typeof PlatformUserScalarFieldEnum]
+
+
+export const PlatformSessionScalarFieldEnum = {
+  id: 'id',
+  platformUserId: 'platformUserId',
+  refreshTokenHash: 'refreshTokenHash',
+  familyId: 'familyId',
+  issuedAt: 'issuedAt',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  revokedAt: 'revokedAt',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent'
+} as const
+
+export type PlatformSessionScalarFieldEnum = (typeof PlatformSessionScalarFieldEnum)[keyof typeof PlatformSessionScalarFieldEnum]
 
 
 export const LocationScalarFieldEnum = {
@@ -2632,6 +2896,18 @@ export const RoleScalarFieldEnum = {
 } as const
 
 export type RoleScalarFieldEnum = (typeof RoleScalarFieldEnum)[keyof typeof RoleScalarFieldEnum]
+
+
+export const TenantSeatLimitScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  roleKey: 'roleKey',
+  maxUsers: 'maxUsers',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TenantSeatLimitScalarFieldEnum = (typeof TenantSeatLimitScalarFieldEnum)[keyof typeof TenantSeatLimitScalarFieldEnum]
 
 
 export const UserRoleScalarFieldEnum = {
@@ -3478,6 +3754,8 @@ export interface PrismaClientOptionsWithAdapter extends PrismaClientBaseOptions 
 export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaClientOptionsWithAdapter
 export type GlobalOmitConfig = {
   tenant?: Prisma.TenantOmit
+  platformUser?: Prisma.PlatformUserOmit
+  platformSession?: Prisma.PlatformSessionOmit
   location?: Prisma.LocationOmit
   displayDevice?: Prisma.DisplayDeviceOmit
   patient?: Prisma.PatientOmit
@@ -3485,6 +3763,7 @@ export type GlobalOmitConfig = {
   auditEvent?: Prisma.AuditEventOmit
   user?: Prisma.UserOmit
   role?: Prisma.RoleOmit
+  tenantSeatLimit?: Prisma.TenantSeatLimitOmit
   userRole?: Prisma.UserRoleOmit
   session?: Prisma.SessionOmit
   department?: Prisma.DepartmentOmit

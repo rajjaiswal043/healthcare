@@ -52,6 +52,31 @@ async function hashPassword(plain) {
 const { SYSTEM_ROLES: ROLES } = await import('@healthcloud/db');
 
 /**
+ * DEV_DISABLE_MFA — a local convenience, and nothing more.
+ *
+ * The administrator and owner roles require TOTP (FR-USR-02) because they are
+ * the roles that can waive a charge, refund money, change permissions and pair
+ * an unattended screen. That default lives in SYSTEM_ROLES and is NOT changed by
+ * this flag: the product still ships MFA-on, and the integration suite still
+ * enrols for real, so the flow keeps its only end-to-end test.
+ *
+ * What this does is seed a DEVELOPER's database with the requirement switched
+ * off, so nobody has to hold a phone to click through an admin screen fifty
+ * times an afternoon. Set it in .env; remove the line to get MFA back.
+ *
+ * Two guards, because a flag that silently weakens auth is exactly the kind that
+ * ends up somewhere it should not be:
+ *   - it refuses to run under NODE_ENV=production
+ *   - it announces itself loudly every single time
+ */
+const DISABLE_MFA = /^(1|true|yes)$/i.test(process.env.DEV_DISABLE_MFA ?? '');
+
+if (DISABLE_MFA && process.env.NODE_ENV === 'production') {
+  console.error('DEV_DISABLE_MFA is set and NODE_ENV=production. Refusing to seed.');
+  process.exit(1);
+}
+
+/**
  * Demo users.
  *
  * `nurse` is included deliberately: it has patient:read but NOT patient:write,
@@ -100,7 +125,14 @@ try {
                requires_mfa = EXCLUDED.requires_mfa,
                updated_at = now()
          RETURNING id`,
-        [tenant.id, role.key, role.name, role.description, role.permissions, role.requiresMfa],
+        [
+          tenant.id,
+          role.key,
+          role.name,
+          role.description,
+          role.permissions,
+          DISABLE_MFA ? false : role.requiresMfa,
+        ],
       );
       roleIds[role.key] = rows[0].id;
     }
@@ -108,13 +140,24 @@ try {
     for (const user of USERS) {
       const passwordHash = await hashPassword(user.password);
 
+      /**
+       * Clearing the enrolment matters as much as clearing the role flag.
+       *
+       * Login asks for a code whenever a user IS enrolled, whatever their role
+       * requires — so an administrator who already set up an authenticator would
+       * still be prompted, and DEV_DISABLE_MFA would look broken. Wiping the
+       * secret puts them back to a plain password.
+       */
       const { rows } = await client.query(
         `INSERT INTO app_user (tenant_id, email, full_name, password_hash, is_active, updated_at)
          VALUES ($1,$2,$3,$4,true, now())
          ON CONFLICT (tenant_id, email) DO UPDATE
-           SET password_hash = EXCLUDED.password_hash, updated_at = now()
+           SET password_hash = EXCLUDED.password_hash,
+               mfa_secret     = CASE WHEN $5 THEN NULL ELSE app_user.mfa_secret END,
+               mfa_enabled_at = CASE WHEN $5 THEN NULL ELSE app_user.mfa_enabled_at END,
+               updated_at = now()
          RETURNING id`,
-        [tenant.id, user.email, user.fullName, passwordHash],
+        [tenant.id, user.email, user.fullName, passwordHash, DISABLE_MFA],
       );
 
       await client.query(
@@ -132,7 +175,17 @@ try {
   console.log('  reception@demo.local / demo1234   front desk — can register');
   console.log('  nurse@demo.local     / demo1234   nurse      — read only, cannot register');
   console.log('  doctor@demo.local    / demo1234   doctor');
-  console.log('  admin@demo.local     / demo1234   administrator — will be forced to set up MFA\n');
+  console.log(
+    DISABLE_MFA
+      ? '  admin@demo.local     / demo1234   administrator\n'
+      : '  admin@demo.local     / demo1234   administrator — will be forced to set up MFA\n',
+  );
+
+  if (DISABLE_MFA) {
+    console.log('  ⚠  DEV_DISABLE_MFA is set: every role seeded WITHOUT two-factor, and any');
+    console.log('     existing enrolment was cleared. Local databases only — remove the line');
+    console.log('     from .env to put the requirement back.\n');
+  }
 } catch (err) {
   await client.query('ROLLBACK').catch(() => {});
   console.error(`Auth seed failed: ${err.message}`);

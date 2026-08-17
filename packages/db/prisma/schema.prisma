@@ -63,13 +63,87 @@ model Tenant {
   /// would be a bug waiting for the first customer who isn't.
   timezone String @default("Asia/Kolkata") @db.VarChar(64)
 
+  /// Who to talk to at the clinic. Captured at onboarding, not by the clinic.
+  contactEmail  String? @map("contact_email") @db.VarChar(255)
+  contactMobile String? @map("contact_mobile") @db.VarChar(20)
+
+  onboardedByPlatformUserId String? @map("onboarded_by_platform_user_id") @db.Uuid
+
+  /// SUSPENDED means read-only, not locked out — see docs/06, section 2.6. A
+  /// suspension without a date and a reason is refused by a CHECK constraint.
+  suspendedAt     DateTime? @map("suspended_at") @db.Timestamptz(6)
+  suspendedReason String?   @map("suspended_reason") @db.VarChar(300)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   locations      Location[]
   displayDevices DisplayDevice[]
+  seatLimits     TenantSeatLimit[]
+
+  onboardedBy PlatformUser? @relation(fields: [onboardedByPlatformUserId], references: [id], onDelete: SetNull, map: "tenant_onboarded_by_fkey")
 
   @@map("tenant")
+}
+
+/// doctorsdesk.in staff. Deliberately NOT a user of any clinic.
+///
+/// `app_user` is tenant-scoped and every policy in this database assumes a row
+/// there belongs to exactly one clinic. A super admin flag on one of those rows
+/// would mean weakening the policies or carrying an exception through all of
+/// them forever — so platform staff live here instead, sign in at their own
+/// endpoint, and hold their own kind of session.
+///
+/// What they can do is provision: create a clinic, set its seat limits, create
+/// its first administrator, suspend and reactivate. What they cannot do is open
+/// a patient, a queue, an invoice or a clinical note.
+model PlatformUser {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Unique across the platform, unlike app_user.email which is unique per clinic.
+  email    String @db.VarChar(255)
+  fullName String @map("full_name") @db.VarChar(200)
+
+  passwordHash String @map("password_hash") @db.VarChar(512)
+
+  /// Mandatory, with no role to make it conditional on and no dev escape hatch.
+  mfaSecret    String?   @map("mfa_secret") @db.VarChar(64)
+  mfaEnabledAt DateTime? @map("mfa_enabled_at") @db.Timestamptz(6)
+
+  isActive         Boolean   @default(true) @map("is_active")
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions  PlatformSession[]
+  onboarded Tenant[]
+
+  @@map("platform_user")
+}
+
+/// A platform sign-in. Separate from `Session` so a clinic refresh token can
+/// never be presented as a platform one, whatever a bug in either path does.
+model PlatformSession {
+  id             String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  platformUserId String @map("platform_user_id") @db.Uuid
+
+  refreshTokenHash String @unique @map("refresh_token_hash") @db.VarChar(64)
+  familyId         String @map("family_id") @db.Uuid
+
+  issuedAt  DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  ipAddress String? @map("ip_address") @db.VarChar(64)
+  userAgent String? @map("user_agent") @db.VarChar(500)
+
+  user PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([platformUserId, issuedAt])
+  @@map("platform_session")
 }
 
 enum TenantStatus {
@@ -424,10 +498,40 @@ model Role {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  users UserRole[]
+  users      UserRole[]
+  seatLimits TenantSeatLimit[]
 
   @@unique([tenantId, key])
   @@map("role")
+}
+
+/// How many people a clinic may have holding a role. Absent means unlimited.
+///
+/// Checked against ACTIVE users only, which is what makes deactivate a distinct
+/// action from delete: a clinic that loses a doctor frees the seat by
+/// deactivating them, and the old user survives because their name is on signed
+/// consultations and issued receipts.
+///
+/// Read-only to the application role. A clinic that can raise its own seat limit
+/// does not have one — writes belong to the platform tier.
+model TenantSeatLimit {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// A role key from packages/db/src/permissions.ts.
+  roleKey  String @map("role_key") @db.VarChar(64)
+  maxUsers Int    @map("max_users")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // The constraint is named explicitly because the migration named it, and an
+  // applied migration is not worth editing to satisfy a default.
+  role Role @relation(fields: [tenantId, roleKey], references: [tenantId, key], onDelete: Cascade, map: "tenant_seat_limit_role_fkey")
+
+  @@unique([tenantId, roleKey])
+  @@map("tenant_seat_limit")
 }
 
 model UserRole {

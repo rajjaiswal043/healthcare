@@ -52,6 +52,8 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   Tenant: 'Tenant',
+  PlatformUser: 'PlatformUser',
+  PlatformSession: 'PlatformSession',
   Location: 'Location',
   DisplayDevice: 'DisplayDevice',
   Patient: 'Patient',
@@ -59,6 +61,7 @@ export const ModelName = {
   AuditEvent: 'AuditEvent',
   User: 'User',
   Role: 'Role',
+  TenantSeatLimit: 'TenantSeatLimit',
   UserRole: 'UserRole',
   Session: 'Session',
   Department: 'Department',
@@ -106,11 +109,50 @@ export const TenantScalarFieldEnum = {
   uhidPadding: 'uhidPadding',
   uhidCounter: 'uhidCounter',
   timezone: 'timezone',
+  contactEmail: 'contactEmail',
+  contactMobile: 'contactMobile',
+  onboardedByPlatformUserId: 'onboardedByPlatformUserId',
+  suspendedAt: 'suspendedAt',
+  suspendedReason: 'suspendedReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type TenantScalarFieldEnum = (typeof TenantScalarFieldEnum)[keyof typeof TenantScalarFieldEnum]
+
+
+export const PlatformUserScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  fullName: 'fullName',
+  passwordHash: 'passwordHash',
+  mfaSecret: 'mfaSecret',
+  mfaEnabledAt: 'mfaEnabledAt',
+  isActive: 'isActive',
+  lastLoginAt: 'lastLoginAt',
+  failedLoginCount: 'failedLoginCount',
+  lockedUntil: 'lockedUntil',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PlatformUserScalarFieldEnum = (typeof PlatformUserScalarFieldEnum)[keyof typeof PlatformUserScalarFieldEnum]
+
+
+export const PlatformSessionScalarFieldEnum = {
+  id: 'id',
+  platformUserId: 'platformUserId',
+  refreshTokenHash: 'refreshTokenHash',
+  familyId: 'familyId',
+  issuedAt: 'issuedAt',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  revokedAt: 'revokedAt',
+  ipAddress: 'ipAddress',
+  userAgent: 'userAgent'
+} as const
+
+export type PlatformSessionScalarFieldEnum = (typeof PlatformSessionScalarFieldEnum)[keyof typeof PlatformSessionScalarFieldEnum]
 
 
 export const LocationScalarFieldEnum = {
@@ -248,6 +290,18 @@ export const RoleScalarFieldEnum = {
 } as const
 
 export type RoleScalarFieldEnum = (typeof RoleScalarFieldEnum)[keyof typeof RoleScalarFieldEnum]
+
+
+export const TenantSeatLimitScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  roleKey: 'roleKey',
+  maxUsers: 'maxUsers',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TenantSeatLimitScalarFieldEnum = (typeof TenantSeatLimitScalarFieldEnum)[keyof typeof TenantSeatLimitScalarFieldEnum]
 
 
 export const UserRoleScalarFieldEnum = {

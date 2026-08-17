@@ -52,6 +52,11 @@ export type TenantMinAggregateOutputType = {
   uhidPadding: number | null
   uhidCounter: bigint | null
   timezone: string | null
+  contactEmail: string | null
+  contactMobile: string | null
+  onboardedByPlatformUserId: string | null
+  suspendedAt: Date | null
+  suspendedReason: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -66,6 +71,11 @@ export type TenantMaxAggregateOutputType = {
   uhidPadding: number | null
   uhidCounter: bigint | null
   timezone: string | null
+  contactEmail: string | null
+  contactMobile: string | null
+  onboardedByPlatformUserId: string | null
+  suspendedAt: Date | null
+  suspendedReason: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -80,6 +90,11 @@ export type TenantCountAggregateOutputType = {
   uhidPadding: number
   uhidCounter: number
   timezone: number
+  contactEmail: number
+  contactMobile: number
+  onboardedByPlatformUserId: number
+  suspendedAt: number
+  suspendedReason: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -106,6 +121,11 @@ export type TenantMinAggregateInputType = {
   uhidPadding?: true
   uhidCounter?: true
   timezone?: true
+  contactEmail?: true
+  contactMobile?: true
+  onboardedByPlatformUserId?: true
+  suspendedAt?: true
+  suspendedReason?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -120,6 +140,11 @@ export type TenantMaxAggregateInputType = {
   uhidPadding?: true
   uhidCounter?: true
   timezone?: true
+  contactEmail?: true
+  contactMobile?: true
+  onboardedByPlatformUserId?: true
+  suspendedAt?: true
+  suspendedReason?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -134,6 +159,11 @@ export type TenantCountAggregateInputType = {
   uhidPadding?: true
   uhidCounter?: true
   timezone?: true
+  contactEmail?: true
+  contactMobile?: true
+  onboardedByPlatformUserId?: true
+  suspendedAt?: true
+  suspendedReason?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -235,6 +265,11 @@ export type TenantGroupByOutputType = {
   uhidPadding: number
   uhidCounter: bigint
   timezone: string
+  contactEmail: string | null
+  contactMobile: string | null
+  onboardedByPlatformUserId: string | null
+  suspendedAt: Date | null
+  suspendedReason: string | null
   createdAt: Date
   updatedAt: Date
   _count: TenantCountAggregateOutputType | null
@@ -272,10 +307,17 @@ export type TenantWhereInput = {
   uhidPadding?: Prisma.IntFilter<"Tenant"> | number
   uhidCounter?: Prisma.BigIntFilter<"Tenant"> | bigint | number
   timezone?: Prisma.StringFilter<"Tenant"> | string
+  contactEmail?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  contactMobile?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  onboardedByPlatformUserId?: Prisma.UuidNullableFilter<"Tenant"> | string | null
+  suspendedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
+  suspendedReason?: Prisma.StringNullableFilter<"Tenant"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   locations?: Prisma.LocationListRelationFilter
   displayDevices?: Prisma.DisplayDeviceListRelationFilter
+  seatLimits?: Prisma.TenantSeatLimitListRelationFilter
+  onboardedBy?: Prisma.XOR<Prisma.PlatformUserNullableScalarRelationFilter, Prisma.PlatformUserWhereInput> | null
 }
 
 export type TenantOrderByWithRelationInput = {
@@ -288,10 +330,17 @@ export type TenantOrderByWithRelationInput = {
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
   timezone?: Prisma.SortOrder
+  contactEmail?: Prisma.SortOrderInput | Prisma.SortOrder
+  contactMobile?: Prisma.SortOrderInput | Prisma.SortOrder
+  onboardedByPlatformUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  suspendedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  suspendedReason?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   locations?: Prisma.LocationOrderByRelationAggregateInput
   displayDevices?: Prisma.DisplayDeviceOrderByRelationAggregateInput
+  seatLimits?: Prisma.TenantSeatLimitOrderByRelationAggregateInput
+  onboardedBy?: Prisma.PlatformUserOrderByWithRelationInput
 }
 
 export type TenantWhereUniqueInput = Prisma.AtLeast<{
@@ -307,10 +356,17 @@ export type TenantWhereUniqueInput = Prisma.AtLeast<{
   uhidPadding?: Prisma.IntFilter<"Tenant"> | number
   uhidCounter?: Prisma.BigIntFilter<"Tenant"> | bigint | number
   timezone?: Prisma.StringFilter<"Tenant"> | string
+  contactEmail?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  contactMobile?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  onboardedByPlatformUserId?: Prisma.UuidNullableFilter<"Tenant"> | string | null
+  suspendedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
+  suspendedReason?: Prisma.StringNullableFilter<"Tenant"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
   locations?: Prisma.LocationListRelationFilter
   displayDevices?: Prisma.DisplayDeviceListRelationFilter
+  seatLimits?: Prisma.TenantSeatLimitListRelationFilter
+  onboardedBy?: Prisma.XOR<Prisma.PlatformUserNullableScalarRelationFilter, Prisma.PlatformUserWhereInput> | null
 }, "id" | "slug">
 
 export type TenantOrderByWithAggregationInput = {
@@ -323,6 +379,11 @@ export type TenantOrderByWithAggregationInput = {
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
   timezone?: Prisma.SortOrder
+  contactEmail?: Prisma.SortOrderInput | Prisma.SortOrder
+  contactMobile?: Prisma.SortOrderInput | Prisma.SortOrder
+  onboardedByPlatformUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  suspendedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  suspendedReason?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.TenantCountOrderByAggregateInput
@@ -345,6 +406,11 @@ export type TenantScalarWhereWithAggregatesInput = {
   uhidPadding?: Prisma.IntWithAggregatesFilter<"Tenant"> | number
   uhidCounter?: Prisma.BigIntWithAggregatesFilter<"Tenant"> | bigint | number
   timezone?: Prisma.StringWithAggregatesFilter<"Tenant"> | string
+  contactEmail?: Prisma.StringNullableWithAggregatesFilter<"Tenant"> | string | null
+  contactMobile?: Prisma.StringNullableWithAggregatesFilter<"Tenant"> | string | null
+  onboardedByPlatformUserId?: Prisma.UuidNullableWithAggregatesFilter<"Tenant"> | string | null
+  suspendedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
+  suspendedReason?: Prisma.StringNullableWithAggregatesFilter<"Tenant"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Tenant"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Tenant"> | Date | string
 }
@@ -359,10 +425,16 @@ export type TenantCreateInput = {
   uhidPadding?: number
   uhidCounter?: bigint | number
   timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
   displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
 
 export type TenantUncheckedCreateInput = {
@@ -375,10 +447,16 @@ export type TenantUncheckedCreateInput = {
   uhidPadding?: number
   uhidCounter?: bigint | number
   timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
   displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
 export type TenantUpdateInput = {
@@ -391,10 +469,16 @@ export type TenantUpdateInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
   displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
 
 export type TenantUncheckedUpdateInput = {
@@ -407,10 +491,16 @@ export type TenantUncheckedUpdateInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
   displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
 export type TenantCreateManyInput = {
@@ -423,6 +513,11 @@ export type TenantCreateManyInput = {
   uhidPadding?: number
   uhidCounter?: bigint | number
   timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -437,6 +532,10 @@ export type TenantUpdateManyMutationInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -451,6 +550,11 @@ export type TenantUncheckedUpdateManyInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -465,6 +569,11 @@ export type TenantCountOrderByAggregateInput = {
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
   timezone?: Prisma.SortOrder
+  contactEmail?: Prisma.SortOrder
+  contactMobile?: Prisma.SortOrder
+  onboardedByPlatformUserId?: Prisma.SortOrder
+  suspendedAt?: Prisma.SortOrder
+  suspendedReason?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -484,6 +593,11 @@ export type TenantMaxOrderByAggregateInput = {
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
   timezone?: Prisma.SortOrder
+  contactEmail?: Prisma.SortOrder
+  contactMobile?: Prisma.SortOrder
+  onboardedByPlatformUserId?: Prisma.SortOrder
+  suspendedAt?: Prisma.SortOrder
+  suspendedReason?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -498,6 +612,11 @@ export type TenantMinOrderByAggregateInput = {
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
   timezone?: Prisma.SortOrder
+  contactEmail?: Prisma.SortOrder
+  contactMobile?: Prisma.SortOrder
+  onboardedByPlatformUserId?: Prisma.SortOrder
+  suspendedAt?: Prisma.SortOrder
+  suspendedReason?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -505,6 +624,16 @@ export type TenantMinOrderByAggregateInput = {
 export type TenantSumOrderByAggregateInput = {
   uhidPadding?: Prisma.SortOrder
   uhidCounter?: Prisma.SortOrder
+}
+
+export type TenantListRelationFilter = {
+  every?: Prisma.TenantWhereInput
+  some?: Prisma.TenantWhereInput
+  none?: Prisma.TenantWhereInput
+}
+
+export type TenantOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
 }
 
 export type TenantScalarRelationFilter = {
@@ -536,8 +665,58 @@ export type BigIntFieldUpdateOperationsInput = {
   divide?: bigint | number
 }
 
+export type NullableStringFieldUpdateOperationsInput = {
+  set?: string | null
+}
+
+export type NullableDateTimeFieldUpdateOperationsInput = {
+  set?: Date | string | null
+}
+
 export type DateTimeFieldUpdateOperationsInput = {
   set?: Date | string
+}
+
+export type TenantCreateNestedManyWithoutOnboardedByInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutOnboardedByInput, Prisma.TenantUncheckedCreateWithoutOnboardedByInput> | Prisma.TenantCreateWithoutOnboardedByInput[] | Prisma.TenantUncheckedCreateWithoutOnboardedByInput[]
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutOnboardedByInput | Prisma.TenantCreateOrConnectWithoutOnboardedByInput[]
+  createMany?: Prisma.TenantCreateManyOnboardedByInputEnvelope
+  connect?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+}
+
+export type TenantUncheckedCreateNestedManyWithoutOnboardedByInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutOnboardedByInput, Prisma.TenantUncheckedCreateWithoutOnboardedByInput> | Prisma.TenantCreateWithoutOnboardedByInput[] | Prisma.TenantUncheckedCreateWithoutOnboardedByInput[]
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutOnboardedByInput | Prisma.TenantCreateOrConnectWithoutOnboardedByInput[]
+  createMany?: Prisma.TenantCreateManyOnboardedByInputEnvelope
+  connect?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+}
+
+export type TenantUpdateManyWithoutOnboardedByNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutOnboardedByInput, Prisma.TenantUncheckedCreateWithoutOnboardedByInput> | Prisma.TenantCreateWithoutOnboardedByInput[] | Prisma.TenantUncheckedCreateWithoutOnboardedByInput[]
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutOnboardedByInput | Prisma.TenantCreateOrConnectWithoutOnboardedByInput[]
+  upsert?: Prisma.TenantUpsertWithWhereUniqueWithoutOnboardedByInput | Prisma.TenantUpsertWithWhereUniqueWithoutOnboardedByInput[]
+  createMany?: Prisma.TenantCreateManyOnboardedByInputEnvelope
+  set?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  disconnect?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  delete?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  connect?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  update?: Prisma.TenantUpdateWithWhereUniqueWithoutOnboardedByInput | Prisma.TenantUpdateWithWhereUniqueWithoutOnboardedByInput[]
+  updateMany?: Prisma.TenantUpdateManyWithWhereWithoutOnboardedByInput | Prisma.TenantUpdateManyWithWhereWithoutOnboardedByInput[]
+  deleteMany?: Prisma.TenantScalarWhereInput | Prisma.TenantScalarWhereInput[]
+}
+
+export type TenantUncheckedUpdateManyWithoutOnboardedByNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutOnboardedByInput, Prisma.TenantUncheckedCreateWithoutOnboardedByInput> | Prisma.TenantCreateWithoutOnboardedByInput[] | Prisma.TenantUncheckedCreateWithoutOnboardedByInput[]
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutOnboardedByInput | Prisma.TenantCreateOrConnectWithoutOnboardedByInput[]
+  upsert?: Prisma.TenantUpsertWithWhereUniqueWithoutOnboardedByInput | Prisma.TenantUpsertWithWhereUniqueWithoutOnboardedByInput[]
+  createMany?: Prisma.TenantCreateManyOnboardedByInputEnvelope
+  set?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  disconnect?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  delete?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  connect?: Prisma.TenantWhereUniqueInput | Prisma.TenantWhereUniqueInput[]
+  update?: Prisma.TenantUpdateWithWhereUniqueWithoutOnboardedByInput | Prisma.TenantUpdateWithWhereUniqueWithoutOnboardedByInput[]
+  updateMany?: Prisma.TenantUpdateManyWithWhereWithoutOnboardedByInput | Prisma.TenantUpdateManyWithWhereWithoutOnboardedByInput[]
+  deleteMany?: Prisma.TenantScalarWhereInput | Prisma.TenantScalarWhereInput[]
 }
 
 export type TenantCreateNestedOneWithoutLocationsInput = {
@@ -568,6 +747,110 @@ export type TenantUpdateOneRequiredWithoutDisplayDevicesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutDisplayDevicesInput, Prisma.TenantUpdateWithoutDisplayDevicesInput>, Prisma.TenantUncheckedUpdateWithoutDisplayDevicesInput>
 }
 
+export type TenantCreateNestedOneWithoutSeatLimitsInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutSeatLimitsInput, Prisma.TenantUncheckedCreateWithoutSeatLimitsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutSeatLimitsInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutSeatLimitsNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutSeatLimitsInput, Prisma.TenantUncheckedCreateWithoutSeatLimitsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutSeatLimitsInput
+  upsert?: Prisma.TenantUpsertWithoutSeatLimitsInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutSeatLimitsInput, Prisma.TenantUpdateWithoutSeatLimitsInput>, Prisma.TenantUncheckedUpdateWithoutSeatLimitsInput>
+}
+
+export type TenantCreateWithoutOnboardedByInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+}
+
+export type TenantUncheckedCreateWithoutOnboardedByInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutOnboardedByInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutOnboardedByInput, Prisma.TenantUncheckedCreateWithoutOnboardedByInput>
+}
+
+export type TenantCreateManyOnboardedByInputEnvelope = {
+  data: Prisma.TenantCreateManyOnboardedByInput | Prisma.TenantCreateManyOnboardedByInput[]
+  skipDuplicates?: boolean
+}
+
+export type TenantUpsertWithWhereUniqueWithoutOnboardedByInput = {
+  where: Prisma.TenantWhereUniqueInput
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutOnboardedByInput, Prisma.TenantUncheckedUpdateWithoutOnboardedByInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutOnboardedByInput, Prisma.TenantUncheckedCreateWithoutOnboardedByInput>
+}
+
+export type TenantUpdateWithWhereUniqueWithoutOnboardedByInput = {
+  where: Prisma.TenantWhereUniqueInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutOnboardedByInput, Prisma.TenantUncheckedUpdateWithoutOnboardedByInput>
+}
+
+export type TenantUpdateManyWithWhereWithoutOnboardedByInput = {
+  where: Prisma.TenantScalarWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateManyMutationInput, Prisma.TenantUncheckedUpdateManyWithoutOnboardedByInput>
+}
+
+export type TenantScalarWhereInput = {
+  AND?: Prisma.TenantScalarWhereInput | Prisma.TenantScalarWhereInput[]
+  OR?: Prisma.TenantScalarWhereInput[]
+  NOT?: Prisma.TenantScalarWhereInput | Prisma.TenantScalarWhereInput[]
+  id?: Prisma.UuidFilter<"Tenant"> | string
+  slug?: Prisma.StringFilter<"Tenant"> | string
+  legalName?: Prisma.StringFilter<"Tenant"> | string
+  name?: Prisma.StringFilter<"Tenant"> | string
+  status?: Prisma.EnumTenantStatusFilter<"Tenant"> | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFilter<"Tenant"> | string
+  uhidPadding?: Prisma.IntFilter<"Tenant"> | number
+  uhidCounter?: Prisma.BigIntFilter<"Tenant"> | bigint | number
+  timezone?: Prisma.StringFilter<"Tenant"> | string
+  contactEmail?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  contactMobile?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  onboardedByPlatformUserId?: Prisma.UuidNullableFilter<"Tenant"> | string | null
+  suspendedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
+  suspendedReason?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  createdAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
+  updatedAt?: Prisma.DateTimeFilter<"Tenant"> | Date | string
+}
+
 export type TenantCreateWithoutLocationsInput = {
   id?: string
   slug: string
@@ -578,9 +861,15 @@ export type TenantCreateWithoutLocationsInput = {
   uhidPadding?: number
   uhidCounter?: bigint | number
   timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
 
 export type TenantUncheckedCreateWithoutLocationsInput = {
@@ -593,9 +882,15 @@ export type TenantUncheckedCreateWithoutLocationsInput = {
   uhidPadding?: number
   uhidCounter?: bigint | number
   timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
 export type TenantCreateOrConnectWithoutLocationsInput = {
@@ -624,9 +919,15 @@ export type TenantUpdateWithoutLocationsInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
 
 export type TenantUncheckedUpdateWithoutLocationsInput = {
@@ -639,9 +940,15 @@ export type TenantUncheckedUpdateWithoutLocationsInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
 export type TenantCreateWithoutDisplayDevicesInput = {
@@ -654,9 +961,15 @@ export type TenantCreateWithoutDisplayDevicesInput = {
   uhidPadding?: number
   uhidCounter?: bigint | number
   timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
 
 export type TenantUncheckedCreateWithoutDisplayDevicesInput = {
@@ -669,9 +982,15 @@ export type TenantUncheckedCreateWithoutDisplayDevicesInput = {
   uhidPadding?: number
   uhidCounter?: bigint | number
   timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
 export type TenantCreateOrConnectWithoutDisplayDevicesInput = {
@@ -700,9 +1019,15 @@ export type TenantUpdateWithoutDisplayDevicesInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
 
 export type TenantUncheckedUpdateWithoutDisplayDevicesInput = {
@@ -715,9 +1040,193 @@ export type TenantUncheckedUpdateWithoutDisplayDevicesInput = {
   uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
   uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutSeatLimitsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
+}
+
+export type TenantUncheckedCreateWithoutSeatLimitsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutSeatLimitsInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutSeatLimitsInput, Prisma.TenantUncheckedCreateWithoutSeatLimitsInput>
+}
+
+export type TenantUpsertWithoutSeatLimitsInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutSeatLimitsInput, Prisma.TenantUncheckedUpdateWithoutSeatLimitsInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutSeatLimitsInput, Prisma.TenantUncheckedCreateWithoutSeatLimitsInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutSeatLimitsInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutSeatLimitsInput, Prisma.TenantUncheckedUpdateWithoutSeatLimitsInput>
+}
+
+export type TenantUpdateWithoutSeatLimitsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutSeatLimitsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateManyOnboardedByInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type TenantUpdateWithoutOnboardedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutOnboardedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantUncheckedUpdateManyWithoutOnboardedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 
@@ -728,11 +1237,13 @@ export type TenantUncheckedUpdateWithoutDisplayDevicesInput = {
 export type TenantCountOutputType = {
   locations: number
   displayDevices: number
+  seatLimits: number
 }
 
 export type TenantCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   locations?: boolean | TenantCountOutputTypeCountLocationsArgs
   displayDevices?: boolean | TenantCountOutputTypeCountDisplayDevicesArgs
+  seatLimits?: boolean | TenantCountOutputTypeCountSeatLimitsArgs
 }
 
 /**
@@ -759,6 +1270,13 @@ export type TenantCountOutputTypeCountDisplayDevicesArgs<ExtArgs extends runtime
   where?: Prisma.DisplayDeviceWhereInput
 }
 
+/**
+ * TenantCountOutputType without action
+ */
+export type TenantCountOutputTypeCountSeatLimitsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TenantSeatLimitWhereInput
+}
+
 
 export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -770,10 +1288,17 @@ export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   uhidPadding?: boolean
   uhidCounter?: boolean
   timezone?: boolean
+  contactEmail?: boolean
+  contactMobile?: boolean
+  onboardedByPlatformUserId?: boolean
+  suspendedAt?: boolean
+  suspendedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   locations?: boolean | Prisma.Tenant$locationsArgs<ExtArgs>
   displayDevices?: boolean | Prisma.Tenant$displayDevicesArgs<ExtArgs>
+  seatLimits?: boolean | Prisma.Tenant$seatLimitsArgs<ExtArgs>
+  onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tenant"]>
 
@@ -787,8 +1312,14 @@ export type TenantSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   uhidPadding?: boolean
   uhidCounter?: boolean
   timezone?: boolean
+  contactEmail?: boolean
+  contactMobile?: boolean
+  onboardedByPlatformUserId?: boolean
+  suspendedAt?: boolean
+  suspendedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
 }, ExtArgs["result"]["tenant"]>
 
 export type TenantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -801,8 +1332,14 @@ export type TenantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   uhidPadding?: boolean
   uhidCounter?: boolean
   timezone?: boolean
+  contactEmail?: boolean
+  contactMobile?: boolean
+  onboardedByPlatformUserId?: boolean
+  suspendedAt?: boolean
+  suspendedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
 }, ExtArgs["result"]["tenant"]>
 
 export type TenantSelectScalar = {
@@ -815,24 +1352,37 @@ export type TenantSelectScalar = {
   uhidPadding?: boolean
   uhidCounter?: boolean
   timezone?: boolean
+  contactEmail?: boolean
+  contactMobile?: boolean
+  onboardedByPlatformUserId?: boolean
+  suspendedAt?: boolean
+  suspendedReason?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type TenantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "slug" | "legalName" | "name" | "status" | "uhidPrefix" | "uhidPadding" | "uhidCounter" | "timezone" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
+export type TenantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "slug" | "legalName" | "name" | "status" | "uhidPrefix" | "uhidPadding" | "uhidCounter" | "timezone" | "contactEmail" | "contactMobile" | "onboardedByPlatformUserId" | "suspendedAt" | "suspendedReason" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
 export type TenantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   locations?: boolean | Prisma.Tenant$locationsArgs<ExtArgs>
   displayDevices?: boolean | Prisma.Tenant$displayDevicesArgs<ExtArgs>
+  seatLimits?: boolean | Prisma.Tenant$seatLimitsArgs<ExtArgs>
+  onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
 }
-export type TenantIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
-export type TenantIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type TenantIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
+}
+export type TenantIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
+}
 
 export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Tenant"
   objects: {
     locations: Prisma.$LocationPayload<ExtArgs>[]
     displayDevices: Prisma.$DisplayDevicePayload<ExtArgs>[]
+    seatLimits: Prisma.$TenantSeatLimitPayload<ExtArgs>[]
+    onboardedBy: Prisma.$PlatformUserPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -867,6 +1417,18 @@ export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
      * would be a bug waiting for the first customer who isn't.
      */
     timezone: string
+    /**
+     * Who to talk to at the clinic. Captured at onboarding, not by the clinic.
+     */
+    contactEmail: string | null
+    contactMobile: string | null
+    onboardedByPlatformUserId: string | null
+    /**
+     * SUSPENDED means read-only, not locked out — see docs/06, section 2.6. A
+     * suspension without a date and a reason is refused by a CHECK constraint.
+     */
+    suspendedAt: Date | null
+    suspendedReason: string | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["tenant"]>
@@ -1265,6 +1827,8 @@ export interface Prisma__TenantClient<T, Null = never, ExtArgs extends runtime.T
   readonly [Symbol.toStringTag]: "PrismaPromise"
   locations<T extends Prisma.Tenant$locationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$locationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$LocationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   displayDevices<T extends Prisma.Tenant$displayDevicesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$displayDevicesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DisplayDevicePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  seatLimits<T extends Prisma.Tenant$seatLimitsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$seatLimitsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TenantSeatLimitPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  onboardedBy<T extends Prisma.Tenant$onboardedByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$onboardedByArgs<ExtArgs>>): Prisma.Prisma__PlatformUserClient<runtime.Types.Result.GetResult<Prisma.$PlatformUserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1303,6 +1867,11 @@ export interface TenantFieldRefs {
   readonly uhidPadding: Prisma.FieldRef<"Tenant", 'Int'>
   readonly uhidCounter: Prisma.FieldRef<"Tenant", 'BigInt'>
   readonly timezone: Prisma.FieldRef<"Tenant", 'String'>
+  readonly contactEmail: Prisma.FieldRef<"Tenant", 'String'>
+  readonly contactMobile: Prisma.FieldRef<"Tenant", 'String'>
+  readonly onboardedByPlatformUserId: Prisma.FieldRef<"Tenant", 'String'>
+  readonly suspendedAt: Prisma.FieldRef<"Tenant", 'DateTime'>
+  readonly suspendedReason: Prisma.FieldRef<"Tenant", 'String'>
   readonly createdAt: Prisma.FieldRef<"Tenant", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Tenant", 'DateTime'>
 }
@@ -1559,6 +2128,10 @@ export type TenantCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensio
    */
   data: Prisma.TenantCreateManyInput | Prisma.TenantCreateManyInput[]
   skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TenantIncludeCreateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1629,6 +2202,10 @@ export type TenantUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensio
    * Limit how many Tenants to update.
    */
   limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TenantIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1743,6 +2320,49 @@ export type Tenant$displayDevicesArgs<ExtArgs extends runtime.Types.Extensions.I
   take?: number
   skip?: number
   distinct?: Prisma.DisplayDeviceScalarFieldEnum | Prisma.DisplayDeviceScalarFieldEnum[]
+}
+
+/**
+ * Tenant.seatLimits
+ */
+export type Tenant$seatLimitsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TenantSeatLimit
+   */
+  select?: Prisma.TenantSeatLimitSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TenantSeatLimit
+   */
+  omit?: Prisma.TenantSeatLimitOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TenantSeatLimitInclude<ExtArgs> | null
+  where?: Prisma.TenantSeatLimitWhereInput
+  orderBy?: Prisma.TenantSeatLimitOrderByWithRelationInput | Prisma.TenantSeatLimitOrderByWithRelationInput[]
+  cursor?: Prisma.TenantSeatLimitWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.TenantSeatLimitScalarFieldEnum | Prisma.TenantSeatLimitScalarFieldEnum[]
+}
+
+/**
+ * Tenant.onboardedBy
+ */
+export type Tenant$onboardedByArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PlatformUser
+   */
+  select?: Prisma.PlatformUserSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PlatformUser
+   */
+  omit?: Prisma.PlatformUserOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PlatformUserInclude<ExtArgs> | null
+  where?: Prisma.PlatformUserWhereInput
 }
 
 /**

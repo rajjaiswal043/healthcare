@@ -173,6 +173,35 @@ describe('multi-factor authentication', () => {
   });
 });
 
+describe('who am I', () => {
+  it('names the user and their roles, not just their permissions', async () => {
+    const session = await login(app, fx.main.slug, 'doctor@main.test');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: session.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json<{
+      fullName: string;
+      roles: Array<{ key: string; name: string }>;
+      permissions: string[];
+    }>();
+
+    // The console paints its chrome from these: the name in the identity chip,
+    // the role key as the colour signature, the role name as the label beside
+    // it. Read from the database rather than the token, so a role changed an
+    // hour ago is not still showing.
+    expect(body.fullName).toBe('Asha Menon');
+    expect(body.roles.map((r) => r.key)).toEqual(['doctor']);
+    expect(body.roles[0]?.name).toBe('Doctor');
+    expect(body.permissions).toContain('consultation:write');
+  });
+});
+
 describe('the guard', () => {
   it('refuses an unauthenticated request', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/auth/me' });
