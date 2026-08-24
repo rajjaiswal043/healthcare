@@ -95,10 +95,11 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
 
   if (refused) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0d1b1a] p-10 text-center text-white">
-        <div>
-          <p className="text-[24px] font-semibold text-white/70">This screen is not paired</p>
-          <p className="mt-3 text-[17px] text-white/40">
+      <main className="grid min-h-screen place-items-center bg-bg p-10 text-center">
+        <div className="card max-w-lg p-8">
+          <p className="eyebrow justify-center">Waiting room</p>
+          <p className="mt-3 font-display text-[26px] font-bold">This screen is not paired</p>
+          <p className="mt-2 text-[16px] text-ink-60">
             Ask the front desk to set it up again from Settings → Waiting-room screens.
           </p>
         </div>
@@ -108,42 +109,51 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
 
   if (!board) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0d1b1a] text-white">
-        <p className="text-[22px] text-white/50">Connecting…</p>
+      <main className="grid min-h-screen place-items-center bg-bg">
+        <p className="text-[22px] text-ink-40">Connecting…</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#0d1b1a] px-[3vw] py-[3vh] text-white">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-[2vh]">
+    /**
+     * The clinic's own paper, at four metres.
+     *
+     * This used to be a dark board on the argument that a wall-mounted screen
+     * wants maximum contrast. It read as a different product — Narveer's point,
+     * and the right one: a patient looking up from the bench and a receptionist
+     * looking at the queue should recognise the same clinic. So it uses the same
+     * tokens as every other screen, and buys its legibility from SIZE instead:
+     * the served token is the biggest thing in the room, and everything else is
+     * deliberately quiet around it.
+     */
+    <main className="min-h-screen bg-bg px-[3vw] py-[3vh]">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-[2vh]">
         <div className="flex items-center gap-[1.6vw]">
-          {/* On a white chip rather than bare on the dark ground.
-              A JPEG carries no transparency, so its own background paints as a
-              hard rectangle against this screen whatever colour it is; a
-              deliberate white panel makes that read as a badge instead of an
-              artefact, and it works for a dark logo, a light one and a colour
-              one without anybody having to prepare the file. Inverting would
-              have been fine for a monochrome mark and ruinous for this one. */}
-          <span className="grid shrink-0 place-items-center rounded-[0.8vw] bg-white p-[0.5vw]">
+          {/* No white chip needed now: the logo's own background and the card
+              behind it are the same white, so a JPEG with no transparency sits
+              flush instead of reading as a pasted rectangle. */}
+          <span className="grid shrink-0 place-items-center rounded-panel border border-ink/8 bg-card p-[0.6vw] shadow-sm">
             <ClinicLogo size={56} />
           </span>
 
           <div>
-            <h1 className="font-display text-[clamp(28px,3.2vw,52px)] font-bold leading-none">
+            <p className="eyebrow">Now serving</p>
+            <h1 className="mt-1 font-display text-[clamp(28px,3.2vw,52px)] font-bold leading-none tracking-display">
               {board.clinic}
             </h1>
             {board.location && (
-              <p className="mt-2 text-[clamp(14px,1.2vw,22px)] text-white/45">{board.location}</p>
+              <p className="mt-2 text-[clamp(14px,1.2vw,22px)] text-ink-40">{board.location}</p>
             )}
           </div>
         </div>
 
         {/* The screen says when it last heard from the clinic, and only when that
             stops being "just now". Silence is the failure mode being designed
-            against. */}
+            against. Amber here is the same amber that means "needs attention"
+            everywhere else in the product. */}
         {stale && (
-          <p className="rounded-full bg-amber-400/15 px-5 py-2 text-[clamp(13px,1.1vw,19px)] font-semibold text-amber-200">
+          <p className="rounded-pill bg-amber-soft px-5 py-2 text-[clamp(13px,1.1vw,19px)] font-semibold text-amber-text">
             Reconnecting — showing the board from{' '}
             {new Date(board.generatedAt).toLocaleTimeString('en-IN', { timeStyle: 'short' })}
           </p>
@@ -166,7 +176,7 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
       </div>
 
       {board.doctors.length === 0 && (
-        <p className="mt-[10vh] text-center text-[clamp(18px,2vw,32px)] text-white/40">
+        <p className="mt-[10vh] text-center text-[clamp(18px,2vw,32px)] text-ink-40">
           No clinics running right now.
         </p>
       )}
@@ -178,60 +188,64 @@ function DoctorCard({ doctor: d }: { doctor: DisplayDoctor }) {
   const late = d.minutesSinceLastCall !== null && d.minutesSinceLastCall >= LATE_MINUTES;
 
   return (
-    <section className="rounded-[1.5vw] border border-white/10 bg-white/[0.04] p-[2vw]">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-[clamp(18px,1.7vw,30px)] font-bold">{d.name}</h2>
+    <section className="card overflow-hidden">
+      {/* The doctor's name sits on the same soft header strip every panel in the
+          console uses, so a patient and a receptionist are looking at one thing
+          drawn one way. */}
+      <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-ink/8 bg-bg-soft px-[2vw] py-[1.6vh]">
+        <h2 className="font-display text-[clamp(18px,1.7vw,30px)] font-bold tracking-display">
+          {d.name}
+        </h2>
         {d.specialty && (
-          <span className="text-[clamp(12px,1vw,17px)] text-white/40">{d.specialty}</span>
+          <span className="text-[clamp(12px,1vw,17px)] text-ink-40">{d.specialty}</span>
         )}
-      </div>
+      </header>
 
-      <p className="mt-[2vh] text-[clamp(11px,0.85vw,15px)] font-semibold uppercase tracking-[0.18em] text-white/35">
-        Now serving
-      </p>
+      <div className="px-[2vw] py-[2vh]">
+        <p className="mono-label">Now serving</p>
 
-      {/* The one number the room is looking at. Everything else on this screen is
-          arranged around keeping it the biggest thing on it. */}
-      <p
-        className={[
-          'font-mono font-bold leading-[0.9]',
-          d.nowServing === null
-            ? 'text-[clamp(48px,6vw,110px)] text-white/20'
-            : 'text-[clamp(72px,10vw,190px)] text-[#5fe0c8]',
-        ].join(' ')}
-      >
-        {d.nowServing ?? '—'}
-      </p>
-
-      {late && (
-        <p className="mt-[1vh] text-[clamp(12px,1vw,18px)] text-amber-200/80">
-          Running late — last called {d.minutesSinceLastCall} minutes ago
+        {/* The one number the room is looking at, and the whole reason this
+            screen can be light: it wins on size, not on contrast tricks. */}
+        <p
+          className={[
+            'font-mono font-bold leading-[0.9]',
+            d.nowServing === null
+              ? 'text-[clamp(48px,6vw,110px)] text-ink-20'
+              : 'text-[clamp(72px,10vw,190px)] text-clinical',
+          ].join(' ')}
+        >
+          {d.nowServing ?? '—'}
         </p>
-      )}
 
-      <div className="mt-[2vh] border-t border-white/10 pt-[2vh]">
-        <p className="text-[clamp(11px,0.85vw,15px)] font-semibold uppercase tracking-[0.18em] text-white/35">
-          Next
-        </p>
-        {d.next.length === 0 ? (
-          <p className="mt-2 text-[clamp(16px,1.4vw,26px)] text-white/30">Nobody waiting</p>
-        ) : (
-          <div className="mt-2 flex flex-wrap gap-[1vw]">
-            {d.next.map((token, i) => (
-              <span
-                key={`${token}-${i}`}
-                className="rounded-[0.6vw] bg-white/8 px-[1.4vw] py-[0.6vh] font-mono text-[clamp(24px,3vw,56px)] font-bold text-white/85"
-              >
-                {token ?? '—'}
-              </span>
-            ))}
-            {d.waiting > d.next.length && (
-              <span className="self-end pb-[0.8vh] text-[clamp(13px,1.1vw,20px)] text-white/35">
-                +{d.waiting - d.next.length} more
-              </span>
-            )}
-          </div>
+        {late && (
+          <p className="mt-[1vh] inline-flex rounded-pill bg-amber-soft px-3 py-1 text-[clamp(12px,1vw,18px)] font-semibold text-amber-text">
+            Running late — last called {d.minutesSinceLastCall} minutes ago
+          </p>
         )}
+
+        <div className="mt-[2vh] border-t border-ink/8 pt-[2vh]">
+          <p className="mono-label">Next</p>
+
+          {d.next.length === 0 ? (
+            <p className="mt-2 text-[clamp(16px,1.4vw,26px)] text-ink-20">Nobody waiting</p>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-end gap-[1vw]">
+              {d.next.map((token, i) => (
+                <span
+                  key={`${token}-${i}`}
+                  className="rounded-panel bg-clinical-soft px-[1.4vw] py-[0.6vh] font-mono text-[clamp(24px,3vw,56px)] font-bold text-clinical-text"
+                >
+                  {token ?? '—'}
+                </span>
+              ))}
+              {d.waiting > d.next.length && (
+                <span className="pb-[0.8vh] text-[clamp(13px,1.1vw,20px)] text-ink-40">
+                  +{d.waiting - d.next.length} more
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );

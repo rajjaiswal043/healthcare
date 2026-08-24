@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { generateSecret, generateURI, verify as verifyOtp } from 'otplib';
 import { PrismaService } from '../database/prisma.service.js';
 import { hashPassword, needsRehash, verifyPassword } from '../auth/password.js';
@@ -37,11 +37,11 @@ interface RequestMeta {
  *
  * The same shape as the clinic's auth, with three deliberate differences:
  *
- *   - **MFA is not optional and not role-dependent.** There is no version of an
+ *   - **MFA is not role-dependent.** On the clinic side it is a property of the
+ *     role; here it applies to every account, because there is no version of an
  *     account that can provision or suspend every clinic on the platform and
- *     should be reachable with a password alone — in production. On a developer
- *     machine `DEV_DISABLE_PLATFORM_MFA` skips it, and `loadEnv` refuses to
- *     start the API if that flag is ever set with NODE_ENV=production.
+ *     should be reachable with a password alone. It is nonetheless subject to
+ *     the same `MFA_ENABLED` switch, which is currently off — see below.
  *   - **Lockout is tighter** — five attempts rather than eight. A handful of
  *     people use these accounts and none of them are typing on a busy front
  *     desk, so a lower threshold costs nothing and buys a lot.
@@ -53,8 +53,6 @@ interface RequestMeta {
  */
 @Injectable()
 export class PlatformAuthService {
-  private readonly logger = new Logger(PlatformAuthService.name);
-
   constructor(private readonly prisma: PrismaService) {}
 
   async login(
@@ -86,20 +84,14 @@ export class PlatformAuthService {
     }
 
     /**
-     * The local escape hatch (DEV_DISABLE_PLATFORM_MFA).
+     * The same single switch the clinic side reads (MFA_ENABLED), currently off.
      *
-     * Skips the authenticator entirely — no enrolment, no code — so onboarding a
-     * clinic on a laptop does not need a phone in hand. `loadEnv` refuses to
-     * start the API if this is set under NODE_ENV=production, so the only way to
-     * reach this branch is on somebody's development machine.
-     *
-     * Logged at warn on every use, with the account named. A weakened login that
-     * leaves no trace is how one ends up switched on for a fortnight.
+     * The platform account can create and suspend every clinic on the platform,
+     * so this is the one most worth turning back on first — but a switch that
+     * means different things in different realms is how the previous
+     * arrangement became impossible to reason about.
      */
-    if (loadEnv().DEV_DISABLE_PLATFORM_MFA) {
-      this.logger.warn(
-        `DEV_DISABLE_PLATFORM_MFA: issued a platform session to ${user.email} without two-factor.`,
-      );
+    if (!loadEnv().MFA_ENABLED) {
       return this.issue(user.id, user.email, user.fullName, user.passwordHash, password, meta);
     }
 

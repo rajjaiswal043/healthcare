@@ -76,6 +76,12 @@
     --role-text: #39414d;
   }
 
+  /* There is deliberately no signature for doctorsdesk.in itself. The platform
+     console was given one — deep ink navy — so that somebody with it and a
+     clinic open in two tabs could not confuse them. Narveer wanted the platform
+     screens to match the clinic's on 25 Aug 2026, so the separation is now
+     carried by the wordmark and a line of text instead. */
+
   body {
     @apply bg-bg font-sans text-ink antialiased;
     margin: 0;

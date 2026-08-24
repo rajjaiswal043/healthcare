@@ -230,7 +230,7 @@ describe('onboarding a clinic', () => {
      *
      * They meet MFA enrolment on the way in, because the administrator role
      * requires it and onboarding seeds roles straight from SYSTEM_ROLES.
-     * DEV_DISABLE_MFA does not reach here: it is read by seed-auth.mjs, so a
+     * The suite forces MFA_ENABLED on in setup-env.ts, so a
      * clinic created through the platform is MFA-required from its first
      * second whatever a developer has set locally.
      */

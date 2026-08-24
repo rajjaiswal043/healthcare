@@ -10,6 +10,14 @@ import {
   type OnboardResult,
   type PlatformUser,
 } from '@/lib/platform-api';
+import { LogoMark } from '@/components/auth-shell';
+import {
+  IconAlert,
+  IconBuilding,
+  IconCheckCircle,
+  IconLogout,
+  IconUsers,
+} from '@/components/icons';
 
 const ROLES = [
   { key: 'doctor', label: 'Doctors' },
@@ -21,12 +29,15 @@ const ROLES = [
 /**
  * The platform console.
  *
- * Dark on purpose — this is not the clinic's product, and the two should never
- * be confused at a glance by somebody with both open.
+ * Built from the clinic's design tokens — same paper, same ink, same cards,
+ * fields and teal. It was hand-rolled dark, which kept it distinguishable at
+ * the price of belonging to no design system, so every fix had to be made
+ * twice. Narveer chose the shared theme on 25 Aug 2026; the wordmark and the
+ * subtitle are what say which console this is.
  *
- * Note what it cannot show: a patient, an appointment, an invoice. The counts
- * come from a database function that returns integers by construction, so there
- * is no shape of response here that could carry a name.
+ * Note what it still cannot show: a patient, an appointment, an invoice. The
+ * counts come from a database function that returns integers by construction,
+ * so there is no shape of response here that could carry a name.
  */
 export default function PlatformConsole() {
   const router = useRouter();
@@ -47,6 +58,7 @@ export default function PlatformConsole() {
 
   /** Shown once, and only once: the credentials handed to a new clinic. */
   const [issued, setIssued] = useState<OnboardResult | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +97,7 @@ export default function PlatformConsole() {
       });
 
       setIssued(result);
+      setCopied(false);
       setAdding(false);
       setName('');
       setSlug('');
@@ -134,97 +147,112 @@ export default function PlatformConsole() {
   const proposedSlug = slugTouched ? slug : slugify(name);
 
   return (
-    <main className="min-h-screen bg-[#12161c] px-6 py-8 text-white">
-      <div className="mx-auto max-w-5xl">
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-5">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/35">
-              Platform
-            </p>
-            <h1 className="mt-1 font-display text-[28px] font-bold">Clinics</h1>
-            <p className="mt-1 text-[13.5px] text-white/45">
-              Counts only — this console cannot open a patient, a queue or an invoice.
-            </p>
+    <main className="min-h-screen bg-bg">
+      {/* The same hairline the clinic console wears under its header. */}
+      <div aria-hidden="true" className="h-[3px] w-full bg-clinical" />
+
+      <div className="border-b border-ink/8 bg-white/70 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <LogoMark size={30} />
+            <div>
+              <p className="font-display text-[17px] font-extrabold leading-tight tracking-display">
+                doctors<span className="text-clinical-text">desk.in</span>
+              </p>
+              <p className="mono-label">Platform console</p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {me && <span className="text-[13px] text-white/45">{me.fullName}</span>}
-            {!adding && (
-              <button
-                type="button"
-                className="rounded-pill bg-white px-4 py-2 text-[13.5px] font-semibold text-[#12161c]"
-                onClick={() => setAdding(true)}
-              >
-                Onboard a clinic
-              </button>
+          <div className="flex items-center gap-2.5">
+            {me && (
+              <span className="hidden items-center gap-2 rounded-pill bg-clinical-soft py-1 pl-1 pr-3 sm:flex">
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-clinical font-mono text-[11px] font-bold text-white">
+                  {initials(me.fullName)}
+                </span>
+                <span className="text-[12.5px] font-semibold text-clinical-text">
+                  {me.fullName}
+                </span>
+              </span>
             )}
             <button
               type="button"
-              className="rounded-pill border border-white/15 px-3 py-2 text-[13px] text-white/60 hover:text-white"
+              className="btn-ghost !text-ink-60"
               onClick={() => {
                 void platformApi.logout().finally(() => router.replace('/platform/login'));
               }}
             >
+              <IconLogout size={15} />
               Sign out
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-5xl px-6 py-7">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-[28px] font-bold">
+              Clinics <span className="text-ink-20">·</span>{' '}
+              <span className="text-clinical-text">{clinics.length}</span>
+            </h1>
+            <p className="mt-1 text-[13.5px] text-ink-60">
+              Counts only — this console cannot open a patient, a queue or an invoice.
+            </p>
+          </div>
+
+          {!adding && (
+            <button type="button" className="btn-primary" onClick={() => setAdding(true)}>
+              <IconBuilding size={15} />
+              Onboard a clinic
+            </button>
+          )}
         </header>
 
         {error && (
           <div
             role="alert"
-            className="mt-5 rounded-card border border-red-400/30 bg-red-400/10 p-3 text-[13.5px] text-red-200"
+            className="mt-5 flex items-start gap-2 rounded-panel border border-coral/25 bg-coral/8 px-3.5 py-2.5 text-[13px] text-coral-text"
           >
-            {error}
+            <span className="mt-0.5 shrink-0">
+              <IconAlert size={14} />
+            </span>
+            <span>{error}</span>
           </div>
         )}
 
         {/* The handover. Shown once — we store a hash, so there is no way back
             to it, and the clinic cannot be signed into without it. */}
         {issued && (
-          <section className="mt-5 rounded-card border border-emerald-300/25 bg-emerald-300/10 p-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-200">
+          <section className="mt-5 rounded-card border border-green/30 bg-green-soft/50 p-5">
+            <p className="flex items-center gap-2 font-display text-[17px] font-bold text-green-text">
+              <IconCheckCircle size={17} />
               {issued.clinic.name} is ready
             </p>
-            <p className="mt-1 text-[13.5px] text-white/60">
+            <p className="mt-1 text-[13px] text-ink-60">
               Send these to the clinic administrator now. The password cannot be shown again — if it
               is lost, reset it from this console.
             </p>
 
             <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.12em] text-white/35">Clinic</dt>
-                <dd className="mt-1 font-mono text-[14px]">{issued.clinic.slug}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.12em] text-white/35">Email</dt>
-                <dd className="mt-1 font-mono text-[14px] break-all">{issued.admin.email}</dd>
-              </div>
-              <div>
-                <dt className="text-[11px] uppercase tracking-[0.12em] text-white/35">Password</dt>
-                <dd className="mt-1 font-mono text-[16px] font-bold tracking-[0.08em]">
-                  {issued.admin.temporaryPassword}
-                </dd>
-              </div>
+              <Handover label="Clinic" value={issued.clinic.slug} />
+              <Handover label="Email" value={issued.admin.email} />
+              <Handover label="Password" value={issued.admin.temporaryPassword} emphasis />
             </dl>
 
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="rounded-pill bg-white px-4 py-2 text-[13px] font-semibold text-[#12161c]"
-                onClick={() =>
+                className="btn-primary"
+                onClick={() => {
                   void navigator.clipboard.writeText(
                     `Clinic: ${issued.clinic.slug}\nEmail: ${issued.admin.email}\nPassword: ${issued.admin.temporaryPassword}`,
-                  )
-                }
+                  );
+                  setCopied(true);
+                }}
               >
-                Copy all three
+                {copied ? 'Copied' : 'Copy all three'}
               </button>
-              <button
-                type="button"
-                className="rounded-pill border border-white/15 px-4 py-2 text-[13px] text-white/60 hover:text-white"
-                onClick={() => setIssued(null)}
-              >
+              <button type="button" className="btn-secondary" onClick={() => setIssued(null)}>
                 Done
               </button>
             </div>
@@ -232,7 +260,7 @@ export default function PlatformConsole() {
         )}
 
         {adding && (
-          <section className="mt-5 rounded-card border border-white/10 bg-white/[0.04] p-5">
+          <section className="card mt-5 p-5">
             <h2 className="font-display text-[19px] font-bold">Onboard a clinic</h2>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -272,20 +300,18 @@ export default function PlatformConsole() {
               />
             </div>
 
-            <div className="mt-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/40">
-                Seats
-              </p>
-              <p className="mt-1 text-[12.5px] text-white/35">
+            <div className="mt-5 rounded-panel border border-ink/8 bg-bg-soft px-4 py-3.5">
+              <p className="mono-label">Seats</p>
+              <p className="mt-1 text-[12.5px] text-ink-40">
                 Leave a box empty for unlimited. Counted on active staff, so deactivating somebody
                 frees their seat.
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-4">
                 {ROLES.map((r) => (
                   <label key={r.key} className="block">
-                    <span className="text-[12px] text-white/50">{r.label}</span>
+                    <span className="field-label !mb-1">{r.label}</span>
                     <input
-                      className="mt-1 w-full rounded-panel border border-white/12 bg-white/5 px-3 py-2 font-mono text-[14px] text-white outline-none focus:border-white/35"
+                      className="field-input !py-2 font-mono"
                       inputMode="numeric"
                       value={seats[r.key] ?? ''}
                       onChange={(e) =>
@@ -304,7 +330,7 @@ export default function PlatformConsole() {
             <div className="mt-5 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="rounded-pill bg-white px-4 py-2 text-[13.5px] font-semibold text-[#12161c] disabled:opacity-40"
+                className="btn-primary"
                 disabled={
                   busyId === 'new' ||
                   name.trim().length < 2 ||
@@ -316,11 +342,7 @@ export default function PlatformConsole() {
               >
                 {busyId === 'new' ? 'Creating…' : 'Create the clinic'}
               </button>
-              <button
-                type="button"
-                className="rounded-pill border border-white/15 px-4 py-2 text-[13.5px] text-white/60 hover:text-white"
-                onClick={() => setAdding(false)}
-              >
+              <button type="button" className="btn-secondary" onClick={() => setAdding(false)}>
                 Cancel
               </button>
             </div>
@@ -329,36 +351,41 @@ export default function PlatformConsole() {
 
         <ul className="mt-6 space-y-2">
           {clinics.map((c) => (
-            <li
-              key={c.id}
-              className="flex flex-wrap items-center gap-4 rounded-card border border-white/10 bg-white/[0.03] px-5 py-4"
-            >
+            <li key={c.id} className="card flex flex-wrap items-center gap-4 px-5 py-4">
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2 font-display text-[17px] font-bold">
                   {c.name}
                   {c.status === 'SUSPENDED' && (
-                    <span className="rounded-pill bg-amber-300/15 px-2.5 py-0.5 text-[11px] font-semibold text-amber-200">
-                      suspended · read-only
-                    </span>
+                    <span className="badge-amber">suspended · read-only</span>
                   )}
                 </p>
-                <p className="mt-0.5 text-[12.5px] text-white/40">
-                  <span className="font-mono">{c.slug}</span>
-                  {' · '}
-                  {c.activeUsers} staff
-                  {' · '}
-                  {c.patients} patients
-                  {' · '}
-                  {c.lastSignInAt
-                    ? `last used ${new Date(c.lastSignInAt).toLocaleDateString('en-IN')}`
-                    : 'never used'}
-                  {c.suspendedReason ? ` · ${c.suspendedReason}` : ''}
+                <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-ink-40">
+                  <span className="font-mono text-ink-60">{c.slug}</span>
+                  <Dot />
+                  <span className="inline-flex items-center gap-1.5">
+                    <IconUsers size={13} />
+                    {c.activeUsers} staff
+                  </span>
+                  <Dot />
+                  <span>{c.patients} patients</span>
+                  <Dot />
+                  <span>
+                    {c.lastSignInAt
+                      ? `last used ${new Date(c.lastSignInAt).toLocaleDateString('en-IN')}`
+                      : 'never used'}
+                  </span>
+                  {c.suspendedReason && (
+                    <>
+                      <Dot />
+                      <span className="text-amber-text">{c.suspendedReason}</span>
+                    </>
+                  )}
                 </p>
               </div>
 
               <button
                 type="button"
-                className="rounded-pill border border-white/15 px-3 py-1.5 text-[12.5px] text-white/70 hover:text-white disabled:opacity-40"
+                className="btn-secondary !px-4 !py-1.5 !text-[13px]"
                 disabled={busyId === c.id}
                 onClick={() => void toggleSuspension(c)}
               >
@@ -369,12 +396,44 @@ export default function PlatformConsole() {
         </ul>
 
         {clinics.length === 0 && (
-          <p className="mt-10 text-center text-[14px] text-white/30">
-            No clinics yet. Onboard the first one.
-          </p>
+          <div className="card mt-6 px-6 py-12 text-center">
+            <p className="font-display text-[18px] font-bold text-ink">No clinics yet</p>
+            <p className="mt-1 text-[13.5px] text-ink-40">
+              Onboard the first one — it takes a name and an administrator.
+            </p>
+          </div>
         )}
       </div>
     </main>
+  );
+}
+
+function Dot() {
+  return <span aria-hidden="true" className="h-1 w-1 rounded-full bg-ink/20" />;
+}
+
+/** One handed-over credential. `select-all` because these get copied by hand too. */
+function Handover({
+  label,
+  value,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="mono-label">{label}</dt>
+      <dd
+        className={[
+          'mt-1 select-all break-all rounded-tiny bg-white px-2.5 py-1.5 font-mono text-ink',
+          emphasis ? 'text-[15px] font-bold tracking-[0.06em]' : 'text-[13px]',
+        ].join(' ')}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -395,19 +454,27 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/40">
-        {label}
-      </span>
+      <span className="field-label">{label}</span>
       <input
-        className={[
-          'mt-1 w-full rounded-panel border border-white/12 bg-white/5 px-3 py-2 text-[14px] text-white outline-none focus:border-white/35',
-          mono ? 'font-mono' : '',
-        ].join(' ')}
+        className={`field-input !py-2 ${mono ? 'font-mono' : ''}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
       />
-      {hint && <span className="mt-1 block text-[11.5px] text-white/30">{hint}</span>}
+      {hint && <span className="field-hint block">{hint}</span>}
     </label>
   );
+}
+
+/** Two letters for the avatar. Same rule as the clinic's, kept local: this file
+ *  has no session and no roles, so importing role-signature would drag a whole
+ *  clinic concept into a console that deliberately has none. */
+function initials(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  const first = words[0];
+  const last = words[words.length - 1];
+
+  if (!first) return '··';
+  if (!last || words.length === 1) return first.slice(0, 2).toUpperCase();
+  return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
 }
