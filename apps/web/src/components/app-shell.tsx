@@ -426,11 +426,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-7 sm:px-6">{children}</main>
 
-        <footer className="border-t border-ink/8 px-6 py-4">
-          <p className="mono-label text-center">
-            HealthCloud · Confidential patient data · Access is logged
-          </p>
-        </footer>
+        {/* No footer. It used to read "Confidential patient data · Access is
+            logged" on every screen — true, and still true, but a standing
+            reminder to staff about our own auditing is commentary, not
+            chrome. Removed 25 Aug 2026 with the rest of it. */}
       </div>
     </div>
   );

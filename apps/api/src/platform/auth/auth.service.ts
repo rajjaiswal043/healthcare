@@ -105,21 +105,17 @@ export class AuthService {
     // --- MFA -----------------------------------------------------------------
 
     /**
-     * The local escape hatch (DEV_DISABLE_MFA).
+     * Two-factor is a single switch (MFA_ENABLED), currently off.
      *
-     * Skips enrolment AND the code prompt, so an administrator on a developer
-     * machine signs in with a password alone. Both halves matter: skipping only
+     * Skips enrolment AND the code prompt. Both halves matter: skipping only
      * enrolment would still prompt anybody who had already set an authenticator
-     * up, which is how this looked broken the first time.
+     * up, which is how this looked broken the first time it was tried.
      *
-     * `loadEnv` refuses to start the API with this set under NODE_ENV=production,
-     * so the only way to reach this branch is locally. Logged every time — a
-     * weakened login that leaves no trace is how one stays on for a fortnight.
+     * Everything below this line still exists and is still tested — the suite
+     * turns the switch on — so restoring it is one environment variable rather
+     * than a rewrite.
      */
-    if (env.DEV_DISABLE_MFA) {
-      this.logger.warn(
-        `DEV_DISABLE_MFA: signed ${email} in without two-factor. Local development only.`,
-      );
+    if (!env.MFA_ENABLED) {
       return this.issueSession(row, password, meta, env);
     }
 

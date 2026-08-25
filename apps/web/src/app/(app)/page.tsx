@@ -6,13 +6,20 @@ import {
   IconCalendar,
   IconChevronRight,
   IconClock,
-  IconIdCard,
   IconSearch,
-  IconShield,
-  IconStethoscope,
   IconUserPlus,
 } from '@/components/icons';
 
+/**
+ * The landing screen: four doors.
+ *
+ * It used to end with a "How your data is protected" section — RLS isolation,
+ * DPDP consent, audit logging — written for the clinic owner reading over a
+ * receptionist's shoulder. Narveer had it removed on 25 Aug 2026. The
+ * guarantees are real and enforced in the database; a staff console is just not
+ * where they get argued, and a receptionist opening this screen forty times a
+ * day does not need telling each time that her keystrokes are logged.
+ */
 export default function HomePage() {
   const { can } = useAuth();
 
@@ -58,9 +65,11 @@ export default function HomePage() {
         <h1 className="mt-2 font-display text-[32px] font-bold">
           Good to see you, <em className="accent-words">let&rsquo;s begin</em>
         </h1>
+        {/* The second sentence here used to read "Everything you do here is
+            attributed to your account and logged" — gone with the rest of the
+            data-handling copy. */}
         <p className="mt-1.5 max-w-xl text-[14.5px] text-ink-60">
-          Register a patient or pull up an existing record. Everything you do here is attributed to
-          your account and logged.
+          Register a patient or pull up an existing record.
         </p>
       </header>
 
@@ -93,41 +102,6 @@ export default function HomePage() {
           ))}
         </div>
       )}
-
-      {/* What the platform guarantees. Front-of-house staff rarely care; the
-          clinic owner watching over their shoulder very much does. */}
-      <section>
-        <p className="eyebrow">How your data is protected</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <Assurance
-            icon={<IconShield size={17} />}
-            title="Isolated by the database"
-            body="Another clinic's records are unreachable from this account — enforced by PostgreSQL, not by application code."
-          />
-          <Assurance
-            icon={<IconIdCard size={17} />}
-            title="Consent recorded"
-            body="Purpose-wise consent is captured at registration and versioned, as the DPDP Act requires."
-          />
-          <Assurance
-            icon={<IconStethoscope size={17} />}
-            title="Every access logged"
-            body="Who viewed which record, when and from where. Field names only — never patient values."
-          />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function Assurance({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
-  return (
-    <div className="card-flat p-4">
-      <span className="grid h-8 w-8 place-items-center rounded-tiny bg-white text-clinical shadow-sm">
-        {icon}
-      </span>
-      <h3 className="mt-3 text-[14px] font-semibold text-ink">{title}</h3>
-      <p className="mt-1 text-[13px] leading-relaxed text-ink-40">{body}</p>
     </div>
   );
 }

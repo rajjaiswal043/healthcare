@@ -9,10 +9,10 @@
  * it. Same reason the database roles live in bootstrap.sql rather than in a
  * migration.
  *
- * The password is generated here and printed ONCE. MFA is mandatory and is
- * enrolled at first sign-in — the account cannot do anything until an
- * authenticator is attached to it, whatever DEV_DISABLE_MFA says. That flag is
- * read by seed-auth.mjs and does not reach this table.
+ * The password is generated here and printed ONCE. Whether an authenticator is
+ * then required depends on MFA_ENABLED, which is currently off everywhere — so
+ * today this password is the whole of the credential. Guard it accordingly, and
+ * do not run this from CI, where the output lands in a build log.
  */
 
 import { config as loadEnv } from 'dotenv';
@@ -89,8 +89,9 @@ try {
   console.log(`\n  ${row.created ? 'Created' : 'Reset'} platform account\n`);
   console.log(`    email     ${row.email}`);
   console.log(`    password  ${password}\n`);
-  console.log('  Shown once. Sign in at /platform/login — you will be asked to set up');
-  console.log('  an authenticator app before the account can do anything.\n');
+  console.log('  Shown once. Sign in at /platform/login.\n');
+  console.log('  Two-factor is currently OFF (MFA_ENABLED), so this password alone reaches');
+  console.log('  every clinic on the platform. Change it after signing in.\n');
 } catch (err) {
   console.error(`Could not create the platform account: ${err.message}`);
   process.exitCode = 1;

@@ -35,6 +35,9 @@ allowBuilds:
 #                 but `pnpm audit --audit-level=high` is part of `verify`, which
 #                 the pre-push hook runs, and a gate that is routinely red stops
 #                 being read. Remove once postcss requires 3.3.18 itself.
+#   deepmerge-ts — GHSA-ggr8-5vv4-36mx, stack exhaustion on a recursive object
+#                 graph. The fix is only in 8.x; 7.1.6 shipped after it and is
+#                 still vulnerable, so there is no in-major escape.
 overrides:
   find-my-way: '>=9.6.1'
   sharp: '>=0.35.0'
@@ -42,3 +45,10 @@ overrides:
   # Caret, not '>=': an open range resolved to nanoid 6, which is ESM-only and
   # not what postcss expects. The fix shipped in the 3.x line, so stay in it.
   nanoid: '^3.3.18'
+  # This one forces a MAJOR bump past an exact pin: @prisma/config depends on
+  # "deepmerge-ts": "7.1.5", not a range. Safe in practice because v8 still
+  # ships a CommonJS build alongside the ESM one and keeps the deepmerge /
+  # deepmergeCustom surface — but @prisma/config is on the hot path for
+  # prisma.config.ts, so if a Prisma upgrade ever starts failing to read its own
+  # config, look here first. Remove once @prisma/config pins 8.x itself.
+  deepmerge-ts: '^8.0.0'

@@ -30,15 +30,21 @@ phase notes in section 6:
   row-level security applies to the table owner, so a SECURITY DEFINER function
   reading `patient` without tenant context counts zero. It now walks the tenants
   and counts inside each one's policy.
-- A newly onboarded clinic's administrator meets MFA enrolment on their very
-  first sign-in, because onboarding seeds roles from `SYSTEM_ROLES` and
-  `DEV_DISABLE_MFA` does not reach that path.
-- Platform MFA gained a **local** escape hatch on Narveer's request:
-  `DEV_DISABLE_PLATFORM_MFA`. It is read by the running API rather than a seed
-  script, so it is guarded harder than anything else in the environment —
-  `loadEnv` refuses to boot with it set under `NODE_ENV=production`, and every
-  sign-in it permits logs a warning. Section 2.1's "no version of this account
-  should be reachable with a password alone" still holds where it matters.
+- **Two-factor is off everywhere, by Narveer's decision on 25 Aug 2026**, while
+  the product is being demonstrated rather than used. It reached that state in
+  three steps, and the first two were mistakes worth recording: a seed-only flag
+  (`DEV_DISABLE_MFA`) that appeared to disable MFA but did not reach a clinic
+  created through this console, because onboarding seeds roles from
+  `SYSTEM_ROLES` and never runs the seed script; then a second flag for the
+  platform realm; then, when the answer for every persona turned out to be the
+  same, a single `MFA_ENABLED` switch that both realms read. Three flags whose
+  combined effect needed three files to work out is worse than one switch that
+  is honestly off.
+- So section 2.1's "no version of this account should be reachable with a
+  password alone" is, today, not true — the platform password is the whole
+  credential. The code is intact and the integration suite still runs with
+  `MFA_ENABLED=true`; **set it to `true` before real clinics hold real patient
+  data.**
 
 ---
 
@@ -392,9 +398,10 @@ mark renders as grey mush at 14 mm.
 
 **The platform tier is a second front door.** It needs the same lockout, the same
 audit, the same session revocation as the clinic one — and it is the account
-least likely to be used daily and most likely to have a weak password. MFA is
-mandatory on it for that reason, with no role-based exemption and no
-`DEV_DISABLE_MFA` escape.
+least likely to be used daily and most likely to have a weak password. MFA on it
+has no role-based exemption for that reason — but it is currently switched off
+along with everyone else's, which makes this the single largest open risk in the
+system and the first thing to reverse.
 
 **Seat limits are commercial logic in a clinical system.** A limit that blocks a
 clinic from adding a doctor on a Monday morning is a support call within the

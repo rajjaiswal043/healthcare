@@ -96,21 +96,22 @@ resulting privilege list because the mistake is otherwise invisible.
 `healthcloud_test`; in parallel, one suite's TRUNCATE lands inside the other's
 assertions and a dozen unrelated tests fail with 401s.
 
-**`DEV_DISABLE_MFA=true` in `.env` turns off two-factor on clinic sign-in.** It
-is read in two places, and needs both: `seed-auth.mjs` seeds roles with
-`requires_mfa = false`, and the **running API** skips enrolment and the code
-prompt. The second is what covers a clinic created through the platform console —
-its roles come straight from `SYSTEM_ROLES` and never touch the seed, so the
-flag looked broken for exactly that case until the API honoured it too.
+**Two-factor is one switch, `MFA_ENABLED`, and it is currently OFF everywhere
+including production** — Narveer's decision on 25 Aug 2026, while the product is
+being demonstrated rather than used. Every account signs in with a password
+alone, and the API says so in its startup log.
 
-`DEV_DISABLE_PLATFORM_MFA=true` does the same for `/platform/login`.
+It replaced three overlapping flags (two `DEV_DISABLE_*` plus a seed-only one)
+whose combined effect nobody could state without reading three files. One switch,
+one answer.
 
-Both weaken live authentication, so they are guarded harder than anything else in
-the environment: **`loadEnv` refuses to start the API** if either is set with
-`NODE_ENV=production`, and every sign-in they permit logs a warning naming the
-account. `setup-env.ts` clears both for the integration suite, so the tests
-always exercise the shipped behaviour rather than whatever is in a developer's
-`.env`. The product default in `permissions.ts` is unchanged.
+Nothing was deleted: enrolment, code verification and the platform realm are all
+still implemented, `SYSTEM_ROLES` still marks administrator and owner as
+requiring TOTP, and `setup-env.ts` forces `MFA_ENABLED=true` for the integration
+suite so all of it keeps its end-to-end test. Turning it back on is that one
+variable.
+
+**Set it to `true` before real clinics hold real patient data.**
 
 **A SECURITY DEFINER function still gets row-level security applied to it.**
 FORCE RLS applies to the table's OWNER, which is who a SECURITY DEFINER function
@@ -126,12 +127,10 @@ clinic session cannot reach it and a platform session cannot read a patient.
 Create the first one with
 `pnpm --filter @healthcloud/db platform:user -- <email> "<name>"`.
 
-MFA is mandatory there in production. `DEV_DISABLE_PLATFORM_MFA=true` in `.env`
-skips it locally — that flag is read by the RUNNING API, unlike `DEV_DISABLE_MFA`
-which only ever reached the seed script, so it genuinely weakens live auth.
-`loadEnv` therefore **refuses to start the API** if it is set with
-`NODE_ENV=production`, and every sign-in that uses it logs a warning naming the
-account.
+MFA there is not role-dependent — when `MFA_ENABLED` is on, every platform
+account needs an authenticator, no exceptions. With it off, the password the
+script prints is the entire credential for an account that can suspend every
+clinic on the platform, so treat that output accordingly.
 
 **A waiting-room screen is paired, not logged in.** Its key is
 `<tenantId>.<secret>`, hashed at rest, and shown exactly once at pairing —

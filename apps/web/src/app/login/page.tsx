@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiRequestError, type MfaChallenge } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
-import { AuthShell, TrustRow } from '@/components/auth-shell';
+import { AuthShell, AuthField, TrustRow } from '@/components/auth-shell';
 import { IconAlert, IconBuilding, IconKey, IconLock, IconMail } from '@/components/icons';
 
 type Stage = 'credentials' | 'mfa-code' | 'mfa-enrol';
@@ -14,7 +14,10 @@ export default function LoginPage() {
   const { refresh } = useAuth();
 
   const [stage, setStage] = useState<Stage>('credentials');
-  const [tenantSlug, setTenantSlug] = useState('sunrise-clinic');
+  // Blank, not the seeded demo clinic: the demo-account panel that made
+  // pre-filling it useful was removed on 25 Aug 2026, and a real clinic
+  // arriving at a box already holding someone else's slug is confusing.
+  const [tenantSlug, setTenantSlug] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -103,16 +106,17 @@ export default function LoginPage() {
 
         {onCredentials ? (
           <>
-            <Field
+            <AuthField
               id="tenantSlug"
               label="Clinic"
               icon={<IconBuilding size={15} />}
               value={tenantSlug}
               onChange={setTenantSlug}
               autoComplete="organization"
-              placeholder="sunrise-clinic"
+              placeholder="your-clinic"
+              autoFocus
             />
-            <Field
+            <AuthField
               id="email"
               label="Email"
               type="email"
@@ -121,9 +125,8 @@ export default function LoginPage() {
               onChange={setEmail}
               autoComplete="username"
               placeholder="you@clinic.in"
-              autoFocus
             />
-            <Field
+            <AuthField
               id="password"
               label="Password"
               type="password"
@@ -165,7 +168,7 @@ export default function LoginPage() {
         )}
 
         {!onCredentials && (
-          <Field
+          <AuthField
             id="totpCode"
             label="Authentication code"
             icon={<IconKey size={15} />}
@@ -186,59 +189,6 @@ export default function LoginPage() {
       </form>
 
       <TrustRow />
-
-      {/* Seeded-demo credentials. Removed when real users are invited. */}
-      <details className="mt-4 rounded-panel border border-ink/10 bg-bg-soft/70 px-3 py-2">
-        <summary className="mono-label cursor-pointer select-none">Demo accounts</summary>
-        <ul className="mt-2 space-y-1 font-mono text-[11.5px] text-ink-60">
-          <li>reception@demo.local — registers</li>
-          <li>nurse@demo.local — read only</li>
-          <li>admin@demo.local — needs 2FA</li>
-        </ul>
-        <p className="mt-1.5 text-[11px] text-ink-40">
-          Password <span className="font-mono">demo1234</span> · also{' '}
-          <span className="font-mono">lotus-polyclinic</span>
-        </p>
-      </details>
     </AuthShell>
-  );
-}
-
-function Field({
-  id,
-  label,
-  icon,
-  value,
-  onChange,
-  type = 'text',
-  mono = false,
-  ...rest
-}: {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  mono?: boolean;
-} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type' | 'id'>) {
-  return (
-    <div>
-      <label htmlFor={id} className="field-label !mb-1">
-        {label}
-      </label>
-      <div className="relative flex items-center">
-        <span className="pointer-events-none absolute left-3.5 text-ink-20">{icon}</span>
-        <input
-          id={id}
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={`field-input-icon !py-2 ${mono ? 'font-mono tracking-[0.3em]' : ''}`}
-          required
-          {...rest}
-        />
-      </div>
-    </div>
   );
 }
