@@ -3,6 +3,7 @@
 import type { Encounter } from '@/lib/api';
 import { formatAge, genderInitial } from '@/lib/format';
 import { ClinicLogo } from './clinic-logo';
+import { useAuth } from './auth-provider';
 
 /**
  * The printed prescription.
@@ -20,21 +21,30 @@ import { ClinicLogo } from './clinic-logo';
 export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
   const { patient, practitioner, prescriptions, diagnoses } = encounter;
 
+  // The clinic whose letterhead this is. Taken from the session rather than the
+  // encounter: a prescription is printed by somebody signed in to that clinic,
+  // and the session is the one place the logo version is already known.
+  const { session } = useAuth();
+  const clinic = session?.tenant ?? null;
+
   const issued = encounter.signedAt ?? encounter.startedAt;
 
   return (
     <div className="print-only hidden text-ink">
       <header className="flex items-start justify-between border-b-2 border-ink pb-3">
         <div className="flex items-start gap-3">
-          {/* One default for every clinic until per-clinic upload exists —
-              see apps/web/public/branding/README.md. Sized in millimetres
-              rather than pixels because this element only ever exists on
-              paper. */}
-          <ClinicLogo size={52} className="mt-0.5 shrink-0" />
+          {/* The clinic's own mark, falling back to the bundled default for a
+              clinic that has not uploaded one. */}
+          <ClinicLogo clinic={clinic} size={52} className="mt-0.5 shrink-0" />
 
           <div>
+            {clinic && (
+              <p className="font-display text-[15px] font-bold uppercase leading-tight tracking-wide">
+                {clinic.name}
+              </p>
+            )}
             <p className="font-display text-[20px] font-bold leading-tight">
-              {practitioner.prefix} {practitioner.fullName}
+              {practitioner.fullName}
             </p>
             <p className="text-[12px]">{practitioner.qualification ?? ''}</p>
             {practitioner.specialty && <p className="text-[12px]">{practitioner.specialty}</p>}
@@ -116,13 +126,15 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
       )}
 
       <footer className="mt-10 flex items-end justify-between">
+        {/* Our name used to sit here, beside the clinic's own doctor's
+            signature, on the clinic's own letterhead. Full white-label took it
+            off: the document belongs to the clinic. The draft warning stays —
+            it stops an unsigned prescription being dispensed against. */}
         <p className="text-[10.5px] italic">
-          {encounter.status === 'SIGNED'
-            ? 'Digitally recorded and signed in HealthCloud.'
-            : 'DRAFT — this consultation has not been signed.'}
+          {encounter.status === 'SIGNED' ? '' : 'DRAFT — this consultation has not been signed.'}
         </p>
         <div className="w-56 border-t border-ink pt-1 text-center text-[11px]">
-          {practitioner.prefix} {practitioner.fullName}
+          {practitioner.fullName}
         </div>
       </footer>
     </div>

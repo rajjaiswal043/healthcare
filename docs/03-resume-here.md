@@ -15,8 +15,15 @@ pnpm --filter @healthcloud/web dev             # :3000
 ```
 
 Sign in at http://localhost:3000/login as `doctor@demo.local` / `demo1234`, clinic
-`sunrise-clinic`. Also `reception@demo.local`, `nurse@demo.local`, and
-`admin@demo.local` (which requires TOTP enrolment).
+`sunrise-clinic`. Also `reception@demo.local`, `nurse@demo.local` and
+`admin@demo.local`. **No authenticator prompt** — MFA is off everywhere; see
+section 3. The clinic slug has to be typed: the login screen no longer pre-fills
+it, and the demo-account panel that used to list these addresses was removed on
+26 Aug 2026, so this note is now the only place they are written down.
+
+The platform console is a separate realm at http://localhost:3000/platform/login.
+Create an account for it with
+`pnpm --filter @healthcloud/db platform:user -- <email> "<name>"`.
 
 **Run the API with `dev`, not `start`.** `start` serves whatever is in `dist`,
 which silently means new routes 404 while old ones work — an hour was lost to
@@ -113,11 +120,21 @@ variable.
 
 **Set it to `true` before real clinics hold real patient data.**
 
+**A MIGRATION is subject to FORCE RLS as well, and says nothing when it is.**
+Same root cause as the entry below, in the place it is easiest to miss: a
+migration runs as the owner, so an `UPDATE` on a tenant table without
+`app.tenant_id` set matches zero rows, reports success and changes nothing. Walk
+the tenants and `set_config` inside the loop —
+`20260826180000_fold_prefix_under_rls` is the pattern, and it raises a NOTICE
+with the row count because the attempt before it failed silently. **Read the
+rows back before believing a data migration.**
+
 **A SECURITY DEFINER function still gets row-level security applied to it.**
 FORCE RLS applies to the table's OWNER, which is who a SECURITY DEFINER function
 runs as — so a function that reads `patient` without setting `app.tenant_id`
-matches zero rows and reports success. This has now bitten three times:
-`auth_lookup_user`, the token backfill, and `platform_clinic_stats`. The fix is
+matches zero rows and reports success. This has now bitten four times:
+`auth_lookup_user`, the token backfill, `platform_clinic_stats`, and a
+practitioner-name migration. The fix is
 always the same shape — resolve the tenant, `set_config(..., true)`, then read
 inside the policy.
 

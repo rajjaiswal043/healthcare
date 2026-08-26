@@ -92,6 +92,47 @@ export interface CurrentSession {
   roles: Array<{ key: string; name: string }>;
   /** While true, the console shows nothing but the change-password screen. */
   mustChangePassword: boolean;
+  /** Whose clinic this is. The console wears this instead of a product name. */
+  tenant: BrandedTenant;
+  /**
+   * Set when this user IS a bookable doctor; null for front desk, nurses and
+   * administrators. What scopes the queue to one doctor's own list — though the
+   * API enforces the same rule, so this is only what stops the console offering
+   * a choice it would then refuse.
+   */
+  practitionerId: string | null;
+}
+
+/**
+ * A clinic's own identity.
+ *
+ * `logoVersion` is null when the clinic has not uploaded one, in which case the
+ * bundled default applies. When it is set, it is both the cache-busting query
+ * parameter and the proof that `logoUrlFor` will resolve to something.
+ */
+export interface BrandedTenant {
+  id: string;
+  slug: string;
+  name: string;
+  logoVersion: string | null;
+}
+
+/** What the sign-in page can learn about a clinic before anybody signs in. */
+export interface PublicBranding {
+  name: string;
+  logoVersion: string | null;
+}
+
+/**
+ * Where a clinic's logo lives.
+ *
+ * Built here rather than returned by the API because it is a URL the browser
+ * fetches directly — putting it in the JSON would mean the server guessing at
+ * the origin the browser is using. The version makes it immutable: a replaced
+ * logo is a different URL, so nothing has to be invalidated.
+ */
+export function logoUrlFor(slug: string, version: string): string {
+  return `${API_BASE}/branding/${encodeURIComponent(slug)}/logo?v=${version}`;
 }
 
 export interface StaffUser {
@@ -158,7 +199,7 @@ export interface SeatUsage {
 
 export interface LoginResponse {
   user: SessionUser;
-  tenant: { id: string; slug: string };
+  tenant: BrandedTenant;
 }
 
 export interface MfaChallenge {
@@ -826,6 +867,39 @@ export const api = {
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
 
   me: () => request<CurrentSession>('/auth/me'),
+
+  /**
+   * A clinic's name and logo, by slug, with no session.
+   *
+   * The one call in this client that works before sign-in. An unknown slug is
+   * answered in the same shape as a known one — the API returns neutral
+   * branding rather than a 404 — so this call has no "no such clinic" case to
+   * handle. That is a convenience, not a secrecy guarantee: a real clinic's
+   * actual name comes back in the body, and nothing can hide that while the
+   * point of the call is to display it.
+   */
+  branding: (slug: string) => request<PublicBranding>(`/branding/${encodeURIComponent(slug)}`),
+
+  /** The signed-in clinic's own branding, for the settings screen. */
+  myBranding: () => request<PublicBranding>('/branding'),
+
+  renameClinic: (name: string) =>
+    request<{ name: string }>('/branding', { method: 'PATCH', body: JSON.stringify({ name }) }),
+
+  /**
+   * Replace the logo.
+   *
+   * Takes base64 rather than a File, so the caller decides how the bytes were
+   * obtained — a file picker today, a drag-and-drop or a crop tool later —
+   * without this module growing a dependency on the DOM.
+   */
+  setClinicLogo: (base64: string) =>
+    request<{ logoVersion: string; width: number; height: number }>('/branding/logo', {
+      method: 'PUT',
+      body: JSON.stringify({ logo: base64 }),
+    }),
+
+  clearClinicLogo: () => request<void>('/branding/logo', { method: 'DELETE' }),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>('/auth/password', {

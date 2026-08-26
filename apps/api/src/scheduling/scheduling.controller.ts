@@ -273,9 +273,18 @@ export class SchedulingController {
 
   // --- the queue -----------------------------------------------------------
 
+  /**
+   * A doctor's queue is their own. See `assertMayReadQueue` for the rule and
+   * why it is expressed as "is this user a practitioner" rather than as a role.
+   */
   @Get('queue')
   @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
-  async queue(@CurrentTenant() tenantId: string, @Query() query: QueueQueryDto) {
+  async queue(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: QueueQueryDto,
+  ) {
+    await this.appointments.assertMayReadQueue(tenantId, user, query.practitionerId);
     return this.appointments.queue(tenantId, query.practitionerId, query.date);
   }
 }

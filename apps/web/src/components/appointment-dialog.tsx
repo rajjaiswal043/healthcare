@@ -141,8 +141,7 @@ export function AppointmentDialog({
             <p className="text-[12.5px] text-ink-60">
               <span className="font-mono">{appointment.patient.uhid}</span> ·{' '}
               {formatAge(appointment.patient)} {genderInitial(appointment.patient.gender)} ·{' '}
-              currently {appointment.localTime} with {appointment.practitioner.prefix ?? ''}{' '}
-              {appointment.practitioner.fullName}
+              currently {appointment.localTime} with {appointment.practitioner.fullName}
             </p>
           </div>
           <button

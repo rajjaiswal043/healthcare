@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -746,6 +747,52 @@ export class AppointmentsService {
    * has already been told they are next. Token is the final tie-break, purely
    * so the order is deterministic.
    */
+  /**
+   * Which doctor's queue this caller may read.
+   *
+   * **A doctor sees their own list and nobody else's.** They are looking at
+   * their own waiting room; another doctor's queue is that doctor's patients,
+   * their complaints and their day, and there is no workflow in an OPD clinic
+   * that needs one consultant browsing another's list.
+   *
+   * The rule is: a user who IS a practitioner is confined to themselves, unless
+   * they also administer the clinic. The distinguishing fact is the practitioner
+   * link rather than a role name — a nurse and a doctor both hold
+   * `appointment:read`, so permissions alone cannot tell them apart here, but
+   * only one of them is a row in `practitioner`. Front desk, nurses and owners
+   * are not practitioners and are unaffected; an administrator who also
+   * consults keeps the whole clinic's view, because that is the job they were
+   * given `user:manage` for.
+   *
+   * Enforced HERE and not only in the console. The web app hides the doctor
+   * selector, which is a courtesy; this is the part that means something.
+   */
+  async assertMayReadQueue(
+    tenantId: string,
+    user: { userId: string; permissions: string[] },
+    requestedPractitionerId: string,
+  ): Promise<void> {
+    if (user.permissions.includes('user:manage')) return;
+
+    const self = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.practitioner.findFirst({ where: { userId: user.userId }, select: { id: true } }),
+    );
+
+    if (!self) return;
+
+    if (self.id !== requestedPractitionerId) {
+      throw new ForbiddenException('You can only view your own queue.');
+    }
+  }
+
+  /** The practitioner this user is, if any. Null for front desk, nurses, admins. */
+  async practitionerIdFor(tenantId: string, userId: string): Promise<string | null> {
+    const row = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.practitioner.findFirst({ where: { userId }, select: { id: true } }),
+    );
+    return row?.id ?? null;
+  }
+
   async queue(tenantId: string, practitionerId: string, date?: string) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const tz = await this.timezone(tx, tenantId);

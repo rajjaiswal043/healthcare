@@ -51,6 +51,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  /**
+   * The clinic's name in the browser tab.
+   *
+   * Set imperatively rather than through Next's metadata API, because the
+   * clinic is only known once /auth/me has answered and metadata is resolved on
+   * the server. Left alone on the realms this provider does not govern — the
+   * platform console and a waiting-room television are not this clinic.
+   */
+  useEffect(() => {
+    if (!governedByThisProvider(pathname)) return;
+    if (session?.tenant?.name) document.title = session.tenant.name;
+  }, [session, pathname]);
+
   const load = useCallback(async () => {
     try {
       setSession(await api.me());

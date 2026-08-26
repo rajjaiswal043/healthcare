@@ -216,7 +216,6 @@ export default function DisplaysPage() {
                       : 'border-ink/12 bg-white text-ink-60 hover:border-ink/25',
                   ].join(' ')}
                 >
-                  {d.prefix ? `${d.prefix} ` : ''}
                   {d.fullName}
                 </button>
               );

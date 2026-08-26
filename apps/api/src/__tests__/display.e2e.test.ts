@@ -23,6 +23,17 @@ import {
   type Session,
 } from './harness.js';
 
+/**
+ * First name and a last initial, spelled out here rather than imported.
+ *
+ * Importing `publicPatientName` would make this test agree with the
+ * implementation by construction — including when the implementation is wrong.
+ */
+function shortened(fullName: string): string {
+  const words = fullName.trim().split(/\s+/);
+  return words.length === 1 ? words[0]! : `${words[0]} ${words[words.length - 1]![0]}.`;
+}
+
 let app: NestFastifyApplication;
 let fx: Fixtures;
 let admin: Session;
@@ -199,12 +210,25 @@ describe('what the screen reads', () => {
     );
 
     expect(patient?.name).toBeTruthy();
+
+    // The FULL name must not be in the payload. Since 26 Aug 2026 the board
+    // shows "Kavita R." so that a patient can match themselves to a number —
+    // but the surname is masked on the server and never leaves it, which is
+    // what this asserts. A screen that received the full name and chose not to
+    // paint it would have leaked it already.
     expect(body).not.toContain(patient?.name);
     expect(body).not.toContain(patient?.uhid);
     expect(body).not.toContain(patient?.mobile);
 
-    // What it DOES carry: the number being called, and who is calling it.
+    // The surname on its own must not appear either — that is the part a
+    // stranger could act on.
+    const surname = patient!.name.trim().split(/\s+/).slice(1).join(' ');
+    expect(surname).toBeTruthy();
+    expect(body).not.toContain(surname);
+
+    // What it DOES carry: the number, the shortened name, and who is calling.
     expect(res.json().doctors[0].nowServing).toBe(token);
+    expect(res.json().doctors[0].nowServingName).toBe(shortened(patient!.name));
     expect(res.json().doctors[0].name).toBe('Dr Asha Menon');
     expect(res.json().clinic).toBe('Main Clinic');
   });
@@ -219,7 +243,7 @@ describe('what the screen reads', () => {
     const key = (await pair()).json().accessKey as string;
     const res = await board(key);
 
-    expect(res.json().doctors[0].next).toEqual([2, 1]);
+    expect(res.json().doctors[0].next.map((n: { token: number }) => n.token)).toEqual([2, 1]);
     expect(res.json().doctors[0].waiting).toBe(2);
     expect(res.json().doctors[0].nowServing).toBeNull();
   });

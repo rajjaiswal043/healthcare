@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, UnauthorizedException } from '
 // otplib v13 exposes a functional API — the v12 `authenticator` singleton is gone.
 import { generateSecret, generateURI, verify as verifyOtp } from 'otplib';
 import { PrismaService } from '../database/prisma.service.js';
+import { logoVersionOf } from '../branding/logo-version.js';
 import { AuditService } from '../audit/audit.service.js';
 import { hashPassword, needsRehash, verifyPassword } from './password.js';
 import {
@@ -213,7 +214,16 @@ export class AuthService {
 
       const tenant = await tx.tenant.findUniqueOrThrow({
         where: { id: row.tenant_id },
-        select: { id: true, slug: true },
+        select: {
+          id: true,
+          slug: true,
+          // The clinic's own identity, carried on the session so the console
+          // can wear it without a second round trip. Under full white-label
+          // this is what replaces our name in the header and the tab title.
+          name: true,
+          logoMimeType: true,
+          logoUpdatedAt: true,
+        },
       });
 
       return {
@@ -229,7 +239,7 @@ export class AuthService {
           permissions,
           mustChangePassword: row.must_change_password,
         },
-        tenant,
+        tenant: brandedTenant(tenant),
       };
     });
   }
@@ -519,6 +529,9 @@ export class AuthService {
     fullName: string;
     roles: Array<{ key: string; name: string }>;
     mustChangePassword: boolean;
+    tenant: BrandedTenant;
+    /** Set when this user IS a bookable doctor. Null for everybody else. */
+    practitionerId: string | null;
   }> {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const user = await tx.user.findUniqueOrThrow({
@@ -530,10 +543,45 @@ export class AuthService {
         },
       });
 
+      /**
+       * Read on every /auth/me, not only at login.
+       *
+       * The console shows the clinic's name and logo in its chrome, and an
+       * administrator who changes either should see it after a refresh rather
+       * than after signing out. Same argument that put `mustChangePassword`
+       * here rather than only in the login response.
+       */
+      const tenant = await tx.tenant.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          logoMimeType: true,
+          logoUpdatedAt: true,
+        },
+      });
+
+      /**
+       * The practitioner this user is, if any.
+       *
+       * A doctor's user account and their bookable practitioner record are two
+       * different rows — a distinction that cost an afternoon when a clinic was
+       * onboarded and the booking screen showed no doctors. This is the link,
+       * and it is what scopes the queue: a doctor sees their own list, not the
+       * whole clinic's.
+       */
+      const practitioner = await tx.practitioner.findFirst({
+        where: { userId },
+        select: { id: true },
+      });
+
       return {
         fullName: user.fullName,
         roles: user.roles.map((r) => r.role),
         mustChangePassword: user.mustChangePassword,
+        tenant: brandedTenant(tenant),
+        practitionerId: practitioner?.id ?? null,
       };
     });
   }
@@ -585,4 +633,28 @@ export class AuthService {
       });
     });
   }
+}
+
+/** What the console needs to wear a clinic's identity. */
+export interface BrandedTenant {
+  id: string;
+  slug: string;
+  name: string;
+  /** Null when the clinic has no logo of its own and the default applies. */
+  logoVersion: string | null;
+}
+
+function brandedTenant(row: {
+  id: string;
+  slug: string;
+  name: string;
+  logoMimeType: string | null;
+  logoUpdatedAt: Date | null;
+}): BrandedTenant {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    logoVersion: row.logoMimeType ? logoVersionOf(row.logoUpdatedAt) : null,
+  };
 }

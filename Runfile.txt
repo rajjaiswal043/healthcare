@@ -1,0 +1,56 @@
+cd "C:\Narveer Laptop\Narveer AI Projects\HealthCloud"
+pnpm --filter @healthcloud/api dev
+pnpm --filter @healthcloud/web dev 
+
+Sandbox Credentials
+Clinic: dr-vivek-swarnkar-ortho-clinic
+Admin
+Email: vivek@clinic.com
+Password: VWK22Z4D62E3KQ74
+Doctor
+vivek@ortho.in
+92K8DPJYFFU2RGJA
+FrontDesk
+Rekha@clinic.in
+GTJ9B6AY4ANJGY9N
+
+narveer@doctorsdesk.in / QM66-3NXG-D37U-AK4K
+
+Production credentials
+
+Dr. Vivek Swarnkar Ortho Clinic
+Gonda-Mankapur Bypass Rd, Gonda, Uttar Pradesh 271003
+orthopaedics(Vivek) and physiotherapist(just give a demo name) --2 doctor are sitting at clinic.
+
+email: narveer@doctorsdesk.in
+password: N923-JSQU-7KCP-NA6P
+
+
+https://thedoctordesk.in/platform/login
+
+email: narveer@doctorsdesk.in
+password: N923-JSQU-7KCP-NA6P
+
+
+https://thedoctordesk.in/login
+
+dr-vivek-swarnkar-ortho-clinic
+
+Hospital Admin
+Clinic: dr-vivek-swarnkar-ortho-clinic
+Email: vivek@ortho.com
+Password:4M37A2X22HDDD3J2
+
+Doctor 1
+vivek@clinic.com
+F7NV59J2YDS24434
+
+Doctor 2
+physio@clinic.com
+VCNG-QYSN-SFFQ-YZTM
+
+Front Desk 1
+Suman@clinic.com
+HAWCVPCQQYTBA92W
+
+

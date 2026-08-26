@@ -207,7 +207,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   ` · ${encounter.patient.bloodGroup.replace('_', ' ').toLowerCase()}`}
               </p>
               <p className="text-[12.5px] text-ink-40">
-                {encounter.practitioner.prefix} {encounter.practitioner.fullName}
+                {encounter.practitioner.fullName}
                 {signed && encounter.signedAt
                   ? ` · signed ${new Date(encounter.signedAt).toLocaleString('en-IN')}`
                   : savedAt

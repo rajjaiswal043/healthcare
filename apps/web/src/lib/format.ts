@@ -60,3 +60,19 @@ export function parseRupeesToPaise(input: string): number | null {
 
   return Math.round(rupees * 100);
 }
+
+/**
+ * How a doctor is named on screen.
+ *
+ * Just the name as the clinic typed it. There is a `prefix` column that used to
+ * be rendered in front of this and defaulted to "Dr"; it produced
+ * "Dr Dr. Vivek Swarnkar" for any administrator who typed the honorific
+ * themselves, and it was wrong for a physiotherapist. The clinic knows who is a
+ * Dr and who is a Ms, so the clinic types it.
+ *
+ * A function rather than reading `.fullName` at each of a dozen call sites,
+ * because "how is a doctor named" is one decision and this is where it lives.
+ */
+export function doctorName(practitioner: { fullName: string } | null | undefined): string {
+  return practitioner?.fullName ?? '';
+}

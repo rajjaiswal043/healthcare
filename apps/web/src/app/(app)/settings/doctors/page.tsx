@@ -330,7 +330,7 @@ function DoctorCard({
       <header className="flex flex-wrap items-center gap-3 border-b border-ink/8 bg-bg-soft px-5 py-3">
         <div className="min-w-0 flex-1">
           <p className="font-display text-[17px] font-bold">
-            {d.prefix ?? 'Dr'} {d.fullName}
+            {d.fullName}
             {!d.isActive && <span className="badge-neutral ml-2">switched off</span>}
           </p>
           <p className="text-[12.5px] text-ink-40">

@@ -1,22 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiRequestError, type MfaChallenge } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
-import { AuthShell, AuthField, TrustRow } from '@/components/auth-shell';
+import { AuthShell, AuthField, TrustRow, type ClinicBrand } from '@/components/auth-shell';
 import { IconAlert, IconBuilding, IconKey, IconLock, IconMail } from '@/components/icons';
 
 type Stage = 'credentials' | 'mfa-code' | 'mfa-enrol';
+
+/**
+ * Where the last clinic signed in from this browser is remembered.
+ *
+ * Not a security decision — the slug is on the sign-in page of a clinic that
+ * wants to be recognised, and it grants nothing on its own. It exists so the
+ * second visit from a front-desk PC opens on that clinic's own logo instead of
+ * a blank page, which is most of what "this is customised for us" feels like in
+ * practice.
+ */
+const LAST_CLINIC_KEY = 'healthcloud.lastClinicSlug';
+
+/** How long to wait after a keystroke before asking the API whose clinic this is. */
+const RESOLVE_DEBOUNCE_MS = 400;
 
 export default function LoginPage() {
   const router = useRouter();
   const { refresh } = useAuth();
 
   const [stage, setStage] = useState<Stage>('credentials');
-  // Blank, not the seeded demo clinic: the demo-account panel that made
-  // pre-filling it useful was removed on 25 Aug 2026, and a real clinic
-  // arriving at a box already holding someone else's slug is confusing.
   const [tenantSlug, setTenantSlug] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,6 +35,68 @@ export default function LoginPage() {
   const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /** Whose sign-in this is. Null until a slug resolves to a real clinic. */
+  const [clinic, setClinic] = useState<ClinicBrand | null>(null);
+
+  /**
+   * Restore the last clinic, once.
+   *
+   * In an effect rather than in `useState`'s initialiser because this component
+   * renders on the server first: reading localStorage during render would make
+   * the server and client markup disagree, and React would discard the whole
+   * tree rather than reconcile it.
+   */
+  useEffect(() => {
+    try {
+      const remembered = window.localStorage.getItem(LAST_CLINIC_KEY);
+      if (remembered) setTenantSlug(remembered);
+    } catch {
+      // Private mode, or storage disabled. The page works without it.
+    }
+  }, []);
+
+  /**
+   * Resolve the typed slug to a clinic's name and logo.
+   *
+   * Debounced, and guarded against the older of two in-flight requests winning:
+   * typing "sunrise-clinic" fires several times as it is typed, and a slow
+   * early response landing after a fast late one would leave the wrong clinic's
+   * logo on screen. The sequence number is what makes that impossible rather
+   * than unlikely.
+   *
+   * The branding is cleared the moment the slug changes, not when the answer
+   * comes back. Showing one clinic's mark while somebody types a different
+   * clinic's name is the one failure mode worth spending a flicker to avoid.
+   */
+  const resolveSeq = useRef(0);
+
+  useEffect(() => {
+    const slug = tenantSlug.trim().toLowerCase();
+    const seq = ++resolveSeq.current;
+
+    setClinic(null);
+
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return;
+
+    const timer = setTimeout(() => {
+      void api
+        .branding(slug)
+        .then((branding) => {
+          if (seq !== resolveSeq.current) return;
+          // Shown as-is, with no attempt to tell "real clinic" from "no such
+          // slug". The API answers both in one shape on purpose, and an
+          // unclaimed slug resolves to neutral words and the bundled mark —
+          // which is exactly what this panel should show for one anyway.
+          setClinic({ slug, name: branding.name, logoVersion: branding.logoVersion });
+        })
+        .catch(() => {
+          // A branding lookup that fails must never block signing in.
+        });
+    }, RESOLVE_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [tenantSlug]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +114,14 @@ export default function LoginPage() {
         setStage(result.enrolmentSecret ? 'mfa-enrol' : 'mfa-code');
         setTotpCode('');
         return;
+      }
+
+      // Only remembered once a sign-in actually succeeded, so a typo never
+      // becomes the clinic this browser opens on tomorrow.
+      try {
+        window.localStorage.setItem(LAST_CLINIC_KEY, result.tenant.slug);
+      } catch {
+        // Nothing to do; the next visit simply starts blank.
       }
 
       await refresh();
@@ -62,7 +143,7 @@ export default function LoginPage() {
   const onCredentials = stage === 'credentials';
 
   return (
-    <AuthShell>
+    <AuthShell clinic={clinic}>
       <div className="mb-5 flex items-center justify-between">
         <div className="flex gap-1.5" aria-hidden="true">
           <span className="h-2 w-2 rounded-full bg-green" />
