@@ -67,6 +67,24 @@ model Tenant {
   contactEmail  String? @map("contact_email") @db.VarChar(255)
   contactMobile String? @map("contact_mobile") @db.VarChar(20)
 
+  /// The clinic's own logo, as bytes.
+  ///
+  /// In the database rather than an object store, deliberately: one row per
+  /// tenant, half a megabyte at most, written almost never and served from
+  /// cache almost always. That buys atomic backups and no second store to keep
+  /// in sync, at a phase with no bucket and no IAM role. `BrandingStore` in the
+  /// API is the seam to move it behind when patient documents force an object
+  /// store — see docs/07-white-label-branding-plan.md section 4.
+  ///
+  /// Always re-encoded to PNG before it lands here, which is what makes an
+  /// uploaded SVG harmless: this file is served to an UNAUTHENTICATED page from
+  /// our own origin, and an SVG is a document that can carry script.
+  logoBytes     Bytes?    @map("logo_bytes")
+  logoMimeType  String?   @map("logo_mime_type") @db.VarChar(64)
+  /// Drives the ETag and the cache-busting query parameter, so a replaced logo
+  /// produces a new URL rather than needing anything invalidated.
+  logoUpdatedAt DateTime? @map("logo_updated_at") @db.Timestamptz(6)
+
   onboardedByPlatformUserId String? @map("onboarded_by_platform_user_id") @db.Uuid
 
   /// SUSPENDED means read-only, not locked out — see docs/06, section 2.6. A

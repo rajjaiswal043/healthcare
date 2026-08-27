@@ -296,10 +296,7 @@ export default function NewAppointmentPage() {
                   : 'border-ink/10 bg-white hover:border-ink/25',
               ].join(' ')}
             >
-              <p className="text-[14px] font-semibold text-ink">
-                {d.prefix ? `${d.prefix} ` : ''}
-                {d.fullName}
-              </p>
+              <p className="text-[14px] font-semibold text-ink">{d.fullName}</p>
               <p className="text-[12.5px] text-ink-40">
                 {d.specialty ?? d.department?.name ?? '—'}
                 {d.qualification ? ` · ${d.qualification}` : ''}
@@ -453,7 +450,7 @@ export default function NewAppointmentPage() {
         {selectedDoctor && patient && (
           <p className="mt-3 text-[12.5px] text-ink-40">
             {slotStart
-              ? `${patient.name} with ${selectedDoctor.prefix ?? ''} ${selectedDoctor.fullName} — ${availability?.slots.find((s) => s.startAt === slotStart)?.time} on ${date}.`
+              ? `${patient.name} with ${selectedDoctor.fullName} — ${availability?.slots.find((s) => s.startAt === slotStart)?.time} on ${date}.`
               : `Pick a time, or add ${patient.name} as a walk-in for today.`}
           </p>
         )}

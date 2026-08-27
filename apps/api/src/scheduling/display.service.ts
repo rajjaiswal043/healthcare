@@ -3,24 +3,34 @@ import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
 import { AppointmentsService, type RequestMeta } from './appointments.service.js';
 import { generateDisplayKey, hashDisplayKey, tenantIdFromDisplayKey } from './display-key.js';
+import { logoVersionOf } from '../platform/branding/logo-version.js';
+import { publicPatientName } from './public-name.js';
 
 /**
  * The waiting-room screen.
  *
- * One rule governs this whole file: **the board shows tokens, never names.**
+ * One rule governs this whole file: **the board never carries a name a stranger
+ * could act on.**
+ *
+ * Until 26 Aug 2026 that rule was absolute — tokens only. Narveer asked for
+ * names, because a patient who cannot match themselves to a number gets missed,
+ * and a receptionist ends up calling out the full name anyway. The rule was
+ * narrowed rather than abandoned: the board carries "Kavita S." and never
+ * "Kavita Sharma", masked in `publicPatientName` before the response is built.
  *
  * A screen on a waiting-room wall is a disclosure to everybody in that room.
  * "Kavita Sharma — Dr Nair, Dermatology, 11:15" tells a room full of strangers
  * who is being treated for what, by whom. Under the DPDP Act that is personal
- * data processed well beyond the purpose it was collected for, and in a small
- * clinic where people know each other it is simply bad manners. A token is a
- * number that means something only to the person holding the slip — which is the
- * entire point of tokens.
+ * data processed beyond the purpose it was collected for, and in a small clinic
+ * where people know each other it is simply bad manners. A first name and an
+ * initial are recognisable to their owner and close to useless to anybody else,
+ * which is the trade this makes.
  *
- * So `board()` selects token numbers and doctor names and nothing else. Not
- * "selects everything and lets the client render a subset": a payload that
- * carries a patient name to a public screen has already leaked it, whatever the
- * screen chooses to paint.
+ * What has NOT changed: the masking happens here, not on the television. A
+ * payload that carries a full name to a public screen has already leaked it,
+ * whatever the screen chooses to paint — so `board()` builds the shortened form
+ * and the surname never leaves this process. The integration test asserts the
+ * surname is absent from the RESPONSE, not from the markup.
  */
 @Injectable()
 export class DisplayService {
@@ -152,7 +162,9 @@ export class DisplayService {
 
       const tenant = await tx.tenant.findUniqueOrThrow({
         where: { id: tenantId },
-        select: { name: true, timezone: true },
+        // slug and logo so the television wears the clinic's own mark. Still
+        // nothing here that could carry a patient name.
+        select: { name: true, timezone: true, slug: true, logoMimeType: true, logoUpdatedAt: true },
       });
 
       const practitioners = await tx.practitioner.findMany({
@@ -185,7 +197,13 @@ export class DisplayService {
   private async paint(
     tenantId: string,
     device: { locationId: string | null; location: { name: string } | null },
-    tenant: { name: string; timezone: string },
+    tenant: {
+      name: string;
+      timezone: string;
+      slug: string;
+      logoMimeType: string | null;
+      logoUpdatedAt: Date | null;
+    },
     practitioners: Array<{
       id: string;
       fullName: string;
@@ -202,16 +220,30 @@ export class DisplayService {
       const lastCalledAt = queue.nowServing?.calledAt ?? null;
 
       doctors.push({
-        name: `${p.prefix ? `${p.prefix} ` : ''}${p.fullName}`,
+        // The name as the clinic typed it. `prefix` was folded into
+        // full_name on 26 Aug 2026 and is no longer read — composing it here
+        // gave "Dr Dr. Vivek Swarnkar" for any clinic that typed the honorific.
+        name: p.fullName,
         specialty: p.specialty,
         /** The number being called. Null when the room is empty. */
         nowServing: queue.nowServing?.tokenNumber ?? null,
+        /**
+         * Who that number belongs to, shortened to "Kavita S.".
+         *
+         * Masked in `publicPatientName` before it reaches this object, so the
+         * surname is never in the response at all. See that file for why the
+         * masking cannot live in the television's markup.
+         */
+        nowServingName: queue.nowServing ? publicPatientName(queue.nowServing.patient.name) : null,
         /**
          * The next few, in the order the clinic will actually call them —
          * priority first, then readiness. Three, because a waiting room reads a
          * screen at a glance and a fourth number is one nobody acts on.
          */
-        next: queue.waiting.slice(0, 3).map((a) => a.tokenNumber),
+        next: queue.waiting.slice(0, 3).map((a) => ({
+          token: a.tokenNumber,
+          name: publicPatientName(a.patient.name),
+        })),
         waiting: queue.waiting.length,
         /**
          * Minutes since the last patient was called in, or null if none has
@@ -226,6 +258,9 @@ export class DisplayService {
 
     return {
       clinic: tenant.name,
+      /** The clinic's own mark, for a screen a waiting room looks at all day. */
+      clinicSlug: tenant.slug,
+      clinicLogoVersion: tenant.logoMimeType ? logoVersionOf(tenant.logoUpdatedAt) : null,
       location: device.location?.name ?? null,
       timezone: tenant.timezone,
       /** For the screen's own "showing data from…" line when the network drops. */

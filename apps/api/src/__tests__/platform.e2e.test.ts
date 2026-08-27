@@ -474,3 +474,78 @@ describe('changing what a clinic is allowed', () => {
     ]);
   });
 });
+
+/**
+ * The platform sets a clinic's logo so their FIRST sign-in already looks like
+ * theirs — before anybody at the clinic has an account to fix it with.
+ *
+ * The interesting assertion is the last one: this write must not appear in the
+ * clinic's audit trail as though one of their own staff did it.
+ */
+describe('platform sets a clinic logo', () => {
+  async function png(size = 120): Promise<Buffer> {
+    const sharp = (await import('sharp')).default;
+    return sharp({
+      create: { width: size, height: size, channels: 3, background: { r: 20, g: 90, b: 160 } },
+    })
+      .png()
+      .toBuffer();
+  }
+
+  it('lands on the clinic and is served publicly', async () => {
+    const created = await onboard({ slug: 'logo-clinic', name: 'Logo Clinic' });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ clinic: { id: string } }>().clinic.id;
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/platform/clinics/${id}/logo`,
+      headers: { cookie: platformCookie },
+      payload: { logo: (await png()).toString('base64') },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const publicLogo = await app.inject({
+      method: 'GET',
+      url: '/api/v1/branding/logo-clinic/logo',
+    });
+    expect(publicLogo.statusCode).toBe(200);
+    expect(publicLogo.headers['content-type']).toBe('image/png');
+  });
+
+  it('refuses a clinic session', async () => {
+    const created = await onboard({ slug: 'no-touch-clinic', name: 'No Touch' });
+    const id = created.json<{ clinic: { id: string } }>().clinic.id;
+    const clinicAdmin = await login(app, fx.main.slug, 'frontdesk@main.test');
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/platform/clinics/${id}/logo`,
+      headers: { cookie: clinicAdmin.cookie },
+      payload: { logo: (await png()).toString('base64') },
+    });
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('does not attribute the change to a member of the clinic staff', async () => {
+    const created = await onboard({ slug: 'attribution-clinic', name: 'Attribution' });
+    const id = created.json<{ clinic: { id: string } }>().clinic.id;
+
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v1/platform/clinics/${id}/logo`,
+      headers: { cookie: platformCookie },
+      payload: { logo: (await png()).toString('base64') },
+    });
+
+    const rows = await ownerQuery<{ actor_user_id: string | null }>(
+      id,
+      `SELECT actor_user_id FROM audit_event WHERE tenant_id = $1 AND action = 'branding.logo.set'`,
+      [id],
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.actor_user_id).toBeNull();
+  });
+});

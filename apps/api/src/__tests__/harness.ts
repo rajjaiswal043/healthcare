@@ -205,7 +205,7 @@ export async function seedFixtures(): Promise<Fixtures> {
     name: 'Main Clinic',
     passwordHash,
     emailDomain: 'main.test',
-    doctorName: 'Asha Menon',
+    doctorName: 'Dr Asha Menon',
   });
 
   const other = await seedTenant({
@@ -214,7 +214,7 @@ export async function seedFixtures(): Promise<Fixtures> {
     name: 'Other Clinic',
     passwordHash,
     emailDomain: 'other.test',
-    doctorName: 'Rohit Bhat',
+    doctorName: 'Dr Rohit Bhat',
   });
 
   return { main, other };
@@ -258,7 +258,7 @@ async function seedTenant(input: {
       `INSERT INTO practitioner
          (tenant_id, full_name, prefix, registration_number, specialty,
           department_id, overbook_per_session, updated_at)
-       VALUES ($1, $2, 'Dr', 'TEST-0001', 'General Medicine', $3, 0, now())
+       VALUES ($1, $2, NULL, 'TEST-0001', 'General Medicine', $3, 0, now())
        RETURNING id`,
       [input.id, input.doctorName, department.id],
     );
@@ -345,6 +345,22 @@ async function seedTenant(input: {
         row.id,
         roleIds.get(user.role),
       ]);
+
+      /**
+       * Link the doctor's ACCOUNT to their PRACTITIONER row.
+       *
+       * These are two different things — the distinction that made a real
+       * clinic's booking screen come up empty — and the fixture modelled a
+       * clinic where they had never been joined. The queue now scopes itself on
+       * exactly this link, so a fixture without it would have tested the
+       * unrestricted path and called it covered.
+       */
+      if (user.role === 'doctor') {
+        await tx.query(`UPDATE practitioner SET user_id = $2 WHERE id = $1`, [
+          practitioner.id,
+          row.id,
+        ]);
+      }
     }
 
     return {
@@ -442,16 +458,38 @@ export async function loginWithMfa(
   }
 
   const { generate } = await import('otplib');
-  const totpCode = await generate({ secret: body.enrolmentSecret });
+  const secret = body.enrolmentSecret;
 
-  const res = await app.inject({
-    method: 'POST',
-    url: '/api/v1/auth/mfa/confirm',
-    payload: { tenantSlug, email, password, totpCode },
-  });
+  /**
+   * Confirm across a TOTP step boundary without flaking.
+   *
+   * A code is generated for the current 30-second window. Generate one at
+   * 29.9s and the server verifies it at 30.1s, in the next window, and rejects
+   * a code that was correct when it was made. That is not a bug in either side
+   * — it is the protocol — and it surfaced as `billing.e2e` failing its
+   * beforeAll with "Invalid code" roughly one run in twenty, which is exactly
+   * often enough to be dismissed as noise and waste an afternoon later.
+   *
+   * So: wait out the boundary and try once more. Bounded at two attempts,
+   * because a third would be hiding a real failure rather than a timing one.
+   */
+  let res = await confirm(await generate({ secret }));
+
+  if (res.statusCode !== 200) {
+    await new Promise((r) => setTimeout(r, msUntilNextTotpWindow() + 250));
+    res = await confirm(await generate({ secret }));
+  }
 
   if (res.statusCode !== 200) {
     throw new Error(`MFA confirm failed for ${email}: ${res.statusCode} ${res.payload}`);
+  }
+
+  function confirm(totpCode: string) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/confirm',
+      payload: { tenantSlug, email, password, totpCode },
+    });
   }
 
   const cookies = parseSetCookies(res.headers['set-cookie']);
@@ -552,4 +590,10 @@ export function clinicDate(days = 7, timeZone = 'Asia/Kolkata'): string {
     month: '2-digit',
     day: '2-digit',
   }).format(d);
+}
+
+/** Milliseconds remaining in the current 30-second TOTP step. */
+function msUntilNextTotpWindow(): number {
+  const STEP_MS = 30_000;
+  return STEP_MS - (Date.now() % STEP_MS);
 }

@@ -8,6 +8,7 @@ import { SuspensionGuard } from './platform/auth/suspension.guard.js';
 import { AuthModule } from './platform/auth/auth.module.js';
 import { UsersModule } from './platform/users/users.module.js';
 import { PlatformModule } from './platform/tier/platform.module.js';
+import { BrandingModule } from './platform/branding/branding.module.js';
 import { PatientsModule } from './clinical/patients/patients.module.js';
 import { ConsultationsModule } from './clinical/consultations/consultations.module.js';
 import { SchedulingModule } from './scheduling/scheduling.module.js';
@@ -52,6 +53,7 @@ const env = loadEnv();
     AuthModule,
     UsersModule,
     PlatformModule,
+    BrandingModule,
     PatientsModule,
     ConsultationsModule,
     SchedulingModule,

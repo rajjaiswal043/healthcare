@@ -1004,3 +1004,98 @@ function transition(appointmentId: string, action: string, session: Session) {
     headers: { cookie: session.cookie },
   });
 }
+
+/**
+ * A doctor's queue is their own.
+ *
+ * The rule is enforced on the server, not by hiding a dropdown: a doctor who
+ * types another practitioner's id into the URL gets 403, not another doctor's
+ * waiting list. Everything here is that one property from both sides.
+ */
+describe('whose queue you may read', () => {
+  /** A second doctor at the same clinic, so "somebody else's queue" exists. */
+  async function secondPractitioner(): Promise<string> {
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO practitioner
+         (tenant_id, full_name, registration_number, specialty, department_id,
+          overbook_per_session, updated_at)
+       VALUES ($1, 'Dr Second Opinion', 'TEST-0002', 'Dermatology', $2, 0, now())
+       RETURNING id`,
+      [fx.main.id, fx.main.departmentId],
+    );
+    return row!.id;
+  }
+
+  it('lets a doctor read their own', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("refuses a doctor another doctor's queue", async () => {
+    const other = await secondPractitioner();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${other}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.payload).toMatch(/your own queue/i);
+  });
+
+  /**
+   * The front desk runs the waiting room and the nurse works across it. Neither
+   * is a practitioner, so neither is confined — and this is what stops the rule
+   * being written as "anybody with appointment:read sees only themselves",
+   * which would have broken the desk.
+   */
+  it('lets the front desk read any doctor', async () => {
+    const other = await secondPractitioner();
+
+    for (const id of [fx.main.practitionerId, other]) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/queue?practitionerId=${id}`,
+        headers: { cookie: frontDesk.cookie },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+  });
+
+  it('lets a nurse read any doctor', async () => {
+    const other = await secondPractitioner();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${other}`,
+      headers: { cookie: nurse.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('tells the console which practitioner the signed-in user is', async () => {
+    const asDoctor = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: doctor.cookie },
+    });
+    expect(asDoctor.json<{ practitionerId: string | null }>().practitionerId).toBe(
+      fx.main.practitionerId,
+    );
+
+    const asFrontDesk = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(asFrontDesk.json<{ practitionerId: string | null }>().practitionerId).toBeNull();
+  });
+});

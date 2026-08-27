@@ -277,7 +277,7 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                         </span>
 
                         <span className="mt-0.5 block text-[11.5px] text-ink-40">
-                          {e.practitioner.prefix} {e.practitioner.fullName}
+                          {e.practitioner.fullName}
                         </span>
                       </Link>
                     </li>
@@ -316,7 +316,7 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                         })}
                       </span>
                       <span className="block text-[12px] text-ink-60">
-                        {a.practitioner.prefix} {a.practitioner.fullName}
+                        {a.practitioner.fullName}
                         {a.reasonForVisit ? ` · ${a.reasonForVisit}` : ''}
                         {a.source === 'WALK_IN' ? ' · walk-in' : ''}
                       </span>

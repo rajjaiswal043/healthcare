@@ -30,7 +30,7 @@ import {
 const POLL_MS = 15000;
 
 export default function QueuePage() {
-  const { can } = useAuth();
+  const { can, session } = useAuth();
   const router = useRouter();
 
   const [doctors, setDoctors] = useState<Practitioner[]>([]);
@@ -49,17 +49,35 @@ export default function QueuePage() {
     appointment: Appointment;
   } | null>(null);
 
+  /**
+   * A doctor is confined to their own queue.
+   *
+   * Not a UI preference — `GET /queue` refuses another doctor's list outright.
+   * This is what stops the console offering a choice the API would then reject,
+   * which is a worse experience than not offering it. An administrator who also
+   * consults keeps the full list; see `assertMayReadQueue` on the API side.
+   */
+  const ownPractitionerId = session?.practitionerId ?? null;
+  const confinedToSelf = ownPractitionerId !== null && !can('user:manage');
+
   useEffect(() => {
     void (async () => {
       try {
         const { practitioners } = await api.practitioners();
-        setDoctors(practitioners);
-        if (practitioners.length > 0) setDoctorId(practitioners[0]!.id);
+        const visible = confinedToSelf
+          ? practitioners.filter((p) => p.id === ownPractitionerId)
+          : practitioners;
+
+        setDoctors(visible);
+        if (visible.length > 0) setDoctorId(visible[0]!.id);
       } catch (err) {
         setError(err instanceof ApiRequestError ? err.error.message : 'Could not load doctors.');
       }
     })();
-  }, []);
+    // Depends on who is looking: AppShell renders nothing until the session
+    // exists, so these are settled by the time this mounts — but listing them
+    // keeps that a fact rather than an assumption.
+  }, [confinedToSelf, ownPractitionerId]);
 
   const load = useCallback(async (id: string) => {
     if (!id) return;
@@ -162,25 +180,37 @@ export default function QueuePage() {
         </div>
 
         <div className="flex items-end gap-2">
-          <div>
-            <label htmlFor="doctor" className="field-label">
-              Doctor
-            </label>
-            <select
-              id="doctor"
-              value={doctorId}
-              onChange={(e) => setDoctorId(e.target.value)}
-              className="field-input min-w-[220px]"
-            >
-              {doctors.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.prefix ? `${d.prefix} ` : ''}
-                  {d.fullName}
-                  {d.specialty ? ` · ${d.specialty}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* A doctor gets their name, not a menu of one. */}
+          {confinedToSelf ? (
+            <div>
+              <p className="field-label">Doctor</p>
+              <p className="rounded-panel border border-ink/10 bg-bg-soft px-3.5 py-2.5 text-[15px] font-semibold text-ink">
+                {doctors[0]?.fullName ?? 'You'}
+                {doctors[0]?.specialty ? (
+                  <span className="font-normal text-ink-40"> · {doctors[0].specialty}</span>
+                ) : null}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="doctor" className="field-label">
+                Doctor
+              </label>
+              <select
+                id="doctor"
+                value={doctorId}
+                onChange={(e) => setDoctorId(e.target.value)}
+                className="field-input min-w-[220px]"
+              >
+                {doctors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.fullName}
+                    {d.specialty ? ` · ${d.specialty}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button
             type="button"
             className="btn-secondary !px-3"

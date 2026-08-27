@@ -34,8 +34,15 @@ const mono = Spline_Sans_Mono({
   display: 'swap',
 });
 
+/**
+ * The title before a session exists.
+ *
+ * Neutral rather than ours: under full white-label a clinic never meets our
+ * name, and the browser tab is somewhere they look all day. `AuthProvider`
+ * replaces this with the clinic's own name as soon as the session loads.
+ */
 export const metadata: Metadata = {
-  title: 'HealthCloud — Staff Console',
+  title: 'Clinic console',
   description: 'Patient registration and records for Indian clinics',
 };
 

@@ -691,7 +691,7 @@ describe('correcting a signed note', () => {
     expect(res.json().addenda).toHaveLength(1);
     // The author's name is captured at write time. Their user record may be
     // renamed; who wrote this did not change.
-    expect(res.json().addenda[0].authorLabel).toBe('Asha Menon');
+    expect(res.json().addenda[0].authorLabel).toBe('Dr Asha Menon');
   });
 
   it('refuses an addendum on a draft', async () => {

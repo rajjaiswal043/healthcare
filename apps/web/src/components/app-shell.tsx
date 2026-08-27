@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './auth-provider';
-import { LogoMark } from './auth-shell';
+import { ClinicLogo } from './clinic-logo';
 import { initialsOf } from '@/lib/role-signature';
 import {
   IconCalendar,
   IconChevronRight,
   IconClock,
+  IconIdCard,
   IconHome,
   IconKey,
   IconLogout,
@@ -116,6 +117,15 @@ const SECTIONS: NavSection[] = [
         // Pairing mints a credential that works without a login.
         permission: 'display:manage',
       },
+      {
+        key: 'branding',
+        label: 'Branding',
+        href: '/settings/branding',
+        icon: <IconIdCard size={16} />,
+        // The clinic's identity across the whole console — same permission as
+        // the rest of "what this clinic is", not a separate one.
+        permission: 'tenant:configure',
+      },
     ],
   },
 ];
@@ -129,6 +139,7 @@ const BREADCRUMBS: Record<string, string> = {
   '/settings/displays': 'Waiting-room screens',
   '/settings/users': 'Staff',
   '/settings/doctors': 'Doctors and hours',
+  '/settings/branding': 'Branding',
   '/change-password': 'Choose a password',
 };
 
@@ -181,8 +192,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     items: s.items.filter((i) => !i.permission || can(i.permission)),
   })).filter((s) => s.items.length > 0);
 
+  /**
+   * Which nav item is lit, resolved once for the whole rail.
+   *
+   * It was `pathname.startsWith(item.href)` evaluated per item, which lights
+   * every ANCESTOR route as well as the current one: on /patients/register both
+   * "Register" and "Find a patient" matched, so the rail claimed you were in two
+   * places at once. A prefix test also matched a route that merely begins with
+   * the same characters, so /patients-archive would have lit /patients too.
+   *
+   * The rule is: only routes that contain this path count — the same path, or a
+   * path below it at a `/` boundary — and among those, the MOST SPECIFIC wins.
+   * "/" is exempt from the boundary rule because every path is below it; it
+   * matches only itself.
+   */
+  const activeHref = mostSpecificMatch(
+    pathname,
+    visible.flatMap((s) => s.items.map((i) => i.href)),
+  );
+
   const initials = initialsOf(session.fullName);
-  const crumb = BREADCRUMBS[pathname] ?? 'HealthCloud';
+  const crumb = BREADCRUMBS[pathname] ?? session.tenant.name;
 
   return (
     /**
@@ -215,21 +245,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           mobileOpen ? 'w-[236px] translate-x-0' : 'w-[236px] -translate-x-full',
         ].join(' ')}
       >
-        <div className="flex items-center justify-between px-1.5">
-          <Link
-            href="/"
-            className="flex items-center gap-2 font-display text-[17px] font-extrabold"
-          >
-            <LogoMark size={26} />
-            {!collapsed && (
-              <span>
-                Health<span className="text-clinical">Cloud</span>
-              </span>
-            )}
+        {/* Centred, and the close button taken out of the flow to keep it
+            that way — with `justify-between` the mark sat wherever the button's
+            presence left it, which meant it moved between the mobile drawer and
+            the desktop rail. Absolute positioning is what makes "centred" mean
+            centred in the rail rather than centred in whatever is left. */}
+        <div className="relative flex items-center justify-center px-1.5">
+          <Link href="/" className="flex items-center" aria-label="Home">
+            {/* The mark only. The name is written once, in the header, where
+                there is room for it — this rail is 236px and a real hospital
+                name ("Dr Vivek Swarnkar Ortho Clinic") truncates here no matter
+                what. Both carried it briefly after white-labelling and the
+                repetition read as a bug rather than as branding. */}
+            <ClinicLogo clinic={session.tenant} size={32} alt={session.tenant.name} />
           </Link>
           <button
             type="button"
-            className="btn-ghost !px-1.5 !py-1.5 lg:hidden"
+            className="btn-ghost absolute right-0 !px-1.5 !py-1.5 lg:hidden"
             aria-label="Close menu"
             onClick={() => setMobileOpen(false)}
           >
@@ -242,8 +274,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div key={section.title} className="flex flex-col gap-1">
               {!collapsed && <p className="mono-label px-2.5 pb-1">{section.title}</p>}
               {section.items.map((item) => {
-                const active =
-                  item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+                const active = item.href === activeHref;
                 return (
                   <Link
                     key={item.key}
@@ -312,17 +343,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <IconMenu size={18} />
           </button>
 
+          {/* The clinic's name gets the space it needs, and the crumb after it
+              yields first.
+
+              It used to be capped at 22 characters with the search box centred
+              beside it, which cut "Sunrise Multispeciality Hospital" in half —
+              and the one thing this header exists to say, after
+              white-labelling, is whose clinic this is. So: the name does not
+              shrink, the crumb does, and the search box has moved off centre to
+              sit beside the account menu. The 40ch cap is a backstop for a
+              genuinely absurd name, not the normal case.
+
+              Set in the display face at 17px extrabold — the weight the nav
+              rail's wordmark used to carry. As a 10.5px mono label it was
+              technically present and practically invisible, which is not what
+              a clinic's own name should be on their own console. */}
           <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 sm:flex">
-            <Link href="/" className="mono-label transition-colors hover:text-ink">
-              HealthCloud
+            <Link
+              href="/"
+              title={session.tenant.name}
+              className="max-w-[40ch] shrink-0 truncate font-display text-[17px] font-extrabold tracking-display text-ink transition-colors hover:text-clinical-text"
+            >
+              {session.tenant.name}
             </Link>
-            <span className="text-ink-20" aria-hidden="true">
+            <span className="shrink-0 text-ink-20" aria-hidden="true">
               <IconChevronRight size={13} />
             </span>
-            <span className="truncate text-[13.5px] font-semibold text-ink">{crumb}</span>
+            {/* Stepped back to ink-40 now that the clinic's name is the heavy
+                thing beside it. Two bold items at the same weight is not a
+                hierarchy, and the name is the one that should win. */}
+            <span className="truncate text-[13.5px] font-semibold text-ink-40">{crumb}</span>
           </nav>
 
-          <div className="mx-auto w-full max-w-md">
+          <div className="ml-auto w-full min-w-[150px] max-w-[300px]">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -350,7 +403,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </form>
           </div>
 
-          <div className="relative ml-auto" ref={menuRef}>
+          <div className="relative shrink-0" ref={menuRef}>
             <button
               type="button"
               onClick={() => setMenuOpen((o) => !o)}
@@ -385,21 +438,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <p className="text-[12px] font-semibold text-[var(--role-text)]">
                     {signature.label}
                   </p>
-                  <p className="mt-1.5 font-mono text-[11px] text-ink-60">
-                    {session.permissions.length} permissions
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {session.permissions.slice(0, 4).map((p) => (
-                      <span key={p} className="badge-neutral !text-[9.5px]">
-                        {p}
-                      </span>
-                    ))}
-                    {session.permissions.length > 4 && (
-                      <span className="badge-neutral !text-[9.5px]">
-                        +{session.permissions.length - 4}
-                      </span>
-                    )}
-                  </div>
+                  {/* The raw permission slugs used to be listed here — "10
+                      permissions", then `appointment:read`, `consent:read` and
+                      the rest as chips. That was debugging output that shipped:
+                      it meant something while the RBAC was being built and
+                      nothing at all to a receptionist, who cannot act on it and
+                      did not ask. The role name above is the answer to "what am
+                      I allowed to do", in the clinic's own words. */}
                 </div>
                 <Link
                   href="/change-password"
@@ -433,4 +478,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+/**
+ * The longest nav route that contains `pathname`, or null.
+ *
+ * Exported nowhere and deliberately dependency-free, so it can be reasoned
+ * about on its own: given /patients/register and ['/', '/patients',
+ * '/patients/register'], the answer is '/patients/register'.
+ */
+function mostSpecificMatch(pathname: string, hrefs: string[]): string | null {
+  let best: string | null = null;
+
+  for (const href of hrefs) {
+    const contains =
+      href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+
+    if (contains && (best === null || href.length > best.length)) best = href;
+  }
+
+  return best;
 }

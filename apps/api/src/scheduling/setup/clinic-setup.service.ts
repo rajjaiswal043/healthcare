@@ -195,7 +195,11 @@ export class ClinicSetupService {
         data: {
           tenantId,
           fullName: input.fullName.trim(),
-          prefix: input.prefix ?? 'Dr',
+          // Never defaulted. The clinic types the honorific into the name —
+          // a system-supplied "Dr" is wrong for a physiotherapist and, when the
+          // admin typed one too, produced "Dr Dr. Vivek Swarnkar".
+          // See 20260826170000_fold_practitioner_prefix.
+          prefix: input.prefix ?? null,
           registrationNumber: input.registrationNumber ?? null,
           qualification: input.qualification ?? null,
           specialty: input.specialty ?? null,

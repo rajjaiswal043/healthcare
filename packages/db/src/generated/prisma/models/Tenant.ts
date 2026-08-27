@@ -54,6 +54,9 @@ export type TenantMinAggregateOutputType = {
   timezone: string | null
   contactEmail: string | null
   contactMobile: string | null
+  logoBytes: runtime.Bytes | null
+  logoMimeType: string | null
+  logoUpdatedAt: Date | null
   onboardedByPlatformUserId: string | null
   suspendedAt: Date | null
   suspendedReason: string | null
@@ -73,6 +76,9 @@ export type TenantMaxAggregateOutputType = {
   timezone: string | null
   contactEmail: string | null
   contactMobile: string | null
+  logoBytes: runtime.Bytes | null
+  logoMimeType: string | null
+  logoUpdatedAt: Date | null
   onboardedByPlatformUserId: string | null
   suspendedAt: Date | null
   suspendedReason: string | null
@@ -92,6 +98,9 @@ export type TenantCountAggregateOutputType = {
   timezone: number
   contactEmail: number
   contactMobile: number
+  logoBytes: number
+  logoMimeType: number
+  logoUpdatedAt: number
   onboardedByPlatformUserId: number
   suspendedAt: number
   suspendedReason: number
@@ -123,6 +132,9 @@ export type TenantMinAggregateInputType = {
   timezone?: true
   contactEmail?: true
   contactMobile?: true
+  logoBytes?: true
+  logoMimeType?: true
+  logoUpdatedAt?: true
   onboardedByPlatformUserId?: true
   suspendedAt?: true
   suspendedReason?: true
@@ -142,6 +154,9 @@ export type TenantMaxAggregateInputType = {
   timezone?: true
   contactEmail?: true
   contactMobile?: true
+  logoBytes?: true
+  logoMimeType?: true
+  logoUpdatedAt?: true
   onboardedByPlatformUserId?: true
   suspendedAt?: true
   suspendedReason?: true
@@ -161,6 +176,9 @@ export type TenantCountAggregateInputType = {
   timezone?: true
   contactEmail?: true
   contactMobile?: true
+  logoBytes?: true
+  logoMimeType?: true
+  logoUpdatedAt?: true
   onboardedByPlatformUserId?: true
   suspendedAt?: true
   suspendedReason?: true
@@ -267,6 +285,9 @@ export type TenantGroupByOutputType = {
   timezone: string
   contactEmail: string | null
   contactMobile: string | null
+  logoBytes: runtime.Bytes | null
+  logoMimeType: string | null
+  logoUpdatedAt: Date | null
   onboardedByPlatformUserId: string | null
   suspendedAt: Date | null
   suspendedReason: string | null
@@ -309,6 +330,9 @@ export type TenantWhereInput = {
   timezone?: Prisma.StringFilter<"Tenant"> | string
   contactEmail?: Prisma.StringNullableFilter<"Tenant"> | string | null
   contactMobile?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  logoBytes?: Prisma.BytesNullableFilter<"Tenant"> | runtime.Bytes | null
+  logoMimeType?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  logoUpdatedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
   onboardedByPlatformUserId?: Prisma.UuidNullableFilter<"Tenant"> | string | null
   suspendedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
   suspendedReason?: Prisma.StringNullableFilter<"Tenant"> | string | null
@@ -332,6 +356,9 @@ export type TenantOrderByWithRelationInput = {
   timezone?: Prisma.SortOrder
   contactEmail?: Prisma.SortOrderInput | Prisma.SortOrder
   contactMobile?: Prisma.SortOrderInput | Prisma.SortOrder
+  logoBytes?: Prisma.SortOrderInput | Prisma.SortOrder
+  logoMimeType?: Prisma.SortOrderInput | Prisma.SortOrder
+  logoUpdatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   onboardedByPlatformUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   suspendedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   suspendedReason?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -358,6 +385,9 @@ export type TenantWhereUniqueInput = Prisma.AtLeast<{
   timezone?: Prisma.StringFilter<"Tenant"> | string
   contactEmail?: Prisma.StringNullableFilter<"Tenant"> | string | null
   contactMobile?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  logoBytes?: Prisma.BytesNullableFilter<"Tenant"> | runtime.Bytes | null
+  logoMimeType?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  logoUpdatedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
   onboardedByPlatformUserId?: Prisma.UuidNullableFilter<"Tenant"> | string | null
   suspendedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
   suspendedReason?: Prisma.StringNullableFilter<"Tenant"> | string | null
@@ -381,6 +411,9 @@ export type TenantOrderByWithAggregationInput = {
   timezone?: Prisma.SortOrder
   contactEmail?: Prisma.SortOrderInput | Prisma.SortOrder
   contactMobile?: Prisma.SortOrderInput | Prisma.SortOrder
+  logoBytes?: Prisma.SortOrderInput | Prisma.SortOrder
+  logoMimeType?: Prisma.SortOrderInput | Prisma.SortOrder
+  logoUpdatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   onboardedByPlatformUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   suspendedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   suspendedReason?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -408,6 +441,9 @@ export type TenantScalarWhereWithAggregatesInput = {
   timezone?: Prisma.StringWithAggregatesFilter<"Tenant"> | string
   contactEmail?: Prisma.StringNullableWithAggregatesFilter<"Tenant"> | string | null
   contactMobile?: Prisma.StringNullableWithAggregatesFilter<"Tenant"> | string | null
+  logoBytes?: Prisma.BytesNullableWithAggregatesFilter<"Tenant"> | runtime.Bytes | null
+  logoMimeType?: Prisma.StringNullableWithAggregatesFilter<"Tenant"> | string | null
+  logoUpdatedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
   onboardedByPlatformUserId?: Prisma.UuidNullableWithAggregatesFilter<"Tenant"> | string | null
   suspendedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tenant"> | Date | string | null
   suspendedReason?: Prisma.StringNullableWithAggregatesFilter<"Tenant"> | string | null
@@ -427,6 +463,9 @@ export type TenantCreateInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
   createdAt?: Date | string
@@ -449,6 +488,9 @@ export type TenantUncheckedCreateInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   onboardedByPlatformUserId?: string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
@@ -471,6 +513,9 @@ export type TenantUpdateInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -493,6 +538,9 @@ export type TenantUncheckedUpdateInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -515,6 +563,9 @@ export type TenantCreateManyInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   onboardedByPlatformUserId?: string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
@@ -534,6 +585,9 @@ export type TenantUpdateManyMutationInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -552,6 +606,9 @@ export type TenantUncheckedUpdateManyInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -571,6 +628,9 @@ export type TenantCountOrderByAggregateInput = {
   timezone?: Prisma.SortOrder
   contactEmail?: Prisma.SortOrder
   contactMobile?: Prisma.SortOrder
+  logoBytes?: Prisma.SortOrder
+  logoMimeType?: Prisma.SortOrder
+  logoUpdatedAt?: Prisma.SortOrder
   onboardedByPlatformUserId?: Prisma.SortOrder
   suspendedAt?: Prisma.SortOrder
   suspendedReason?: Prisma.SortOrder
@@ -595,6 +655,9 @@ export type TenantMaxOrderByAggregateInput = {
   timezone?: Prisma.SortOrder
   contactEmail?: Prisma.SortOrder
   contactMobile?: Prisma.SortOrder
+  logoBytes?: Prisma.SortOrder
+  logoMimeType?: Prisma.SortOrder
+  logoUpdatedAt?: Prisma.SortOrder
   onboardedByPlatformUserId?: Prisma.SortOrder
   suspendedAt?: Prisma.SortOrder
   suspendedReason?: Prisma.SortOrder
@@ -614,6 +677,9 @@ export type TenantMinOrderByAggregateInput = {
   timezone?: Prisma.SortOrder
   contactEmail?: Prisma.SortOrder
   contactMobile?: Prisma.SortOrder
+  logoBytes?: Prisma.SortOrder
+  logoMimeType?: Prisma.SortOrder
+  logoUpdatedAt?: Prisma.SortOrder
   onboardedByPlatformUserId?: Prisma.SortOrder
   suspendedAt?: Prisma.SortOrder
   suspendedReason?: Prisma.SortOrder
@@ -667,6 +733,10 @@ export type BigIntFieldUpdateOperationsInput = {
 
 export type NullableStringFieldUpdateOperationsInput = {
   set?: string | null
+}
+
+export type NullableBytesFieldUpdateOperationsInput = {
+  set?: runtime.Bytes | null
 }
 
 export type NullableDateTimeFieldUpdateOperationsInput = {
@@ -773,6 +843,9 @@ export type TenantCreateWithoutOnboardedByInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
   createdAt?: Date | string
@@ -794,6 +867,9 @@ export type TenantUncheckedCreateWithoutOnboardedByInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
   createdAt?: Date | string
@@ -844,6 +920,9 @@ export type TenantScalarWhereInput = {
   timezone?: Prisma.StringFilter<"Tenant"> | string
   contactEmail?: Prisma.StringNullableFilter<"Tenant"> | string | null
   contactMobile?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  logoBytes?: Prisma.BytesNullableFilter<"Tenant"> | runtime.Bytes | null
+  logoMimeType?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  logoUpdatedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
   onboardedByPlatformUserId?: Prisma.UuidNullableFilter<"Tenant"> | string | null
   suspendedAt?: Prisma.DateTimeNullableFilter<"Tenant"> | Date | string | null
   suspendedReason?: Prisma.StringNullableFilter<"Tenant"> | string | null
@@ -863,6 +942,9 @@ export type TenantCreateWithoutLocationsInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
   createdAt?: Date | string
@@ -884,6 +966,9 @@ export type TenantUncheckedCreateWithoutLocationsInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   onboardedByPlatformUserId?: string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
@@ -921,6 +1006,9 @@ export type TenantUpdateWithoutLocationsInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -942,6 +1030,9 @@ export type TenantUncheckedUpdateWithoutLocationsInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -963,6 +1054,9 @@ export type TenantCreateWithoutDisplayDevicesInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
   createdAt?: Date | string
@@ -984,6 +1078,9 @@ export type TenantUncheckedCreateWithoutDisplayDevicesInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   onboardedByPlatformUserId?: string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
@@ -1021,6 +1118,9 @@ export type TenantUpdateWithoutDisplayDevicesInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1042,6 +1142,9 @@ export type TenantUncheckedUpdateWithoutDisplayDevicesInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1063,6 +1166,9 @@ export type TenantCreateWithoutSeatLimitsInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
   createdAt?: Date | string
@@ -1084,6 +1190,9 @@ export type TenantUncheckedCreateWithoutSeatLimitsInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   onboardedByPlatformUserId?: string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
@@ -1121,6 +1230,9 @@ export type TenantUpdateWithoutSeatLimitsInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1142,6 +1254,9 @@ export type TenantUncheckedUpdateWithoutSeatLimitsInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1163,6 +1278,9 @@ export type TenantCreateManyOnboardedByInput = {
   timezone?: string
   contactEmail?: string | null
   contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
   suspendedAt?: Date | string | null
   suspendedReason?: string | null
   createdAt?: Date | string
@@ -1181,6 +1299,9 @@ export type TenantUpdateWithoutOnboardedByInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1202,6 +1323,9 @@ export type TenantUncheckedUpdateWithoutOnboardedByInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1223,6 +1347,9 @@ export type TenantUncheckedUpdateManyWithoutOnboardedByInput = {
   timezone?: Prisma.StringFieldUpdateOperationsInput | string
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1290,6 +1417,9 @@ export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   timezone?: boolean
   contactEmail?: boolean
   contactMobile?: boolean
+  logoBytes?: boolean
+  logoMimeType?: boolean
+  logoUpdatedAt?: boolean
   onboardedByPlatformUserId?: boolean
   suspendedAt?: boolean
   suspendedReason?: boolean
@@ -1314,6 +1444,9 @@ export type TenantSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   timezone?: boolean
   contactEmail?: boolean
   contactMobile?: boolean
+  logoBytes?: boolean
+  logoMimeType?: boolean
+  logoUpdatedAt?: boolean
   onboardedByPlatformUserId?: boolean
   suspendedAt?: boolean
   suspendedReason?: boolean
@@ -1334,6 +1467,9 @@ export type TenantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   timezone?: boolean
   contactEmail?: boolean
   contactMobile?: boolean
+  logoBytes?: boolean
+  logoMimeType?: boolean
+  logoUpdatedAt?: boolean
   onboardedByPlatformUserId?: boolean
   suspendedAt?: boolean
   suspendedReason?: boolean
@@ -1354,6 +1490,9 @@ export type TenantSelectScalar = {
   timezone?: boolean
   contactEmail?: boolean
   contactMobile?: boolean
+  logoBytes?: boolean
+  logoMimeType?: boolean
+  logoUpdatedAt?: boolean
   onboardedByPlatformUserId?: boolean
   suspendedAt?: boolean
   suspendedReason?: boolean
@@ -1361,7 +1500,7 @@ export type TenantSelectScalar = {
   updatedAt?: boolean
 }
 
-export type TenantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "slug" | "legalName" | "name" | "status" | "uhidPrefix" | "uhidPadding" | "uhidCounter" | "timezone" | "contactEmail" | "contactMobile" | "onboardedByPlatformUserId" | "suspendedAt" | "suspendedReason" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
+export type TenantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "slug" | "legalName" | "name" | "status" | "uhidPrefix" | "uhidPadding" | "uhidCounter" | "timezone" | "contactEmail" | "contactMobile" | "logoBytes" | "logoMimeType" | "logoUpdatedAt" | "onboardedByPlatformUserId" | "suspendedAt" | "suspendedReason" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
 export type TenantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   locations?: boolean | Prisma.Tenant$locationsArgs<ExtArgs>
   displayDevices?: boolean | Prisma.Tenant$displayDevicesArgs<ExtArgs>
@@ -1422,6 +1561,27 @@ export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
      */
     contactEmail: string | null
     contactMobile: string | null
+    /**
+     * The clinic's own logo, as bytes.
+     * 
+     * In the database rather than an object store, deliberately: one row per
+     * tenant, half a megabyte at most, written almost never and served from
+     * cache almost always. That buys atomic backups and no second store to keep
+     * in sync, at a phase with no bucket and no IAM role. `BrandingStore` in the
+     * API is the seam to move it behind when patient documents force an object
+     * store — see docs/07-white-label-branding-plan.md section 4.
+     * 
+     * Always re-encoded to PNG before it lands here, which is what makes an
+     * uploaded SVG harmless: this file is served to an UNAUTHENTICATED page from
+     * our own origin, and an SVG is a document that can carry script.
+     */
+    logoBytes: runtime.Bytes | null
+    logoMimeType: string | null
+    /**
+     * Drives the ETag and the cache-busting query parameter, so a replaced logo
+     * produces a new URL rather than needing anything invalidated.
+     */
+    logoUpdatedAt: Date | null
     onboardedByPlatformUserId: string | null
     /**
      * SUSPENDED means read-only, not locked out — see docs/06, section 2.6. A
@@ -1869,6 +2029,9 @@ export interface TenantFieldRefs {
   readonly timezone: Prisma.FieldRef<"Tenant", 'String'>
   readonly contactEmail: Prisma.FieldRef<"Tenant", 'String'>
   readonly contactMobile: Prisma.FieldRef<"Tenant", 'String'>
+  readonly logoBytes: Prisma.FieldRef<"Tenant", 'Bytes'>
+  readonly logoMimeType: Prisma.FieldRef<"Tenant", 'String'>
+  readonly logoUpdatedAt: Prisma.FieldRef<"Tenant", 'DateTime'>
   readonly onboardedByPlatformUserId: Prisma.FieldRef<"Tenant", 'String'>
   readonly suspendedAt: Prisma.FieldRef<"Tenant", 'DateTime'>
   readonly suspendedReason: Prisma.FieldRef<"Tenant", 'String'>

@@ -1,17 +1,20 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import {
+  IsBase64,
   IsEmail,
   IsObject,
   IsOptional,
@@ -27,6 +30,8 @@ import { Public } from '../auth/decorators.js';
 import { PlatformAuthService } from './platform-auth.service.js';
 import { OnboardingService } from './onboarding.service.js';
 import { PlatformGuard, type PlatformActor } from './platform.guard.js';
+import { BrandingService } from '../branding/branding.service.js';
+import { MAX_UPLOAD_BYTES } from '../branding/logo-image.js';
 import {
   PLATFORM_REFRESH_COOKIE,
   clearPlatformCookies,
@@ -113,6 +118,15 @@ class SuspendDto {
   reason?: string;
 }
 
+class PlatformSetLogoDto {
+  @IsString()
+  @IsBase64({}, { message: 'logo must be base64-encoded image bytes' })
+  @MaxLength(Math.ceil((MAX_UPLOAD_BYTES * 4) / 3) + 8, {
+    message: `logo must be at most ${MAX_UPLOAD_BYTES / 1024}KB`,
+  })
+  logo!: string;
+}
+
 class SeatLimitsDto {
   @IsObject()
   seatLimits!: Record<string, number>;
@@ -135,6 +149,7 @@ export class PlatformController {
   constructor(
     private readonly auth: PlatformAuthService,
     private readonly onboarding: OnboardingService,
+    private readonly branding: BrandingService,
   ) {}
 
   // --- signing in ----------------------------------------------------------
@@ -255,6 +270,46 @@ export class PlatformController {
   @Patch('clinics/:id/seat-limits')
   async seatLimits(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: SeatLimitsDto) {
     return this.onboarding.setSeatLimits(id, dto.seatLimits);
+  }
+
+  /**
+   * Set a clinic's logo on their behalf.
+   *
+   * So a newly onboarded clinic signs in for the first time already looking
+   * like itself, rather than meeting the generic default and having to fix it —
+   * that first impression is the whole point of white-labelling, and it happens
+   * before anybody at the clinic has an account to fix it with.
+   *
+   * The tenant id comes from the URL here, not from a session, because a
+   * platform actor legitimately acts on any clinic. That is the difference
+   * between this route and the clinic-facing one, and it is why this sits
+   * behind `PlatformGuard`.
+   */
+  @Public()
+  @UseGuards(PlatformGuard)
+  @Put('clinics/:id/logo')
+  async setLogo(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: PlatformSetLogoDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.branding.setLogo(id, Buffer.from(dto.logo, 'base64'), {
+      ...metaFrom(req),
+      // No actorUserId: a platform account is not a user of this clinic, and
+      // writing its id into the clinic's audit trail would make it look like
+      // one of their staff did this.
+    });
+  }
+
+  @Public()
+  @UseGuards(PlatformGuard)
+  @Delete('clinics/:id/logo')
+  @HttpCode(204)
+  async clearLogo(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ): Promise<void> {
+    await this.branding.clearLogo(id, metaFrom(req));
   }
 }
 

@@ -153,6 +153,13 @@ export class AuthController {
       // a gate that only exists in the login response is one refresh away from
       // being bypassed.
       mustChangePassword: profile.mustChangePassword,
+      // The clinic's own name and logo version. Under full white-label this is
+      // what the console wears instead of ours, so it has to survive a reload
+      // rather than living only in the login response.
+      tenant: profile.tenant,
+      // Set when this user is a bookable doctor. The console uses it to lock
+      // the queue to their own list; the API enforces the same thing.
+      practitionerId: profile.practitionerId,
     };
   }
 

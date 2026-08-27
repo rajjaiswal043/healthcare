@@ -134,7 +134,7 @@ describe('the patient record', () => {
     expect(body.appointments).toHaveLength(1);
     expect(body.appointments[0].id).toBe(appointmentId);
     expect(body.appointments[0].encounterId).toBe(encounter.json().id);
-    expect(body.appointments[0].practitioner.fullName).toBe('Asha Menon');
+    expect(body.appointments[0].practitioner.fullName).toBe('Dr Asha Menon');
     expect(body.appointments[0].reasonForVisit).toBe('Fever and body ache');
     expect(body.stats.totalVisits).toBe(1);
     // Still in progress, so not yet a completed visit.

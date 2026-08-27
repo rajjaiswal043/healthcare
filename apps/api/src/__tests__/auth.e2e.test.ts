@@ -195,7 +195,7 @@ describe('who am I', () => {
     // the role key as the colour signature, the role name as the label beside
     // it. Read from the database rather than the token, so a role changed an
     // hour ago is not still showing.
-    expect(body.fullName).toBe('Asha Menon');
+    expect(body.fullName).toBe('Dr Asha Menon');
     expect(body.roles.map((r) => r.key)).toEqual(['doctor']);
     expect(body.roles[0]?.name).toBe('Doctor');
     expect(body.permissions).toContain('consultation:write');

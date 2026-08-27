@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { IconEyeOff, IconLock, IconShield } from './icons';
+import { ClinicLogo, type LogoSource } from './clinic-logo';
 
 /**
  * The sign-in stage: drifting warm colour and paper grain behind a glassy split
@@ -14,32 +15,27 @@ import { IconEyeOff, IconLock, IconShield } from './icons';
  *   - the brand panel is hidden below `lg`, where stacking it above the form
  *     would guarantee overflow
  *
- * Two variants share all of that. `clinic` is HealthCloud; `platform` is
- * doctorsdesk.in signing into its own console. They are one component rather
- * than two files on purpose — the previous platform screen was hand-rolled and
- * drifted until it belonged to no design system at all.
+ * Two variants. `platform` is doctorsdesk.in signing into its own console and
+ * still wears our name, because that console is ours. `clinic` wears the
+ * CLINIC'S name and logo and never ours — full white-label, Narveer's decision
+ * on 26 Aug 2026 (docs/07). That is why the clinic side lost the blockquote,
+ * "Clinic CRM for India" and "ABDM-aware · Built for Indian OPD": they are our
+ * voice, and a clinic does not hear it.
  *
- * The variants differ in WORDING ONLY, by Narveer's decision on 25 Aug 2026.
- * An earlier pass gave the platform a dark brand panel so the two products
- * could not be confused by somebody with both tabs open; the two screens are to
- * match, and that is the call. What still separates them is the wordmark, the
- * "Platform" chip and the footer line pointing clinic staff at /login — text,
- * not colour.
+ * The clinic panel therefore has a state nothing else in the app has: **before
+ * a slug has been typed there is no clinic**, and the page belongs to nobody.
+ * It shows the bundled default mark and neutral words rather than guessing.
  *
- * The `TrustRow` under the form stays. Data-handling copy was stripped from the
- * signed-in console on 25 Aug 2026 — the home page's "How your data is
- * protected" panel and the footer on every screen — but three words on the way
- * in, read once by somebody deciding whether to trust this product, is a
- * different thing from a standing reminder to a receptionist who has already
- * signed in forty times today. Narveer kept these.
- *
- * They are claims, so they have to stay true. `Audited` and `Encrypted` are
- * carried by `audit_event` and TLS + at-rest encryption; `DPDP-ready` by
- * purpose-wise consent at registration. If one of those ever stops being the
- * case, this row is the thing that becomes a lie.
+ * The `TrustRow` under the form survives white-labelling because it never named
+ * us — it makes a claim about the clinic's data, not about who wrote this.
  */
 
 type Variant = 'clinic' | 'platform';
+
+/** Whose sign-in this is, once the slug has resolved. Null until then. */
+export interface ClinicBrand extends LogoSource {
+  name: string;
+}
 
 // Inline SVG turbulence: no extra request, nothing to cache-bust, and it
 // survives a strict content-security policy.
@@ -78,9 +74,12 @@ export function TrustRow({ variant = 'clinic' }: { variant?: Variant }) {
 export function AuthShell({
   children,
   variant = 'clinic',
+  clinic = null,
 }: {
   children: ReactNode;
   variant?: Variant;
+  /** Ignored by the platform variant, which is not a clinic. */
+  clinic?: ClinicBrand | null;
 }) {
   const platform = variant === 'platform';
 
@@ -106,25 +105,30 @@ export function AuthShell({
 
       <div className="relative z-10 grid max-h-full w-full max-w-[1040px] overflow-hidden rounded-card-lg border border-ink/10 bg-white/60 shadow-lg backdrop-blur-xl lg:h-[min(620px,calc(100vh-2.5rem))] lg:grid-cols-[1.05fr_0.95fr]">
         {/* Brand panel — hidden below lg, where stacking it would force a scroll. */}
-        {platform ? <PlatformBrand /> : <ClinicBrand />}
+        {platform ? <PlatformBrand /> : <ClinicBrandPanel clinic={clinic} />}
 
         {/* Form panel. Scrolls internally only if the window is unusually short. */}
         <section className="flex min-h-0 flex-col justify-center overflow-y-auto bg-white/75 px-6 py-7 backdrop-blur-sm sm:px-9">
           <div className="mx-auto w-full max-w-[350px]">
-            {/* Compact brand lockup for the small-screen layout, where the
-                brand panel above is hidden. */}
-            <p className="mb-5 flex items-center gap-2 font-display text-[19px] font-extrabold lg:hidden">
-              <LogoMark size={24} />
+            {/* Compact lockup for the small-screen layout, where the panel
+                above is hidden. */}
+            <div className="mb-5 flex items-center gap-2.5 lg:hidden">
               {platform ? (
                 <>
-                  doctors<span className="text-clinical">desk.in</span>
+                  <LogoMark size={24} />
+                  <span className="font-display text-[19px] font-extrabold">
+                    doctors<span className="text-clinical">desk.in</span>
+                  </span>
                 </>
               ) : (
                 <>
-                  Health<span className="text-clinical">Cloud</span>
+                  <ClinicLogo clinic={clinic} size={26} />
+                  <span className="truncate font-display text-[17px] font-extrabold">
+                    {clinic?.name ?? 'Clinic sign-in'}
+                  </span>
                 </>
               )}
-            </p>
+            </div>
             {children}
           </div>
         </section>
@@ -133,50 +137,44 @@ export function AuthShell({
   );
 }
 
-function ClinicBrand() {
+/**
+ * The clinic's half. Their mark, their name, and nothing of ours.
+ *
+ * Deliberately quiet when `clinic` is null. That is not a loading state to be
+ * papered over with a spinner — it is the honest answer to "whose sign-in is
+ * this?" before the slug has been typed, and a guess would be worse.
+ */
+function ClinicBrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
   return (
-    <Brand
-      name="Health"
-      tail="Cloud"
-      quote={['Every patient relationship,', 'in one place.']}
-      caption="Clinic CRM for India"
-      footnote="ABDM-aware · Built for Indian OPD"
-    />
+    <section className="relative hidden flex-col items-center justify-center gap-7 border-r border-ink/10 bg-gradient-to-br from-white/60 to-bg-soft/60 px-12 py-10 text-center lg:flex">
+      <ClinicLogo clinic={clinic} size={clinic ? 92 : 72} alt={clinic?.name ?? ''} />
+
+      {clinic ? (
+        <div className="flex flex-col items-center gap-4">
+          <p className="max-w-[380px] font-display text-[clamp(24px,2.7vw,32px)] font-bold leading-[1.14] tracking-display text-ink">
+            {clinic.name}
+          </p>
+          <p className="mono-label flex items-center gap-3">
+            <span aria-hidden="true" className="inline-block h-px w-9 bg-clinical" />
+            Staff sign-in
+          </p>
+        </div>
+      ) : (
+        <p className="max-w-[300px] text-[13.5px] text-ink-40">
+          Enter your clinic&rsquo;s sign-in address and it will appear here.
+        </p>
+      )}
+    </section>
   );
 }
 
+/** doctorsdesk.in's own half. This console is ours, so it says so. */
 function PlatformBrand() {
-  return (
-    <Brand
-      name="doctors"
-      tail="desk.in"
-      quote={['Every clinic on the platform,', 'in one list.']}
-      caption="Platform operations"
-      footnote="Not a clinic account · Opens no patient record"
-    />
-  );
-}
-
-/** Wordmark, pull quote, caption, footnote — one panel, two sets of words. */
-function Brand({
-  name,
-  tail,
-  quote,
-  caption,
-  footnote,
-}: {
-  name: string;
-  tail: string;
-  quote: [string, string];
-  caption: string;
-  footnote: string;
-}) {
   return (
     <section className="relative hidden flex-col items-center justify-center gap-9 border-r border-ink/10 bg-gradient-to-br from-white/60 to-bg-soft/60 px-12 py-10 text-center lg:flex">
       <p className="flex items-center gap-2.5 font-display text-[23px] font-extrabold tracking-display text-ink">
         <LogoMark size={28} />
-        {name}
-        <span className="-ml-2.5 text-clinical">{tail}</span>
+        doctors<span className="-ml-2.5 text-clinical">desk.in</span>
       </p>
 
       <figure className="relative m-0 flex max-w-[400px] flex-col items-center gap-5">
@@ -187,12 +185,12 @@ function Brand({
           &ldquo;
         </span>
         <blockquote className="relative z-10 m-0 font-display text-[clamp(22px,2.6vw,30px)] font-bold leading-[1.12] tracking-display text-ink">
-          <span className="block">{quote[0]}</span>
-          <span className="block text-clinical-text">{quote[1]}</span>
+          <span className="block">Every clinic on the platform,</span>
+          <span className="block text-clinical-text">in one list.</span>
         </blockquote>
         <figcaption className="mono-label flex items-center gap-3">
           <span aria-hidden="true" className="inline-block h-px w-9 bg-clinical" />
-          {caption}
+          Platform operations
         </figcaption>
       </figure>
 
@@ -201,7 +199,7 @@ function Brand({
           aria-hidden="true"
           className="inline-block h-1.5 w-1.5 rounded-full bg-clinical shadow-[0_0_8px_rgba(15,118,110,.55)]"
         />
-        {footnote}
+        Not a clinic account · Opens no patient record
       </p>
     </section>
   );
@@ -210,10 +208,8 @@ function Brand({
 /**
  * One field, both sign-ins.
  *
- * It was duplicated in each page until the platform screen was brought into the
- * theme, at which point "similar" would have meant two copies drifting apart
- * again. Anything that changes here — focus ring, icon inset, label size —
- * changes on both by construction.
+ * Anything that changes here — focus ring, icon inset, label size — changes on
+ * both by construction.
  */
 export function AuthField({
   id,
@@ -254,6 +250,13 @@ export function AuthField({
   );
 }
 
+/**
+ * doctorsdesk.in's mark.
+ *
+ * Not used anywhere a clinic can see it — that is what full white-label means.
+ * The clinic surfaces use `ClinicLogo`, which falls back to the bundled generic
+ * mark rather than to ours.
+ */
 export function LogoMark({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">

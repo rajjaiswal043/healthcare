@@ -30,13 +30,20 @@ interface DisplayDoctor {
   name: string;
   specialty: string | null;
   nowServing: number | null;
-  next: Array<number | null>;
+  /**
+   * Already shortened by the API to "Kavita S." — the surname never reaches
+   * this screen. Do not try to expand it; there is nothing here to expand.
+   */
+  nowServingName: string | null;
+  next: Array<{ token: number | null; name: string }>;
   waiting: number;
   minutesSinceLastCall: number | null;
 }
 
 interface DisplayBoard {
   clinic: string;
+  clinicSlug: string;
+  clinicLogoVersion: string | null;
   location: string | null;
   generatedAt: string;
   doctors: DisplayDoctor[];
@@ -134,7 +141,10 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
               behind it are the same white, so a JPEG with no transparency sits
               flush instead of reading as a pasted rectangle. */}
           <span className="grid shrink-0 place-items-center rounded-panel border border-ink/8 bg-card p-[0.6vw] shadow-sm">
-            <ClinicLogo size={56} />
+            <ClinicLogo
+              clinic={{ slug: board.clinicSlug, logoVersion: board.clinicLogoVersion }}
+              size={56}
+            />
           </span>
 
           <div>
@@ -217,6 +227,15 @@ function DoctorCard({ doctor: d }: { doctor: DisplayDoctor }) {
           {d.nowServing ?? '—'}
         </p>
 
+        {/* Under the number, not beside it. The token is what the room scans
+            for; the name is the confirmation once a number has caught somebody's
+            eye, so it must not compete with it for size. */}
+        {d.nowServingName && (
+          <p className="mt-[0.5vh] text-[clamp(20px,2.2vw,42px)] font-semibold leading-tight text-ink">
+            {d.nowServingName}
+          </p>
+        )}
+
         {late && (
           <p className="mt-[1vh] inline-flex rounded-pill bg-amber-soft px-3 py-1 text-[clamp(12px,1vw,18px)] font-semibold text-amber-text">
             Running late — last called {d.minutesSinceLastCall} minutes ago
@@ -230,12 +249,19 @@ function DoctorCard({ doctor: d }: { doctor: DisplayDoctor }) {
             <p className="mt-2 text-[clamp(16px,1.4vw,26px)] text-ink-20">Nobody waiting</p>
           ) : (
             <div className="mt-2 flex flex-wrap items-end gap-[1vw]">
-              {d.next.map((token, i) => (
+              {d.next.map((entry, i) => (
                 <span
-                  key={`${token}-${i}`}
-                  className="rounded-panel bg-clinical-soft px-[1.4vw] py-[0.6vh] font-mono text-[clamp(24px,3vw,56px)] font-bold text-clinical-text"
+                  key={`${entry.token}-${i}`}
+                  className="rounded-panel bg-clinical-soft px-[1.4vw] py-[0.6vh] text-center"
                 >
-                  {token ?? '—'}
+                  <span className="block font-mono text-[clamp(24px,3vw,56px)] font-bold leading-none text-clinical-text">
+                    {entry.token ?? '—'}
+                  </span>
+                  {entry.name && (
+                    <span className="mt-[0.4vh] block text-[clamp(11px,1vw,18px)] font-semibold text-clinical-text/70">
+                      {entry.name}
+                    </span>
+                  )}
                 </span>
               ))}
               {d.waiting > d.next.length && (
