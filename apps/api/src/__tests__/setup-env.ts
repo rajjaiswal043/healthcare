@@ -88,6 +88,17 @@ process.env.LOG_LEVEL = 'error';
  */
 process.env.MFA_ENABLED = 'true';
 
+/**
+ * Clinical documents go in a Map, not a bucket.
+ *
+ * The suite must run with no AWS credentials and no network. Everything worth
+ * asserting about document storage — that keys are tenant-prefixed, that another
+ * clinic's document is unreachable, that oversized and wrong-typed files are
+ * refused — is decided before the store is reached, so a real bucket would prove
+ * nothing extra and would make these tests fail on a train.
+ */
+process.env.CLINICAL_STORAGE_DRIVER = 'memory';
+
 // The app refuses to start without these; a developer whose .env predates auth
 // should get that message from here rather than a stack trace inside Nest.
 for (const key of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET']) {

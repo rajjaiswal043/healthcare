@@ -51,7 +51,26 @@ export class ClinicSetupService {
 
   // --- departments ---------------------------------------------------------
 
-  async createDepartment(tenantId: string, name: string, meta: RequestMeta) {
+  /**
+   * Every department, diagnostic ones included.
+   *
+   * Distinct from `GET /departments`, which is the FIRST STEP OF BOOKING and
+   * deliberately hides diagnostic departments — nobody books an appointment with
+   * radiology. Setup needs to see what booking hides, or an administrator can
+   * create an X-ray department and never see it again.
+   */
+  async listDepartments(tenantId: string) {
+    const departments = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.department.findMany({
+        where: { isActive: true },
+        orderBy: [{ isDiagnostic: 'asc' }, { displayOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true, isDiagnostic: true },
+      }),
+    );
+    return { departments };
+  }
+
+  async createDepartment(tenantId: string, name: string, meta: RequestMeta, isDiagnostic = false) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const clash = await tx.department.findFirst({ where: { name: name.trim() } });
       if (clash) {
@@ -62,8 +81,8 @@ export class ClinicSetupService {
       }
 
       const created = await tx.department.create({
-        data: { tenantId, name: name.trim() },
-        select: { id: true, name: true, displayOrder: true, isActive: true },
+        data: { tenantId, name: name.trim(), isDiagnostic },
+        select: { id: true, name: true, displayOrder: true, isActive: true, isDiagnostic: true },
       });
 
       await this.audit.record(tx, tenantId, {
@@ -81,7 +100,7 @@ export class ClinicSetupService {
   async updateDepartment(
     tenantId: string,
     id: string,
-    input: { name?: string; displayOrder?: number; isActive?: boolean },
+    input: { name?: string; displayOrder?: number; isActive?: boolean; isDiagnostic?: boolean },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
@@ -93,6 +112,7 @@ export class ClinicSetupService {
         data: {
           ...(input.name === undefined ? {} : { name: input.name.trim() }),
           ...(input.displayOrder === undefined ? {} : { displayOrder: input.displayOrder }),
+          ...(input.isDiagnostic === undefined ? {} : { isDiagnostic: input.isDiagnostic }),
           ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
         },
         select: { id: true, name: true, displayOrder: true, isActive: true },

@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
@@ -10,6 +20,7 @@ import { PERMISSIONS } from '../../platform/auth/permissions.js';
 import { PatientsService, type RequestMeta } from './patients.service.js';
 import { RegisterPatientDto } from './dto/register-patient.dto.js';
 import { CheckDuplicatesDto } from './dto/check-duplicates.dto.js';
+import { CorrectPatientDto } from './correct-patient.dto.js';
 
 @Controller('patients')
 export class PatientsController {
@@ -44,6 +55,38 @@ export class PatientsController {
   ) {
     const patients = await this.patients.search(tenantId, q ?? '', metaFrom(req, user));
     return { patients };
+  }
+
+  /**
+   * Correct a patient registered earlier — FR-P36-20.
+   *
+   * Behind `patient:write`, the permission the front desk and doctors already
+   * hold: the people who register patients and the people who notice the error
+   * mid-consultation. Narveer's choice on 27 Aug 2026 over widening it to
+   * everyone clinical.
+   *
+   * The DTO is where UHID and ABHA are refused — see `CorrectPatientDto`.
+   */
+  @Patch(':id')
+  @RequirePermissions(PERMISSIONS.PATIENT_WRITE)
+  async correct(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CorrectPatientDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.patients.correct(tenantId, id, { ...dto }, metaFrom(req, user));
+  }
+
+  /** What this record used to say. Administrators only. */
+  @Get(':id/corrections')
+  @RequirePermissions(PERMISSIONS.AUDIT_READ)
+  async corrections(
+    @CurrentTenant() tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.patients.corrections(tenantId, id);
   }
 
   /**

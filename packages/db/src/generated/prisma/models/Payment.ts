@@ -39,6 +39,7 @@ export type PaymentMinAggregateOutputType = {
   tenantId: string | null
   invoiceId: string | null
   direction: $Enums.PaymentDirection | null
+  correctionKind: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode | null
   amountPaise: number | null
   reference: string | null
@@ -53,6 +54,7 @@ export type PaymentMaxAggregateOutputType = {
   tenantId: string | null
   invoiceId: string | null
   direction: $Enums.PaymentDirection | null
+  correctionKind: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode | null
   amountPaise: number | null
   reference: string | null
@@ -67,6 +69,7 @@ export type PaymentCountAggregateOutputType = {
   tenantId: number
   invoiceId: number
   direction: number
+  correctionKind: number
   mode: number
   amountPaise: number
   reference: number
@@ -91,6 +94,7 @@ export type PaymentMinAggregateInputType = {
   tenantId?: true
   invoiceId?: true
   direction?: true
+  correctionKind?: true
   mode?: true
   amountPaise?: true
   reference?: true
@@ -105,6 +109,7 @@ export type PaymentMaxAggregateInputType = {
   tenantId?: true
   invoiceId?: true
   direction?: true
+  correctionKind?: true
   mode?: true
   amountPaise?: true
   reference?: true
@@ -119,6 +124,7 @@ export type PaymentCountAggregateInputType = {
   tenantId?: true
   invoiceId?: true
   direction?: true
+  correctionKind?: true
   mode?: true
   amountPaise?: true
   reference?: true
@@ -220,6 +226,7 @@ export type PaymentGroupByOutputType = {
   tenantId: string
   invoiceId: string
   direction: $Enums.PaymentDirection
+  correctionKind: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode
   amountPaise: number
   reference: string | null
@@ -257,6 +264,7 @@ export type PaymentWhereInput = {
   tenantId?: Prisma.UuidFilter<"Payment"> | string
   invoiceId?: Prisma.UuidFilter<"Payment"> | string
   direction?: Prisma.EnumPaymentDirectionFilter<"Payment"> | $Enums.PaymentDirection
+  correctionKind?: Prisma.EnumPaymentCorrectionKindNullableFilter<"Payment"> | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFilter<"Payment"> | $Enums.PaymentMode
   amountPaise?: Prisma.IntFilter<"Payment"> | number
   reference?: Prisma.StringNullableFilter<"Payment"> | string | null
@@ -272,6 +280,7 @@ export type PaymentOrderByWithRelationInput = {
   tenantId?: Prisma.SortOrder
   invoiceId?: Prisma.SortOrder
   direction?: Prisma.SortOrder
+  correctionKind?: Prisma.SortOrderInput | Prisma.SortOrder
   mode?: Prisma.SortOrder
   amountPaise?: Prisma.SortOrder
   reference?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -290,6 +299,7 @@ export type PaymentWhereUniqueInput = Prisma.AtLeast<{
   tenantId?: Prisma.UuidFilter<"Payment"> | string
   invoiceId?: Prisma.UuidFilter<"Payment"> | string
   direction?: Prisma.EnumPaymentDirectionFilter<"Payment"> | $Enums.PaymentDirection
+  correctionKind?: Prisma.EnumPaymentCorrectionKindNullableFilter<"Payment"> | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFilter<"Payment"> | $Enums.PaymentMode
   amountPaise?: Prisma.IntFilter<"Payment"> | number
   reference?: Prisma.StringNullableFilter<"Payment"> | string | null
@@ -305,6 +315,7 @@ export type PaymentOrderByWithAggregationInput = {
   tenantId?: Prisma.SortOrder
   invoiceId?: Prisma.SortOrder
   direction?: Prisma.SortOrder
+  correctionKind?: Prisma.SortOrderInput | Prisma.SortOrder
   mode?: Prisma.SortOrder
   amountPaise?: Prisma.SortOrder
   reference?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -327,6 +338,7 @@ export type PaymentScalarWhereWithAggregatesInput = {
   tenantId?: Prisma.UuidWithAggregatesFilter<"Payment"> | string
   invoiceId?: Prisma.UuidWithAggregatesFilter<"Payment"> | string
   direction?: Prisma.EnumPaymentDirectionWithAggregatesFilter<"Payment"> | $Enums.PaymentDirection
+  correctionKind?: Prisma.EnumPaymentCorrectionKindNullableWithAggregatesFilter<"Payment"> | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeWithAggregatesFilter<"Payment"> | $Enums.PaymentMode
   amountPaise?: Prisma.IntWithAggregatesFilter<"Payment"> | number
   reference?: Prisma.StringNullableWithAggregatesFilter<"Payment"> | string | null
@@ -340,6 +352,7 @@ export type PaymentCreateInput = {
   id?: string
   tenantId: string
   direction?: $Enums.PaymentDirection
+  correctionKind?: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode
   amountPaise: number
   reference?: string | null
@@ -355,6 +368,7 @@ export type PaymentUncheckedCreateInput = {
   tenantId: string
   invoiceId: string
   direction?: $Enums.PaymentDirection
+  correctionKind?: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode
   amountPaise: number
   reference?: string | null
@@ -368,6 +382,7 @@ export type PaymentUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   direction?: Prisma.EnumPaymentDirectionFieldUpdateOperationsInput | $Enums.PaymentDirection
+  correctionKind?: Prisma.NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFieldUpdateOperationsInput | $Enums.PaymentMode
   amountPaise?: Prisma.IntFieldUpdateOperationsInput | number
   reference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -383,6 +398,7 @@ export type PaymentUncheckedUpdateInput = {
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   invoiceId?: Prisma.StringFieldUpdateOperationsInput | string
   direction?: Prisma.EnumPaymentDirectionFieldUpdateOperationsInput | $Enums.PaymentDirection
+  correctionKind?: Prisma.NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFieldUpdateOperationsInput | $Enums.PaymentMode
   amountPaise?: Prisma.IntFieldUpdateOperationsInput | number
   reference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -397,6 +413,7 @@ export type PaymentCreateManyInput = {
   tenantId: string
   invoiceId: string
   direction?: $Enums.PaymentDirection
+  correctionKind?: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode
   amountPaise: number
   reference?: string | null
@@ -410,6 +427,7 @@ export type PaymentUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   direction?: Prisma.EnumPaymentDirectionFieldUpdateOperationsInput | $Enums.PaymentDirection
+  correctionKind?: Prisma.NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFieldUpdateOperationsInput | $Enums.PaymentMode
   amountPaise?: Prisma.IntFieldUpdateOperationsInput | number
   reference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -424,6 +442,7 @@ export type PaymentUncheckedUpdateManyInput = {
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   invoiceId?: Prisma.StringFieldUpdateOperationsInput | string
   direction?: Prisma.EnumPaymentDirectionFieldUpdateOperationsInput | $Enums.PaymentDirection
+  correctionKind?: Prisma.NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFieldUpdateOperationsInput | $Enums.PaymentMode
   amountPaise?: Prisma.IntFieldUpdateOperationsInput | number
   reference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -448,6 +467,7 @@ export type PaymentCountOrderByAggregateInput = {
   tenantId?: Prisma.SortOrder
   invoiceId?: Prisma.SortOrder
   direction?: Prisma.SortOrder
+  correctionKind?: Prisma.SortOrder
   mode?: Prisma.SortOrder
   amountPaise?: Prisma.SortOrder
   reference?: Prisma.SortOrder
@@ -466,6 +486,7 @@ export type PaymentMaxOrderByAggregateInput = {
   tenantId?: Prisma.SortOrder
   invoiceId?: Prisma.SortOrder
   direction?: Prisma.SortOrder
+  correctionKind?: Prisma.SortOrder
   mode?: Prisma.SortOrder
   amountPaise?: Prisma.SortOrder
   reference?: Prisma.SortOrder
@@ -480,6 +501,7 @@ export type PaymentMinOrderByAggregateInput = {
   tenantId?: Prisma.SortOrder
   invoiceId?: Prisma.SortOrder
   direction?: Prisma.SortOrder
+  correctionKind?: Prisma.SortOrder
   mode?: Prisma.SortOrder
   amountPaise?: Prisma.SortOrder
   reference?: Prisma.SortOrder
@@ -539,6 +561,10 @@ export type EnumPaymentDirectionFieldUpdateOperationsInput = {
   set?: $Enums.PaymentDirection
 }
 
+export type NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput = {
+  set?: $Enums.PaymentCorrectionKind | null
+}
+
 export type EnumPaymentModeFieldUpdateOperationsInput = {
   set?: $Enums.PaymentMode
 }
@@ -547,6 +573,7 @@ export type PaymentCreateWithoutInvoiceInput = {
   id?: string
   tenantId: string
   direction?: $Enums.PaymentDirection
+  correctionKind?: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode
   amountPaise: number
   reference?: string | null
@@ -560,6 +587,7 @@ export type PaymentUncheckedCreateWithoutInvoiceInput = {
   id?: string
   tenantId: string
   direction?: $Enums.PaymentDirection
+  correctionKind?: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode
   amountPaise: number
   reference?: string | null
@@ -603,6 +631,7 @@ export type PaymentScalarWhereInput = {
   tenantId?: Prisma.UuidFilter<"Payment"> | string
   invoiceId?: Prisma.UuidFilter<"Payment"> | string
   direction?: Prisma.EnumPaymentDirectionFilter<"Payment"> | $Enums.PaymentDirection
+  correctionKind?: Prisma.EnumPaymentCorrectionKindNullableFilter<"Payment"> | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFilter<"Payment"> | $Enums.PaymentMode
   amountPaise?: Prisma.IntFilter<"Payment"> | number
   reference?: Prisma.StringNullableFilter<"Payment"> | string | null
@@ -616,6 +645,7 @@ export type PaymentCreateManyInvoiceInput = {
   id?: string
   tenantId: string
   direction?: $Enums.PaymentDirection
+  correctionKind?: $Enums.PaymentCorrectionKind | null
   mode: $Enums.PaymentMode
   amountPaise: number
   reference?: string | null
@@ -629,6 +659,7 @@ export type PaymentUpdateWithoutInvoiceInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   direction?: Prisma.EnumPaymentDirectionFieldUpdateOperationsInput | $Enums.PaymentDirection
+  correctionKind?: Prisma.NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFieldUpdateOperationsInput | $Enums.PaymentMode
   amountPaise?: Prisma.IntFieldUpdateOperationsInput | number
   reference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -642,6 +673,7 @@ export type PaymentUncheckedUpdateWithoutInvoiceInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   direction?: Prisma.EnumPaymentDirectionFieldUpdateOperationsInput | $Enums.PaymentDirection
+  correctionKind?: Prisma.NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFieldUpdateOperationsInput | $Enums.PaymentMode
   amountPaise?: Prisma.IntFieldUpdateOperationsInput | number
   reference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -655,6 +687,7 @@ export type PaymentUncheckedUpdateManyWithoutInvoiceInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   direction?: Prisma.EnumPaymentDirectionFieldUpdateOperationsInput | $Enums.PaymentDirection
+  correctionKind?: Prisma.NullableEnumPaymentCorrectionKindFieldUpdateOperationsInput | $Enums.PaymentCorrectionKind | null
   mode?: Prisma.EnumPaymentModeFieldUpdateOperationsInput | $Enums.PaymentMode
   amountPaise?: Prisma.IntFieldUpdateOperationsInput | number
   reference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -671,6 +704,7 @@ export type PaymentSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   tenantId?: boolean
   invoiceId?: boolean
   direction?: boolean
+  correctionKind?: boolean
   mode?: boolean
   amountPaise?: boolean
   reference?: boolean
@@ -686,6 +720,7 @@ export type PaymentSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   tenantId?: boolean
   invoiceId?: boolean
   direction?: boolean
+  correctionKind?: boolean
   mode?: boolean
   amountPaise?: boolean
   reference?: boolean
@@ -701,6 +736,7 @@ export type PaymentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   tenantId?: boolean
   invoiceId?: boolean
   direction?: boolean
+  correctionKind?: boolean
   mode?: boolean
   amountPaise?: boolean
   reference?: boolean
@@ -716,6 +752,7 @@ export type PaymentSelectScalar = {
   tenantId?: boolean
   invoiceId?: boolean
   direction?: boolean
+  correctionKind?: boolean
   mode?: boolean
   amountPaise?: boolean
   reference?: boolean
@@ -725,7 +762,7 @@ export type PaymentSelectScalar = {
   createdAt?: boolean
 }
 
-export type PaymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "invoiceId" | "direction" | "mode" | "amountPaise" | "reference" | "collectedByUserId" | "collectedAt" | "reason" | "createdAt", ExtArgs["result"]["payment"]>
+export type PaymentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "invoiceId" | "direction" | "correctionKind" | "mode" | "amountPaise" | "reference" | "collectedByUserId" | "collectedAt" | "reason" | "createdAt", ExtArgs["result"]["payment"]>
 export type PaymentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   invoice?: boolean | Prisma.InvoiceDefaultArgs<ExtArgs>
 }
@@ -746,6 +783,14 @@ export type $PaymentPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     tenantId: string
     invoiceId: string
     direction: $Enums.PaymentDirection
+    /**
+     * Why a REFUND row exists — null on money-in, required on a refund.
+     * 
+     * PATIENT_REFUND and RECORDED_IN_ERROR net to the same figure and are
+     * completely different problems: money that LEFT the drawer versus money that
+     * was never in it. A CHECK ties this to `direction` so neither can drift.
+     */
+    correctionKind: $Enums.PaymentCorrectionKind | null
     mode: $Enums.PaymentMode
     /**
      * Always POSITIVE. The direction says which way the money went; a signed
@@ -1196,6 +1241,7 @@ export interface PaymentFieldRefs {
   readonly tenantId: Prisma.FieldRef<"Payment", 'String'>
   readonly invoiceId: Prisma.FieldRef<"Payment", 'String'>
   readonly direction: Prisma.FieldRef<"Payment", 'PaymentDirection'>
+  readonly correctionKind: Prisma.FieldRef<"Payment", 'PaymentCorrectionKind'>
   readonly mode: Prisma.FieldRef<"Payment", 'PaymentMode'>
   readonly amountPaise: Prisma.FieldRef<"Payment", 'Int'>
   readonly reference: Prisma.FieldRef<"Payment", 'String'>

@@ -26,6 +26,42 @@ const EnvSchema = z.object({
 
   WEB_BASE_URL: z.string().url().default('http://localhost:3000'),
 
+  /**
+   * S3, for clinical documents — X-rays, scanned reports, PDFs.
+   *
+   * Names match the DropYard implementation deliberately: Narveer runs both,
+   * and two of his codebases disagreeing about what the S3 bucket variable is
+   * called is a needless thing to remember.
+   *
+   * ALL OPTIONAL, and that is a decision rather than laziness. A clinic that
+   * does not use diagnostics should not be unable to start because nobody has
+   * created a bucket yet, and the integration suite must run on a laptop with
+   * no AWS credentials. `S3ClinicalDocumentStore` throws a plain-English error
+   * when it is actually called without them — the same shape as DropYard's
+   * `getS3Config()`.
+   */
+  AWS_REGION: z.string().optional(),
+  AWS_S3_BUCKET: z.string().optional(),
+  /** For a CDN in front of the bucket later. Unused while reads are presigned. */
+  S3_PUBLIC_BASE_URL: z.string().url().optional(),
+
+  /**
+   * Which clinical document store to bind.
+   *
+   * `memory` keeps uploaded bytes in a Map and is how the integration suite runs
+   * without AWS credentials — a suite that needed a real bucket is a suite
+   * nobody runs on a train.
+   *
+   * Declared as configuration rather than sniffed from NODE_ENV, deliberately.
+   * This codebase already refuses to give the application a hidden notion of
+   * "test mode" (see the DATABASE_URL note in `__tests__/setup-env.ts`): a
+   * branch that only tests take is a branch nobody reviews. This is a named,
+   * greppable choice — and `memory` LOSES EVERY FILE ON RESTART, so the parse
+   * below refuses to start with it under NODE_ENV=production rather than
+   * trusting anyone to notice.
+   */
+  CLINICAL_STORAGE_DRIVER: z.enum(['s3', 'memory']).default('s3'),
+
   // Signing keys. Length-checked because a short secret makes HMAC-SHA256
   // brute-forceable, and a default that "works" in dev is exactly how a weak
   // key reaches production.
@@ -85,6 +121,14 @@ export function loadEnv(): Env {
    * reading three files, so the answer drifted. A line in the startup log
    * cannot drift.
    */
+  if (parsed.data.CLINICAL_STORAGE_DRIVER === 'memory' && parsed.data.NODE_ENV === 'production') {
+    throw new Error(
+      'CLINICAL_STORAGE_DRIVER=memory keeps clinical documents in memory and loses every ' +
+        'one of them when the process restarts. It exists for the test suite. Refusing to ' +
+        'start in production.',
+    );
+  }
+
   if (!parsed.data.MFA_ENABLED) {
     // eslint-disable-next-line no-console -- before Nest's logger exists
     console.warn(

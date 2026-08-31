@@ -39,6 +39,7 @@ export type EncounterMinAggregateOutputType = {
   historyOfPresentIllness: string | null
   examinationFindings: string | null
   advice: string | null
+  prescriptionNote: string | null
   followUpDate: Date | null
   followUpNote: string | null
   startedAt: Date | null
@@ -59,6 +60,7 @@ export type EncounterMaxAggregateOutputType = {
   historyOfPresentIllness: string | null
   examinationFindings: string | null
   advice: string | null
+  prescriptionNote: string | null
   followUpDate: Date | null
   followUpNote: string | null
   startedAt: Date | null
@@ -79,6 +81,7 @@ export type EncounterCountAggregateOutputType = {
   historyOfPresentIllness: number
   examinationFindings: number
   advice: number
+  prescriptionNote: number
   followUpDate: number
   followUpNote: number
   startedAt: number
@@ -101,6 +104,7 @@ export type EncounterMinAggregateInputType = {
   historyOfPresentIllness?: true
   examinationFindings?: true
   advice?: true
+  prescriptionNote?: true
   followUpDate?: true
   followUpNote?: true
   startedAt?: true
@@ -121,6 +125,7 @@ export type EncounterMaxAggregateInputType = {
   historyOfPresentIllness?: true
   examinationFindings?: true
   advice?: true
+  prescriptionNote?: true
   followUpDate?: true
   followUpNote?: true
   startedAt?: true
@@ -141,6 +146,7 @@ export type EncounterCountAggregateInputType = {
   historyOfPresentIllness?: true
   examinationFindings?: true
   advice?: true
+  prescriptionNote?: true
   followUpDate?: true
   followUpNote?: true
   startedAt?: true
@@ -234,6 +240,7 @@ export type EncounterGroupByOutputType = {
   historyOfPresentIllness: string | null
   examinationFindings: string | null
   advice: string | null
+  prescriptionNote: string | null
   followUpDate: Date | null
   followUpNote: string | null
   startedAt: Date
@@ -275,6 +282,7 @@ export type EncounterWhereInput = {
   historyOfPresentIllness?: Prisma.StringNullableFilter<"Encounter"> | string | null
   examinationFindings?: Prisma.StringNullableFilter<"Encounter"> | string | null
   advice?: Prisma.StringNullableFilter<"Encounter"> | string | null
+  prescriptionNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   startedAt?: Prisma.DateTimeFilter<"Encounter"> | Date | string
@@ -302,6 +310,7 @@ export type EncounterOrderByWithRelationInput = {
   historyOfPresentIllness?: Prisma.SortOrderInput | Prisma.SortOrder
   examinationFindings?: Prisma.SortOrderInput | Prisma.SortOrder
   advice?: Prisma.SortOrderInput | Prisma.SortOrder
+  prescriptionNote?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpDate?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpNote?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -332,6 +341,7 @@ export type EncounterWhereUniqueInput = Prisma.AtLeast<{
   historyOfPresentIllness?: Prisma.StringNullableFilter<"Encounter"> | string | null
   examinationFindings?: Prisma.StringNullableFilter<"Encounter"> | string | null
   advice?: Prisma.StringNullableFilter<"Encounter"> | string | null
+  prescriptionNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   startedAt?: Prisma.DateTimeFilter<"Encounter"> | Date | string
@@ -359,6 +369,7 @@ export type EncounterOrderByWithAggregationInput = {
   historyOfPresentIllness?: Prisma.SortOrderInput | Prisma.SortOrder
   examinationFindings?: Prisma.SortOrderInput | Prisma.SortOrder
   advice?: Prisma.SortOrderInput | Prisma.SortOrder
+  prescriptionNote?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpDate?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpNote?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -385,6 +396,7 @@ export type EncounterScalarWhereWithAggregatesInput = {
   historyOfPresentIllness?: Prisma.StringNullableWithAggregatesFilter<"Encounter"> | string | null
   examinationFindings?: Prisma.StringNullableWithAggregatesFilter<"Encounter"> | string | null
   advice?: Prisma.StringNullableWithAggregatesFilter<"Encounter"> | string | null
+  prescriptionNote?: Prisma.StringNullableWithAggregatesFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableWithAggregatesFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableWithAggregatesFilter<"Encounter"> | string | null
   startedAt?: Prisma.DateTimeWithAggregatesFilter<"Encounter"> | Date | string
@@ -402,6 +414,7 @@ export type EncounterCreateInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -429,6 +442,7 @@ export type EncounterUncheckedCreateInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -450,6 +464,7 @@ export type EncounterUpdateInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -477,6 +492,7 @@ export type EncounterUncheckedUpdateInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -501,6 +517,7 @@ export type EncounterCreateManyInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -518,6 +535,7 @@ export type EncounterUpdateManyMutationInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -538,6 +556,7 @@ export type EncounterUncheckedUpdateManyInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -573,6 +592,7 @@ export type EncounterCountOrderByAggregateInput = {
   historyOfPresentIllness?: Prisma.SortOrder
   examinationFindings?: Prisma.SortOrder
   advice?: Prisma.SortOrder
+  prescriptionNote?: Prisma.SortOrder
   followUpDate?: Prisma.SortOrder
   followUpNote?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -593,6 +613,7 @@ export type EncounterMaxOrderByAggregateInput = {
   historyOfPresentIllness?: Prisma.SortOrder
   examinationFindings?: Prisma.SortOrder
   advice?: Prisma.SortOrder
+  prescriptionNote?: Prisma.SortOrder
   followUpDate?: Prisma.SortOrder
   followUpNote?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -613,6 +634,7 @@ export type EncounterMinOrderByAggregateInput = {
   historyOfPresentIllness?: Prisma.SortOrder
   examinationFindings?: Prisma.SortOrder
   advice?: Prisma.SortOrder
+  prescriptionNote?: Prisma.SortOrder
   followUpDate?: Prisma.SortOrder
   followUpNote?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
@@ -811,6 +833,7 @@ export type EncounterCreateWithoutPatientInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -836,6 +859,7 @@ export type EncounterUncheckedCreateWithoutPatientInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -889,6 +913,7 @@ export type EncounterScalarWhereInput = {
   historyOfPresentIllness?: Prisma.StringNullableFilter<"Encounter"> | string | null
   examinationFindings?: Prisma.StringNullableFilter<"Encounter"> | string | null
   advice?: Prisma.StringNullableFilter<"Encounter"> | string | null
+  prescriptionNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   startedAt?: Prisma.DateTimeFilter<"Encounter"> | Date | string
@@ -906,6 +931,7 @@ export type EncounterCreateWithoutPractitionerInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -931,6 +957,7 @@ export type EncounterUncheckedCreateWithoutPractitionerInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -978,6 +1005,7 @@ export type EncounterCreateWithoutAppointmentInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1003,6 +1031,7 @@ export type EncounterUncheckedCreateWithoutAppointmentInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1040,6 +1069,7 @@ export type EncounterUpdateWithoutAppointmentInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1065,6 +1095,7 @@ export type EncounterUncheckedUpdateWithoutAppointmentInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1086,6 +1117,7 @@ export type EncounterCreateWithoutVitalsInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1112,6 +1144,7 @@ export type EncounterUncheckedCreateWithoutVitalsInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1148,6 +1181,7 @@ export type EncounterUpdateWithoutVitalsInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1174,6 +1208,7 @@ export type EncounterUncheckedUpdateWithoutVitalsInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1194,6 +1229,7 @@ export type EncounterCreateWithoutDiagnosesInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1220,6 +1256,7 @@ export type EncounterUncheckedCreateWithoutDiagnosesInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1256,6 +1293,7 @@ export type EncounterUpdateWithoutDiagnosesInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1282,6 +1320,7 @@ export type EncounterUncheckedUpdateWithoutDiagnosesInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1302,6 +1341,7 @@ export type EncounterCreateWithoutPrescriptionsInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1328,6 +1368,7 @@ export type EncounterUncheckedCreateWithoutPrescriptionsInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1364,6 +1405,7 @@ export type EncounterUpdateWithoutPrescriptionsInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1390,6 +1432,7 @@ export type EncounterUncheckedUpdateWithoutPrescriptionsInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1410,6 +1453,7 @@ export type EncounterCreateWithoutAddendaInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1436,6 +1480,7 @@ export type EncounterUncheckedCreateWithoutAddendaInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1472,6 +1517,7 @@ export type EncounterUpdateWithoutAddendaInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1498,6 +1544,7 @@ export type EncounterUncheckedUpdateWithoutAddendaInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1520,6 +1567,7 @@ export type EncounterCreateManyPatientInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1537,6 +1585,7 @@ export type EncounterUpdateWithoutPatientInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1562,6 +1611,7 @@ export type EncounterUncheckedUpdateWithoutPatientInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1585,6 +1635,7 @@ export type EncounterUncheckedUpdateManyWithoutPatientInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1604,6 +1655,7 @@ export type EncounterCreateManyPractitionerInput = {
   historyOfPresentIllness?: string | null
   examinationFindings?: string | null
   advice?: string | null
+  prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
   startedAt?: Date | string
@@ -1621,6 +1673,7 @@ export type EncounterUpdateWithoutPractitionerInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1646,6 +1699,7 @@ export type EncounterUncheckedUpdateWithoutPractitionerInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1669,6 +1723,7 @@ export type EncounterUncheckedUpdateManyWithoutPractitionerInput = {
   historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1747,6 +1802,7 @@ export type EncounterSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   historyOfPresentIllness?: boolean
   examinationFindings?: boolean
   advice?: boolean
+  prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
   startedAt?: boolean
@@ -1775,6 +1831,7 @@ export type EncounterSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   historyOfPresentIllness?: boolean
   examinationFindings?: boolean
   advice?: boolean
+  prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
   startedAt?: boolean
@@ -1798,6 +1855,7 @@ export type EncounterSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   historyOfPresentIllness?: boolean
   examinationFindings?: boolean
   advice?: boolean
+  prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
   startedAt?: boolean
@@ -1821,6 +1879,7 @@ export type EncounterSelectScalar = {
   historyOfPresentIllness?: boolean
   examinationFindings?: boolean
   advice?: boolean
+  prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
   startedAt?: boolean
@@ -1830,7 +1889,7 @@ export type EncounterSelectScalar = {
   updatedAt?: boolean
 }
 
-export type EncounterOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "practitionerId" | "status" | "chiefComplaint" | "historyOfPresentIllness" | "examinationFindings" | "advice" | "followUpDate" | "followUpNote" | "startedAt" | "signedAt" | "signedByUserId" | "createdAt" | "updatedAt", ExtArgs["result"]["encounter"]>
+export type EncounterOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "practitionerId" | "status" | "chiefComplaint" | "historyOfPresentIllness" | "examinationFindings" | "advice" | "prescriptionNote" | "followUpDate" | "followUpNote" | "startedAt" | "signedAt" | "signedByUserId" | "createdAt" | "updatedAt", ExtArgs["result"]["encounter"]>
 export type EncounterInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
@@ -1884,6 +1943,13 @@ export type $EncounterPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     historyOfPresentIllness: string | null
     examinationFindings: string | null
     advice: string | null
+    /**
+     * FR-CON-11. A second printed block, for what is NOT advice to the patient:
+     * physiotherapy, precautions, a line to the pharmacy, a referral note. Kept
+     * apart from `advice` because the two are addressed to different readers and
+     * merging them cannot be undone once doctors have written into one box.
+     */
+    prescriptionNote: string | null
     followUpDate: Date | null
     followUpNote: string | null
     startedAt: Date
@@ -2336,6 +2402,7 @@ export interface EncounterFieldRefs {
   readonly historyOfPresentIllness: Prisma.FieldRef<"Encounter", 'String'>
   readonly examinationFindings: Prisma.FieldRef<"Encounter", 'String'>
   readonly advice: Prisma.FieldRef<"Encounter", 'String'>
+  readonly prescriptionNote: Prisma.FieldRef<"Encounter", 'String'>
   readonly followUpDate: Prisma.FieldRef<"Encounter", 'DateTime'>
   readonly followUpNote: Prisma.FieldRef<"Encounter", 'String'>
   readonly startedAt: Prisma.FieldRef<"Encounter", 'DateTime'>

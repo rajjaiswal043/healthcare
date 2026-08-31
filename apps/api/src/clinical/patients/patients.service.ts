@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
@@ -207,6 +212,146 @@ export class PatientsService {
    * exists without their consent record, or without an audit trail, is a
    * compliance problem rather than merely a bug.
    */
+  /**
+   * Correct a patient registered earlier — FR-P36-20 to FR-P36-22.
+   *
+   * Three things worth knowing before changing anything here.
+   *
+   * **The diff decides what is recorded.** Only fields whose value actually
+   * moved produce a `patient_correction` row, so re-saving a form without
+   * touching it writes nothing. The database has the same rule as a CHECK.
+   *
+   * **Date of birth and age are kept from contradicting each other.** Setting a
+   * birth date clears any stored age, because an age recorded two years ago
+   * beside a newly known birth date is worse than no age at all. Setting an age
+   * clears the birth date for the same reason, and registration already treats
+   * them as alternatives.
+   *
+   * **A correction can create a duplicate, and that does not block it.**
+   * Changing a mobile to one another patient already has is exactly how two
+   * records of the same person are noticed — refusing the correction would leave
+   * the clinic with the typo AND the duplicate. Matches are returned as a
+   * warning; merging (FR-P36-16) remains the fix.
+   */
+  async correct(
+    tenantId: string,
+    patientId: string,
+    input: Record<string, unknown>,
+    meta: RequestMeta,
+  ): Promise<{ patient: PatientSummary; duplicatesWarned: DuplicateCandidate[] }> {
+    if (!meta.actorUserId) {
+      throw new BadRequestException('A correction must be attributable to a user.');
+    }
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const before = await tx.patient.findUnique({ where: { id: patientId } });
+      if (!before) throw new NotFoundException('Patient not found');
+
+      const data: Record<string, unknown> = {};
+      const corrections: Array<{
+        field: string;
+        oldValue: string | null;
+        newValue: string | null;
+      }> = [];
+
+      for (const [field, raw] of Object.entries(input)) {
+        if (raw === undefined) continue;
+
+        const next = field === 'birthDate' && raw !== null ? new Date(String(raw)) : raw;
+        const previous = (before as Record<string, unknown>)[field];
+
+        if (asText(previous) === asText(next)) continue;
+
+        data[field] = next;
+        corrections.push({ field, oldValue: asText(previous), newValue: asText(next) });
+      }
+
+      // Keep the two age representations from disagreeing. Whichever the caller
+      // supplied wins, and the other is cleared.
+      if (data['birthDate'] !== undefined && input['ageYears'] === undefined) {
+        if (before.ageYears !== null) {
+          corrections.push({
+            field: 'ageYears',
+            oldValue: asText(before.ageYears),
+            newValue: null,
+          });
+        }
+        data['ageYears'] = null;
+      } else if (data['ageYears'] !== undefined && input['birthDate'] === undefined) {
+        if (before.birthDate !== null) {
+          corrections.push({
+            field: 'birthDate',
+            oldValue: asText(before.birthDate),
+            newValue: null,
+          });
+        }
+        data['birthDate'] = null;
+      }
+
+      if (corrections.length === 0) {
+        return { patient: toSummary(before), duplicatesWarned: [] };
+      }
+
+      const updated = await tx.patient.update({ where: { id: patientId }, data });
+
+      await tx.patientCorrection.createMany({
+        data: corrections.map((c) => ({
+          tenantId,
+          patientId,
+          field: c.field,
+          oldValue: c.oldValue,
+          newValue: c.newValue,
+          correctedByUserId: meta.actorUserId as string,
+        })),
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'patient.correct',
+        resourceType: 'Patient',
+        resourceId: patientId,
+        patientId,
+        // Names only here, as everywhere. The VALUES live in
+        // `patient_correction`, which is the deliberate exception — see that
+        // table's migration for why it exists and what it costs.
+        changedFields: corrections.map((c) => c.field),
+        ...meta,
+      });
+
+      const duplicates =
+        data['mobile'] !== undefined || data['name'] !== undefined
+          ? (
+              await this.findDuplicates(tenantId, {
+                name: updated.name,
+                mobile: updated.mobile,
+                gender: updated.gender,
+                ...(updated.ageYears !== null ? { ageYears: updated.ageYears } : {}),
+              })
+            ).filter((d) => d.id !== patientId)
+          : [];
+
+      return { patient: toSummary(updated), duplicatesWarned: duplicates };
+    });
+  }
+
+  /** What this record used to say. Behind `audit:read`. */
+  async corrections(tenantId: string, patientId: string) {
+    const corrections = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.patientCorrection.findMany({
+        where: { patientId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          field: true,
+          oldValue: true,
+          newValue: true,
+          createdAt: true,
+          correctedBy: { select: { id: true, fullName: true } },
+        },
+      }),
+    );
+    return { corrections };
+  }
+
   async register(
     tenantId: string,
     dto: RegisterPatientDto,
@@ -567,4 +712,19 @@ function toSummary(p: {
     abhaNumber: p.abhaNumber,
     createdAt: p.createdAt,
   };
+}
+
+/**
+ * One field's value as text, for comparison and for the history row.
+ *
+ * Comparison and storage use the same function on purpose: a diff that decided
+ * "changed" by one rule and recorded the value by another would eventually
+ * record a change that did not happen. Dates are reduced to YYYY-MM-DD because
+ * `birth_date` is a DATE and the time half is noise that would make every save
+ * look like a correction.
+ */
+function asText(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value);
 }

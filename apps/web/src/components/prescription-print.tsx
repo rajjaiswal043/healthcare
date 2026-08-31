@@ -117,6 +117,17 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
         </section>
       )}
 
+      {/* FR-CON-11. Below Advice, because advice to the patient is what they act
+          on first; this is the detail underneath it. Renders nothing when
+          empty — an empty heading on a clinical document reads as something
+          omitted rather than something absent. */}
+      {encounter.prescriptionNote && (
+        <section className="border-t border-ink/40 py-2.5 text-[12.5px]">
+          <p className="font-bold uppercase tracking-wide">Note</p>
+          <p className="whitespace-pre-wrap">{encounter.prescriptionNote}</p>
+        </section>
+      )}
+
       {encounter.followUpDate && (
         <p className="py-1 text-[12.5px]">
           <strong>Review on</strong>{' '}

@@ -12,9 +12,17 @@ import {
   VitalsPanel,
 } from '@/components/consultation-panels';
 import { PrescriptionPrint } from '@/components/prescription-print';
+import { DiagnosticOrdersPanel } from '@/components/diagnostic-orders-panel';
+import { PreviousVisitsPanel } from '@/components/previous-visits-panel';
 import { IconAlert, IconArrowLeft, IconCheckCircle, IconClock, IconLock } from '@/components/icons';
 
 /** Narrative fields, saved on blur rather than on every keystroke. */
+/**
+ * FR-CON-11. Matches the DTO and the database CHECK — three places, because
+ * each one is the last line of defence for a different caller.
+ */
+const NOTE_MAX_LENGTH = 1000;
+
 const NARRATIVE = [
   {
     key: 'chiefComplaint' as const,
@@ -60,6 +68,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
       historyOfPresentIllness: e.historyOfPresentIllness ?? '',
       examinationFindings: e.examinationFindings ?? '',
       advice: e.advice ?? '',
+      prescriptionNote: e.prescriptionNote ?? '',
       followUpDate: e.followUpDate ? String(e.followUpDate).slice(0, 10) : '',
     });
     setSavedAt(new Date());
@@ -90,6 +99,8 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
    * either: a doctor who closes the tab mid-consultation should not lose the
    * note. Blur is the point at which the doctor has finished a thought.
    */
+  const noteLength = (narrative.prescriptionNote ?? '').length;
+
   async function saveField(key: string, value: string) {
     if (!encounter || !editable) return;
 
@@ -326,6 +337,11 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
 
         <div className="grid gap-5 lg:grid-cols-[1.15fr_1fr]">
           <div className="space-y-5">
+            {/* Above the vitals, because "what did I give her last time" is the
+                first question of a follow-up and the answer should not be
+                below the fold. Renders nothing on a first visit. */}
+            <PreviousVisitsPanel encounterId={encounter.id} />
+
             <VitalsPanel
               encounter={encounter}
               onSaved={applyEncounter}
@@ -398,6 +414,58 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
               onSaved={applyEncounter}
               onError={setError}
               editable={Boolean(encounter.status === 'IN_PROGRESS' && can('prescription:write'))}
+            />
+
+            {/* FR-CON-11 — the prescription note.
+                Its own card DIRECTLY BELOW the medicines, not up with the
+                clinical narrative, because that is where the doctor's attention
+                already is when writing it. Narveer chose this placement on
+                26 Aug 2026, and it is also the likeliest reason `advice` went
+                unnoticed: it sits four sections higher up the page. */}
+            <section className="card p-5">
+              <div className="flex items-baseline justify-between gap-3">
+                <label htmlFor="prescriptionNote" className="mono-label">
+                  Note
+                </label>
+                {/* Only once it is close enough to matter. A counter on an empty
+                    box is noise; a limit discovered at 1000 characters is worse. */}
+                {editable && noteLength > NOTE_MAX_LENGTH - 200 && (
+                  <span
+                    className={`font-mono text-[11px] ${
+                      noteLength >= NOTE_MAX_LENGTH ? 'text-coral-text' : 'text-ink-40'
+                    }`}
+                  >
+                    {noteLength} / {NOTE_MAX_LENGTH}
+                  </span>
+                )}
+              </div>
+
+              <p className="field-hint">Prints on the prescription, under Advice.</p>
+
+              {editable ? (
+                <textarea
+                  id="prescriptionNote"
+                  rows={3}
+                  maxLength={NOTE_MAX_LENGTH}
+                  className="field-input mt-1.5 text-[13.5px]"
+                  placeholder="Physiotherapy, precautions, instructions for the pharmacy"
+                  value={narrative.prescriptionNote ?? ''}
+                  onChange={(e) => setNarrative({ ...narrative, prescriptionNote: e.target.value })}
+                  onBlur={(e) => void saveField('prescriptionNote', e.target.value)}
+                />
+              ) : (
+                <p className="mt-1 whitespace-pre-wrap text-[13.5px]">
+                  {encounter.prescriptionNote || <span className="text-ink-20">—</span>}
+                </p>
+              )}
+            </section>
+
+            {/* Tests, ordered and read in the same place the question was
+                asked. Renders nothing when the clinic has no diagnostic
+                department and nothing has been requested. */}
+            <DiagnosticOrdersPanel
+              appointmentId={encounter.appointment.id}
+              editable={Boolean(editable)}
             />
 
             {(signed || encounter.addenda.length > 0) && (

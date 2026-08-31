@@ -97,6 +97,9 @@ model Tenant {
 
   locations      Location[]
   displayDevices DisplayDevice[]
+  clinicalDocuments ClinicalDocument[]
+  patientCorrections PatientCorrection[]
+  diagnosticOrders  DiagnosticOrder[]
   seatLimits     TenantSeatLimit[]
 
   onboardedBy PlatformUser? @relation(fields: [onboardedByPlatformUserId], references: [id], onDelete: SetNull, map: "tenant_onboarded_by_fkey")
@@ -336,6 +339,9 @@ model Patient {
   consents     ConsentRecord[]
   appointments Appointment[]
   encounters   Encounter[]
+  documents    ClinicalDocument[]
+  diagnosticOrders DiagnosticOrder[]
+  corrections  PatientCorrection[]
   invoices     Invoice[]
 
   @@unique([tenantId, uhid])
@@ -482,6 +488,10 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   roles    UserRole[]
+  uploadedDocuments ClinicalDocument[]
+  patientCorrections PatientCorrection[]
+  diagnosticOrdersRaised    DiagnosticOrder[] @relation("DiagnosticOrdersRaised")
+  diagnosticOrdersCompleted DiagnosticOrder[] @relation("DiagnosticOrdersCompleted")
   sessions Session[]
 
   @@unique([tenantId, email])
@@ -622,6 +632,9 @@ model Department {
   tenantId String @map("tenant_id") @db.Uuid
 
   name String @db.VarChar(120)
+  /// X-ray, pathology. No appointment slots, absent from booking: nobody books
+  /// an appointment with radiology, a doctor sends them there mid-visit.
+  isDiagnostic Boolean @default(false) @map("is_diagnostic")
   /// Sort order on the booking screen â€” clinics want their busiest first.
   displayOrder Int     @default(0) @map("display_order")
   isActive     Boolean @default(true) @map("is_active")
@@ -631,6 +644,7 @@ model Department {
 
   practitioners Practitioner[]
   appointments  Appointment[]
+  diagnosticOrders DiagnosticOrder[]
 
   @@unique([tenantId, name])
   @@index([tenantId, isActive, displayOrder])
@@ -939,6 +953,8 @@ model Appointment {
   @@index([tenantId, patientId, startAt])
   @@index([tenantId, practitionerId, queueDate, status])
   @@index([tenantId, practitionerId, queueDate, prioritySetAt, readyAt], map: "appointment_queue_order_idx")
+  diagnosticOrders DiagnosticOrder[]
+
   @@map("appointment")
 }
 
@@ -986,6 +1002,11 @@ model Encounter {
   historyOfPresentIllness String? @map("history_of_present_illness") @db.Text
   examinationFindings     String? @map("examination_findings") @db.Text
   advice                  String? @db.Text
+  /// FR-CON-11. A second printed block, for what is NOT advice to the patient:
+  /// physiotherapy, precautions, a line to the pharmacy, a referral note. Kept
+  /// apart from `advice` because the two are addressed to different readers and
+  /// merging them cannot be undone once doctors have written into one box.
+  prescriptionNote        String? @map("prescription_note") @db.Text
 
   followUpDate DateTime? @map("follow_up_date") @db.Date
   followUpNote String?   @map("follow_up_note") @db.VarChar(300)
@@ -1414,6 +1435,13 @@ model Payment {
   invoiceId String @map("invoice_id") @db.Uuid
 
   direction PaymentDirection @default(IN)
+
+  /// Why a REFUND row exists — null on money-in, required on a refund.
+  ///
+  /// PATIENT_REFUND and RECORDED_IN_ERROR net to the same figure and are
+  /// completely different problems: money that LEFT the drawer versus money that
+  /// was never in it. A CHECK ties this to `direction` so neither can drift.
+  correctionKind PaymentCorrectionKind? @map("correction_kind")
   mode      PaymentMode
   /// Always POSITIVE. The direction says which way the money went; a signed
   /// amount plus a direction is two sources of truth for one fact.
@@ -1475,3 +1503,140 @@ model QueueCounter {
   @@map("queue_counter")
 }
 
+/// A file held in S3 against a patient — an X-ray, a scanned report, a PDF.
+///
+/// The row is the index; the bytes are in the bucket. `objectKey` is ALWAYS
+/// `tenants/{tenantId}/patients/{patientId}/{uuid}{ext}`, built from the
+/// authenticated session and never from anything in a request — a database
+/// CHECK enforces the tenant prefix, because this is the one table whose
+/// contents point outside row-level security's reach.
+///
+/// Insert-only. No update, no delete, both revoked at the database. A wrong
+/// result is superseded by another document, not edited. See
+/// docs/09-diagnostics-plan.md.
+model ClinicalDocument {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  patientId String @map("patient_id") @db.Uuid
+
+  objectKey   String @map("object_key") @db.Text
+  /// What the clinic called it, sanitised. Display only — never used to build a key.
+  fileName    String @map("file_name") @db.VarChar(255)
+  /// Sniffed from the bytes. The upload's declared type is not trusted.
+  contentType String @map("content_type") @db.VarChar(128)
+  sizeBytes   Int    @map("size_bytes")
+
+  /// The order this satisfies, when there is one. Nullable: a clinic may attach
+  /// a report nobody ordered — a letter a patient brought in, a scan done
+  /// elsewhere. An order is how a result reaches the doctor who asked for it,
+  /// not the only way a file can exist.
+  diagnosticOrderId String? @map("diagnostic_order_id") @db.Uuid
+  uploadedByUserId String   @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "clinical_document_tenant_fkey")
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "clinical_document_patient_fkey")
+  uploadedBy User  @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict, map: "clinical_document_uploader_fkey")
+  diagnosticOrder DiagnosticOrder? @relation(fields: [diagnosticOrderId], references: [id], onDelete: Restrict, map: "clinical_document_order_fkey")
+
+  @@unique([objectKey], map: "clinical_document_object_key_key")
+  @@index([tenantId, patientId, createdAt(sort: Desc)], map: "clinical_document_patient_idx")
+  @@index([tenantId, diagnosticOrderId], map: "clinical_document_order_idx")
+  @@map("clinical_document")
+}
+
+enum DiagnosticOrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+
+  @@map("diagnostic_order_status")
+}
+
+/// A test a doctor asked for: "X-ray, left knee, AP and lateral".
+///
+/// Belongs to the VISIT rather than the day — a patient sent for an X-ray and
+/// brought back is the same visit (docs/05), and the order hangs off it. The
+/// description is free text on purpose: a coded catalogue of studies is its own
+/// project, and a clinic that cannot type what it wants writes it on paper,
+/// which is the outcome this feature exists to prevent.
+///
+/// Never deleted. An order raised in error is CANCELLED — "why was this patient
+/// sent for an X-ray" is a question with an answer, and deleting the row deletes
+/// the answer.
+model DiagnosticOrder {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  appointmentId   String @map("appointment_id") @db.Uuid
+  patientId       String @map("patient_id") @db.Uuid
+  departmentId    String @map("department_id") @db.Uuid
+  orderedByUserId String @map("ordered_by_user_id") @db.Uuid
+
+  description String                @db.VarChar(300)
+  status      DiagnosticOrderStatus @default(PENDING)
+
+  /// Typed when the result is attached. One report per order.
+  resultNote        String?   @map("result_note") @db.VarChar(2000)
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
+  completedByUserId String?   @map("completed_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "diagnostic_order_tenant_fkey")
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_appointment_fkey")
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "diagnostic_order_patient_fkey")
+  department  Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_department_fkey")
+  orderedBy   User        @relation("DiagnosticOrdersRaised", fields: [orderedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_ordered_by_fkey")
+  completedBy User?       @relation("DiagnosticOrdersCompleted", fields: [completedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_completed_by_fkey")
+
+  documents ClinicalDocument[]
+
+  @@index([tenantId, departmentId, status, createdAt], map: "diagnostic_order_worklist_idx")
+  @@index([tenantId, appointmentId], map: "diagnostic_order_visit_idx")
+  @@map("diagnostic_order")
+}
+
+/// What a patient's record used to say.
+///
+/// One row per field changed. Written by `PatientsService.correct`, never by
+/// anything else, and never updated or deleted — the point of the table is that
+/// it records what the record previously claimed, and a history that can be
+/// edited answers a different question.
+///
+/// **This holds patient data outside the patient row**, which is a deliberate
+/// exception to the audit trail's rule of names-without-values. Narveer chose it
+/// on 27 Aug 2026 so that "what did it say before" has an answer. The cost is
+/// that a DPDP erasure request now has a second place to reach.
+model PatientCorrection {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  patientId String @map("patient_id") @db.Uuid
+
+  /// The API's property name — `mobile`, `birthDate` — not the column name.
+  field    String  @db.VarChar(64)
+  oldValue String? @map("old_value") @db.Text
+  newValue String? @map("new_value") @db.Text
+
+  correctedByUserId String   @map("corrected_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "patient_correction_tenant_fkey")
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "patient_correction_patient_fkey")
+  correctedBy User    @relation(fields: [correctedByUserId], references: [id], onDelete: Restrict, map: "patient_correction_user_fkey")
+
+  @@index([tenantId, patientId, createdAt(sort: Desc)], map: "patient_correction_patient_idx")
+  @@map("patient_correction")
+}
+
+/// Why a compensating payment row exists. See the `payment.correction_kind`
+/// migration for the reasoning.
+enum PaymentCorrectionKind {
+  /// Money physically went back to the patient.
+  PATIENT_REFUND
+  /// The entry was never real. No money moved either way.
+  RECORDED_IN_ERROR
+
+  @@map("payment_correction_kind")
+}

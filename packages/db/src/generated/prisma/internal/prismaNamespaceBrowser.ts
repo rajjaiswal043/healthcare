@@ -80,7 +80,10 @@ export const ModelName = {
   InvoiceLine: 'InvoiceLine',
   Payment: 'Payment',
   InvoiceCounter: 'InvoiceCounter',
-  QueueCounter: 'QueueCounter'
+  QueueCounter: 'QueueCounter',
+  ClinicalDocument: 'ClinicalDocument',
+  DiagnosticOrder: 'DiagnosticOrder',
+  PatientCorrection: 'PatientCorrection'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -340,6 +343,7 @@ export const DepartmentScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
   name: 'name',
+  isDiagnostic: 'isDiagnostic',
   displayOrder: 'displayOrder',
   isActive: 'isActive',
   createdAt: 'createdAt',
@@ -461,6 +465,7 @@ export const EncounterScalarFieldEnum = {
   historyOfPresentIllness: 'historyOfPresentIllness',
   examinationFindings: 'examinationFindings',
   advice: 'advice',
+  prescriptionNote: 'prescriptionNote',
   followUpDate: 'followUpDate',
   followUpNote: 'followUpNote',
   startedAt: 'startedAt',
@@ -622,6 +627,7 @@ export const PaymentScalarFieldEnum = {
   tenantId: 'tenantId',
   invoiceId: 'invoiceId',
   direction: 'direction',
+  correctionKind: 'correctionKind',
   mode: 'mode',
   amountPaise: 'amountPaise',
   reference: 'reference',
@@ -653,6 +659,55 @@ export const QueueCounterScalarFieldEnum = {
 } as const
 
 export type QueueCounterScalarFieldEnum = (typeof QueueCounterScalarFieldEnum)[keyof typeof QueueCounterScalarFieldEnum]
+
+
+export const ClinicalDocumentScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  patientId: 'patientId',
+  objectKey: 'objectKey',
+  fileName: 'fileName',
+  contentType: 'contentType',
+  sizeBytes: 'sizeBytes',
+  diagnosticOrderId: 'diagnosticOrderId',
+  uploadedByUserId: 'uploadedByUserId',
+  createdAt: 'createdAt'
+} as const
+
+export type ClinicalDocumentScalarFieldEnum = (typeof ClinicalDocumentScalarFieldEnum)[keyof typeof ClinicalDocumentScalarFieldEnum]
+
+
+export const DiagnosticOrderScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  appointmentId: 'appointmentId',
+  patientId: 'patientId',
+  departmentId: 'departmentId',
+  orderedByUserId: 'orderedByUserId',
+  description: 'description',
+  status: 'status',
+  resultNote: 'resultNote',
+  completedAt: 'completedAt',
+  completedByUserId: 'completedByUserId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type DiagnosticOrderScalarFieldEnum = (typeof DiagnosticOrderScalarFieldEnum)[keyof typeof DiagnosticOrderScalarFieldEnum]
+
+
+export const PatientCorrectionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  patientId: 'patientId',
+  field: 'field',
+  oldValue: 'oldValue',
+  newValue: 'newValue',
+  correctedByUserId: 'correctedByUserId',
+  createdAt: 'createdAt'
+} as const
+
+export type PatientCorrectionScalarFieldEnum = (typeof PatientCorrectionScalarFieldEnum)[keyof typeof PatientCorrectionScalarFieldEnum]
 
 
 export const SortOrder = {

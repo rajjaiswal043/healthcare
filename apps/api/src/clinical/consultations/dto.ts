@@ -71,6 +71,19 @@ export class UpdateEncounterDto {
   @MaxLength(5000)
   advice?: string;
 
+  /**
+   * FR-CON-11. Printed under its own heading, below Advice.
+   *
+   * 1000 rather than the 5000 the other narrative fields allow: this prints,
+   * and a note long enough to push the prescription onto a second sheet is a
+   * note the clinic will stop using. The database carries the same bound as a
+   * CHECK, so it holds for any caller that reaches the column another way.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  prescriptionNote?: string;
+
   @IsOptional()
   @Matches(DATE_RE, { message: 'followUpDate must be YYYY-MM-DD' })
   followUpDate?: string;

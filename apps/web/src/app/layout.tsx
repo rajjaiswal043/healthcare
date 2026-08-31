@@ -48,7 +48,25 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-IN" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    /**
+     * `suppressHydrationWarning` is for browser extensions, not for us.
+     *
+     * QuillBot (and others) stamp attributes onto <html> before React loads —
+     * `data-qb-installed`, and ironically a lowercase `suppresshydrationwarning`
+     * of their own that React ignores. React then sees attributes the server
+     * never sent and reports a mismatch, which in the worst case costs the page
+     * its event handlers: buttons render and do nothing.
+     *
+     * This suppresses the check for THIS ELEMENT'S attributes only — not its
+     * children, and not any mismatch inside the app. The cost is that a genuine
+     * attribute mismatch we introduced on <html> would go unreported; we set
+     * none, which is what makes the trade acceptable.
+     */
+    <html
+      lang="en-IN"
+      suppressHydrationWarning
+      className={`${display.variable} ${sans.variable} ${mono.variable}`}
+    >
       <body>
         <AuthProvider>{children}</AuthProvider>
       </body>

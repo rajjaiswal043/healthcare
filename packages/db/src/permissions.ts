@@ -49,6 +49,28 @@ export const PERMISSIONS = {
   CONSULTATION_READ: 'consultation:read',
   CONSULTATION_WRITE: 'consultation:write',
   VITALS_WRITE: 'vitals:write',
+
+  /**
+   * Clinical documents — X-rays, scanned reports, PDFs held in S3.
+   *
+   * Separate from `consultation:*` because the people who ATTACH a result are
+   * not the people who write the note. A radiographer uploads a film and never
+   * touches a diagnosis; a doctor reads the film and never operates the machine.
+   */
+  DOCUMENT_READ: 'document:read',
+  DOCUMENT_WRITE: 'document:write',
+
+  /**
+   * Diagnostics — X-ray and pathology.
+   *
+   * Three, not one, because three different people are involved: the doctor who
+   * ORDERS a test, everyone clinical who READS what came back, and the
+   * technician who RESULTS it. A single `diagnostic:manage` would have let a
+   * radiographer order their own work.
+   */
+  DIAGNOSTIC_ORDER: 'diagnostic:order',
+  DIAGNOSTIC_READ: 'diagnostic:read',
+  DIAGNOSTIC_RESULT: 'diagnostic:result',
   PRESCRIPTION_WRITE: 'prescription:write',
   /** Editing the clinic's drug list is an administrative act, not a clinical one. */
   FORMULARY_MANAGE: 'formulary:manage',
@@ -122,6 +144,9 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.INVOICE_READ,
       PERMISSIONS.INVOICE_WRITE,
       PERMISSIONS.PAYMENT_COLLECT,
+      // Fields "are my X-ray results back yet". Reads; never attaches.
+      PERMISSIONS.DOCUMENT_READ,
+      PERMISSIONS.DIAGNOSTIC_READ,
     ],
     requiresMfa: false,
   },
@@ -143,6 +168,10 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.CONSULTATION_WRITE,
       PERMISSIONS.VITALS_WRITE,
       PERMISSIONS.PRESCRIPTION_WRITE,
+      // Reads an X-ray during the consultation; does not attach one.
+      PERMISSIONS.DOCUMENT_READ,
+      PERMISSIONS.DIAGNOSTIC_ORDER,
+      PERMISSIONS.DIAGNOSTIC_READ,
     ],
     requiresMfa: false,
   },
@@ -158,6 +187,39 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       // Reads the note and records vitals; does not diagnose or prescribe.
       PERMISSIONS.CONSULTATION_READ,
       PERMISSIONS.VITALS_WRITE,
+      PERMISSIONS.DOCUMENT_READ,
+      PERMISSIONS.DIAGNOSTIC_READ,
+    ],
+    requiresMfa: false,
+  },
+  {
+    key: 'diagnostics',
+    name: 'Diagnostics',
+    description: 'X-ray and pathology. Works the test list and attaches results.',
+    permissions: [
+      /**
+       * The full patient record, read-only — Narveer's decision, 26 Aug 2026.
+       *
+       * The narrower option would have been the order and nothing else: name,
+       * age, UHID, the test requested. He chose the wider one because a
+       * technician who cannot see the history cannot spot that the wrong film
+       * was requested, and in a small clinic the same person often does several
+       * jobs. It does mean this role can open any patient's consultation notes.
+       * docs/09 section 4 records the reasoning; narrowing it later is a change
+       * to this list rather than a rewrite.
+       */
+      PERMISSIONS.PATIENT_READ,
+      PERMISSIONS.CONSENT_READ,
+      PERMISSIONS.APPOINTMENT_READ,
+      PERMISSIONS.CONSULTATION_READ,
+
+      // The job itself: see the list, open what is there, attach what comes off
+      // the machine. Note what is absent — DIAGNOSTIC_ORDER. A department does
+      // not order its own work.
+      PERMISSIONS.DIAGNOSTIC_READ,
+      PERMISSIONS.DIAGNOSTIC_RESULT,
+      PERMISSIONS.DOCUMENT_READ,
+      PERMISSIONS.DOCUMENT_WRITE,
     ],
     requiresMfa: false,
   },
@@ -181,6 +243,8 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       // Oversight: sees the money and the day-end numbers, collects none of it.
       PERMISSIONS.INVOICE_READ,
       PERMISSIONS.REPORT_REVENUE,
+      PERMISSIONS.DOCUMENT_READ,
+      PERMISSIONS.DIAGNOSTIC_READ,
     ],
     requiresMfa: true,
   },

@@ -11,6 +11,7 @@ import {
   IconChevronRight,
   IconClock,
   IconIdCard,
+  IconStethoscope,
   IconHome,
   IconKey,
   IconLogout,
@@ -18,6 +19,7 @@ import {
   IconPanelLeft,
   IconReceipt,
   IconSearch,
+  IconShield,
   IconUserPlus,
   IconUsers,
   IconX,
@@ -92,6 +94,20 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'Diagnostics',
+    items: [
+      {
+        key: 'diagnostics',
+        label: 'Tests to do',
+        href: '/diagnostics',
+        icon: <IconStethoscope size={16} />,
+        // Everyone clinical can read the list; only Diagnostics and the
+        // administrator can attach a result, and the screen adapts.
+        permission: 'diagnostic:read',
+      },
+    ],
+  },
+  {
     title: 'Settings',
     items: [
       {
@@ -100,6 +116,15 @@ const SECTIONS: NavSection[] = [
         href: '/settings/users',
         icon: <IconUsers size={16} />,
         permission: 'user:manage',
+      },
+      {
+        key: 'roles',
+        label: 'Roles and permissions',
+        icon: <IconShield size={16} />,
+        href: '/settings/roles',
+        // Sits next to Staff on purpose: adding someone and deciding what they
+        // may do are the same job, two screens apart.
+        permission: 'role:manage',
       },
       {
         key: 'doctors',
@@ -138,8 +163,10 @@ const BREADCRUMBS: Record<string, string> = {
   '/appointments/new': 'Book an appointment',
   '/settings/displays': 'Waiting-room screens',
   '/settings/users': 'Staff',
+  '/settings/roles': 'Roles and permissions',
   '/settings/doctors': 'Doctors and hours',
   '/settings/branding': 'Branding',
+  '/diagnostics': 'Tests to do',
   '/change-password': 'Choose a password',
 };
 
@@ -331,9 +358,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* The peripheral signal. Three pixels, full width, directly above the
             content — the thing you register from across a desk without reading
             anything on the screen. */}
-        <div aria-hidden="true" className="sticky top-0 z-30 h-[3px] shrink-0 bg-[var(--role)]" />
+        <div
+          aria-hidden="true"
+          className="no-print sticky top-0 z-30 h-[3px] shrink-0 bg-[var(--role)]"
+        />
 
-        <header className="sticky top-[3px] z-30 flex h-[58px] items-center gap-3 border-b border-ink/8 bg-white/85 px-4 backdrop-blur-md sm:px-6">
+        {/* `data-app-shell` is what the print stylesheet hides. It cannot key
+            on the tag alone: the printed prescription has its own <header>
+            carrying the clinic letterhead, and a bare `header` rule would
+            hide that too. The attribute went missing from this element at
+            some point, so the selector matched nothing and the search box and
+            account menu printed at the top of every prescription. */}
+        <header
+          data-app-shell
+          className="sticky top-[3px] z-30 flex h-[58px] items-center gap-3 border-b border-ink/8 bg-white/85 px-4 backdrop-blur-md sm:px-6"
+        >
           <button
             type="button"
             className="btn-ghost !px-1.5 !py-1.5 lg:hidden"

@@ -23,6 +23,7 @@ const ROLES = [
   { key: 'doctor', label: 'Doctors' },
   { key: 'nurse', label: 'Nurses' },
   { key: 'front_desk', label: 'Front desk' },
+  { key: 'diagnostics', label: 'Diagnostics' },
   { key: 'administrator', label: 'Administrators' },
 ];
 

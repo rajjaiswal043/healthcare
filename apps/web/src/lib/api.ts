@@ -40,6 +40,41 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
   onUnauthorized = fn;
 }
 
+/**
+ * Upload one file as multipart.
+ *
+ * Separate from `request` because the Content-Type must NOT be set by hand: the
+ * browser writes `multipart/form-data; boundary=...` itself, and a header
+ * without that boundary produces a body the server cannot parse. Everything
+ * else — credentials, the 401 handler, the error shape — is shared.
+ */
+async function upload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.set('file', file);
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  });
+
+  if (res.status === 401) onUnauthorized?.();
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: ApiError } | null;
+    throw new ApiRequestError(
+      res.status,
+      body?.error ?? {
+        code: 'UNKNOWN',
+        message: `Upload failed (${res.status})`,
+        correlationId: 'unknown',
+      },
+    );
+  }
+
+  return (await res.json()) as T;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Only declare a JSON content type when there IS a body. Fastify rejects a
   // request that claims `application/json` and then sends nothing, with a bare
@@ -135,6 +170,30 @@ export function logoUrlFor(slug: string, version: string): string {
   return `${API_BASE}/branding/${encodeURIComponent(slug)}/logo?v=${version}`;
 }
 
+/** A permission, described for somebody who is not a programmer. */
+export interface PermissionInfo {
+  name: string;
+  description: string;
+  category: string;
+}
+
+export interface ClinicRole {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  permissions: string[];
+  isSystem: boolean;
+  requiresMfa: boolean;
+  /** False only for Administrator — the way back from every other change. */
+  editable: boolean;
+  /** A custom role nobody holds. */
+  deletable: boolean;
+  /** A built-in with shipped permissions to restore. */
+  resettable: boolean;
+  staffCount: number;
+}
+
 export interface StaffUser {
   id: string;
   email: string;
@@ -228,6 +287,39 @@ export interface PatientSummary {
  * search results stay narrow so a live search does not pull addresses, consents
  * and visit history for twenty patients nobody has opened.
  */
+/** What a patient's record used to say — FR-P36-22. Administrators only. */
+export interface PatientCorrection {
+  id: string;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  createdAt: string;
+  correctedBy: { id: string; fullName: string };
+}
+
+/**
+ * The fields a correction may touch.
+ *
+ * UHID and ABHA are absent, and that absence is the contract: the API refuses
+ * them outright, so a form that offered them would be building a request the
+ * server declines.
+ */
+export interface PatientCorrectionInput {
+  name?: string;
+  gender?: string;
+  birthDate?: string;
+  ageYears?: number;
+  mobile?: string;
+  email?: string;
+  addressLine?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  bloodGroup?: string;
+  emergencyContactName?: string;
+  emergencyContactMobile?: string;
+}
+
 export interface PatientDetail extends PatientSummary {
   givenName: string | null;
   familyName: string | null;
@@ -299,9 +391,81 @@ export interface RegisterPatientInput {
 
 // --- scheduling -----------------------------------------------------------
 
+/**
+ * A previous visit, as the consultation shows it.
+ *
+ * Richer than `EncounterSummary`, which the patient record uses: that one counts
+ * medicines, this one names them with their dose, because a count is not
+ * something a doctor can act on.
+ */
+export interface PreviousVisit {
+  id: string;
+  startedAt: string;
+  signedAt: string | null;
+  chiefComplaint: string | null;
+  advice: string | null;
+  prescriptionNote: string | null;
+  practitioner: { id: string; fullName: string };
+  diagnoses: Array<{ code: string | null; display: string; isPrimary: boolean }>;
+  prescriptions: Array<{
+    drugName: string;
+    strength: string | null;
+    form: string | null;
+    dose: string;
+    frequency: string;
+    durationDays: number | null;
+  }>;
+  vitals: {
+    systolicMmHg: number | null;
+    diastolicMmHg: number | null;
+    pulseBpm: number | null;
+    temperatureC: number | null;
+    spo2Percent: number | null;
+    weightKg: number | null;
+  } | null;
+  tests: Array<{
+    id: string;
+    description: string;
+    resultNote: string | null;
+    department: { name: string };
+    documents: Array<{ id: string; fileName: string }>;
+  }>;
+}
+
+/** A test a doctor asked for. */
+export interface DiagnosticOrder {
+  id: string;
+  description: string;
+  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+  createdAt: string;
+  completedAt: string | null;
+  resultNote: string | null;
+  appointmentId: string;
+  department: { id: string; name: string };
+  patient: { id: string; name: string; uhid: string; gender: string; ageYears: number | null };
+  orderedBy: { id: string; fullName: string };
+  completedBy: { id: string; fullName: string } | null;
+  _count: { documents: number };
+}
+
+/** A file held against a patient. Note the absence of an object key. */
+export interface ClinicalDocument {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+  uploadedBy: { id: string; fullName: string };
+}
+
 export interface Department {
   id: string;
   name: string;
+  /**
+   * X-ray, pathology. Absent from the booking list entirely, so this is only
+   * ever set on departments read through `setupDepartments`.
+   */
+  isDiagnostic?: boolean;
 }
 
 export interface Practitioner {
@@ -471,6 +635,8 @@ export interface Encounter {
   historyOfPresentIllness: string | null;
   examinationFindings: string | null;
   advice: string | null;
+  /** FR-CON-11. Prints under its own heading, below Advice. */
+  prescriptionNote: string | null;
   followUpDate: string | null;
   followUpNote: string | null;
   patient: {
@@ -548,14 +714,24 @@ export interface InvoiceLine {
   totalPaise: number;
 }
 
+/** Why a compensating entry exists — null on money-in. */
+export type PaymentCorrectionKind = 'PATIENT_REFUND' | 'RECORDED_IN_ERROR';
+
 export interface PaymentRow {
   id: string;
   direction: 'IN' | 'REFUND';
+  /**
+   * Money that LEFT the drawer versus money that was never in it. They net to
+   * the same figure and are completely different problems.
+   */
+  correctionKind: PaymentCorrectionKind | null;
   mode: string;
   amountPaise: number;
   reference: string | null;
   reason: string | null;
   collectedAt: string;
+  /** FR-BIL-13. Null only if the author's account has since been removed. */
+  collectedBy: { id: string; fullName: string | null };
 }
 
 export interface Invoice {
@@ -637,6 +813,79 @@ export interface OutstandingInvoice {
 
 export const api = {
   departments: () => request<{ departments: Department[] }>('/departments'),
+
+  /** Setup's view — includes diagnostic departments, which booking hides. */
+  setupDepartments: () => request<{ departments: Department[] }>('/setup/departments'),
+
+  /**
+   * Correct a patient registered earlier — FR-P36-20.
+   *
+   * Returns the updated record plus any duplicates the change created. A
+   * duplicate is a WARNING, never a refusal: blocking would leave the clinic
+   * holding both the typo and the duplicate.
+   */
+  correctPatient: (id: string, input: PatientCorrectionInput) =>
+    request<{ patient: PatientSummary; duplicatesWarned: DuplicateCandidate[] }>(
+      `/patients/${id}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    ),
+
+  patientCorrections: (id: string) =>
+    request<{ corrections: PatientCorrection[] }>(`/patients/${id}/corrections`),
+
+  /** What happened last time — FR-P36-23. Signed visits only, most recent first. */
+  previousVisits: (encounterId: string) =>
+    request<{ visits: PreviousVisit[] }>(`/encounters/${encounterId}/previous-visits`),
+
+  // --- diagnostics ----------------------------------------------------------
+
+  diagnosticDepartments: () => request<{ departments: Department[] }>('/diagnostics/departments'),
+
+  diagnosticWorklist: (
+    params: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (params.departmentId) query.set('departmentId', params.departmentId);
+    if (params.status) query.set('status', params.status);
+    const suffix = query.toString();
+    return request<{ orders: DiagnosticOrder[] }>(
+      `/diagnostics/orders${suffix ? `?${suffix}` : ''}`,
+    );
+  },
+
+  diagnosticOrder: (id: string) =>
+    request<DiagnosticOrder & { documents: ClinicalDocument[] }>(`/diagnostics/orders/${id}`),
+
+  ordersForVisit: (appointmentId: string) =>
+    request<{ orders: DiagnosticOrder[] }>(`/appointments/${appointmentId}/diagnostic-orders`),
+
+  raiseDiagnosticOrder: (input: {
+    appointmentId: string;
+    departmentId: string;
+    description: string;
+  }) =>
+    request<DiagnosticOrder>('/diagnostics/orders', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  cancelDiagnosticOrder: (id: string) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}/cancel`, { method: 'PATCH' }),
+
+  attachResult: (orderId: string, file: File) =>
+    upload<ClinicalDocument>(`/diagnostics/orders/${orderId}/documents`, file),
+
+  completeDiagnosticOrder: (id: string, resultNote: string) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}/complete`, {
+      method: 'PATCH',
+      body: JSON.stringify({ resultNote }),
+    }),
+
+  /** A short-lived URL to open a file. Expires in five minutes. */
+  documentUrl: (id: string) =>
+    request<{ url: string; expiresInSeconds: number; fileName: string; contentType: string }>(
+      `/documents/${id}/url`,
+    ),
 
   practitioners: (departmentId?: string) =>
     request<{ practitioners: Practitioner[] }>(
@@ -748,8 +997,16 @@ export const api = {
   collectPayment: (id: string, input: { mode: string; amountPaise: number; reference?: string }) =>
     request<Invoice>(`/invoices/${id}/payments`, { method: 'POST', body: JSON.stringify(input) }),
 
-  refundPayment: (id: string, input: { mode: string; amountPaise: number; reason: string }) =>
-    request<Invoice>(`/invoices/${id}/refunds`, { method: 'POST', body: JSON.stringify(input) }),
+  refundPayment: (
+    id: string,
+    input: {
+      mode: string;
+      amountPaise: number;
+      reason: string;
+      /** Required by the API — there is deliberately no default. */
+      kind: PaymentCorrectionKind;
+    },
+  ) => request<Invoice>(`/invoices/${id}/refunds`, { method: 'POST', body: JSON.stringify(input) }),
 
   waiveInvoice: (id: string, reason: string) =>
     request<Invoice>(`/invoices/${id}/waive`, { method: 'POST', body: JSON.stringify({ reason }) }),
@@ -780,6 +1037,7 @@ export const api = {
       historyOfPresentIllness?: string;
       examinationFindings?: string;
       advice?: string;
+      prescriptionNote?: string;
       followUpDate?: string;
       followUpNote?: string;
     },
@@ -907,6 +1165,33 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
 
+  // --- roles and permissions ------------------------------------------------
+
+  permissionCatalogue: () =>
+    request<{ categories: Array<{ category: string; permissions: PermissionInfo[] }> }>(
+      '/permissions',
+    ),
+
+  clinicRoles: () => request<{ roles: ClinicRole[] }>('/roles'),
+
+  createRole: (input: { name: string; description?: string; permissions: string[] }) =>
+    request<ClinicRole>('/roles', { method: 'POST', body: JSON.stringify(input) }),
+
+  /** Returns `signedOut` — how many people this change just signed out. */
+  updateRole: (
+    id: string,
+    input: { name?: string; description?: string; permissions?: string[] },
+  ) =>
+    request<ClinicRole & { signedOut: number }>(`/roles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  resetRole: (id: string) =>
+    request<ClinicRole & { signedOut: number }>(`/roles/${id}/reset`, { method: 'POST' }),
+
+  deleteRole: (id: string) => request<{ id: string }>(`/roles/${id}`, { method: 'DELETE' }),
+
   // --- staff accounts -------------------------------------------------------
 
   staff: () => request<{ users: StaffUser[]; seats: SeatUsage[] }>('/users'),
@@ -931,8 +1216,11 @@ export const api = {
       '/setup/practitioners',
     ),
 
-  createDepartment: (name: string) =>
-    request<Department>('/departments', { method: 'POST', body: JSON.stringify({ name }) }),
+  createDepartment: (name: string, isDiagnostic = false) =>
+    request<Department>('/departments', {
+      method: 'POST',
+      body: JSON.stringify({ name, isDiagnostic }),
+    }),
 
   createPractitioner: (input: {
     fullName: string;

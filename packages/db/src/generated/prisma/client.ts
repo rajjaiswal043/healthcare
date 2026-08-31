@@ -330,3 +330,48 @@ export type InvoiceCounter = Prisma.InvoiceCounterModel
  * on tenant.
  */
 export type QueueCounter = Prisma.QueueCounterModel
+/**
+ * Model ClinicalDocument
+ * A file held in S3 against a patient — an X-ray, a scanned report, a PDF.
+ * 
+ * The row is the index; the bytes are in the bucket. `objectKey` is ALWAYS
+ * `tenants/{tenantId}/patients/{patientId}/{uuid}{ext}`, built from the
+ * authenticated session and never from anything in a request — a database
+ * CHECK enforces the tenant prefix, because this is the one table whose
+ * contents point outside row-level security's reach.
+ * 
+ * Insert-only. No update, no delete, both revoked at the database. A wrong
+ * result is superseded by another document, not edited. See
+ * docs/09-diagnostics-plan.md.
+ */
+export type ClinicalDocument = Prisma.ClinicalDocumentModel
+/**
+ * Model DiagnosticOrder
+ * A test a doctor asked for: "X-ray, left knee, AP and lateral".
+ * 
+ * Belongs to the VISIT rather than the day — a patient sent for an X-ray and
+ * brought back is the same visit (docs/05), and the order hangs off it. The
+ * description is free text on purpose: a coded catalogue of studies is its own
+ * project, and a clinic that cannot type what it wants writes it on paper,
+ * which is the outcome this feature exists to prevent.
+ * 
+ * Never deleted. An order raised in error is CANCELLED — "why was this patient
+ * sent for an X-ray" is a question with an answer, and deleting the row deletes
+ * the answer.
+ */
+export type DiagnosticOrder = Prisma.DiagnosticOrderModel
+/**
+ * Model PatientCorrection
+ * What a patient's record used to say.
+ * 
+ * One row per field changed. Written by `PatientsService.correct`, never by
+ * anything else, and never updated or deleted — the point of the table is that
+ * it records what the record previously claimed, and a history that can be
+ * edited answers a different question.
+ * 
+ * **This holds patient data outside the patient row**, which is a deliberate
+ * exception to the audit trail's rule of names-without-values. Narveer chose it
+ * on 27 Aug 2026 so that "what did it say before" has an answer. The cost is
+ * that a DPDP erasure request now has a second place to reach.
+ */
+export type PatientCorrection = Prisma.PatientCorrectionModel

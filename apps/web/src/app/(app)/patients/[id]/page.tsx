@@ -1,8 +1,15 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApiRequestError, type EncounterSummary, type PatientDetail } from '@/lib/api';
+import {
+  api,
+  ApiRequestError,
+  type EncounterSummary,
+  type PatientCorrection,
+  type PatientDetail,
+} from '@/lib/api';
+import { PatientCorrectionDialog } from '@/components/patient-correction-dialog';
 import { useAuth } from '@/components/auth-provider';
 import { formatAge, genderInitial } from '@/lib/format';
 import {
@@ -38,24 +45,29 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
 
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [encounters, setEncounters] = useState<EncounterSummary[] | null>(null);
+  const [correcting, setCorrecting] = useState(false);
+  /** Null until an administrator asks for them — see the panel at the bottom. */
+  const [corrections, setCorrections] = useState<PatientCorrection[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const mayReadNotes = can('consultation:read');
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        setPatient(await api.getPatient(id));
-      } catch (err) {
-        setError(
-          err instanceof ApiRequestError ? err.error.message : 'Could not load the patient.',
-        );
-      } finally {
-        setLoading(false);
-      }
-    })();
+  /** Named so a correction can re-read the record without duplicating this. */
+  const load = useCallback(async () => {
+    try {
+      setPatient(await api.getPatient(id));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not load the patient.');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   /**
    * Clinical notes are fetched separately and only by those allowed to read
@@ -125,12 +137,24 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
           </div>
         </div>
 
-        {can('appointment:write') && (
-          <Link href={`/appointments/new?patientId=${patient.id}`} className="btn-primary">
-            <IconCalendar size={16} />
-            Book an appointment
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* FR-P36-20. Beside booking rather than buried in the record,
+              because a wrong mobile is usually noticed while somebody is trying
+              to use it. */}
+          {can('patient:write') && (
+            <button type="button" className="btn-secondary" onClick={() => setCorrecting(true)}>
+              <IconIdCard size={16} />
+              Correct details
+            </button>
+          )}
+
+          {can('appointment:write') && (
+            <Link href={`/appointments/new?patientId=${patient.id}`} className="btn-primary">
+              <IconCalendar size={16} />
+              Book an appointment
+            </Link>
+          )}
+        </div>
       </header>
 
       {error && (
@@ -343,6 +367,78 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
           </section>
         </div>
       </div>
+
+      {/* FR-P36-22. Behind `audit:read`, and loaded on demand rather than with
+          the page: this table holds patient data, so it is not something every
+          screen load should pull down. */}
+      {can('audit:read') && (
+        <section className="card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-[17px] font-bold">Corrections</h2>
+            {corrections === null && (
+              <button
+                type="button"
+                className="btn-secondary !py-1.5"
+                onClick={() =>
+                  void (async () => {
+                    try {
+                      setCorrections((await api.patientCorrections(patient.id)).corrections);
+                    } catch (err) {
+                      setError(
+                        err instanceof ApiRequestError
+                          ? err.error.message
+                          : 'Could not load corrections.',
+                      );
+                    }
+                  })()
+                }
+              >
+                Show what changed
+              </button>
+            )}
+          </div>
+
+          {corrections !== null &&
+            (corrections.length === 0 ? (
+              <p className="mt-2 text-[13px] text-ink-40">
+                This record has not been corrected since registration.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {corrections.map((c) => (
+                  <li key={c.id} className="rounded-panel border border-ink/10 px-3.5 py-2.5">
+                    <p className="text-[13.5px]">
+                      <span className="mono-label mr-2">{c.field}</span>
+                      <span className="text-ink-40 line-through">{c.oldValue ?? 'empty'}</span>
+                      <span className="mx-2 text-ink-20">→</span>
+                      <span className="font-semibold">{c.newValue ?? 'empty'}</span>
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-ink-40">
+                      {c.correctedBy.fullName} ·{' '}
+                      {new Date(c.createdAt).toLocaleString('en-IN', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ))}
+        </section>
+      )}
+
+      {correcting && (
+        <PatientCorrectionDialog
+          patient={patient}
+          onClose={() => setCorrecting(false)}
+          onSaved={() => {
+            void load();
+            // Force a re-fetch if the history is already open, so a correction
+            // made now does not sit behind a stale list.
+            setCorrections(null);
+          }}
+        />
+      )}
     </div>
   );
 }

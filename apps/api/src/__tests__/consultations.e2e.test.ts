@@ -923,3 +923,266 @@ describe('patient history', () => {
     expect(first.diagnoses[0].code).toBe('J06.9');
   });
 });
+
+/**
+ * FR-CON-11 — the prescription note.
+ *
+ * A second printed block, for what is not advice to the patient. The tests that
+ * matter are the two boundaries: it is bounded at 1000 characters in three
+ * places (screen, DTO, database CHECK), and it is part of the signed record, so
+ * it stops being writable the moment the consultation is signed.
+ */
+describe('the prescription note', () => {
+  const NOTE = 'Physiotherapy from Monday. No squatting for six weeks.';
+
+  it('saves and reads back, alongside advice rather than instead of it', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        advice: 'Rest the knee. Ice twice daily.',
+        prescriptionNote: NOTE,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().prescriptionNote).toBe(NOTE);
+    // Both, and distinct. Merging them was the cheaper design and the wrong one.
+    expect(res.json().advice).toBe('Rest the knee. Ice twice daily.');
+  });
+
+  it('survives a reload', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { prescriptionNote: NOTE },
+    });
+
+    const reread = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(reread.json().prescriptionNote).toBe(NOTE);
+  });
+
+  it('accepts exactly 1000 characters and refuses 1001', async () => {
+    const { encounter } = await openConsultation();
+
+    const atLimit = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { prescriptionNote: 'x'.repeat(1000) },
+    });
+    expect(atLimit.statusCode).toBe(200);
+
+    const overLimit = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { prescriptionNote: 'x'.repeat(1001) },
+    });
+    expect(overLimit.statusCode).toBe(400);
+  });
+
+  it('can be cleared', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { prescriptionNote: NOTE },
+    });
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { prescriptionNote: '' },
+    });
+
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json().prescriptionNote).toBe('');
+  });
+
+  /**
+   * The immutability that matters. A prescription is dispensed against; a note
+   * on it that can be rewritten after signing is not a record. The correction
+   * path is an addendum, exactly as for every other field.
+   */
+  it('cannot be changed once the consultation is signed', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Knee pain', prescriptionNote: NOTE },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    const afterSigning = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { prescriptionNote: 'Rewritten after the fact' },
+    });
+
+    expect(afterSigning.statusCode).toBeGreaterThanOrEqual(400);
+
+    const reread = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+    });
+    expect(reread.json().prescriptionNote).toBe(NOTE);
+  });
+});
+
+/**
+ * FR-P36-23 — what happened last time, read from inside the current visit.
+ *
+ * The properties that matter: only SIGNED visits count (a half-written draft is
+ * not history), only visits BEFORE this one, and the medicines come back with
+ * their dose rather than as a count — a count is what the patient record already
+ * gives and is not something a doctor can act on.
+ */
+describe('the previous visit', () => {
+  async function signedVisitFor(patientIndex: number, complaint: string) {
+    const { encounter } = await openConsultation(patientIndex);
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: complaint, advice: 'Rest' },
+    });
+
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/prescriptions`,
+      headers: { cookie: doctor.cookie },
+      payload: {
+        prescriptions: [
+          {
+            drugName: 'Tab Ultracet',
+            strength: '37.5mg',
+            dose: '1 tablet',
+            frequency: '1-0-1',
+            durationDays: 5,
+          },
+        ],
+      },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    return encounter.id;
+  }
+
+  it('is empty on a first visit', async () => {
+    const { encounter } = await openConsultation(2);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounter.id}/previous-visits`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ visits: unknown[] }>().visits).toHaveLength(0);
+  });
+
+  it('names the medicines with their dose, not a count', async () => {
+    await signedVisitFor(0, 'Knee pain');
+    const { encounter: today } = await openConsultation(0, 1);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${today.id}/previous-visits`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    const visits = res.json<{
+      visits: Array<{
+        chiefComplaint: string;
+        prescriptions: Array<{ drugName: string; dose: string; frequency: string }>;
+      }>;
+    }>().visits;
+
+    expect(visits).toHaveLength(1);
+    expect(visits[0]?.chiefComplaint).toBe('Knee pain');
+    expect(visits[0]?.prescriptions[0]).toMatchObject({
+      drugName: 'Tab Ultracet',
+      dose: '1 tablet',
+      frequency: '1-0-1',
+    });
+  });
+
+  /**
+   * A draft is somebody's unfinished thinking. Showing it in a later
+   * consultation would put it in front of a doctor as though it were a record.
+   *
+   * The earlier visit is pushed back to IN_PROGRESS directly rather than by
+   * leaving a real one unsigned: an unsigned visit keeps its patient in the
+   * queue, so the patient cannot then be checked in for the second visit this
+   * test needs. What is under test is the status filter, and this exercises it
+   * without fighting the queue rules.
+   */
+  it('ignores an unsigned visit', async () => {
+    const earlier = await signedVisitFor(1, 'Signed then unsigned');
+    const { encounter: today } = await openConsultation(1, 1);
+
+    const before = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${today.id}/previous-visits`,
+      headers: { cookie: doctor.cookie },
+    });
+    expect(before.json<{ visits: unknown[] }>().visits).toHaveLength(1);
+
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE encounter SET status = 'IN_PROGRESS', signed_at = NULL, signed_by_user_id = NULL
+        WHERE id = $1`,
+      [earlier],
+    );
+
+    const after = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${today.id}/previous-visits`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(after.json<{ visits: unknown[] }>().visits).toHaveLength(0);
+  });
+
+  it('does not leak another clinic history', async () => {
+    const { encounter } = await openConsultation(0);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounter.id}/previous-visits`,
+      headers: { cookie: otherDoctor.cookie },
+    });
+
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+  });
+});

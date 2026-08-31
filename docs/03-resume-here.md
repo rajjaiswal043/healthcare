@@ -50,6 +50,7 @@ Verified in a browser, not only by test.
 | Billing — OPD, pay-first   | Done. `docs/04-billing-plan.md`.                          |
 | Tokens, recall, screen     | Done, all three phases. `docs/05-token-queue-plan.md`.    |
 | Staff management           | Done. Settings → Staff. `docs/06-platform-...-plan.md`.   |
+| Roles and permissions      | Done. Settings → Roles. `docs/06`, section 9.             |
 | Platform tier, onboarding  | Done. `/platform`. Per-clinic logo upload deferred.       |
 | IPD, claims, ABDM          | Not started, deliberately parked.                         |
 
@@ -179,18 +180,17 @@ miswrites one and the two cancel out.
 
 ## 4. Known gaps
 
-| Gap                              | Note                                                                            |
-| -------------------------------- | ------------------------------------------------------------------------------- |
-| Printed receipt                  | Invoices are numbered and complete; nothing prints one yet.                     |
-| Per-clinic logo                  | One default for everyone at `apps/web/public/branding/`. Upload waits on S3.    |
-| Editing a patient                | The detail page is read-only. Registration is the only way demographics get in. |
-| User management UI               | Roles and users are seeded only. No invite, no edit.                            |
-| Password reset                   | No flow at all.                                                                 |
-| Reminders (FR-APT-06)            | Blocked on a WhatsApp BSP and DLT registration — a customer onboarding task.    |
-| Patient self-booking (FR-APT-04) | Needs the patient portal, which does not exist.                                 |
-| `audit_event` partitioning       | Plain table with a BRIN index. Fine until production volume.                    |
-| Rate limiting                    | Per-account lockout only. No IP throttle.                                       |
-| Web tests                        | None. The browser checks are written ad hoc and deleted after use.              |
+| Gap                              | Note                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------ |
+| Printed receipt                  | Invoices are numbered and complete; nothing prints one yet.                    |
+| Per-clinic logo                  | One default for everyone at `apps/web/public/branding/`. Upload waits on S3.   |
+| Assigning a custom role          | Made at Settings → Roles, given out at Settings → Staff. Two screens, one job. |
+| Password reset                   | No flow at all.                                                                |
+| Reminders (FR-APT-06)            | Blocked on a WhatsApp BSP and DLT registration — a customer onboarding task.   |
+| Patient self-booking (FR-APT-04) | Needs the patient portal, which does not exist.                                |
+| `audit_event` partitioning       | Plain table with a BRIN index. Fine until production volume.                   |
+| Rate limiting                    | Per-account lockout only. No IP throttle.                                      |
+| Web tests                        | None. The browser checks are written ad hoc and deleted after use.             |
 
 ---
 
@@ -201,6 +201,10 @@ miswrites one and the two cancel out.
    script created them.
 2. **The printed receipt.** The invoice is complete and numbered; nothing prints
    it. Small, and the print stylesheet already exists from the prescription.
-3. **Editing a patient.** Small, and increasingly awkward to be without.
+3. **FR-P36-24 — repeat the last visit's prescription in one click.** The last
+   point from the orthopaedic demo still outstanding; the previous-visit panel
+   already loads everything it needs.
+4. **A DPDP erasure process.** Patient data now sits in three places — the patient
+   row, `patient_correction`, and S3 — and nothing deletes a person on request.
 
 Then IPD, claims or ABDM — all large, and none urgent for a single OPD clinic.

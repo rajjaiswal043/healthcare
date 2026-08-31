@@ -185,3 +185,20 @@ export const PaymentDirection = {
 } as const
 
 export type PaymentDirection = (typeof PaymentDirection)[keyof typeof PaymentDirection]
+
+
+export const DiagnosticOrderStatus = {
+  PENDING: 'PENDING',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED'
+} as const
+
+export type DiagnosticOrderStatus = (typeof DiagnosticOrderStatus)[keyof typeof DiagnosticOrderStatus]
+
+
+export const PaymentCorrectionKind = {
+  PATIENT_REFUND: 'PATIENT_REFUND',
+  RECORDED_IN_ERROR: 'RECORDED_IN_ERROR'
+} as const
+
+export type PaymentCorrectionKind = (typeof PaymentCorrectionKind)[keyof typeof PaymentCorrectionKind]

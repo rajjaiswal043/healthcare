@@ -49,7 +49,9 @@ export class SchedulingController {
   async departments(@CurrentTenant() tenantId: string) {
     const departments = await this.prisma.forTenant(tenantId, (tx) =>
       tx.department.findMany({
-        where: { isActive: true },
+        // Diagnostic departments are excluded: nobody books an appointment with
+        // radiology, and offering it here produces a booking with no slots.
+        where: { isActive: true, isDiagnostic: false },
         orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
         select: { id: true, name: true },
       }),

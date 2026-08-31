@@ -49,12 +49,13 @@ export default function DoctorsPage() {
   });
 
   const [newDepartment, setNewDepartment] = useState('');
+  const [newIsDiagnostic, setNewIsDiagnostic] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const [setup, depts, locs] = await Promise.all([
         api.setupPractitioners(),
-        api.departments(),
+        api.setupDepartments(),
         api.locations(),
       ]);
       setDoctors(setup.practitioners);
@@ -264,36 +265,54 @@ export default function DoctorsPage() {
 
       <section className="card p-5">
         <h2 className="font-display text-[17px] font-bold">Departments</h2>
-        <p className="mt-1 text-[13px] text-ink-60">
+        <p className="mt-1 max-w-[62ch] text-[13px] text-ink-60">
           The first step of booking. Optional — with none, the booking screen simply shows every
-          doctor.
+          doctor. Mark a department as <strong>diagnostic</strong> (X-ray, pathology) and it takes
+          test requests instead of appointments: it has no slots and never appears when booking.
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {departments.map((d) => (
-            <span key={d.id} className="badge-neutral">
+            <span key={d.id} className={d.isDiagnostic ? 'badge-clinical' : 'badge-neutral'}>
               {d.name}
+              {d.isDiagnostic && ' · tests'}
             </span>
           ))}
           {departments.length === 0 && <span className="text-[13px] text-ink-40">None yet.</span>}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <input
             className="field-input max-w-[260px]"
             value={newDepartment}
             onChange={(e) => setNewDepartment(e.target.value)}
-            placeholder="Orthopaedics"
+            placeholder={newIsDiagnostic ? 'X-ray' : 'Orthopaedics'}
             maxLength={120}
           />
+
+          {/* Chosen before creating, not after: the flag decides whether the
+              department ever appears on the booking screen, and a consulting
+              department that quietly became diagnostic would take its doctors'
+              slots with it. */}
+          <label className="flex select-none items-center gap-2 text-[13.5px] text-ink-60">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-clinical"
+              checked={newIsDiagnostic}
+              onChange={(e) => setNewIsDiagnostic(e.target.checked)}
+            />
+            Does tests, not appointments
+          </label>
+
           <button
             type="button"
             className="btn-secondary"
             disabled={busy === 'dept' || newDepartment.trim().length < 2}
             onClick={() =>
               void run('dept', async () => {
-                await api.createDepartment(newDepartment.trim());
+                await api.createDepartment(newDepartment.trim(), newIsDiagnostic);
                 setNewDepartment('');
+                setNewIsDiagnostic(false);
               })
             }
           >
