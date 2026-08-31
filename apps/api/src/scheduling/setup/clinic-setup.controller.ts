@@ -37,6 +37,15 @@ class DepartmentDto {
   @MinLength(2)
   @MaxLength(120)
   name!: string;
+
+  /**
+   * X-ray, pathology. A diagnostic department has no appointment slots and does
+   * not appear at the first step of booking — a doctor sends a patient there
+   * mid-visit rather than anyone booking it.
+   */
+  @IsOptional()
+  @IsBoolean()
+  isDiagnostic?: boolean;
 }
 
 class UpdateDepartmentDto {
@@ -45,6 +54,10 @@ class UpdateDepartmentDto {
   @MinLength(2)
   @MaxLength(120)
   name?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isDiagnostic?: boolean;
 
   @IsOptional()
   @IsInt()
@@ -187,6 +200,13 @@ export class ClinicSetupController {
 
   // --- departments ---------------------------------------------------------
 
+  /** What setup sees, unlike booking: diagnostic departments included. */
+  @Get('setup/departments')
+  @RequirePermissions(PERMISSIONS.SCHEDULE_MANAGE)
+  async listDepartments(@CurrentTenant() tenantId: string) {
+    return this.setup.listDepartments(tenantId);
+  }
+
   @Post('departments')
   @RequirePermissions(PERMISSIONS.SCHEDULE_MANAGE)
   async createDepartment(
@@ -195,7 +215,12 @@ export class ClinicSetupController {
     @Body() dto: DepartmentDto,
     @Req() req: FastifyRequest,
   ) {
-    return this.setup.createDepartment(tenantId, dto.name, meta(req, user));
+    return this.setup.createDepartment(
+      tenantId,
+      dto.name,
+      meta(req, user),
+      dto.isDiagnostic ?? false,
+    );
   }
 
   @Patch('departments/:id')

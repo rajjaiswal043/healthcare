@@ -9,6 +9,16 @@ export {
   type RoleSeed,
 } from './permissions.js';
 
+export {
+  PERMISSION_CATALOGUE,
+  PERMISSION_CATEGORIES,
+  SYSTEM_ROLE_KEYS,
+  LOCKED_ROLE_KEY,
+  defaultPermissionsFor,
+  type PermissionCategory,
+  type PermissionInfo,
+} from './permission-catalogue.js';
+
 export { withTenant, forEachTenant, InvalidTenantIdError } from './tenancy.js';
 export type { TenantClient } from './tenancy.js';
 

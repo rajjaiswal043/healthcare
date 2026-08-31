@@ -53,6 +53,18 @@ export function PaymentDialog({
   const [amount, setAmount] = useState(() => (initial.balancePaise / 100).toFixed(2));
   const [reference, setReference] = useState('');
   const [exception, setException] = useState<'waive' | 'defer' | null>(null);
+
+  /**
+   * Correcting money already recorded — FR-BIL-11.
+   *
+   * Two kinds, and the administrator must choose. They net to the same figure
+   * and mean completely different things to whoever counts the drawer: money
+   * that LEFT it, versus money that was never in it. The API refuses a
+   * correction that does not say which.
+   */
+  const [correcting, setCorrecting] = useState<'PATIENT_REFUND' | 'RECORDED_IN_ERROR' | null>(null);
+  const [correctionAmount, setCorrectionAmount] = useState('');
+  const [correctionReason, setCorrectionReason] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +87,7 @@ export function PaymentDialog({
   const canCollect = can('payment:collect');
   const mayWaive = can('invoice:waive');
   const mayDefer = can('invoice:defer');
+  const mayCorrect = can('payment:refund');
 
   const apply = (updated: Invoice) => {
     setInvoice(updated);
@@ -123,6 +136,35 @@ export function PaymentDialog({
       setReason('');
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not record that.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitCorrection() {
+    if (!correcting || correctionReason.trim().length < 3) return;
+
+    const paise = Math.round(Number(correctionAmount) * 100);
+    if (!Number.isFinite(paise) || paise <= 0) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      apply(
+        await api.refundPayment(invoice.id, {
+          mode,
+          amountPaise: paise,
+          kind: correcting,
+          reason: correctionReason.trim(),
+        }),
+      );
+      setCorrecting(null);
+      setCorrectionAmount('');
+      setCorrectionReason('');
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError ? err.error.message : 'Could not record the correction.',
+      );
     } finally {
       setBusy(false);
     }
@@ -292,6 +334,95 @@ export function PaymentDialog({
             )
           )}
 
+          {/* Correcting what was already recorded. Administrator-only, and
+              shown whether or not the invoice is settled — an entry made in
+              error is most often noticed after the bill looks paid. */}
+          {mayCorrect && invoice.paidPaise > invoice.refundedPaise && (
+            <section className="border-t border-ink/8 pt-4">
+              {correcting === null ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary !py-1.5 text-[12.5px]"
+                    onClick={() => {
+                      setCorrecting('PATIENT_REFUND');
+                      setCorrectionAmount(
+                        ((invoice.paidPaise - invoice.refundedPaise) / 100).toFixed(2),
+                      );
+                    }}
+                  >
+                    Refund the patient
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary !py-1.5 text-[12.5px]"
+                    onClick={() => {
+                      setCorrecting('RECORDED_IN_ERROR');
+                      setCorrectionAmount(
+                        ((invoice.paidPaise - invoice.refundedPaise) / 100).toFixed(2),
+                      );
+                    }}
+                  >
+                    Recorded in error
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="mono-label">
+                    {correcting === 'PATIENT_REFUND'
+                      ? 'Money going back to the patient'
+                      : 'This entry was never real — no money moved'}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      className="field-input !py-2 max-w-[140px]"
+                      inputMode="decimal"
+                      value={correctionAmount}
+                      onChange={(e) => setCorrectionAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                      aria-label="Amount"
+                    />
+                    <input
+                      className="field-input !py-2 min-w-[220px] flex-1"
+                      value={correctionReason}
+                      onChange={(e) => setCorrectionReason(e.target.value)}
+                      placeholder={
+                        correcting === 'PATIENT_REFUND'
+                          ? 'Procedure not performed'
+                          : 'Entered against the wrong patient'
+                      }
+                      maxLength={300}
+                      aria-label="Reason"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn-primary !py-2"
+                      disabled={busy || correctionReason.trim().length < 3}
+                      onClick={() => void submitCorrection()}
+                    >
+                      {busy ? 'Recording…' : 'Record it'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => setCorrecting(null)}
+                      disabled={busy}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  <p className="field-hint">
+                    This adds a correcting entry. Nothing already recorded is changed or removed.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
           {!settled && (mayWaive || mayDefer) && (
             <section className="border-t border-ink/8 pt-4">
               {exception === null ? (
@@ -381,22 +512,46 @@ export function PaymentDialog({
           {invoice.payments.length > 0 && (
             <section>
               <p className="mono-label mb-2">Recorded</p>
-              <ul className="space-y-1">
-                {invoice.payments.map((p) => (
-                  <li key={p.id} className="flex justify-between gap-3 text-[12.5px]">
-                    <span>
-                      {p.direction === 'REFUND' ? 'Refund · ' : ''}
-                      {p.mode.replace('_', ' ').toLowerCase()}
-                      {p.reference && <span className="text-ink-40"> · {p.reference}</span>}
-                    </span>
-                    <span
-                      className={`font-mono ${p.direction === 'REFUND' ? 'text-coral-text' : ''}`}
-                    >
-                      {p.direction === 'REFUND' ? '−' : ''}
-                      {formatPaise(p.amountPaise)}
-                    </span>
-                  </li>
-                ))}
+              {/* FR-BIL-13. This list used to show the mode and the amount and
+                  nothing else — the reason was captured from the beginning and
+                  displayed to nobody, so the person a patient asks "why was I
+                  charged twice" had to go and find an administrator. */}
+              <ul className="space-y-2">
+                {invoice.payments.map((p) => {
+                  const reversal = p.correctionKind === 'RECORDED_IN_ERROR';
+                  const back = p.direction === 'REFUND';
+
+                  return (
+                    <li key={p.id} className="text-[12.5px]">
+                      <div className="flex justify-between gap-3">
+                        <span>
+                          {reversal ? (
+                            <span className="font-semibold text-amber-text">Recorded in error</span>
+                          ) : back ? (
+                            <span className="font-semibold text-coral-text">Refunded</span>
+                          ) : null}
+                          {back && ' · '}
+                          {p.mode.replace('_', ' ').toLowerCase()}
+                          {p.reference && <span className="text-ink-40"> · {p.reference}</span>}
+                        </span>
+                        <span className={`font-mono ${back ? 'text-coral-text' : ''}`}>
+                          {back ? '−' : ''}
+                          {formatPaise(p.amountPaise)}
+                        </span>
+                      </div>
+
+                      <p className="text-[11.5px] text-ink-40">
+                        {p.collectedBy.fullName ?? 'Unknown'} ·{' '}
+                        {new Date(p.collectedAt).toLocaleString('en-IN', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })}
+                      </p>
+
+                      {p.reason && <p className="text-[11.5px] text-ink-60">“{p.reason}”</p>}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           )}

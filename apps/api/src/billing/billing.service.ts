@@ -361,7 +361,7 @@ export class BillingService {
   async refund(
     tenantId: string,
     id: string,
-    input: { mode: string; amountPaise: number; reason: string },
+    input: { mode: string; amountPaise: number; reason: string; kind: string },
     meta: RequestMeta,
   ) {
     const collectedByUserId = meta.actorUserId;
@@ -394,6 +394,7 @@ export class BillingService {
           mode: input.mode as never,
           amountPaise: input.amountPaise,
           reason: input.reason,
+          correctionKind: input.kind as never,
           collectedByUserId,
         },
       });
@@ -401,7 +402,7 @@ export class BillingService {
       await this.restatus(tx, id, invoice.totalPaise);
 
       await this.audit.record(tx, tenantId, {
-        action: 'payment.refund',
+        action: input.kind === 'RECORDED_IN_ERROR' ? 'payment.reverse' : 'payment.refund',
         resourceType: 'Invoice',
         resourceId: id,
         patientId: invoice.patientId,
@@ -497,6 +498,7 @@ export class BillingService {
         where: { collectedAt: { gte: from, lt: to } },
         select: {
           direction: true,
+          correctionKind: true,
           mode: true,
           amountPaise: true,
           collectedByUserId: true,
@@ -515,6 +517,17 @@ export class BillingService {
       let collectedPaise = 0;
       let refundedPaise = 0;
 
+      /**
+       * The two halves of `refundedPaise`, kept apart — FR-BIL-11.
+       *
+       * Both reduce the day's net figure identically, and an owner counting the
+       * drawer needs to know which: money that LEFT it, versus an entry that was
+       * never real. `refundedPaise` stays as the sum of both so nothing reading
+       * this report today changes meaning.
+       */
+      let patientRefundedPaise = 0;
+      let reversedInErrorPaise = 0;
+
       for (const p of payments) {
         const modeRow = byMode.get(p.mode) ?? { collectedPaise: 0, refundedPaise: 0 };
         const userRow = byCollector.get(p.collectedByUserId) ?? {
@@ -530,6 +543,15 @@ export class BillingService {
           refundedPaise += p.amountPaise;
           modeRow.refundedPaise += p.amountPaise;
           userRow.refundedPaise += p.amountPaise;
+
+          if (p.correctionKind === 'RECORDED_IN_ERROR') {
+            reversedInErrorPaise += p.amountPaise;
+          } else {
+            // Null only on refunds that predate the distinction, and those were
+            // labelled PATIENT_REFUND by the migration. Treated as such here too
+            // rather than counted as neither.
+            patientRefundedPaise += p.amountPaise;
+          }
         }
 
         byMode.set(p.mode, modeRow);
@@ -541,6 +563,10 @@ export class BillingService {
         timezone: tz,
         collectedPaise,
         refundedPaise,
+        /** Money that physically went back to a patient. */
+        patientRefundedPaise,
+        /** Entries that were never real — no money moved either way. */
+        reversedInErrorPaise,
         netPaise: collectedPaise - refundedPaise,
         transactionCount: payments.length,
         byMode: [...byMode.entries()].map(([mode, v]) => ({
@@ -556,6 +582,7 @@ export class BillingService {
         })),
         transactions: payments.map((p) => ({
           direction: p.direction,
+          correctionKind: p.correctionKind,
           mode: p.mode,
           amountPaise: p.amountPaise,
           collectedAt: p.collectedAt,
@@ -721,8 +748,34 @@ export class BillingService {
     const paidPaise = sum(invoice.payments.filter((p) => p.direction === 'IN'));
     const refundedPaise = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
 
+    /**
+     * FR-BIL-13 — who did this, in words.
+     *
+     * A second query rather than a relation: `payment.collected_by_user_id` has
+     * no foreign key, so Prisma cannot join it without a schema change, and
+     * adding one to a table this old risks failing on any row whose author has
+     * since been removed. One extra query when an invoice is opened is the
+     * cheaper trade.
+     *
+     * The reason text needs no work at all — `include` was already returning it
+     * and nothing displayed it, which is the whole of what FR-BIL-13 was asking
+     * for on the server side.
+     */
+    const authorIds = [...new Set(invoice.payments.map((p) => p.collectedByUserId))];
+    const authors = authorIds.length
+      ? await tx.user.findMany({
+          where: { id: { in: authorIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const nameOf = new Map(authors.map((a) => [a.id, a.fullName]));
+
     return {
       ...invoice,
+      payments: invoice.payments.map((p) => ({
+        ...p,
+        collectedBy: { id: p.collectedByUserId, fullName: nameOf.get(p.collectedByUserId) ?? null },
+      })),
       paidPaise,
       refundedPaise,
       balancePaise: invoice.totalPaise - (paidPaise - refundedPaise),

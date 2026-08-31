@@ -1,5 +1,7 @@
 import 'reflect-metadata';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
+import { MAX_DOCUMENT_BYTES } from './clinical/documents/documents.service.js';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -46,6 +48,17 @@ export async function createApiApp(): Promise<NestFastifyApplication> {
     contentSecurityPolicy: {
       directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
     },
+  });
+
+  /**
+   * Multipart, for clinical documents only.
+   *
+   * The byte limit is set here as well as in the controller because this one is
+   * enforced while the stream is being read: without it a caller can push
+   * gigabytes at the process before any handler gets a chance to object.
+   */
+  await app.register(multipart, {
+    limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1, fields: 8 },
   });
 
   app.enableCors({

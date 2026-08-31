@@ -165,6 +165,7 @@ export class ConsultationsService {
         ...defined('historyOfPresentIllness', input.historyOfPresentIllness),
         ...defined('examinationFindings', input.examinationFindings),
         ...defined('advice', input.advice),
+        ...defined('prescriptionNote', input.prescriptionNote),
         ...defined('followUpNote', input.followUpNote),
         ...(input.followUpDate === undefined
           ? {}
@@ -453,6 +454,112 @@ export class ConsultationsService {
   }
 
   /** Past consultations for Patient 360. */
+  /**
+   * What happened last time, for the doctor sitting in front of the patient now.
+   *
+   * FR-P36-23, from the orthopaedic clinic demo: the question a doctor asks
+   * mid-consultation is "what did I give her last time", and until now answering
+   * it meant leaving the consultation and losing the place. So this returns the
+   * previous SIGNED visits — not a list of dates, but the things that get acted
+   * on: diagnoses, medicines WITH THEIR DOSE, the vitals of the day, and any
+   * test results that came back.
+   *
+   * Signed only. A draft note from a visit somebody abandoned half-written is
+   * not history; showing it would put unfinished thinking in front of a doctor
+   * as though it were a record.
+   *
+   * Three, not twenty. This is a panel inside a consultation, and a doctor who
+   * needs the fourth visit back is better served by the patient's full record.
+   */
+  async previousVisits(tenantId: string, encounterId: string, limit = 3) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const current = await tx.encounter.findUnique({
+        where: { id: encounterId },
+        select: { id: true, patientId: true, startedAt: true },
+      });
+      if (!current) throw new NotFoundException('Encounter not found');
+
+      const rows = await tx.encounter.findMany({
+        where: {
+          patientId: current.patientId,
+          id: { not: current.id },
+          status: 'SIGNED',
+          startedAt: { lt: current.startedAt },
+        },
+        orderBy: { startedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          startedAt: true,
+          signedAt: true,
+          chiefComplaint: true,
+          advice: true,
+          prescriptionNote: true,
+          practitioner: { select: { id: true, fullName: true } },
+          diagnoses: {
+            select: { code: true, display: true, isPrimary: true },
+            orderBy: { isPrimary: 'desc' },
+          },
+          // The dose is the point. "3 medicines" is what the Patient 360 list
+          // already says, and it is not something a doctor can act on.
+          prescriptions: {
+            select: {
+              drugName: true,
+              strength: true,
+              form: true,
+              dose: true,
+              frequency: true,
+              durationDays: true,
+            },
+          },
+          vitals: { orderBy: { recordedAt: 'desc' }, take: 1 },
+          appointment: { select: { id: true } },
+        },
+      });
+
+      /**
+       * Test results, fetched per visit rather than joined.
+       *
+       * Diagnostic orders hang off the APPOINTMENT, not the encounter, because a
+       * patient sent for an X-ray and brought back is one visit with one
+       * appointment (docs/05). Three extra queries at most, on a panel that
+       * opens once per consultation.
+       */
+      const visits = [];
+      for (const row of rows) {
+        const orders = await tx.diagnosticOrder.findMany({
+          where: { appointmentId: row.appointment.id, status: 'COMPLETED' },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            description: true,
+            resultNote: true,
+            department: { select: { name: true } },
+            documents: { select: { id: true, fileName: true }, orderBy: { createdAt: 'asc' } },
+          },
+        });
+
+        const latestVitals = row.vitals[0];
+
+        visits.push({
+          id: row.id,
+          startedAt: row.startedAt,
+          signedAt: row.signedAt,
+          chiefComplaint: row.chiefComplaint,
+          advice: row.advice,
+          prescriptionNote: row.prescriptionNote,
+          practitioner: row.practitioner,
+          diagnoses: row.diagnoses,
+          prescriptions: row.prescriptions,
+          vitals: latestVitals ? vitalsView(latestVitals) : null,
+          tests: orders,
+        });
+      }
+
+      return { visits };
+    });
+  }
+
   async historyForPatient(tenantId: string, patientId: string, limit = 20) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const rows = await tx.encounter.findMany({
@@ -602,6 +709,7 @@ export class ConsultationsService {
       historyOfPresentIllness: e.historyOfPresentIllness,
       examinationFindings: e.examinationFindings,
       advice: e.advice,
+      prescriptionNote: e.prescriptionNote,
       followUpDate: e.followUpDate,
       followUpNote: e.followUpNote,
       patient: e.patient,

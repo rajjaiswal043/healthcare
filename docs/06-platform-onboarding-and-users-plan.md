@@ -448,3 +448,65 @@ answer: PNG and JPEG only, re-encoded on upload.
 2. **What does a clinic see when it hits a seat limit at 9am on a Monday?** The
    message names the way out, but if the answer is "message Narveer on WhatsApp",
    that should be what it says.
+
+---
+
+## 9. Roles and permissions by hand — 28 Aug 2026
+
+Modelled on the role management in Narveer's CIPCRM at his request: a catalogue
+of permissions grouped into categories, roles holding a list of them, and an
+administrator ticking boxes at **Settings → Roles and permissions**. Until now
+roles existed only because the seed created them.
+
+Three decisions, all Narveer's:
+
+| Question                             | Decision                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| Can a clinic change a built-in role? | **Yes, its permissions — never its key or its name, and never Administrator at all.** |
+| Can a clinic invent its own roles?   | **Yes.** The key is slugified from the name once and then fixed.                      |
+| When does a change take effect?      | **Immediately: everybody holding the role is signed out.**                            |
+
+### Why Administrator is locked
+
+It is the way back from every other change on the screen. A clinic that removed
+`role:manage` from the only role holding it would have lost the screen that puts
+it back, and nobody at the clinic could fix it — it would be a support call and a
+SQL statement. `LOCKED_ROLE_KEY` in `packages/db/src/permission-catalogue.ts`;
+`assertEditable` refuses PATCH, reset and delete with `ROLE_IS_LOCKED`.
+
+### Why the key never changes
+
+Onboarding, seat limits and three backfill migrations all address roles by key.
+A renamed key breaks them with no error anybody would see: seats stop counting, a
+migration matches nothing and reports success. The name is a label; the key is an
+identifier, and the two are allowed to diverge.
+
+### Why the catalogue is code, not a table
+
+CIPCRM seeds its permissions into a collection. Ours is compiled against by
+`@RequirePermissions`, so a permission absent from the code guards nothing — a
+role holding `patient:delete` would look meaningful on screen and stop no one.
+`PERMISSION_CATALOGUE` is typed `Record<Permission, PermissionInfo>`, so adding a
+permission without describing it fails the build. `assertPermissionsExist`
+refuses anything outside it with `UNKNOWN_PERMISSION`.
+
+### Why saving signs people out
+
+Permissions ride in the signed access token — that is what lets a request be
+authorised without a database lookup, and the cost is that a token keeps saying
+what it said when it was issued. Without revocation, a permission removed at 10am
+stays usable until that person next happens to log out. `revokeSessionsForRole`
+sets `revoked_reason = 'role_changed'` and **skips the administrator making the
+change**: signing yourself out mid-edit hides whether the change worked, and they
+hold every permission anyway.
+
+The screen says how many people a save will interrupt _before_ it is pressed, and
+how many it did after.
+
+### Still open
+
+- **Roles are not assignable from this screen.** Adding a custom role tells you to
+  go to Staff to give it to somebody. One screen would be better; two is honest.
+- **A custom role cannot be deleted while anybody holds it** (`ROLE_IN_USE`). Move
+  them first. Reassigning on delete was considered and rejected — deciding on
+  somebody's behalf what they may now do is not a thing to do silently.

@@ -14,6 +14,13 @@ export {
   PERMISSIONS,
   ALL_PERMISSIONS,
   SYSTEM_ROLES,
+  PERMISSION_CATALOGUE,
+  PERMISSION_CATEGORIES,
+  SYSTEM_ROLE_KEYS,
+  LOCKED_ROLE_KEY,
+  defaultPermissionsFor,
   type Permission,
   type RoleSeed,
+  type PermissionCategory,
+  type PermissionInfo,
 } from '@healthcloud/db';

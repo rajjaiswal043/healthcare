@@ -69,6 +69,12 @@ export class CollectPaymentDto {
   reference?: string;
 }
 
+/** Why a compensating entry exists. See `payment.correction_kind`. */
+export enum PaymentCorrectionKindDto {
+  PATIENT_REFUND = 'PATIENT_REFUND',
+  RECORDED_IN_ERROR = 'RECORDED_IN_ERROR',
+}
+
 export class RefundDto {
   @IsEnum(PaymentModeDto)
   mode!: PaymentModeDto;
@@ -83,6 +89,17 @@ export class RefundDto {
   @MinLength(3)
   @MaxLength(300)
   reason!: string;
+
+  /**
+   * Which kind of correction this is.
+   *
+   * Required, with no default, deliberately. Both kinds net to the same figure —
+   * `PATIENT_REFUND` is money that LEFT the drawer, `RECORDED_IN_ERROR` is money
+   * that was never in it — and an owner counting cash at closing needs to know
+   * which. A default would silently pick one of those answers for somebody.
+   */
+  @IsEnum(PaymentCorrectionKindDto)
+  kind!: PaymentCorrectionKindDto;
 }
 
 export class InvoiceExceptionDto {

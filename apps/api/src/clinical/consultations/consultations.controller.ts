@@ -143,6 +143,23 @@ export class ConsultationsController {
     return this.consultations.addAddendum(tenantId, id, dto, await this.meta(req, user));
   }
 
+  /**
+   * What happened last time, read from inside the current consultation.
+   *
+   * FR-P36-23. Addressed by ENCOUNTER rather than by patient so the server
+   * decides which visits count as "previous" — a client passing a patient id and
+   * a date could ask for visits after this one, which is not a question with a
+   * sensible answer.
+   */
+  @Get('encounters/:id/previous-visits')
+  @RequirePermissions(PERMISSIONS.CONSULTATION_READ)
+  async previousVisits(
+    @CurrentTenant() tenantId: string,
+    @Param('id', new ParseUUIDPipe()) encounterId: string,
+  ) {
+    return this.consultations.previousVisits(tenantId, encounterId);
+  }
+
   /** Past consultations, for Patient 360. */
   @Get('patients/:id/encounters')
   @RequirePermissions(PERMISSIONS.CONSULTATION_READ)

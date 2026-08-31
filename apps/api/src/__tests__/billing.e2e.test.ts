@@ -90,7 +90,11 @@ async function book(patientIndex = 0, slotIndex = 0, visitType?: string) {
     },
   });
 
-  expect(res.statusCode).toBe(201);
+  // Surfaced rather than asserted bare: a booking conflict says why, and
+  // "expected 409 to be 201" sends you reading the wrong file.
+  if (res.statusCode !== 201) {
+    throw new Error(`Could not book for the test: ${res.statusCode} ${res.payload}`);
+  }
   return res.json().id as string;
 }
 
@@ -399,7 +403,12 @@ describe('refunds', () => {
       method: 'POST',
       url: `/api/v1/invoices/${invoice.id}/refunds`,
       headers: { cookie: admin.cookie },
-      payload: { mode: 'CASH', amountPaise: 30000, reason: 'Patient left before being seen' },
+      payload: {
+        mode: 'CASH',
+        amountPaise: 30000,
+        kind: 'PATIENT_REFUND',
+        reason: 'Patient left before being seen',
+      },
     });
 
     // The one rule that matters: money cannot leave that never arrived.
@@ -415,7 +424,12 @@ describe('refunds', () => {
       method: 'POST',
       url: `/api/v1/invoices/${invoice.id}/refunds`,
       headers: { cookie: admin.cookie },
-      payload: { mode: 'CASH', amountPaise: CONSULT_FEE, reason: 'Doctor unavailable' },
+      payload: {
+        mode: 'CASH',
+        amountPaise: CONSULT_FEE,
+        kind: 'PATIENT_REFUND',
+        reason: 'Doctor unavailable',
+      },
     });
 
     expect(res.statusCode).toBe(201);
@@ -435,7 +449,12 @@ describe('refunds', () => {
       method: 'POST',
       url: `/api/v1/invoices/${invoice.id}/refunds`,
       headers: { cookie: frontDesk.cookie },
-      payload: { mode: 'CASH', amountPaise: 10000, reason: 'Changed their mind' },
+      payload: {
+        mode: 'CASH',
+        amountPaise: 10000,
+        kind: 'PATIENT_REFUND',
+        reason: 'Changed their mind',
+      },
     });
 
     // The person at the desk must not be able to authorise their own exception.
@@ -451,10 +470,182 @@ describe('refunds', () => {
       method: 'POST',
       url: `/api/v1/invoices/${invoice.id}/refunds`,
       headers: { cookie: admin.cookie },
-      payload: { mode: 'CASH', amountPaise: 10000 },
+      payload: { mode: 'CASH', amountPaise: 10000, kind: 'PATIENT_REFUND' },
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  /**
+   * FR-BIL-11. Both kinds net to the same figure and are completely different
+   * problems: money that LEFT the drawer versus money that was never in it. A
+   * default would have silently picked one of those answers for somebody.
+   */
+  it('is refused without saying which kind of correction it is', async () => {
+    const invoice = await invoiceFor(await book());
+    await pay(invoice.id, CONSULT_FEE);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/refunds`,
+      headers: { cookie: admin.cookie },
+      payload: { mode: 'CASH', amountPaise: 10000, reason: 'Entered twice' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('records a reversal distinctly from a refund', async () => {
+    const invoice = await invoiceFor(await book());
+    await pay(invoice.id, CONSULT_FEE);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/refunds`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        mode: 'CASH',
+        amountPaise: CONSULT_FEE,
+        kind: 'RECORDED_IN_ERROR',
+        reason: 'Entered against the wrong patient',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    const [row] = await ownerQuery<{ correction_kind: string }>(
+      fx.main.id,
+      `SELECT correction_kind FROM payment WHERE direction = 'REFUND' AND invoice_id = $1`,
+      [invoice.id],
+    );
+    expect(row?.correction_kind).toBe('RECORDED_IN_ERROR');
+  });
+});
+
+/**
+ * FR-BIL-13 — the trail on the invoice itself.
+ *
+ * The reason was captured from the beginning and returned to nobody. What this
+ * asserts is that a FRONT DESK caller — who has no `audit:read` — can see what
+ * was corrected, by whom, when and why. Sending a receptionist to find an
+ * administrator to answer "why was I charged twice" is the reason clinics keep a
+ * paper register.
+ */
+describe('the correction trail on an invoice', () => {
+  it('shows the front desk who corrected it, when and why', async () => {
+    const invoice = await invoiceFor(await book());
+    await pay(invoice.id, CONSULT_FEE);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/refunds`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        mode: 'CASH',
+        amountPaise: CONSULT_FEE,
+        kind: 'RECORDED_IN_ERROR',
+        reason: 'Entered against the wrong patient',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/invoices/${invoice.id}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const reversal = res
+      .json<{
+        payments: Array<{
+          direction: string;
+          correctionKind: string | null;
+          reason: string | null;
+          collectedAt: string;
+          collectedBy: { fullName: string | null };
+        }>;
+      }>()
+      .payments.find((p) => p.direction === 'REFUND');
+
+    expect(reversal?.correctionKind).toBe('RECORDED_IN_ERROR');
+    expect(reversal?.reason).toBe('Entered against the wrong patient');
+    expect(reversal?.collectedBy.fullName).toBeTruthy();
+    expect(reversal?.collectedAt).toBeTruthy();
+  });
+
+  it('shows the reason a bill was waived', async () => {
+    const invoice = await invoiceFor(await book());
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/waive`,
+      headers: { cookie: admin.cookie },
+      payload: { reason: 'Staff family, waived by the medical director' },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/invoices/${invoice.id}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.json<{ status: string; reason: string }>()).toMatchObject({
+      status: 'WAIVED',
+      reason: 'Staff family, waived by the medical director',
+    });
+  });
+});
+
+describe('the day-end report separates the two kinds', () => {
+  it('counts money that left the drawer apart from money never in it', async () => {
+    const first = await invoiceFor(await book());
+    await pay(first.id, CONSULT_FEE);
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${first.id}/refunds`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        mode: 'CASH',
+        amountPaise: CONSULT_FEE,
+        kind: 'PATIENT_REFUND',
+        reason: 'Procedure not performed',
+      },
+    });
+
+    // A different patient AND a different slot. Availability lists every slot,
+    // full or not, so a second booking has to name the next one explicitly —
+    // that is the convention every other test in this file follows.
+    const second = await invoiceFor(await book(1, 1));
+    await pay(second.id, CONSULT_FEE);
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${second.id}/refunds`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        mode: 'CASH',
+        amountPaise: CONSULT_FEE,
+        kind: 'RECORDED_IN_ERROR',
+        reason: 'Recorded twice by mistake',
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/reports/day-collection',
+      headers: { cookie: admin.cookie },
+    });
+
+    const report = res.json<{
+      refundedPaise: number;
+      patientRefundedPaise: number;
+      reversedInErrorPaise: number;
+    }>();
+
+    expect(report.patientRefundedPaise).toBe(CONSULT_FEE);
+    expect(report.reversedInErrorPaise).toBe(CONSULT_FEE);
+    // The existing total still means what it always did, so nothing reading this
+    // report today changes behind somebody's back.
+    expect(report.refundedPaise).toBe(report.patientRefundedPaise + report.reversedInErrorPaise);
   });
 });
 
@@ -616,7 +807,12 @@ describe('the day-end report', () => {
       method: 'POST',
       url: `/api/v1/invoices/${invoice.id}/refunds`,
       headers: { cookie: admin.cookie },
-      payload: { mode: 'CASH', amountPaise: 20000, reason: 'Procedure not performed' },
+      payload: {
+        mode: 'CASH',
+        amountPaise: 20000,
+        kind: 'PATIENT_REFUND',
+        reason: 'Procedure not performed',
+      },
     });
 
     const report = (
