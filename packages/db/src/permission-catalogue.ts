@@ -81,6 +81,11 @@ export const PERMISSION_CATALOGUE: Record<Permission, PermissionInfo> = {
     description: 'Set up doctors, departments and weekly consulting hours',
     category: 'Appointments and queue',
   },
+  [PERMISSIONS.VISIT_OPEN]: {
+    name: PERMISSIONS.VISIT_OPEN,
+    description: "Start today's visit for a doctor, without booking a future appointment",
+    category: 'Appointments and queue',
+  },
   [PERMISSIONS.QUEUE_PRIORITISE]: {
     name: PERMISSIONS.QUEUE_PRIORITISE,
     description: 'Move a patient up the queue, and bring back one sent for tests',
@@ -169,6 +174,16 @@ export const PERMISSION_CATALOGUE: Record<Permission, PermissionInfo> = {
     description: 'Let a patient pay later',
     category: 'Billing',
   },
+  [PERMISSIONS.PROMOTION_MANAGE]: {
+    name: PERMISSIONS.PROMOTION_MANAGE,
+    description: 'Set up the clinic’s discounts, and switch one off',
+    category: 'Billing',
+  },
+  [PERMISSIONS.PROMOTION_APPLY]: {
+    name: PERMISSIONS.PROMOTION_APPLY,
+    description: 'Apply an approved discount to a bill, naming who authorised it',
+    category: 'Billing',
+  },
 
   [PERMISSIONS.REPORT_REVENUE]: {
     name: PERMISSIONS.REPORT_REVENUE,
@@ -215,9 +230,9 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
 ];
 
 /**
- * The roles a clinic may adjust but not delete or rename — the six we ship.
+ * The roles a clinic may adjust but not delete or rename — the seven we ship.
  *
- * The KEY is what matters. Onboarding, seat limits and three backfill migrations
+ * The KEY is what matters. Onboarding, seat limits and four backfill migrations
  * all address roles by key, so a renamed or missing one breaks them with no
  * error anybody would see. Permissions on these roles are freely editable; the
  * key is not.

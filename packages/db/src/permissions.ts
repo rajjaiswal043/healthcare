@@ -40,6 +40,21 @@ export const PERMISSIONS = {
   QUEUE_PRIORITISE: 'queue:prioritise',
 
   /**
+   * Start today's visit for a doctor, without holding the diary.
+   *
+   * Split from `appointment:write` on Narveer's decision of 3 Sep 2026, for the
+   * finance desk. Those are two different powers and they were one permission:
+   * opening a walk-in that is happening now is an act at the door, while booking
+   * Thursday afternoon, rescheduling it and cancelling it is control of the
+   * clinic's diary. A finance person needs the first so the bill has a visit to
+   * attach to, and must not have the second.
+   *
+   * The front desk holds both, as it always did — this narrows what a NEW role
+   * can be given, and takes nothing away from an existing one.
+   */
+  VISIT_OPEN: 'visit:open',
+
+  /**
    * The clinical note. Split three ways rather than one `consultation:write`,
    * because the three actions are held by different people: a nurse records
    * vitals, only a doctor diagnoses and prescribes, and the front desk does
@@ -87,6 +102,20 @@ export const PERMISSIONS = {
   INVOICE_WAIVE: 'invoice:waive',
   INVOICE_DEFER: 'invoice:defer',
   PAYMENT_REFUND: 'payment:refund',
+
+  /**
+   * Promotions — the clinic's discounts, set up in advance.
+   *
+   * Two permissions, not one, and the split is the control. The administrator
+   * DEFINES what a discount may be; the finance desk APPLIES one that already
+   * exists. A single `promotion:manage` would have let the person taking the
+   * money invent the discount they were about to give, which is the failure mode
+   * this whole feature is meant to replace — a verbal instruction and a
+   * hand-written note.
+   */
+  PROMOTION_MANAGE: 'promotion:manage',
+  PROMOTION_APPLY: 'promotion:apply',
+
   REPORT_REVENUE: 'report:revenue',
 
   AUDIT_READ: 'audit:read',
@@ -136,6 +165,10 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.APPOINTMENT_READ,
       PERMISSIONS.APPOINTMENT_WRITE,
       PERMISSIONS.APPOINTMENT_CANCEL,
+      // Held alongside APPOINTMENT_WRITE rather than instead of it. The front
+      // desk always could open a walk-in; `visit:open` only names that power
+      // separately so the finance desk can be given it on its own.
+      PERMISSIONS.VISIT_OPEN,
       // Puts a patient back at the front after they return from an X-ray, and
       // handles the emergency who cannot wait. Recorded, never silent.
       PERMISSIONS.QUEUE_PRIORITISE,
@@ -221,6 +254,57 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DOCUMENT_WRITE,
     ],
+    requiresMfa: false,
+  },
+  {
+    key: 'finance',
+    name: 'Finance',
+    description: 'Meets the patient first. Registers, bills, discounts and takes payment.',
+    permissions: [
+      // Finds whoever walked in, and registers them if this is their first
+      // visit. A first-time patient sent to another desk to be created is the
+      // thing this role exists to prevent.
+      PERMISSIONS.PATIENT_READ,
+      PERMISSIONS.PATIENT_WRITE,
+
+      /**
+       * No `consent:read` or `consent:write`, removed 5 Sep 2026.
+       *
+       * Registration does capture DPDP consent, but it does so inside the
+       * registration transaction behind `patient:write` — no endpoint in this
+       * API checks the consent permissions at all. Holding them gave finance
+       * nothing today and pre-granted it whatever a standalone
+       * consent-management endpoint might check tomorrow, with no review at the
+       * moment that endpoint was written. Managing a patient's consent is not
+       * this desk's job; registering them is.
+       */
+
+      // "Which doctors are consulting today, and do they have room?" — the
+      // question answered before any money is taken.
+      PERMISSIONS.APPOINTMENT_READ,
+      // Opens today's visit so the bill has something real to attach to.
+      // Deliberately NOT appointment:write or appointment:cancel: this desk
+      // does not hold the diary. See the note on VISIT_OPEN.
+      PERMISSIONS.VISIT_OPEN,
+
+      // The bill itself, and the money.
+      PERMISSIONS.INVOICE_READ,
+      PERMISSIONS.INVOICE_WRITE,
+      PERMISSIONS.PAYMENT_COLLECT,
+      // Applies a discount the administrator already defined. Cannot define one.
+      PERMISSIONS.PROMOTION_APPLY,
+
+      // Owns the numbers, and is who the owner asks where the day's money went.
+      PERMISSIONS.REPORT_REVENUE,
+    ],
+    /**
+     * Matched to the front desk, which is also false.
+     *
+     * This role moves money but does not authorise its exceptions — waive, defer
+     * and refund stay with the administrator, whose role does require TOTP. If
+     * MFA_ENABLED is ever turned on and this desk is judged to need it too, this
+     * is the one line to change.
+     */
     requiresMfa: false,
   },
   {

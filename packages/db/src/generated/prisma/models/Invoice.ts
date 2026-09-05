@@ -58,6 +58,7 @@ export type InvoiceMinAggregateOutputType = {
   cancelledAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
+  activePromotionApplicationId: string | null
 }
 
 export type InvoiceMaxAggregateOutputType = {
@@ -78,6 +79,7 @@ export type InvoiceMaxAggregateOutputType = {
   cancelledAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
+  activePromotionApplicationId: string | null
 }
 
 export type InvoiceCountAggregateOutputType = {
@@ -98,6 +100,7 @@ export type InvoiceCountAggregateOutputType = {
   cancelledAt: number
   createdAt: number
   updatedAt: number
+  activePromotionApplicationId: number
   _all: number
 }
 
@@ -134,6 +137,7 @@ export type InvoiceMinAggregateInputType = {
   cancelledAt?: true
   createdAt?: true
   updatedAt?: true
+  activePromotionApplicationId?: true
 }
 
 export type InvoiceMaxAggregateInputType = {
@@ -154,6 +158,7 @@ export type InvoiceMaxAggregateInputType = {
   cancelledAt?: true
   createdAt?: true
   updatedAt?: true
+  activePromotionApplicationId?: true
 }
 
 export type InvoiceCountAggregateInputType = {
@@ -174,6 +179,7 @@ export type InvoiceCountAggregateInputType = {
   cancelledAt?: true
   createdAt?: true
   updatedAt?: true
+  activePromotionApplicationId?: true
   _all?: true
 }
 
@@ -281,6 +287,7 @@ export type InvoiceGroupByOutputType = {
   cancelledAt: Date | null
   createdAt: Date
   updatedAt: Date
+  activePromotionApplicationId: string | null
   _count: InvoiceCountAggregateOutputType | null
   _avg: InvoiceAvgAggregateOutputType | null
   _sum: InvoiceSumAggregateOutputType | null
@@ -324,10 +331,13 @@ export type InvoiceWhereInput = {
   cancelledAt?: Prisma.DateTimeNullableFilter<"Invoice"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Invoice"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Invoice"> | Date | string
+  activePromotionApplicationId?: Prisma.UuidNullableFilter<"Invoice"> | string | null
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   appointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
   lines?: Prisma.InvoiceLineListRelationFilter
   payments?: Prisma.PaymentListRelationFilter
+  activePromotion?: Prisma.XOR<Prisma.PromotionApplicationNullableScalarRelationFilter, Prisma.PromotionApplicationWhereInput> | null
+  promotionApplications?: Prisma.PromotionApplicationListRelationFilter
 }
 
 export type InvoiceOrderByWithRelationInput = {
@@ -348,10 +358,13 @@ export type InvoiceOrderByWithRelationInput = {
   cancelledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  activePromotionApplicationId?: Prisma.SortOrderInput | Prisma.SortOrder
   patient?: Prisma.PatientOrderByWithRelationInput
   appointment?: Prisma.AppointmentOrderByWithRelationInput
   lines?: Prisma.InvoiceLineOrderByRelationAggregateInput
   payments?: Prisma.PaymentOrderByRelationAggregateInput
+  activePromotion?: Prisma.PromotionApplicationOrderByWithRelationInput
+  promotionApplications?: Prisma.PromotionApplicationOrderByRelationAggregateInput
 }
 
 export type InvoiceWhereUniqueInput = Prisma.AtLeast<{
@@ -376,10 +389,13 @@ export type InvoiceWhereUniqueInput = Prisma.AtLeast<{
   cancelledAt?: Prisma.DateTimeNullableFilter<"Invoice"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Invoice"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Invoice"> | Date | string
+  activePromotionApplicationId?: Prisma.UuidNullableFilter<"Invoice"> | string | null
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   appointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
   lines?: Prisma.InvoiceLineListRelationFilter
   payments?: Prisma.PaymentListRelationFilter
+  activePromotion?: Prisma.XOR<Prisma.PromotionApplicationNullableScalarRelationFilter, Prisma.PromotionApplicationWhereInput> | null
+  promotionApplications?: Prisma.PromotionApplicationListRelationFilter
 }, "id" | "appointmentId" | "tenantId_number">
 
 export type InvoiceOrderByWithAggregationInput = {
@@ -400,6 +416,7 @@ export type InvoiceOrderByWithAggregationInput = {
   cancelledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  activePromotionApplicationId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.InvoiceCountOrderByAggregateInput
   _avg?: Prisma.InvoiceAvgOrderByAggregateInput
   _max?: Prisma.InvoiceMaxOrderByAggregateInput
@@ -428,6 +445,7 @@ export type InvoiceScalarWhereWithAggregatesInput = {
   cancelledAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Invoice"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Invoice"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Invoice"> | Date | string
+  activePromotionApplicationId?: Prisma.UuidNullableWithAggregatesFilter<"Invoice"> | string | null
 }
 
 export type InvoiceCreateInput = {
@@ -450,6 +468,8 @@ export type InvoiceCreateInput = {
   appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceUncheckedCreateInput = {
@@ -470,8 +490,10 @@ export type InvoiceUncheckedCreateInput = {
   cancelledAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceUpdateInput = {
@@ -494,6 +516,8 @@ export type InvoiceUpdateInput = {
   appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceUncheckedUpdateInput = {
@@ -514,8 +538,10 @@ export type InvoiceUncheckedUpdateInput = {
   cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceCreateManyInput = {
@@ -536,6 +562,7 @@ export type InvoiceCreateManyInput = {
   cancelledAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
 }
 
 export type InvoiceUpdateManyMutationInput = {
@@ -574,6 +601,7 @@ export type InvoiceUncheckedUpdateManyInput = {
   cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type InvoiceListRelationFilter = {
@@ -614,6 +642,7 @@ export type InvoiceCountOrderByAggregateInput = {
   cancelledAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  activePromotionApplicationId?: Prisma.SortOrder
 }
 
 export type InvoiceAvgOrderByAggregateInput = {
@@ -641,6 +670,7 @@ export type InvoiceMaxOrderByAggregateInput = {
   cancelledAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  activePromotionApplicationId?: Prisma.SortOrder
 }
 
 export type InvoiceMinOrderByAggregateInput = {
@@ -661,6 +691,7 @@ export type InvoiceMinOrderByAggregateInput = {
   cancelledAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  activePromotionApplicationId?: Prisma.SortOrder
 }
 
 export type InvoiceSumOrderByAggregateInput = {
@@ -781,6 +812,62 @@ export type InvoiceUpdateOneRequiredWithoutPaymentsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.InvoiceUpdateToOneWithWhereWithoutPaymentsInput, Prisma.InvoiceUpdateWithoutPaymentsInput>, Prisma.InvoiceUncheckedUpdateWithoutPaymentsInput>
 }
 
+export type InvoiceCreateNestedOneWithoutPromotionApplicationsInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutPromotionApplicationsInput, Prisma.InvoiceUncheckedCreateWithoutPromotionApplicationsInput>
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutPromotionApplicationsInput
+  connect?: Prisma.InvoiceWhereUniqueInput
+}
+
+export type InvoiceCreateNestedManyWithoutActivePromotionInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutActivePromotionInput, Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput> | Prisma.InvoiceCreateWithoutActivePromotionInput[] | Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput[]
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput | Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput[]
+  createMany?: Prisma.InvoiceCreateManyActivePromotionInputEnvelope
+  connect?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+}
+
+export type InvoiceUncheckedCreateNestedManyWithoutActivePromotionInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutActivePromotionInput, Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput> | Prisma.InvoiceCreateWithoutActivePromotionInput[] | Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput[]
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput | Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput[]
+  createMany?: Prisma.InvoiceCreateManyActivePromotionInputEnvelope
+  connect?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+}
+
+export type InvoiceUpdateOneRequiredWithoutPromotionApplicationsNestedInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutPromotionApplicationsInput, Prisma.InvoiceUncheckedCreateWithoutPromotionApplicationsInput>
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutPromotionApplicationsInput
+  upsert?: Prisma.InvoiceUpsertWithoutPromotionApplicationsInput
+  connect?: Prisma.InvoiceWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.InvoiceUpdateToOneWithWhereWithoutPromotionApplicationsInput, Prisma.InvoiceUpdateWithoutPromotionApplicationsInput>, Prisma.InvoiceUncheckedUpdateWithoutPromotionApplicationsInput>
+}
+
+export type InvoiceUpdateManyWithoutActivePromotionNestedInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutActivePromotionInput, Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput> | Prisma.InvoiceCreateWithoutActivePromotionInput[] | Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput[]
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput | Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput[]
+  upsert?: Prisma.InvoiceUpsertWithWhereUniqueWithoutActivePromotionInput | Prisma.InvoiceUpsertWithWhereUniqueWithoutActivePromotionInput[]
+  createMany?: Prisma.InvoiceCreateManyActivePromotionInputEnvelope
+  set?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  disconnect?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  delete?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  connect?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  update?: Prisma.InvoiceUpdateWithWhereUniqueWithoutActivePromotionInput | Prisma.InvoiceUpdateWithWhereUniqueWithoutActivePromotionInput[]
+  updateMany?: Prisma.InvoiceUpdateManyWithWhereWithoutActivePromotionInput | Prisma.InvoiceUpdateManyWithWhereWithoutActivePromotionInput[]
+  deleteMany?: Prisma.InvoiceScalarWhereInput | Prisma.InvoiceScalarWhereInput[]
+}
+
+export type InvoiceUncheckedUpdateManyWithoutActivePromotionNestedInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutActivePromotionInput, Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput> | Prisma.InvoiceCreateWithoutActivePromotionInput[] | Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput[]
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput | Prisma.InvoiceCreateOrConnectWithoutActivePromotionInput[]
+  upsert?: Prisma.InvoiceUpsertWithWhereUniqueWithoutActivePromotionInput | Prisma.InvoiceUpsertWithWhereUniqueWithoutActivePromotionInput[]
+  createMany?: Prisma.InvoiceCreateManyActivePromotionInputEnvelope
+  set?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  disconnect?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  delete?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  connect?: Prisma.InvoiceWhereUniqueInput | Prisma.InvoiceWhereUniqueInput[]
+  update?: Prisma.InvoiceUpdateWithWhereUniqueWithoutActivePromotionInput | Prisma.InvoiceUpdateWithWhereUniqueWithoutActivePromotionInput[]
+  updateMany?: Prisma.InvoiceUpdateManyWithWhereWithoutActivePromotionInput | Prisma.InvoiceUpdateManyWithWhereWithoutActivePromotionInput[]
+  deleteMany?: Prisma.InvoiceScalarWhereInput | Prisma.InvoiceScalarWhereInput[]
+}
+
 export type InvoiceCreateWithoutPatientInput = {
   id?: string
   tenantId: string
@@ -800,6 +887,8 @@ export type InvoiceCreateWithoutPatientInput = {
   appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceUncheckedCreateWithoutPatientInput = {
@@ -819,8 +908,10 @@ export type InvoiceUncheckedCreateWithoutPatientInput = {
   cancelledAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceCreateOrConnectWithoutPatientInput = {
@@ -870,6 +961,7 @@ export type InvoiceScalarWhereInput = {
   cancelledAt?: Prisma.DateTimeNullableFilter<"Invoice"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Invoice"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Invoice"> | Date | string
+  activePromotionApplicationId?: Prisma.UuidNullableFilter<"Invoice"> | string | null
 }
 
 export type InvoiceCreateWithoutAppointmentInput = {
@@ -891,6 +983,8 @@ export type InvoiceCreateWithoutAppointmentInput = {
   patient: Prisma.PatientCreateNestedOneWithoutInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceUncheckedCreateWithoutAppointmentInput = {
@@ -910,8 +1004,10 @@ export type InvoiceUncheckedCreateWithoutAppointmentInput = {
   cancelledAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceCreateOrConnectWithoutAppointmentInput = {
@@ -949,6 +1045,8 @@ export type InvoiceUpdateWithoutAppointmentInput = {
   patient?: Prisma.PatientUpdateOneRequiredWithoutInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceUncheckedUpdateWithoutAppointmentInput = {
@@ -968,8 +1066,10 @@ export type InvoiceUncheckedUpdateWithoutAppointmentInput = {
   cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceCreateWithoutLinesInput = {
@@ -991,6 +1091,8 @@ export type InvoiceCreateWithoutLinesInput = {
   patient: Prisma.PatientCreateNestedOneWithoutInvoicesInput
   appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceUncheckedCreateWithoutLinesInput = {
@@ -1011,7 +1113,9 @@ export type InvoiceUncheckedCreateWithoutLinesInput = {
   cancelledAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceCreateOrConnectWithoutLinesInput = {
@@ -1049,6 +1153,8 @@ export type InvoiceUpdateWithoutLinesInput = {
   patient?: Prisma.PatientUpdateOneRequiredWithoutInvoicesNestedInput
   appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceUncheckedUpdateWithoutLinesInput = {
@@ -1069,7 +1175,9 @@ export type InvoiceUncheckedUpdateWithoutLinesInput = {
   cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceCreateWithoutPaymentsInput = {
@@ -1091,6 +1199,8 @@ export type InvoiceCreateWithoutPaymentsInput = {
   patient: Prisma.PatientCreateNestedOneWithoutInvoicesInput
   appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
+  activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceUncheckedCreateWithoutPaymentsInput = {
@@ -1111,7 +1221,9 @@ export type InvoiceUncheckedCreateWithoutPaymentsInput = {
   cancelledAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
 }
 
 export type InvoiceCreateOrConnectWithoutPaymentsInput = {
@@ -1149,6 +1261,8 @@ export type InvoiceUpdateWithoutPaymentsInput = {
   patient?: Prisma.PatientUpdateOneRequiredWithoutInvoicesNestedInput
   appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
+  activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceUncheckedUpdateWithoutPaymentsInput = {
@@ -1169,7 +1283,189 @@ export type InvoiceUncheckedUpdateWithoutPaymentsInput = {
   cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
+}
+
+export type InvoiceCreateWithoutPromotionApplicationsInput = {
+  id?: string
+  tenantId: string
+  number: string
+  status?: $Enums.InvoiceStatus
+  subtotalPaise: number
+  discountPaise?: number
+  taxPaise?: number
+  totalPaise: number
+  reason?: string | null
+  authorisedByUserId?: string | null
+  issuedByUserId?: string | null
+  issuedAt?: Date | string
+  cancelledAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  patient: Prisma.PatientCreateNestedOneWithoutInvoicesInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
+  lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
+  payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
+}
+
+export type InvoiceUncheckedCreateWithoutPromotionApplicationsInput = {
+  id?: string
+  tenantId: string
+  number: string
+  patientId: string
+  appointmentId?: string | null
+  status?: $Enums.InvoiceStatus
+  subtotalPaise: number
+  discountPaise?: number
+  taxPaise?: number
+  totalPaise: number
+  reason?: string | null
+  authorisedByUserId?: string | null
+  issuedByUserId?: string | null
+  issuedAt?: Date | string
+  cancelledAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
+  lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
+  payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+}
+
+export type InvoiceCreateOrConnectWithoutPromotionApplicationsInput = {
+  where: Prisma.InvoiceWhereUniqueInput
+  create: Prisma.XOR<Prisma.InvoiceCreateWithoutPromotionApplicationsInput, Prisma.InvoiceUncheckedCreateWithoutPromotionApplicationsInput>
+}
+
+export type InvoiceCreateWithoutActivePromotionInput = {
+  id?: string
+  tenantId: string
+  number: string
+  status?: $Enums.InvoiceStatus
+  subtotalPaise: number
+  discountPaise?: number
+  taxPaise?: number
+  totalPaise: number
+  reason?: string | null
+  authorisedByUserId?: string | null
+  issuedByUserId?: string | null
+  issuedAt?: Date | string
+  cancelledAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  patient: Prisma.PatientCreateNestedOneWithoutInvoicesInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
+  lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
+  payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
+}
+
+export type InvoiceUncheckedCreateWithoutActivePromotionInput = {
+  id?: string
+  tenantId: string
+  number: string
+  patientId: string
+  appointmentId?: string | null
+  status?: $Enums.InvoiceStatus
+  subtotalPaise: number
+  discountPaise?: number
+  taxPaise?: number
+  totalPaise: number
+  reason?: string | null
+  authorisedByUserId?: string | null
+  issuedByUserId?: string | null
+  issuedAt?: Date | string
+  cancelledAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
+  payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
+}
+
+export type InvoiceCreateOrConnectWithoutActivePromotionInput = {
+  where: Prisma.InvoiceWhereUniqueInput
+  create: Prisma.XOR<Prisma.InvoiceCreateWithoutActivePromotionInput, Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput>
+}
+
+export type InvoiceCreateManyActivePromotionInputEnvelope = {
+  data: Prisma.InvoiceCreateManyActivePromotionInput | Prisma.InvoiceCreateManyActivePromotionInput[]
+  skipDuplicates?: boolean
+}
+
+export type InvoiceUpsertWithoutPromotionApplicationsInput = {
+  update: Prisma.XOR<Prisma.InvoiceUpdateWithoutPromotionApplicationsInput, Prisma.InvoiceUncheckedUpdateWithoutPromotionApplicationsInput>
+  create: Prisma.XOR<Prisma.InvoiceCreateWithoutPromotionApplicationsInput, Prisma.InvoiceUncheckedCreateWithoutPromotionApplicationsInput>
+  where?: Prisma.InvoiceWhereInput
+}
+
+export type InvoiceUpdateToOneWithWhereWithoutPromotionApplicationsInput = {
+  where?: Prisma.InvoiceWhereInput
+  data: Prisma.XOR<Prisma.InvoiceUpdateWithoutPromotionApplicationsInput, Prisma.InvoiceUncheckedUpdateWithoutPromotionApplicationsInput>
+}
+
+export type InvoiceUpdateWithoutPromotionApplicationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  number?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
+  subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  reason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  authorisedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  patient?: Prisma.PatientUpdateOneRequiredWithoutInvoicesNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
+  lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
+  payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
+}
+
+export type InvoiceUncheckedUpdateWithoutPromotionApplicationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  number?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
+  subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  reason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  authorisedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
+  payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+}
+
+export type InvoiceUpsertWithWhereUniqueWithoutActivePromotionInput = {
+  where: Prisma.InvoiceWhereUniqueInput
+  update: Prisma.XOR<Prisma.InvoiceUpdateWithoutActivePromotionInput, Prisma.InvoiceUncheckedUpdateWithoutActivePromotionInput>
+  create: Prisma.XOR<Prisma.InvoiceCreateWithoutActivePromotionInput, Prisma.InvoiceUncheckedCreateWithoutActivePromotionInput>
+}
+
+export type InvoiceUpdateWithWhereUniqueWithoutActivePromotionInput = {
+  where: Prisma.InvoiceWhereUniqueInput
+  data: Prisma.XOR<Prisma.InvoiceUpdateWithoutActivePromotionInput, Prisma.InvoiceUncheckedUpdateWithoutActivePromotionInput>
+}
+
+export type InvoiceUpdateManyWithWhereWithoutActivePromotionInput = {
+  where: Prisma.InvoiceScalarWhereInput
+  data: Prisma.XOR<Prisma.InvoiceUpdateManyMutationInput, Prisma.InvoiceUncheckedUpdateManyWithoutActivePromotionInput>
 }
 
 export type InvoiceCreateManyPatientInput = {
@@ -1189,6 +1485,7 @@ export type InvoiceCreateManyPatientInput = {
   cancelledAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
 }
 
 export type InvoiceUpdateWithoutPatientInput = {
@@ -1210,6 +1507,8 @@ export type InvoiceUpdateWithoutPatientInput = {
   appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceUncheckedUpdateWithoutPatientInput = {
@@ -1229,14 +1528,103 @@ export type InvoiceUncheckedUpdateWithoutPatientInput = {
   cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
 }
 
 export type InvoiceUncheckedUpdateManyWithoutPatientInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   number?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
+  subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  reason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  authorisedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type InvoiceCreateManyActivePromotionInput = {
+  id?: string
+  tenantId: string
+  number: string
+  patientId: string
+  appointmentId?: string | null
+  status?: $Enums.InvoiceStatus
+  subtotalPaise: number
+  discountPaise?: number
+  taxPaise?: number
+  totalPaise: number
+  reason?: string | null
+  authorisedByUserId?: string | null
+  issuedByUserId?: string | null
+  issuedAt?: Date | string
+  cancelledAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type InvoiceUpdateWithoutActivePromotionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  number?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
+  subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  reason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  authorisedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  patient?: Prisma.PatientUpdateOneRequiredWithoutInvoicesNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
+  lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
+  payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
+}
+
+export type InvoiceUncheckedUpdateWithoutActivePromotionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  number?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
+  subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  reason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  authorisedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
+  payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
+}
+
+export type InvoiceUncheckedUpdateManyWithoutActivePromotionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  number?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
   appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
   subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1260,11 +1648,13 @@ export type InvoiceUncheckedUpdateManyWithoutPatientInput = {
 export type InvoiceCountOutputType = {
   lines: number
   payments: number
+  promotionApplications: number
 }
 
 export type InvoiceCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   lines?: boolean | InvoiceCountOutputTypeCountLinesArgs
   payments?: boolean | InvoiceCountOutputTypeCountPaymentsArgs
+  promotionApplications?: boolean | InvoiceCountOutputTypeCountPromotionApplicationsArgs
 }
 
 /**
@@ -1291,6 +1681,13 @@ export type InvoiceCountOutputTypeCountPaymentsArgs<ExtArgs extends runtime.Type
   where?: Prisma.PaymentWhereInput
 }
 
+/**
+ * InvoiceCountOutputType without action
+ */
+export type InvoiceCountOutputTypeCountPromotionApplicationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PromotionApplicationWhereInput
+}
+
 
 export type InvoiceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -1310,10 +1707,13 @@ export type InvoiceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   cancelledAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  activePromotionApplicationId?: boolean
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.Invoice$appointmentArgs<ExtArgs>
   lines?: boolean | Prisma.Invoice$linesArgs<ExtArgs>
   payments?: boolean | Prisma.Invoice$paymentsArgs<ExtArgs>
+  activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
+  promotionApplications?: boolean | Prisma.Invoice$promotionApplicationsArgs<ExtArgs>
   _count?: boolean | Prisma.InvoiceCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["invoice"]>
 
@@ -1335,8 +1735,10 @@ export type InvoiceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   cancelledAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  activePromotionApplicationId?: boolean
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.Invoice$appointmentArgs<ExtArgs>
+  activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
 }, ExtArgs["result"]["invoice"]>
 
 export type InvoiceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -1357,8 +1759,10 @@ export type InvoiceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   cancelledAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  activePromotionApplicationId?: boolean
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.Invoice$appointmentArgs<ExtArgs>
+  activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
 }, ExtArgs["result"]["invoice"]>
 
 export type InvoiceSelectScalar = {
@@ -1379,23 +1783,28 @@ export type InvoiceSelectScalar = {
   cancelledAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  activePromotionApplicationId?: boolean
 }
 
-export type InvoiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "number" | "patientId" | "appointmentId" | "status" | "subtotalPaise" | "discountPaise" | "taxPaise" | "totalPaise" | "reason" | "authorisedByUserId" | "issuedByUserId" | "issuedAt" | "cancelledAt" | "createdAt" | "updatedAt", ExtArgs["result"]["invoice"]>
+export type InvoiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "number" | "patientId" | "appointmentId" | "status" | "subtotalPaise" | "discountPaise" | "taxPaise" | "totalPaise" | "reason" | "authorisedByUserId" | "issuedByUserId" | "issuedAt" | "cancelledAt" | "createdAt" | "updatedAt" | "activePromotionApplicationId", ExtArgs["result"]["invoice"]>
 export type InvoiceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.Invoice$appointmentArgs<ExtArgs>
   lines?: boolean | Prisma.Invoice$linesArgs<ExtArgs>
   payments?: boolean | Prisma.Invoice$paymentsArgs<ExtArgs>
+  activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
+  promotionApplications?: boolean | Prisma.Invoice$promotionApplicationsArgs<ExtArgs>
   _count?: boolean | Prisma.InvoiceCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type InvoiceIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.Invoice$appointmentArgs<ExtArgs>
+  activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
 }
 export type InvoiceIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.Invoice$appointmentArgs<ExtArgs>
+  activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
 }
 
 export type $InvoicePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1405,6 +1814,11 @@ export type $InvoicePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     appointment: Prisma.$AppointmentPayload<ExtArgs> | null
     lines: Prisma.$InvoiceLinePayload<ExtArgs>[]
     payments: Prisma.$PaymentPayload<ExtArgs>[]
+    activePromotion: Prisma.$PromotionApplicationPayload<ExtArgs> | null
+    /**
+     * Every discount this bill has ever carried, reversed ones included.
+     */
+    promotionApplications: Prisma.$PromotionApplicationPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1442,6 +1856,16 @@ export type $InvoicePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     cancelledAt: Date | null
     createdAt: Date
     updatedAt: Date
+    /**
+     * The one discount currently on this bill, or none.
+     * 
+     * The invariant lives here rather than as a unique index on
+     * `promotion_application` because reversals are new rows: the reversed
+     * application keeps `reversal_kind IS NULL` on the row it reverses, so a
+     * partial index there would block a second, legitimate discount. One
+     * nullable column cannot hold two.
+     */
+    activePromotionApplicationId: string | null
   }, ExtArgs["result"]["invoice"]>
   composites: {}
 }
@@ -1840,6 +2264,8 @@ export interface Prisma__InvoiceClient<T, Null = never, ExtArgs extends runtime.
   appointment<T extends Prisma.Invoice$appointmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$appointmentArgs<ExtArgs>>): Prisma.Prisma__AppointmentClient<runtime.Types.Result.GetResult<Prisma.$AppointmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   lines<T extends Prisma.Invoice$linesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$linesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$InvoiceLinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   payments<T extends Prisma.Invoice$paymentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$paymentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  activePromotion<T extends Prisma.Invoice$activePromotionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$activePromotionArgs<ExtArgs>>): Prisma.Prisma__PromotionApplicationClient<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  promotionApplications<T extends Prisma.Invoice$promotionApplicationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$promotionApplicationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1886,6 +2312,7 @@ export interface InvoiceFieldRefs {
   readonly cancelledAt: Prisma.FieldRef<"Invoice", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"Invoice", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Invoice", 'DateTime'>
+  readonly activePromotionApplicationId: Prisma.FieldRef<"Invoice", 'String'>
 }
     
 
@@ -2351,6 +2778,49 @@ export type Invoice$paymentsArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number
   skip?: number
   distinct?: Prisma.PaymentScalarFieldEnum | Prisma.PaymentScalarFieldEnum[]
+}
+
+/**
+ * Invoice.activePromotion
+ */
+export type Invoice$activePromotionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PromotionApplication
+   */
+  select?: Prisma.PromotionApplicationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PromotionApplication
+   */
+  omit?: Prisma.PromotionApplicationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PromotionApplicationInclude<ExtArgs> | null
+  where?: Prisma.PromotionApplicationWhereInput
+}
+
+/**
+ * Invoice.promotionApplications
+ */
+export type Invoice$promotionApplicationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PromotionApplication
+   */
+  select?: Prisma.PromotionApplicationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PromotionApplication
+   */
+  omit?: Prisma.PromotionApplicationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PromotionApplicationInclude<ExtArgs> | null
+  where?: Prisma.PromotionApplicationWhereInput
+  orderBy?: Prisma.PromotionApplicationOrderByWithRelationInput | Prisma.PromotionApplicationOrderByWithRelationInput[]
+  cursor?: Prisma.PromotionApplicationWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PromotionApplicationScalarFieldEnum | Prisma.PromotionApplicationScalarFieldEnum[]
 }
 
 /**

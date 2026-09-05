@@ -353,3 +353,33 @@ export type DiagnosticOrder = Prisma.DiagnosticOrderModel
  * that a DPDP erasure request now has a second place to reach.
  */
 export type PatientCorrection = Prisma.PatientCorrectionModel
+/**
+ * Model Promotion
+ * A discount the administrator has defined in advance (FR-PRO-01).
+ * 
+ * The point of the table is that the finance desk applies a KNOWN thing rather
+ * than inventing one. Today a discount is a verbal instruction and a
+ * hand-written note; this makes it a row somebody with `promotion:manage`
+ * created, that an invoice from March can still explain in September.
+ * 
+ * Never deleted, only switched off — `active` exists for exactly that, and the
+ * migration revokes DELETE from the app role so the rule is the database's
+ * rather than the service layer's.
+ */
+export type Promotion = Prisma.PromotionModel
+/**
+ * Model PromotionApplication
+ * A promotion actually applied to a bill (FR-PRO-02).
+ * 
+ * Append-only, like `payment` and for the same reason: this is the record that
+ * answers "who gave this money away, and on whose instruction". A row that can
+ * be edited or removed answers nothing.
+ * 
+ * `authorisedByUserId` is NOT NULL by decision (3 Sep 2026). The instruction
+ * arrives by telephone, so the system cannot observe it — the finance person
+ * names the approver from the clinic's own staff. Without that, the record
+ * shows the finance person gave away money and shows nothing about the
+ * instruction they were following, and the person most exposed by the gap is
+ * the finance person. Mirrors `invoice.authorised_by_user_id`, made mandatory.
+ */
+export type PromotionApplication = Prisma.PromotionApplicationModel

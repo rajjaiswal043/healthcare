@@ -343,6 +343,8 @@ export type TenantWhereInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentListRelationFilter
   patientCorrections?: Prisma.PatientCorrectionListRelationFilter
   diagnosticOrders?: Prisma.DiagnosticOrderListRelationFilter
+  promotions?: Prisma.PromotionListRelationFilter
+  promotionApplications?: Prisma.PromotionApplicationListRelationFilter
   seatLimits?: Prisma.TenantSeatLimitListRelationFilter
   onboardedBy?: Prisma.XOR<Prisma.PlatformUserNullableScalarRelationFilter, Prisma.PlatformUserWhereInput> | null
 }
@@ -372,6 +374,8 @@ export type TenantOrderByWithRelationInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentOrderByRelationAggregateInput
   patientCorrections?: Prisma.PatientCorrectionOrderByRelationAggregateInput
   diagnosticOrders?: Prisma.DiagnosticOrderOrderByRelationAggregateInput
+  promotions?: Prisma.PromotionOrderByRelationAggregateInput
+  promotionApplications?: Prisma.PromotionApplicationOrderByRelationAggregateInput
   seatLimits?: Prisma.TenantSeatLimitOrderByRelationAggregateInput
   onboardedBy?: Prisma.PlatformUserOrderByWithRelationInput
 }
@@ -404,6 +408,8 @@ export type TenantWhereUniqueInput = Prisma.AtLeast<{
   clinicalDocuments?: Prisma.ClinicalDocumentListRelationFilter
   patientCorrections?: Prisma.PatientCorrectionListRelationFilter
   diagnosticOrders?: Prisma.DiagnosticOrderListRelationFilter
+  promotions?: Prisma.PromotionListRelationFilter
+  promotionApplications?: Prisma.PromotionApplicationListRelationFilter
   seatLimits?: Prisma.TenantSeatLimitListRelationFilter
   onboardedBy?: Prisma.XOR<Prisma.PlatformUserNullableScalarRelationFilter, Prisma.PlatformUserWhereInput> | null
 }, "id" | "slug">
@@ -484,6 +490,8 @@ export type TenantCreateInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -513,6 +521,8 @@ export type TenantUncheckedCreateInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -540,6 +550,8 @@ export type TenantUpdateInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -569,6 +581,8 @@ export type TenantUncheckedUpdateInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -894,6 +908,34 @@ export type TenantUpdateOneRequiredWithoutPatientCorrectionsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutPatientCorrectionsInput, Prisma.TenantUpdateWithoutPatientCorrectionsInput>, Prisma.TenantUncheckedUpdateWithoutPatientCorrectionsInput>
 }
 
+export type TenantCreateNestedOneWithoutPromotionsInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPromotionsInput, Prisma.TenantUncheckedCreateWithoutPromotionsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPromotionsInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutPromotionsNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPromotionsInput, Prisma.TenantUncheckedCreateWithoutPromotionsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPromotionsInput
+  upsert?: Prisma.TenantUpsertWithoutPromotionsInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutPromotionsInput, Prisma.TenantUpdateWithoutPromotionsInput>, Prisma.TenantUncheckedUpdateWithoutPromotionsInput>
+}
+
+export type TenantCreateNestedOneWithoutPromotionApplicationsInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPromotionApplicationsInput, Prisma.TenantUncheckedCreateWithoutPromotionApplicationsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPromotionApplicationsInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutPromotionApplicationsNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPromotionApplicationsInput, Prisma.TenantUncheckedCreateWithoutPromotionApplicationsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPromotionApplicationsInput
+  upsert?: Prisma.TenantUpsertWithoutPromotionApplicationsInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutPromotionApplicationsInput, Prisma.TenantUpdateWithoutPromotionApplicationsInput>, Prisma.TenantUncheckedUpdateWithoutPromotionApplicationsInput>
+}
+
 export type TenantCreateWithoutOnboardedByInput = {
   id?: string
   slug: string
@@ -918,6 +960,8 @@ export type TenantCreateWithoutOnboardedByInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
 }
 
@@ -945,6 +989,8 @@ export type TenantUncheckedCreateWithoutOnboardedByInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1022,6 +1068,8 @@ export type TenantCreateWithoutLocationsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1050,6 +1098,8 @@ export type TenantUncheckedCreateWithoutLocationsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1092,6 +1142,8 @@ export type TenantUpdateWithoutLocationsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1120,6 +1172,8 @@ export type TenantUncheckedUpdateWithoutLocationsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1146,6 +1200,8 @@ export type TenantCreateWithoutDisplayDevicesInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1174,6 +1230,8 @@ export type TenantUncheckedCreateWithoutDisplayDevicesInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1216,6 +1274,8 @@ export type TenantUpdateWithoutDisplayDevicesInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1244,6 +1304,8 @@ export type TenantUncheckedUpdateWithoutDisplayDevicesInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1271,6 +1333,8 @@ export type TenantCreateWithoutSeatLimitsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
 
@@ -1299,6 +1363,8 @@ export type TenantUncheckedCreateWithoutSeatLimitsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
 }
 
 export type TenantCreateOrConnectWithoutSeatLimitsInput = {
@@ -1341,6 +1407,8 @@ export type TenantUpdateWithoutSeatLimitsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
 
@@ -1369,6 +1437,8 @@ export type TenantUncheckedUpdateWithoutSeatLimitsInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
 }
 
 export type TenantCreateWithoutClinicalDocumentsInput = {
@@ -1394,6 +1464,8 @@ export type TenantCreateWithoutClinicalDocumentsInput = {
   displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1422,6 +1494,8 @@ export type TenantUncheckedCreateWithoutClinicalDocumentsInput = {
   displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1464,6 +1538,8 @@ export type TenantUpdateWithoutClinicalDocumentsInput = {
   displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1492,6 +1568,8 @@ export type TenantUncheckedUpdateWithoutClinicalDocumentsInput = {
   displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1518,6 +1596,8 @@ export type TenantCreateWithoutDiagnosticOrdersInput = {
   displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
   clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1546,6 +1626,8 @@ export type TenantUncheckedCreateWithoutDiagnosticOrdersInput = {
   displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1588,6 +1670,8 @@ export type TenantUpdateWithoutDiagnosticOrdersInput = {
   displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
   clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1616,6 +1700,8 @@ export type TenantUncheckedUpdateWithoutDiagnosticOrdersInput = {
   displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1642,6 +1728,8 @@ export type TenantCreateWithoutPatientCorrectionsInput = {
   displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
   clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1670,6 +1758,8 @@ export type TenantUncheckedCreateWithoutPatientCorrectionsInput = {
   displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1712,6 +1802,8 @@ export type TenantUpdateWithoutPatientCorrectionsInput = {
   displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
   clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1740,6 +1832,272 @@ export type TenantUncheckedUpdateWithoutPatientCorrectionsInput = {
   displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutPromotionsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
+}
+
+export type TenantUncheckedCreateWithoutPromotionsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutPromotionsInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPromotionsInput, Prisma.TenantUncheckedCreateWithoutPromotionsInput>
+}
+
+export type TenantUpsertWithoutPromotionsInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutPromotionsInput, Prisma.TenantUncheckedUpdateWithoutPromotionsInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPromotionsInput, Prisma.TenantUncheckedCreateWithoutPromotionsInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutPromotionsInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutPromotionsInput, Prisma.TenantUncheckedUpdateWithoutPromotionsInput>
+}
+
+export type TenantUpdateWithoutPromotionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutPromotionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutPromotionApplicationsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
+}
+
+export type TenantUncheckedCreateWithoutPromotionApplicationsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutPromotionApplicationsInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPromotionApplicationsInput, Prisma.TenantUncheckedCreateWithoutPromotionApplicationsInput>
+}
+
+export type TenantUpsertWithoutPromotionApplicationsInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutPromotionApplicationsInput, Prisma.TenantUncheckedUpdateWithoutPromotionApplicationsInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPromotionApplicationsInput, Prisma.TenantUncheckedCreateWithoutPromotionApplicationsInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutPromotionApplicationsInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutPromotionApplicationsInput, Prisma.TenantUncheckedUpdateWithoutPromotionApplicationsInput>
+}
+
+export type TenantUpdateWithoutPromotionApplicationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutPromotionApplicationsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1788,6 +2146,8 @@ export type TenantUpdateWithoutOnboardedByInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
 }
 
@@ -1815,6 +2175,8 @@ export type TenantUncheckedUpdateWithoutOnboardedByInput = {
   clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1850,6 +2212,8 @@ export type TenantCountOutputType = {
   clinicalDocuments: number
   patientCorrections: number
   diagnosticOrders: number
+  promotions: number
+  promotionApplications: number
   seatLimits: number
 }
 
@@ -1859,6 +2223,8 @@ export type TenantCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions
   clinicalDocuments?: boolean | TenantCountOutputTypeCountClinicalDocumentsArgs
   patientCorrections?: boolean | TenantCountOutputTypeCountPatientCorrectionsArgs
   diagnosticOrders?: boolean | TenantCountOutputTypeCountDiagnosticOrdersArgs
+  promotions?: boolean | TenantCountOutputTypeCountPromotionsArgs
+  promotionApplications?: boolean | TenantCountOutputTypeCountPromotionApplicationsArgs
   seatLimits?: boolean | TenantCountOutputTypeCountSeatLimitsArgs
 }
 
@@ -1910,6 +2276,20 @@ export type TenantCountOutputTypeCountDiagnosticOrdersArgs<ExtArgs extends runti
 /**
  * TenantCountOutputType without action
  */
+export type TenantCountOutputTypeCountPromotionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PromotionWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
+export type TenantCountOutputTypeCountPromotionApplicationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PromotionApplicationWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
 export type TenantCountOutputTypeCountSeatLimitsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.TenantSeatLimitWhereInput
 }
@@ -1940,6 +2320,8 @@ export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   clinicalDocuments?: boolean | Prisma.Tenant$clinicalDocumentsArgs<ExtArgs>
   patientCorrections?: boolean | Prisma.Tenant$patientCorrectionsArgs<ExtArgs>
   diagnosticOrders?: boolean | Prisma.Tenant$diagnosticOrdersArgs<ExtArgs>
+  promotions?: boolean | Prisma.Tenant$promotionsArgs<ExtArgs>
+  promotionApplications?: boolean | Prisma.Tenant$promotionApplicationsArgs<ExtArgs>
   seatLimits?: boolean | Prisma.Tenant$seatLimitsArgs<ExtArgs>
   onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
@@ -2020,6 +2402,8 @@ export type TenantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   clinicalDocuments?: boolean | Prisma.Tenant$clinicalDocumentsArgs<ExtArgs>
   patientCorrections?: boolean | Prisma.Tenant$patientCorrectionsArgs<ExtArgs>
   diagnosticOrders?: boolean | Prisma.Tenant$diagnosticOrdersArgs<ExtArgs>
+  promotions?: boolean | Prisma.Tenant$promotionsArgs<ExtArgs>
+  promotionApplications?: boolean | Prisma.Tenant$promotionApplicationsArgs<ExtArgs>
   seatLimits?: boolean | Prisma.Tenant$seatLimitsArgs<ExtArgs>
   onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
@@ -2039,6 +2423,8 @@ export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     clinicalDocuments: Prisma.$ClinicalDocumentPayload<ExtArgs>[]
     patientCorrections: Prisma.$PatientCorrectionPayload<ExtArgs>[]
     diagnosticOrders: Prisma.$DiagnosticOrderPayload<ExtArgs>[]
+    promotions: Prisma.$PromotionPayload<ExtArgs>[]
+    promotionApplications: Prisma.$PromotionApplicationPayload<ExtArgs>[]
     seatLimits: Prisma.$TenantSeatLimitPayload<ExtArgs>[]
     onboardedBy: Prisma.$PlatformUserPayload<ExtArgs> | null
   }
@@ -2509,6 +2895,8 @@ export interface Prisma__TenantClient<T, Null = never, ExtArgs extends runtime.T
   clinicalDocuments<T extends Prisma.Tenant$clinicalDocumentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$clinicalDocumentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ClinicalDocumentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   patientCorrections<T extends Prisma.Tenant$patientCorrectionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$patientCorrectionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PatientCorrectionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   diagnosticOrders<T extends Prisma.Tenant$diagnosticOrdersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$diagnosticOrdersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  promotions<T extends Prisma.Tenant$promotionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$promotionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  promotionApplications<T extends Prisma.Tenant$promotionApplicationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$promotionApplicationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   seatLimits<T extends Prisma.Tenant$seatLimitsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$seatLimitsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TenantSeatLimitPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   onboardedBy<T extends Prisma.Tenant$onboardedByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$onboardedByArgs<ExtArgs>>): Prisma.Prisma__PlatformUserClient<runtime.Types.Result.GetResult<Prisma.$PlatformUserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
@@ -3077,6 +3465,54 @@ export type Tenant$diagnosticOrdersArgs<ExtArgs extends runtime.Types.Extensions
   take?: number
   skip?: number
   distinct?: Prisma.DiagnosticOrderScalarFieldEnum | Prisma.DiagnosticOrderScalarFieldEnum[]
+}
+
+/**
+ * Tenant.promotions
+ */
+export type Tenant$promotionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Promotion
+   */
+  select?: Prisma.PromotionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Promotion
+   */
+  omit?: Prisma.PromotionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PromotionInclude<ExtArgs> | null
+  where?: Prisma.PromotionWhereInput
+  orderBy?: Prisma.PromotionOrderByWithRelationInput | Prisma.PromotionOrderByWithRelationInput[]
+  cursor?: Prisma.PromotionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PromotionScalarFieldEnum | Prisma.PromotionScalarFieldEnum[]
+}
+
+/**
+ * Tenant.promotionApplications
+ */
+export type Tenant$promotionApplicationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PromotionApplication
+   */
+  select?: Prisma.PromotionApplicationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PromotionApplication
+   */
+  omit?: Prisma.PromotionApplicationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PromotionApplicationInclude<ExtArgs> | null
+  where?: Prisma.PromotionApplicationWhereInput
+  orderBy?: Prisma.PromotionApplicationOrderByWithRelationInput | Prisma.PromotionApplicationOrderByWithRelationInput[]
+  cursor?: Prisma.PromotionApplicationWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PromotionApplicationScalarFieldEnum | Prisma.PromotionApplicationScalarFieldEnum[]
 }
 
 /**

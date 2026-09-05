@@ -83,7 +83,9 @@ export const ModelName = {
   QueueCounter: 'QueueCounter',
   ClinicalDocument: 'ClinicalDocument',
   DiagnosticOrder: 'DiagnosticOrder',
-  PatientCorrection: 'PatientCorrection'
+  PatientCorrection: 'PatientCorrection',
+  Promotion: 'Promotion',
+  PromotionApplication: 'PromotionApplication'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -598,7 +600,8 @@ export const InvoiceScalarFieldEnum = {
   issuedAt: 'issuedAt',
   cancelledAt: 'cancelledAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  activePromotionApplicationId: 'activePromotionApplicationId'
 } as const
 
 export type InvoiceScalarFieldEnum = (typeof InvoiceScalarFieldEnum)[keyof typeof InvoiceScalarFieldEnum]
@@ -708,6 +711,43 @@ export const PatientCorrectionScalarFieldEnum = {
 } as const
 
 export type PatientCorrectionScalarFieldEnum = (typeof PatientCorrectionScalarFieldEnum)[keyof typeof PatientCorrectionScalarFieldEnum]
+
+
+export const PromotionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  code: 'code',
+  name: 'name',
+  description: 'description',
+  type: 'type',
+  value: 'value',
+  maxDiscountPaise: 'maxDiscountPaise',
+  validFrom: 'validFrom',
+  validTo: 'validTo',
+  isActive: 'isActive',
+  createdByUserId: 'createdByUserId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PromotionScalarFieldEnum = (typeof PromotionScalarFieldEnum)[keyof typeof PromotionScalarFieldEnum]
+
+
+export const PromotionApplicationScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  promotionId: 'promotionId',
+  invoiceId: 'invoiceId',
+  discountPaise: 'discountPaise',
+  appliedByUserId: 'appliedByUserId',
+  authorisedByUserId: 'authorisedByUserId',
+  appliedAt: 'appliedAt',
+  reversalKind: 'reversalKind',
+  reversesApplicationId: 'reversesApplicationId',
+  createdAt: 'createdAt'
+} as const
+
+export type PromotionApplicationScalarFieldEnum = (typeof PromotionApplicationScalarFieldEnum)[keyof typeof PromotionApplicationScalarFieldEnum]
 
 
 export const SortOrder = {
