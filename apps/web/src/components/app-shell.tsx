@@ -137,6 +137,15 @@ const SECTIONS: NavSection[] = [
         permission: 'role:manage',
       },
       {
+        key: 'prices',
+        label: 'Prices',
+        href: '/settings/prices',
+        icon: <IconReceipt size={16} />,
+        // The administrator owns what things cost. Finance applies the prices;
+        // it does not set them.
+        permission: 'tenant:configure',
+      },
+      {
         key: 'doctors',
         label: 'Doctors and hours',
         href: '/settings/doctors',

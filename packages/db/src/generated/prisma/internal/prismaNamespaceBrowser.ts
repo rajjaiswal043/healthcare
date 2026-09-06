@@ -85,7 +85,10 @@ export const ModelName = {
   DiagnosticOrder: 'DiagnosticOrder',
   PatientCorrection: 'PatientCorrection',
   Promotion: 'Promotion',
-  PromotionApplication: 'PromotionApplication'
+  PromotionApplication: 'PromotionApplication',
+  ReceiptCounter: 'ReceiptCounter',
+  Receipt: 'Receipt',
+  ReceiptPrint: 'ReceiptPrint'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -573,6 +576,7 @@ export const ServiceScalarFieldEnum = {
   code: 'code',
   name: 'name',
   category: 'category',
+  departmentId: 'departmentId',
   pricePaise: 'pricePaise',
   taxRateBasisPoints: 'taxRateBasisPoints',
   isActive: 'isActive',
@@ -748,6 +752,46 @@ export const PromotionApplicationScalarFieldEnum = {
 } as const
 
 export type PromotionApplicationScalarFieldEnum = (typeof PromotionApplicationScalarFieldEnum)[keyof typeof PromotionApplicationScalarFieldEnum]
+
+
+export const ReceiptCounterScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  prefix: 'prefix',
+  lastNumber: 'lastNumber'
+} as const
+
+export type ReceiptCounterScalarFieldEnum = (typeof ReceiptCounterScalarFieldEnum)[keyof typeof ReceiptCounterScalarFieldEnum]
+
+
+export const ReceiptScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  paymentId: 'paymentId',
+  invoiceId: 'invoiceId',
+  number: 'number',
+  totalChargedPaise: 'totalChargedPaise',
+  discountPaise: 'discountPaise',
+  taxPaise: 'taxPaise',
+  payablePaise: 'payablePaise',
+  paidNowPaise: 'paidNowPaise',
+  balancePaise: 'balancePaise',
+  issuedAt: 'issuedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type ReceiptScalarFieldEnum = (typeof ReceiptScalarFieldEnum)[keyof typeof ReceiptScalarFieldEnum]
+
+
+export const ReceiptPrintScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  receiptId: 'receiptId',
+  printedByUserId: 'printedByUserId',
+  printedAt: 'printedAt'
+} as const
+
+export type ReceiptPrintScalarFieldEnum = (typeof ReceiptPrintScalarFieldEnum)[keyof typeof ReceiptPrintScalarFieldEnum]
 
 
 export const SortOrder = {

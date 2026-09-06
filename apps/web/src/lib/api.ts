@@ -790,6 +790,83 @@ export interface AppliedPromotion {
   authorisedBy: { id: string; fullName: string };
 }
 
+/** A row on the administrator's price list (FR-PRC-01). */
+export interface PricedService {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  /** In paise. Rupees exist only on screen. */
+  pricePaise: number;
+  /** Basis points — 500 is 5%. Zero for almost every clinic. */
+  taxRateBasisPoints: number;
+  isActive: boolean;
+  updatedAt: string;
+  department: { id: string; name: string } | null;
+}
+
+export interface PriceListInput {
+  code: string;
+  name: string;
+  category: string;
+  pricePaise: number;
+  taxRateBasisPoints?: number;
+  departmentId?: string | null;
+  isActive?: boolean;
+}
+
+/** Everything the printed receipt needs — FR-RCP-02. */
+export interface ReceiptPayload {
+  receiptNumber: string;
+  issuedAt: string;
+  invoiceNumber: string;
+  clinic: {
+    name: string;
+    phone: string | null;
+    addressLine: string | null;
+    city: string | null;
+    logoUpdatedAt: string | null;
+  };
+  patient: {
+    uhid: string;
+    name: string;
+    mobile: string;
+    gender: string;
+    ageYears: number | null;
+    birthDate: string | null;
+  };
+  /** Null for a walk-in with no doctor. The sheet does not invent one. */
+  doctor: { fullName: string; prefix: string | null } | null;
+  lines: Array<{
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    amountPaise: number;
+  }>;
+  /** In this order, never collapsed. */
+  money: {
+    totalChargedPaise: number;
+    discountPaise: number;
+    discountLabel: string | null;
+    taxPaise: number;
+    payablePaise: number;
+    paidNowPaise: number;
+    mode: string;
+    reference: string | null;
+    balancePaise: number;
+  };
+  /** True only when something actually carries tax. */
+  showTax: boolean;
+  receivedBy: string;
+  /** Present only on the response that RECORDED a print. */
+  print?: {
+    printCount: number;
+    isDuplicate: boolean;
+    printedAt: string;
+    printedBy: string;
+  };
+}
+
 export interface ChargeableService {
   id: string;
   code: string;
@@ -1048,6 +1125,26 @@ export const api = {
 
   dayCollection: (date?: string) =>
     request<DayCollection>(`/reports/day-collection${date ? `?date=${date}` : ''}`),
+
+  // --- receipts -------------------------------------------------------------
+
+  /** Read a receipt without recording a print. */
+  receipt: (paymentId: string) => request<ReceiptPayload>(`/payments/${paymentId}/receipt`),
+
+  /**
+   * Record that the receipt went on paper, and get it back.
+   *
+   * One call rather than two, so the screen cannot render a sheet it forgot to
+   * log — the log is the only thing that can mark a second copy DUPLICATE.
+   */
+  printReceipt: (paymentId: string) =>
+    request<ReceiptPayload>(`/payments/${paymentId}/receipt/prints`, { method: 'POST' }),
+
+  receiptPrints: (paymentId: string) =>
+    request<{
+      number: string;
+      prints: Array<{ printedAt: string; printedBy: string; isDuplicate: boolean }>;
+    }>(`/payments/${paymentId}/receipt/prints`),
 
   // --- promotions -----------------------------------------------------------
 
@@ -1333,8 +1430,28 @@ export const api = {
   removeSchedule: (id: string) =>
     request<{ id: string }>(`/setup/schedules/${id}`, { method: 'DELETE' }),
 
-  upsertService: (input: { code: string; name: string; category: string; pricePaise: number }) =>
-    request<{ id: string }>('/setup/services', { method: 'POST', body: JSON.stringify(input) }),
+  upsertService: (input: PriceListInput) =>
+    request<PricedService>('/setup/services', { method: 'POST', body: JSON.stringify(input) }),
+
+  /**
+   * The administrator's price list — everything, switched-off included.
+   *
+   * Not `services()`. That one is what may go on a bill: active only, behind
+   * `invoice:read`. This is what the clinic charges for, behind
+   * `tenant:configure`, and it has to show the withdrawn ones so one can be
+   * brought back.
+   */
+  priceList: () =>
+    request<{ services: PricedService[]; departments: Array<{ id: string; name: string }> }>(
+      '/setup/services',
+    ),
+
+  /** Switch a service off, or back on. There is no delete — FR-PRC-03. */
+  setServiceActive: (id: string, isActive: boolean) =>
+    request<PricedService>(`/setup/services/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
 
   resetStaffPassword: (id: string) =>
     request<{ id: string; fullName: string; email: string; temporaryPassword: string }>(

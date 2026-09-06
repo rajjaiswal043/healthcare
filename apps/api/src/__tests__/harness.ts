@@ -56,7 +56,10 @@ const TABLES = [
   // own, but the list is explicit for the reason in the comment above.
   'platform_session',
   'tenant_seat_limit',
-  // Before `invoice` and `promotion`, both of which it references.
+  // Before `payment` and `invoice`, both of which they reference.
+  'receipt_print',
+  'receipt',
+  'receipt_counter',
   'promotion_application',
   'promotion',
   'payment',
@@ -177,7 +180,7 @@ export async function resetDatabase(): Promise<void> {
 export async function resetAppointments(): Promise<void> {
   const db = await owner();
   await db.query(
-    `TRUNCATE promotion_application, payment, invoice_line, invoice,
+    `TRUNCATE receipt_print, receipt, promotion_application, payment, invoice_line, invoice,
               encounter_addendum, prescription, diagnosis, vitals_observation, encounter,
               appointment, queue_counter
      RESTART IDENTITY CASCADE`,

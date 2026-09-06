@@ -383,3 +383,42 @@ export type Promotion = Prisma.PromotionModel
  * the finance person. Mirrors `invoice.authorised_by_user_id`, made mandatory.
  */
 export type PromotionApplication = Prisma.PromotionApplicationModel
+/**
+ * Model ReceiptCounter
+ * The clinic's receipt sequence.
+ * 
+ * A separate table from `InvoiceCounter` rather than a column on it: that
+ * model's `tenantId` is `@unique`, so it holds exactly one counter per clinic.
+ * The two sequences are independent on purpose — one invoice can produce
+ * several receipts, so sharing a number would need a suffix, and a receipt with
+ * a suffix invites somebody to invent one.
+ */
+export type ReceiptCounter = Prisma.ReceiptCounterModel
+/**
+ * Model Receipt
+ * A receipt — proof that a PAYMENT was received (FR-RCP-01, -03).
+ * 
+ * One per money-in payment, never one per invoice. A ₹1,100 bill paid ₹500 now
+ * and ₹600 later is one invoice and two receipts, each showing what was paid at
+ * that moment and what remained.
+ * 
+ * THE MONEY BLOCK IS FROZEN HERE, not derived at print time. Deriving it looked
+ * safe — the invoice total cannot move while money is on it — until
+ * `BillingService.loadEditable` turned out to test paid MINUS refunded, so a
+ * fully refunded invoice becomes editable again and its total can change after
+ * a receipt was issued. A reprint would then show a balance that was never
+ * true. Storing the figures is also simply what a receipt is: a record of what
+ * a document said.
+ */
+export type Receipt = Prisma.ReceiptModel
+/**
+ * Model ReceiptPrint
+ * Every time a receipt was put on paper (FR-RCP-03).
+ * 
+ * Not optional. This log is the only thing that can answer "has this been
+ * printed before", which is what lets the second copy carry DUPLICATE on its
+ * face. Two identical unmarked receipts for one payment is how cash goes
+ * missing in a clinic, and the person exposed by it is the finance desk, who
+ * otherwise cannot prove which copy was the original.
+ */
+export type ReceiptPrint = Prisma.ReceiptPrintModel

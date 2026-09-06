@@ -401,12 +401,86 @@ export class ClinicSetupService {
 
   // --- what the clinic charges ---------------------------------------------
 
+  /**
+   * The whole price list, including what is switched off (FR-PRC-01).
+   *
+   * A SECOND list endpoint rather than a flag on the existing one. `GET
+   * /services` answers "what may I put on a bill", is behind `invoice:read`, and
+   * correctly hides inactive rows — the finance desk must not be able to charge
+   * for something the clinic stopped offering. This answers "what does this
+   * clinic charge for", is behind `tenant:configure`, and must show the
+   * switched-off ones because FR-PRC-03 is about being able to see and revive
+   * them. One endpoint serving both would have to be told which it was doing,
+   * and the wrong answer either hides a price from the administrator or offers a
+   * withdrawn service to the desk.
+   */
+  async priceList(tenantId: string) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const services = await tx.service.findMany({
+        orderBy: [{ isActive: 'desc' }, { category: 'asc' }, { name: 'asc' }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          category: true,
+          pricePaise: true,
+          taxRateBasisPoints: true,
+          isActive: true,
+          updatedAt: true,
+          department: { select: { id: true, name: true } },
+        },
+      });
+
+      // The departments an administrator may attach a service to, so the screen
+      // does not need a second round trip to fill one dropdown.
+      const departments = await tx.department.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true },
+      });
+
+      return { services, departments };
+    });
+  }
+
+  /**
+   * Create a service, or change one that exists.
+   *
+   * **`isActive` is not touched unless the caller says so**, and that is a fix
+   * rather than a preference. This used to hardcode `isActive: true` in the
+   * update branch, so switching a service off and later correcting its price
+   * silently brought it back — the clinic would start being offered a service it
+   * had withdrawn, with nothing on any screen to explain how. FR-PRC-03 says a
+   * service is switched off and never deleted; a switch that undoes itself on
+   * the next edit is not a switch.
+   *
+   * Every field is optional on update for the same reason: a partial edit must
+   * change what it names and nothing else.
+   */
   async upsertService(
     tenantId: string,
-    input: { code: string; name: string; category: string; pricePaise: number },
+    input: {
+      code: string;
+      name: string;
+      category: string;
+      pricePaise: number;
+      taxRateBasisPoints?: number;
+      departmentId?: string | null;
+      isActive?: boolean;
+    },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
+      if (input.departmentId) {
+        // Read through the tenant client, so a department id from another clinic
+        // is simply not found rather than being compared against.
+        const department = await tx.department.findUnique({
+          where: { id: input.departmentId },
+          select: { id: true },
+        });
+        if (!department) throw new BadRequestException('That department does not exist.');
+      }
+
       const service = await tx.service.upsert({
         where: { tenantId_code: { tenantId, code: input.code } },
         create: {
@@ -415,16 +489,78 @@ export class ClinicSetupService {
           name: input.name.trim(),
           category: input.category as never,
           pricePaise: input.pricePaise,
+          taxRateBasisPoints: input.taxRateBasisPoints ?? 0,
+          departmentId: input.departmentId ?? null,
+          ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
         },
-        update: { name: input.name.trim(), pricePaise: input.pricePaise, isActive: true },
-        select: { id: true, code: true, name: true, pricePaise: true },
+        update: {
+          name: input.name.trim(),
+          category: input.category as never,
+          pricePaise: input.pricePaise,
+          ...(input.taxRateBasisPoints === undefined
+            ? {}
+            : { taxRateBasisPoints: input.taxRateBasisPoints }),
+          ...(input.departmentId === undefined ? {} : { departmentId: input.departmentId }),
+          // Absent means "leave it as it is". See the note above.
+          ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          category: true,
+          pricePaise: true,
+          taxRateBasisPoints: true,
+          isActive: true,
+          department: { select: { id: true, name: true } },
+        },
       });
 
       await this.audit.record(tx, tenantId, {
         action: 'service.upsert',
         resourceType: 'Service',
         resourceId: service.id,
-        changedFields: ['pricePaise'],
+        changedFields: Object.keys(input).filter((k) => k !== 'code'),
+        ...meta,
+      });
+
+      return service;
+    });
+  }
+
+  /**
+   * Switch a service off, or back on (FR-PRC-03).
+   *
+   * The delete. A service no longer offered is withdrawn, never removed —
+   * reporting groups by service, and a deleted one makes last month's figures
+   * unexplainable. Historical invoice lines are untouched either way: they
+   * copied the name and price at billing time and do not read this row.
+   */
+  async setServiceActive(tenantId: string, id: string, isActive: boolean, meta: RequestMeta) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const existing = await tx.service.findUnique({ where: { id }, select: { id: true } });
+      if (!existing) throw new NotFoundException('Service not found');
+
+      const service = await tx.service.update({
+        where: { id },
+        data: { isActive },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          category: true,
+          pricePaise: true,
+          taxRateBasisPoints: true,
+          isActive: true,
+          department: { select: { id: true, name: true } },
+        },
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: isActive ? 'service.activate' : 'service.deactivate',
+        resourceType: 'Service',
+        resourceId: id,
+        changedFields: ['isActive'],
         ...meta,
       });
 

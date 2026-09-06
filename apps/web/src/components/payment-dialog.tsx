@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, ApiRequestError, type Invoice } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { formatPaise, parseRupeesToPaise } from '@/lib/format';
+import { ReceiptButton } from './receipt-button';
 import { IconAlert, IconCheck, IconX } from './icons';
 
 const MODES = [
@@ -557,7 +558,10 @@ export function PaymentDialog({
           )}
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-ink/8 bg-bg-soft px-5 py-4">
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-ink/8 bg-bg-soft px-5 py-4">
+          {/* FR-RCP-01: available again later, from the invoice. Renders nothing
+              when no money has come in — a refund is not a receipt. */}
+          <ReceiptButton invoice={invoice} className="btn-secondary" />
           <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
             {settled ? 'Done' : 'Close'}
           </button>

@@ -345,6 +345,9 @@ export type TenantWhereInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderListRelationFilter
   promotions?: Prisma.PromotionListRelationFilter
   promotionApplications?: Prisma.PromotionApplicationListRelationFilter
+  receiptCounter?: Prisma.XOR<Prisma.ReceiptCounterNullableScalarRelationFilter, Prisma.ReceiptCounterWhereInput> | null
+  receipts?: Prisma.ReceiptListRelationFilter
+  receiptPrints?: Prisma.ReceiptPrintListRelationFilter
   seatLimits?: Prisma.TenantSeatLimitListRelationFilter
   onboardedBy?: Prisma.XOR<Prisma.PlatformUserNullableScalarRelationFilter, Prisma.PlatformUserWhereInput> | null
 }
@@ -376,6 +379,9 @@ export type TenantOrderByWithRelationInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderOrderByRelationAggregateInput
   promotions?: Prisma.PromotionOrderByRelationAggregateInput
   promotionApplications?: Prisma.PromotionApplicationOrderByRelationAggregateInput
+  receiptCounter?: Prisma.ReceiptCounterOrderByWithRelationInput
+  receipts?: Prisma.ReceiptOrderByRelationAggregateInput
+  receiptPrints?: Prisma.ReceiptPrintOrderByRelationAggregateInput
   seatLimits?: Prisma.TenantSeatLimitOrderByRelationAggregateInput
   onboardedBy?: Prisma.PlatformUserOrderByWithRelationInput
 }
@@ -410,6 +416,9 @@ export type TenantWhereUniqueInput = Prisma.AtLeast<{
   diagnosticOrders?: Prisma.DiagnosticOrderListRelationFilter
   promotions?: Prisma.PromotionListRelationFilter
   promotionApplications?: Prisma.PromotionApplicationListRelationFilter
+  receiptCounter?: Prisma.XOR<Prisma.ReceiptCounterNullableScalarRelationFilter, Prisma.ReceiptCounterWhereInput> | null
+  receipts?: Prisma.ReceiptListRelationFilter
+  receiptPrints?: Prisma.ReceiptPrintListRelationFilter
   seatLimits?: Prisma.TenantSeatLimitListRelationFilter
   onboardedBy?: Prisma.XOR<Prisma.PlatformUserNullableScalarRelationFilter, Prisma.PlatformUserWhereInput> | null
 }, "id" | "slug">
@@ -492,6 +501,9 @@ export type TenantCreateInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -523,6 +535,9 @@ export type TenantUncheckedCreateInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -552,6 +567,9 @@ export type TenantUpdateInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -583,6 +601,9 @@ export type TenantUncheckedUpdateInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -936,6 +957,48 @@ export type TenantUpdateOneRequiredWithoutPromotionApplicationsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutPromotionApplicationsInput, Prisma.TenantUpdateWithoutPromotionApplicationsInput>, Prisma.TenantUncheckedUpdateWithoutPromotionApplicationsInput>
 }
 
+export type TenantCreateNestedOneWithoutReceiptCounterInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutReceiptCounterInput, Prisma.TenantUncheckedCreateWithoutReceiptCounterInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutReceiptCounterInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutReceiptCounterNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutReceiptCounterInput, Prisma.TenantUncheckedCreateWithoutReceiptCounterInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutReceiptCounterInput
+  upsert?: Prisma.TenantUpsertWithoutReceiptCounterInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutReceiptCounterInput, Prisma.TenantUpdateWithoutReceiptCounterInput>, Prisma.TenantUncheckedUpdateWithoutReceiptCounterInput>
+}
+
+export type TenantCreateNestedOneWithoutReceiptsInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutReceiptsInput, Prisma.TenantUncheckedCreateWithoutReceiptsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutReceiptsInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutReceiptsNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutReceiptsInput, Prisma.TenantUncheckedCreateWithoutReceiptsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutReceiptsInput
+  upsert?: Prisma.TenantUpsertWithoutReceiptsInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutReceiptsInput, Prisma.TenantUpdateWithoutReceiptsInput>, Prisma.TenantUncheckedUpdateWithoutReceiptsInput>
+}
+
+export type TenantCreateNestedOneWithoutReceiptPrintsInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutReceiptPrintsInput, Prisma.TenantUncheckedCreateWithoutReceiptPrintsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutReceiptPrintsInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutReceiptPrintsNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutReceiptPrintsInput, Prisma.TenantUncheckedCreateWithoutReceiptPrintsInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutReceiptPrintsInput
+  upsert?: Prisma.TenantUpsertWithoutReceiptPrintsInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutReceiptPrintsInput, Prisma.TenantUpdateWithoutReceiptPrintsInput>, Prisma.TenantUncheckedUpdateWithoutReceiptPrintsInput>
+}
+
 export type TenantCreateWithoutOnboardedByInput = {
   id?: string
   slug: string
@@ -962,6 +1025,9 @@ export type TenantCreateWithoutOnboardedByInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
 }
 
@@ -991,6 +1057,9 @@ export type TenantUncheckedCreateWithoutOnboardedByInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1070,6 +1139,9 @@ export type TenantCreateWithoutLocationsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1100,6 +1172,9 @@ export type TenantUncheckedCreateWithoutLocationsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1144,6 +1219,9 @@ export type TenantUpdateWithoutLocationsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1174,6 +1252,9 @@ export type TenantUncheckedUpdateWithoutLocationsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1202,6 +1283,9 @@ export type TenantCreateWithoutDisplayDevicesInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1232,6 +1316,9 @@ export type TenantUncheckedCreateWithoutDisplayDevicesInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1276,6 +1363,9 @@ export type TenantUpdateWithoutDisplayDevicesInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1306,6 +1396,9 @@ export type TenantUncheckedUpdateWithoutDisplayDevicesInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1335,6 +1428,9 @@ export type TenantCreateWithoutSeatLimitsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
 
@@ -1365,6 +1461,9 @@ export type TenantUncheckedCreateWithoutSeatLimitsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
 }
 
 export type TenantCreateOrConnectWithoutSeatLimitsInput = {
@@ -1409,6 +1508,9 @@ export type TenantUpdateWithoutSeatLimitsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
 
@@ -1439,6 +1541,9 @@ export type TenantUncheckedUpdateWithoutSeatLimitsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
 }
 
 export type TenantCreateWithoutClinicalDocumentsInput = {
@@ -1466,6 +1571,9 @@ export type TenantCreateWithoutClinicalDocumentsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1496,6 +1604,9 @@ export type TenantUncheckedCreateWithoutClinicalDocumentsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1540,6 +1651,9 @@ export type TenantUpdateWithoutClinicalDocumentsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1570,6 +1684,9 @@ export type TenantUncheckedUpdateWithoutClinicalDocumentsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1598,6 +1715,9 @@ export type TenantCreateWithoutDiagnosticOrdersInput = {
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1628,6 +1748,9 @@ export type TenantUncheckedCreateWithoutDiagnosticOrdersInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1672,6 +1795,9 @@ export type TenantUpdateWithoutDiagnosticOrdersInput = {
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1702,6 +1828,9 @@ export type TenantUncheckedUpdateWithoutDiagnosticOrdersInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1730,6 +1859,9 @@ export type TenantCreateWithoutPatientCorrectionsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1760,6 +1892,9 @@ export type TenantUncheckedCreateWithoutPatientCorrectionsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1804,6 +1939,9 @@ export type TenantUpdateWithoutPatientCorrectionsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1834,6 +1972,9 @@ export type TenantUncheckedUpdateWithoutPatientCorrectionsInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1862,6 +2003,9 @@ export type TenantCreateWithoutPromotionsInput = {
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -1892,6 +2036,9 @@ export type TenantUncheckedCreateWithoutPromotionsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -1936,6 +2083,9 @@ export type TenantUpdateWithoutPromotionsInput = {
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -1966,6 +2116,9 @@ export type TenantUncheckedUpdateWithoutPromotionsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -1994,6 +2147,9 @@ export type TenantCreateWithoutPromotionApplicationsInput = {
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
   onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
 }
@@ -2024,6 +2180,9 @@ export type TenantUncheckedCreateWithoutPromotionApplicationsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
   promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
 }
 
@@ -2068,6 +2227,9 @@ export type TenantUpdateWithoutPromotionApplicationsInput = {
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
   onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
 }
@@ -2098,6 +2260,441 @@ export type TenantUncheckedUpdateWithoutPromotionApplicationsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutReceiptCounterInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
+}
+
+export type TenantUncheckedCreateWithoutReceiptCounterInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutReceiptCounterInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutReceiptCounterInput, Prisma.TenantUncheckedCreateWithoutReceiptCounterInput>
+}
+
+export type TenantUpsertWithoutReceiptCounterInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutReceiptCounterInput, Prisma.TenantUncheckedUpdateWithoutReceiptCounterInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutReceiptCounterInput, Prisma.TenantUncheckedCreateWithoutReceiptCounterInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutReceiptCounterInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutReceiptCounterInput, Prisma.TenantUncheckedUpdateWithoutReceiptCounterInput>
+}
+
+export type TenantUpdateWithoutReceiptCounterInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutReceiptCounterInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutReceiptsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
+}
+
+export type TenantUncheckedCreateWithoutReceiptsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutReceiptsInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutReceiptsInput, Prisma.TenantUncheckedCreateWithoutReceiptsInput>
+}
+
+export type TenantUpsertWithoutReceiptsInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutReceiptsInput, Prisma.TenantUncheckedUpdateWithoutReceiptsInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutReceiptsInput, Prisma.TenantUncheckedCreateWithoutReceiptsInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutReceiptsInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutReceiptsInput, Prisma.TenantUncheckedUpdateWithoutReceiptsInput>
+}
+
+export type TenantUpdateWithoutReceiptsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutReceiptsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutReceiptPrintsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitCreateNestedManyWithoutTenantInput
+  onboardedBy?: Prisma.PlatformUserCreateNestedOneWithoutOnboardedInput
+}
+
+export type TenantUncheckedCreateWithoutReceiptPrintsInput = {
+  id?: string
+  slug: string
+  legalName: string
+  name: string
+  status?: $Enums.TenantStatus
+  uhidPrefix?: string
+  uhidPadding?: number
+  uhidCounter?: bigint | number
+  timezone?: string
+  contactEmail?: string | null
+  contactMobile?: string | null
+  logoBytes?: runtime.Bytes | null
+  logoMimeType?: string | null
+  logoUpdatedAt?: Date | string | null
+  onboardedByPlatformUserId?: string | null
+  suspendedAt?: Date | string | null
+  suspendedReason?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  locations?: Prisma.LocationUncheckedCreateNestedManyWithoutTenantInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedCreateNestedManyWithoutTenantInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutTenantInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutTenantInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutTenantInput
+  promotions?: Prisma.PromotionUncheckedCreateNestedManyWithoutTenantInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutTenantInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedCreateNestedOneWithoutTenantInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutTenantInput
+  seatLimits?: Prisma.TenantSeatLimitUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutReceiptPrintsInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutReceiptPrintsInput, Prisma.TenantUncheckedCreateWithoutReceiptPrintsInput>
+}
+
+export type TenantUpsertWithoutReceiptPrintsInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutReceiptPrintsInput, Prisma.TenantUncheckedUpdateWithoutReceiptPrintsInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutReceiptPrintsInput, Prisma.TenantUncheckedCreateWithoutReceiptPrintsInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutReceiptPrintsInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutReceiptPrintsInput, Prisma.TenantUncheckedUpdateWithoutReceiptPrintsInput>
+}
+
+export type TenantUpdateWithoutReceiptPrintsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
+  onboardedBy?: Prisma.PlatformUserUpdateOneWithoutOnboardedNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutReceiptPrintsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  slug?: Prisma.StringFieldUpdateOperationsInput | string
+  legalName?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumTenantStatusFieldUpdateOperationsInput | $Enums.TenantStatus
+  uhidPrefix?: Prisma.StringFieldUpdateOperationsInput | string
+  uhidPadding?: Prisma.IntFieldUpdateOperationsInput | number
+  uhidCounter?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  timezone?: Prisma.StringFieldUpdateOperationsInput | string
+  contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  contactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoBytes?: Prisma.NullableBytesFieldUpdateOperationsInput | runtime.Bytes | null
+  logoMimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  logoUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  onboardedByPlatformUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  suspendedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  suspendedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  locations?: Prisma.LocationUncheckedUpdateManyWithoutTenantNestedInput
+  displayDevices?: Prisma.DisplayDeviceUncheckedUpdateManyWithoutTenantNestedInput
+  clinicalDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutTenantNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutTenantNestedInput
+  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
+  promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -2148,6 +2745,9 @@ export type TenantUpdateWithoutOnboardedByInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUpdateManyWithoutTenantNestedInput
 }
 
@@ -2177,6 +2777,9 @@ export type TenantUncheckedUpdateWithoutOnboardedByInput = {
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutTenantNestedInput
   promotions?: Prisma.PromotionUncheckedUpdateManyWithoutTenantNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutTenantNestedInput
+  receiptCounter?: Prisma.ReceiptCounterUncheckedUpdateOneWithoutTenantNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutTenantNestedInput
+  receiptPrints?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutTenantNestedInput
   seatLimits?: Prisma.TenantSeatLimitUncheckedUpdateManyWithoutTenantNestedInput
 }
 
@@ -2214,6 +2817,8 @@ export type TenantCountOutputType = {
   diagnosticOrders: number
   promotions: number
   promotionApplications: number
+  receipts: number
+  receiptPrints: number
   seatLimits: number
 }
 
@@ -2225,6 +2830,8 @@ export type TenantCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions
   diagnosticOrders?: boolean | TenantCountOutputTypeCountDiagnosticOrdersArgs
   promotions?: boolean | TenantCountOutputTypeCountPromotionsArgs
   promotionApplications?: boolean | TenantCountOutputTypeCountPromotionApplicationsArgs
+  receipts?: boolean | TenantCountOutputTypeCountReceiptsArgs
+  receiptPrints?: boolean | TenantCountOutputTypeCountReceiptPrintsArgs
   seatLimits?: boolean | TenantCountOutputTypeCountSeatLimitsArgs
 }
 
@@ -2290,6 +2897,20 @@ export type TenantCountOutputTypeCountPromotionApplicationsArgs<ExtArgs extends 
 /**
  * TenantCountOutputType without action
  */
+export type TenantCountOutputTypeCountReceiptsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ReceiptWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
+export type TenantCountOutputTypeCountReceiptPrintsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ReceiptPrintWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
 export type TenantCountOutputTypeCountSeatLimitsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.TenantSeatLimitWhereInput
 }
@@ -2322,6 +2943,9 @@ export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   diagnosticOrders?: boolean | Prisma.Tenant$diagnosticOrdersArgs<ExtArgs>
   promotions?: boolean | Prisma.Tenant$promotionsArgs<ExtArgs>
   promotionApplications?: boolean | Prisma.Tenant$promotionApplicationsArgs<ExtArgs>
+  receiptCounter?: boolean | Prisma.Tenant$receiptCounterArgs<ExtArgs>
+  receipts?: boolean | Prisma.Tenant$receiptsArgs<ExtArgs>
+  receiptPrints?: boolean | Prisma.Tenant$receiptPrintsArgs<ExtArgs>
   seatLimits?: boolean | Prisma.Tenant$seatLimitsArgs<ExtArgs>
   onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
@@ -2404,6 +3028,9 @@ export type TenantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   diagnosticOrders?: boolean | Prisma.Tenant$diagnosticOrdersArgs<ExtArgs>
   promotions?: boolean | Prisma.Tenant$promotionsArgs<ExtArgs>
   promotionApplications?: boolean | Prisma.Tenant$promotionApplicationsArgs<ExtArgs>
+  receiptCounter?: boolean | Prisma.Tenant$receiptCounterArgs<ExtArgs>
+  receipts?: boolean | Prisma.Tenant$receiptsArgs<ExtArgs>
+  receiptPrints?: boolean | Prisma.Tenant$receiptPrintsArgs<ExtArgs>
   seatLimits?: boolean | Prisma.Tenant$seatLimitsArgs<ExtArgs>
   onboardedBy?: boolean | Prisma.Tenant$onboardedByArgs<ExtArgs>
   _count?: boolean | Prisma.TenantCountOutputTypeDefaultArgs<ExtArgs>
@@ -2425,6 +3052,9 @@ export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     diagnosticOrders: Prisma.$DiagnosticOrderPayload<ExtArgs>[]
     promotions: Prisma.$PromotionPayload<ExtArgs>[]
     promotionApplications: Prisma.$PromotionApplicationPayload<ExtArgs>[]
+    receiptCounter: Prisma.$ReceiptCounterPayload<ExtArgs> | null
+    receipts: Prisma.$ReceiptPayload<ExtArgs>[]
+    receiptPrints: Prisma.$ReceiptPrintPayload<ExtArgs>[]
     seatLimits: Prisma.$TenantSeatLimitPayload<ExtArgs>[]
     onboardedBy: Prisma.$PlatformUserPayload<ExtArgs> | null
   }
@@ -2897,6 +3527,9 @@ export interface Prisma__TenantClient<T, Null = never, ExtArgs extends runtime.T
   diagnosticOrders<T extends Prisma.Tenant$diagnosticOrdersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$diagnosticOrdersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   promotions<T extends Prisma.Tenant$promotionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$promotionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   promotionApplications<T extends Prisma.Tenant$promotionApplicationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$promotionApplicationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  receiptCounter<T extends Prisma.Tenant$receiptCounterArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$receiptCounterArgs<ExtArgs>>): Prisma.Prisma__ReceiptCounterClient<runtime.Types.Result.GetResult<Prisma.$ReceiptCounterPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  receipts<T extends Prisma.Tenant$receiptsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$receiptsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ReceiptPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  receiptPrints<T extends Prisma.Tenant$receiptPrintsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$receiptPrintsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ReceiptPrintPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   seatLimits<T extends Prisma.Tenant$seatLimitsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$seatLimitsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TenantSeatLimitPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   onboardedBy<T extends Prisma.Tenant$onboardedByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$onboardedByArgs<ExtArgs>>): Prisma.Prisma__PlatformUserClient<runtime.Types.Result.GetResult<Prisma.$PlatformUserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
@@ -3513,6 +4146,73 @@ export type Tenant$promotionApplicationsArgs<ExtArgs extends runtime.Types.Exten
   take?: number
   skip?: number
   distinct?: Prisma.PromotionApplicationScalarFieldEnum | Prisma.PromotionApplicationScalarFieldEnum[]
+}
+
+/**
+ * Tenant.receiptCounter
+ */
+export type Tenant$receiptCounterArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ReceiptCounter
+   */
+  select?: Prisma.ReceiptCounterSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ReceiptCounter
+   */
+  omit?: Prisma.ReceiptCounterOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ReceiptCounterInclude<ExtArgs> | null
+  where?: Prisma.ReceiptCounterWhereInput
+}
+
+/**
+ * Tenant.receipts
+ */
+export type Tenant$receiptsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Receipt
+   */
+  select?: Prisma.ReceiptSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Receipt
+   */
+  omit?: Prisma.ReceiptOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ReceiptInclude<ExtArgs> | null
+  where?: Prisma.ReceiptWhereInput
+  orderBy?: Prisma.ReceiptOrderByWithRelationInput | Prisma.ReceiptOrderByWithRelationInput[]
+  cursor?: Prisma.ReceiptWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ReceiptScalarFieldEnum | Prisma.ReceiptScalarFieldEnum[]
+}
+
+/**
+ * Tenant.receiptPrints
+ */
+export type Tenant$receiptPrintsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ReceiptPrint
+   */
+  select?: Prisma.ReceiptPrintSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ReceiptPrint
+   */
+  omit?: Prisma.ReceiptPrintOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ReceiptPrintInclude<ExtArgs> | null
+  where?: Prisma.ReceiptPrintWhereInput
+  orderBy?: Prisma.ReceiptPrintOrderByWithRelationInput | Prisma.ReceiptPrintOrderByWithRelationInput[]
+  cursor?: Prisma.ReceiptPrintWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ReceiptPrintScalarFieldEnum | Prisma.ReceiptPrintScalarFieldEnum[]
 }
 
 /**

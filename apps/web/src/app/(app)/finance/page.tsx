@@ -14,6 +14,7 @@ import {
   type Promotion,
 } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
+import { ReceiptButton } from '@/components/receipt-button';
 import { formatAge, formatPaise, genderInitial, parseRupeesToPaise } from '@/lib/format';
 import {
   IconAlert,
@@ -371,8 +372,9 @@ export default function FinanceDeskPage() {
 
           {!invoice ? (
             <Banner tone="info">
-              This clinic has not priced anything, so no bill was raised. The patient can go
-              straight to the front desk to be checked in.
+              No services are priced yet, and this doctor has no consultation fee, so no bill was
+              raised. Ask your administrator. The patient can go straight to the front desk to be
+              checked in.
             </Banner>
           ) : (
             <>
@@ -388,6 +390,16 @@ export default function FinanceDeskPage() {
                     }, 'Could not add the charge.')
                   }
                 />
+              )}
+
+              {/* FR-PRC-02: an empty price list must say so rather than looking
+                  like a missing button. The bill exists because the doctor has a
+                  fee, but there is nothing else the desk could add to it. */}
+              {canBill && invoice.balancePaise > 0 && services.length === 0 && (
+                <p className="field-hint mt-4">
+                  No services are priced yet, so nothing else can be added to this bill. Ask your
+                  administrator.
+                </p>
               )}
 
               {canBill && invoice.lines.length > 1 && invoice.paidPaise === 0 && (
@@ -1152,7 +1164,9 @@ function Finished({
         )}
 
         <div className="flex flex-wrap justify-center gap-3 p-6">
-          <button type="button" className="btn-primary" onClick={onAnother}>
+          {/* FR-RCP-01: available immediately after taking the payment. */}
+          {invoice && <ReceiptButton invoice={invoice} className="btn-primary" />}
+          <button type="button" className="btn-secondary" onClick={onAnother}>
             <IconUserPlus size={16} />
             Next patient
           </button>

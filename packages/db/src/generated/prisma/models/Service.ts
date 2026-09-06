@@ -42,6 +42,7 @@ export type ServiceMinAggregateOutputType = {
   code: string | null
   name: string | null
   category: $Enums.ServiceCategory | null
+  departmentId: string | null
   pricePaise: number | null
   taxRateBasisPoints: number | null
   isActive: boolean | null
@@ -55,6 +56,7 @@ export type ServiceMaxAggregateOutputType = {
   code: string | null
   name: string | null
   category: $Enums.ServiceCategory | null
+  departmentId: string | null
   pricePaise: number | null
   taxRateBasisPoints: number | null
   isActive: boolean | null
@@ -68,6 +70,7 @@ export type ServiceCountAggregateOutputType = {
   code: number
   name: number
   category: number
+  departmentId: number
   pricePaise: number
   taxRateBasisPoints: number
   isActive: number
@@ -93,6 +96,7 @@ export type ServiceMinAggregateInputType = {
   code?: true
   name?: true
   category?: true
+  departmentId?: true
   pricePaise?: true
   taxRateBasisPoints?: true
   isActive?: true
@@ -106,6 +110,7 @@ export type ServiceMaxAggregateInputType = {
   code?: true
   name?: true
   category?: true
+  departmentId?: true
   pricePaise?: true
   taxRateBasisPoints?: true
   isActive?: true
@@ -119,6 +124,7 @@ export type ServiceCountAggregateInputType = {
   code?: true
   name?: true
   category?: true
+  departmentId?: true
   pricePaise?: true
   taxRateBasisPoints?: true
   isActive?: true
@@ -219,6 +225,7 @@ export type ServiceGroupByOutputType = {
   code: string
   name: string
   category: $Enums.ServiceCategory
+  departmentId: string | null
   pricePaise: number
   taxRateBasisPoints: number
   isActive: boolean
@@ -255,11 +262,13 @@ export type ServiceWhereInput = {
   code?: Prisma.StringFilter<"Service"> | string
   name?: Prisma.StringFilter<"Service"> | string
   category?: Prisma.EnumServiceCategoryFilter<"Service"> | $Enums.ServiceCategory
+  departmentId?: Prisma.UuidNullableFilter<"Service"> | string | null
   pricePaise?: Prisma.IntFilter<"Service"> | number
   taxRateBasisPoints?: Prisma.IntFilter<"Service"> | number
   isActive?: Prisma.BoolFilter<"Service"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Service"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Service"> | Date | string
+  department?: Prisma.XOR<Prisma.DepartmentNullableScalarRelationFilter, Prisma.DepartmentWhereInput> | null
   lines?: Prisma.InvoiceLineListRelationFilter
 }
 
@@ -269,11 +278,13 @@ export type ServiceOrderByWithRelationInput = {
   code?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  departmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   pricePaise?: Prisma.SortOrder
   taxRateBasisPoints?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  department?: Prisma.DepartmentOrderByWithRelationInput
   lines?: Prisma.InvoiceLineOrderByRelationAggregateInput
 }
 
@@ -287,11 +298,13 @@ export type ServiceWhereUniqueInput = Prisma.AtLeast<{
   code?: Prisma.StringFilter<"Service"> | string
   name?: Prisma.StringFilter<"Service"> | string
   category?: Prisma.EnumServiceCategoryFilter<"Service"> | $Enums.ServiceCategory
+  departmentId?: Prisma.UuidNullableFilter<"Service"> | string | null
   pricePaise?: Prisma.IntFilter<"Service"> | number
   taxRateBasisPoints?: Prisma.IntFilter<"Service"> | number
   isActive?: Prisma.BoolFilter<"Service"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Service"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Service"> | Date | string
+  department?: Prisma.XOR<Prisma.DepartmentNullableScalarRelationFilter, Prisma.DepartmentWhereInput> | null
   lines?: Prisma.InvoiceLineListRelationFilter
 }, "id" | "tenantId_code">
 
@@ -301,6 +314,7 @@ export type ServiceOrderByWithAggregationInput = {
   code?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  departmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   pricePaise?: Prisma.SortOrder
   taxRateBasisPoints?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -322,6 +336,7 @@ export type ServiceScalarWhereWithAggregatesInput = {
   code?: Prisma.StringWithAggregatesFilter<"Service"> | string
   name?: Prisma.StringWithAggregatesFilter<"Service"> | string
   category?: Prisma.EnumServiceCategoryWithAggregatesFilter<"Service"> | $Enums.ServiceCategory
+  departmentId?: Prisma.UuidNullableWithAggregatesFilter<"Service"> | string | null
   pricePaise?: Prisma.IntWithAggregatesFilter<"Service"> | number
   taxRateBasisPoints?: Prisma.IntWithAggregatesFilter<"Service"> | number
   isActive?: Prisma.BoolWithAggregatesFilter<"Service"> | boolean
@@ -340,6 +355,7 @@ export type ServiceCreateInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  department?: Prisma.DepartmentCreateNestedOneWithoutServicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutServiceInput
 }
 
@@ -349,6 +365,7 @@ export type ServiceUncheckedCreateInput = {
   code: string
   name: string
   category?: $Enums.ServiceCategory
+  departmentId?: string | null
   pricePaise: number
   taxRateBasisPoints?: number
   isActive?: boolean
@@ -368,6 +385,7 @@ export type ServiceUpdateInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  department?: Prisma.DepartmentUpdateOneWithoutServicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutServiceNestedInput
 }
 
@@ -377,6 +395,7 @@ export type ServiceUncheckedUpdateInput = {
   code?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumServiceCategoryFieldUpdateOperationsInput | $Enums.ServiceCategory
+  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pricePaise?: Prisma.IntFieldUpdateOperationsInput | number
   taxRateBasisPoints?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -391,6 +410,7 @@ export type ServiceCreateManyInput = {
   code: string
   name: string
   category?: $Enums.ServiceCategory
+  departmentId?: string | null
   pricePaise: number
   taxRateBasisPoints?: number
   isActive?: boolean
@@ -417,11 +437,22 @@ export type ServiceUncheckedUpdateManyInput = {
   code?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumServiceCategoryFieldUpdateOperationsInput | $Enums.ServiceCategory
+  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pricePaise?: Prisma.IntFieldUpdateOperationsInput | number
   taxRateBasisPoints?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type ServiceListRelationFilter = {
+  every?: Prisma.ServiceWhereInput
+  some?: Prisma.ServiceWhereInput
+  none?: Prisma.ServiceWhereInput
+}
+
+export type ServiceOrderByRelationAggregateInput = {
+  _count?: Prisma.SortOrder
 }
 
 export type ServiceTenantIdCodeCompoundUniqueInput = {
@@ -435,6 +466,7 @@ export type ServiceCountOrderByAggregateInput = {
   code?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  departmentId?: Prisma.SortOrder
   pricePaise?: Prisma.SortOrder
   taxRateBasisPoints?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -453,6 +485,7 @@ export type ServiceMaxOrderByAggregateInput = {
   code?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  departmentId?: Prisma.SortOrder
   pricePaise?: Prisma.SortOrder
   taxRateBasisPoints?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -466,6 +499,7 @@ export type ServiceMinOrderByAggregateInput = {
   code?: Prisma.SortOrder
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
+  departmentId?: Prisma.SortOrder
   pricePaise?: Prisma.SortOrder
   taxRateBasisPoints?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
@@ -481,6 +515,48 @@ export type ServiceSumOrderByAggregateInput = {
 export type ServiceNullableScalarRelationFilter = {
   is?: Prisma.ServiceWhereInput | null
   isNot?: Prisma.ServiceWhereInput | null
+}
+
+export type ServiceCreateNestedManyWithoutDepartmentInput = {
+  create?: Prisma.XOR<Prisma.ServiceCreateWithoutDepartmentInput, Prisma.ServiceUncheckedCreateWithoutDepartmentInput> | Prisma.ServiceCreateWithoutDepartmentInput[] | Prisma.ServiceUncheckedCreateWithoutDepartmentInput[]
+  connectOrCreate?: Prisma.ServiceCreateOrConnectWithoutDepartmentInput | Prisma.ServiceCreateOrConnectWithoutDepartmentInput[]
+  createMany?: Prisma.ServiceCreateManyDepartmentInputEnvelope
+  connect?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+}
+
+export type ServiceUncheckedCreateNestedManyWithoutDepartmentInput = {
+  create?: Prisma.XOR<Prisma.ServiceCreateWithoutDepartmentInput, Prisma.ServiceUncheckedCreateWithoutDepartmentInput> | Prisma.ServiceCreateWithoutDepartmentInput[] | Prisma.ServiceUncheckedCreateWithoutDepartmentInput[]
+  connectOrCreate?: Prisma.ServiceCreateOrConnectWithoutDepartmentInput | Prisma.ServiceCreateOrConnectWithoutDepartmentInput[]
+  createMany?: Prisma.ServiceCreateManyDepartmentInputEnvelope
+  connect?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+}
+
+export type ServiceUpdateManyWithoutDepartmentNestedInput = {
+  create?: Prisma.XOR<Prisma.ServiceCreateWithoutDepartmentInput, Prisma.ServiceUncheckedCreateWithoutDepartmentInput> | Prisma.ServiceCreateWithoutDepartmentInput[] | Prisma.ServiceUncheckedCreateWithoutDepartmentInput[]
+  connectOrCreate?: Prisma.ServiceCreateOrConnectWithoutDepartmentInput | Prisma.ServiceCreateOrConnectWithoutDepartmentInput[]
+  upsert?: Prisma.ServiceUpsertWithWhereUniqueWithoutDepartmentInput | Prisma.ServiceUpsertWithWhereUniqueWithoutDepartmentInput[]
+  createMany?: Prisma.ServiceCreateManyDepartmentInputEnvelope
+  set?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  disconnect?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  delete?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  connect?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  update?: Prisma.ServiceUpdateWithWhereUniqueWithoutDepartmentInput | Prisma.ServiceUpdateWithWhereUniqueWithoutDepartmentInput[]
+  updateMany?: Prisma.ServiceUpdateManyWithWhereWithoutDepartmentInput | Prisma.ServiceUpdateManyWithWhereWithoutDepartmentInput[]
+  deleteMany?: Prisma.ServiceScalarWhereInput | Prisma.ServiceScalarWhereInput[]
+}
+
+export type ServiceUncheckedUpdateManyWithoutDepartmentNestedInput = {
+  create?: Prisma.XOR<Prisma.ServiceCreateWithoutDepartmentInput, Prisma.ServiceUncheckedCreateWithoutDepartmentInput> | Prisma.ServiceCreateWithoutDepartmentInput[] | Prisma.ServiceUncheckedCreateWithoutDepartmentInput[]
+  connectOrCreate?: Prisma.ServiceCreateOrConnectWithoutDepartmentInput | Prisma.ServiceCreateOrConnectWithoutDepartmentInput[]
+  upsert?: Prisma.ServiceUpsertWithWhereUniqueWithoutDepartmentInput | Prisma.ServiceUpsertWithWhereUniqueWithoutDepartmentInput[]
+  createMany?: Prisma.ServiceCreateManyDepartmentInputEnvelope
+  set?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  disconnect?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  delete?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  connect?: Prisma.ServiceWhereUniqueInput | Prisma.ServiceWhereUniqueInput[]
+  update?: Prisma.ServiceUpdateWithWhereUniqueWithoutDepartmentInput | Prisma.ServiceUpdateWithWhereUniqueWithoutDepartmentInput[]
+  updateMany?: Prisma.ServiceUpdateManyWithWhereWithoutDepartmentInput | Prisma.ServiceUpdateManyWithWhereWithoutDepartmentInput[]
+  deleteMany?: Prisma.ServiceScalarWhereInput | Prisma.ServiceScalarWhereInput[]
 }
 
 export type EnumServiceCategoryFieldUpdateOperationsInput = {
@@ -503,6 +579,77 @@ export type ServiceUpdateOneWithoutLinesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ServiceUpdateToOneWithWhereWithoutLinesInput, Prisma.ServiceUpdateWithoutLinesInput>, Prisma.ServiceUncheckedUpdateWithoutLinesInput>
 }
 
+export type ServiceCreateWithoutDepartmentInput = {
+  id?: string
+  tenantId: string
+  code: string
+  name: string
+  category?: $Enums.ServiceCategory
+  pricePaise: number
+  taxRateBasisPoints?: number
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  lines?: Prisma.InvoiceLineCreateNestedManyWithoutServiceInput
+}
+
+export type ServiceUncheckedCreateWithoutDepartmentInput = {
+  id?: string
+  tenantId: string
+  code: string
+  name: string
+  category?: $Enums.ServiceCategory
+  pricePaise: number
+  taxRateBasisPoints?: number
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutServiceInput
+}
+
+export type ServiceCreateOrConnectWithoutDepartmentInput = {
+  where: Prisma.ServiceWhereUniqueInput
+  create: Prisma.XOR<Prisma.ServiceCreateWithoutDepartmentInput, Prisma.ServiceUncheckedCreateWithoutDepartmentInput>
+}
+
+export type ServiceCreateManyDepartmentInputEnvelope = {
+  data: Prisma.ServiceCreateManyDepartmentInput | Prisma.ServiceCreateManyDepartmentInput[]
+  skipDuplicates?: boolean
+}
+
+export type ServiceUpsertWithWhereUniqueWithoutDepartmentInput = {
+  where: Prisma.ServiceWhereUniqueInput
+  update: Prisma.XOR<Prisma.ServiceUpdateWithoutDepartmentInput, Prisma.ServiceUncheckedUpdateWithoutDepartmentInput>
+  create: Prisma.XOR<Prisma.ServiceCreateWithoutDepartmentInput, Prisma.ServiceUncheckedCreateWithoutDepartmentInput>
+}
+
+export type ServiceUpdateWithWhereUniqueWithoutDepartmentInput = {
+  where: Prisma.ServiceWhereUniqueInput
+  data: Prisma.XOR<Prisma.ServiceUpdateWithoutDepartmentInput, Prisma.ServiceUncheckedUpdateWithoutDepartmentInput>
+}
+
+export type ServiceUpdateManyWithWhereWithoutDepartmentInput = {
+  where: Prisma.ServiceScalarWhereInput
+  data: Prisma.XOR<Prisma.ServiceUpdateManyMutationInput, Prisma.ServiceUncheckedUpdateManyWithoutDepartmentInput>
+}
+
+export type ServiceScalarWhereInput = {
+  AND?: Prisma.ServiceScalarWhereInput | Prisma.ServiceScalarWhereInput[]
+  OR?: Prisma.ServiceScalarWhereInput[]
+  NOT?: Prisma.ServiceScalarWhereInput | Prisma.ServiceScalarWhereInput[]
+  id?: Prisma.UuidFilter<"Service"> | string
+  tenantId?: Prisma.UuidFilter<"Service"> | string
+  code?: Prisma.StringFilter<"Service"> | string
+  name?: Prisma.StringFilter<"Service"> | string
+  category?: Prisma.EnumServiceCategoryFilter<"Service"> | $Enums.ServiceCategory
+  departmentId?: Prisma.UuidNullableFilter<"Service"> | string | null
+  pricePaise?: Prisma.IntFilter<"Service"> | number
+  taxRateBasisPoints?: Prisma.IntFilter<"Service"> | number
+  isActive?: Prisma.BoolFilter<"Service"> | boolean
+  createdAt?: Prisma.DateTimeFilter<"Service"> | Date | string
+  updatedAt?: Prisma.DateTimeFilter<"Service"> | Date | string
+}
+
 export type ServiceCreateWithoutLinesInput = {
   id?: string
   tenantId: string
@@ -514,6 +661,7 @@ export type ServiceCreateWithoutLinesInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  department?: Prisma.DepartmentCreateNestedOneWithoutServicesInput
 }
 
 export type ServiceUncheckedCreateWithoutLinesInput = {
@@ -522,6 +670,7 @@ export type ServiceUncheckedCreateWithoutLinesInput = {
   code: string
   name: string
   category?: $Enums.ServiceCategory
+  departmentId?: string | null
   pricePaise: number
   taxRateBasisPoints?: number
   isActive?: boolean
@@ -556,9 +705,65 @@ export type ServiceUpdateWithoutLinesInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  department?: Prisma.DepartmentUpdateOneWithoutServicesNestedInput
 }
 
 export type ServiceUncheckedUpdateWithoutLinesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  code?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.EnumServiceCategoryFieldUpdateOperationsInput | $Enums.ServiceCategory
+  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pricePaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxRateBasisPoints?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type ServiceCreateManyDepartmentInput = {
+  id?: string
+  tenantId: string
+  code: string
+  name: string
+  category?: $Enums.ServiceCategory
+  pricePaise: number
+  taxRateBasisPoints?: number
+  isActive?: boolean
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type ServiceUpdateWithoutDepartmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  code?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.EnumServiceCategoryFieldUpdateOperationsInput | $Enums.ServiceCategory
+  pricePaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxRateBasisPoints?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  lines?: Prisma.InvoiceLineUpdateManyWithoutServiceNestedInput
+}
+
+export type ServiceUncheckedUpdateWithoutDepartmentInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  code?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  category?: Prisma.EnumServiceCategoryFieldUpdateOperationsInput | $Enums.ServiceCategory
+  pricePaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxRateBasisPoints?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutServiceNestedInput
+}
+
+export type ServiceUncheckedUpdateManyWithoutDepartmentInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   code?: Prisma.StringFieldUpdateOperationsInput | string
@@ -608,11 +813,13 @@ export type ServiceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   code?: boolean
   name?: boolean
   category?: boolean
+  departmentId?: boolean
   pricePaise?: boolean
   taxRateBasisPoints?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  department?: boolean | Prisma.Service$departmentArgs<ExtArgs>
   lines?: boolean | Prisma.Service$linesArgs<ExtArgs>
   _count?: boolean | Prisma.ServiceCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["service"]>
@@ -623,11 +830,13 @@ export type ServiceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   code?: boolean
   name?: boolean
   category?: boolean
+  departmentId?: boolean
   pricePaise?: boolean
   taxRateBasisPoints?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  department?: boolean | Prisma.Service$departmentArgs<ExtArgs>
 }, ExtArgs["result"]["service"]>
 
 export type ServiceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -636,11 +845,13 @@ export type ServiceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   code?: boolean
   name?: boolean
   category?: boolean
+  departmentId?: boolean
   pricePaise?: boolean
   taxRateBasisPoints?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  department?: boolean | Prisma.Service$departmentArgs<ExtArgs>
 }, ExtArgs["result"]["service"]>
 
 export type ServiceSelectScalar = {
@@ -649,6 +860,7 @@ export type ServiceSelectScalar = {
   code?: boolean
   name?: boolean
   category?: boolean
+  departmentId?: boolean
   pricePaise?: boolean
   taxRateBasisPoints?: boolean
   isActive?: boolean
@@ -656,17 +868,23 @@ export type ServiceSelectScalar = {
   updatedAt?: boolean
 }
 
-export type ServiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "code" | "name" | "category" | "pricePaise" | "taxRateBasisPoints" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["service"]>
+export type ServiceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "code" | "name" | "category" | "departmentId" | "pricePaise" | "taxRateBasisPoints" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["service"]>
 export type ServiceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  department?: boolean | Prisma.Service$departmentArgs<ExtArgs>
   lines?: boolean | Prisma.Service$linesArgs<ExtArgs>
   _count?: boolean | Prisma.ServiceCountOutputTypeDefaultArgs<ExtArgs>
 }
-export type ServiceIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
-export type ServiceIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type ServiceIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  department?: boolean | Prisma.Service$departmentArgs<ExtArgs>
+}
+export type ServiceIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  department?: boolean | Prisma.Service$departmentArgs<ExtArgs>
+}
 
 export type $ServicePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Service"
   objects: {
+    department: Prisma.$DepartmentPayload<ExtArgs> | null
     lines: Prisma.$InvoiceLinePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -681,6 +899,16 @@ export type $ServicePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * Groups the day-end report and, later, the accounting export.
      */
     category: $Enums.ServiceCategory
+    /**
+     * Which department performs it, where that applies (FR-PRC-01).
+     * 
+     * Nullable on purpose. An X-ray belongs to radiology; a consultation belongs
+     * to whichever doctor gave it, and a dressing may belong to nobody in
+     * particular. Forcing a department would make the administrator invent one,
+     * and an invented department is worse than an absent one — it shows up in
+     * every report afterwards looking like a fact.
+     */
+    departmentId: string | null
     /**
      * Default price in paise. A practitioner may override it — see
      * `Practitioner.consultationFeePaise`.
@@ -1091,6 +1319,7 @@ readonly fields: ServiceFieldRefs;
  */
 export interface Prisma__ServiceClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  department<T extends Prisma.Service$departmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Service$departmentArgs<ExtArgs>>): Prisma.Prisma__DepartmentClient<runtime.Types.Result.GetResult<Prisma.$DepartmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   lines<T extends Prisma.Service$linesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Service$linesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$InvoiceLinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -1126,6 +1355,7 @@ export interface ServiceFieldRefs {
   readonly code: Prisma.FieldRef<"Service", 'String'>
   readonly name: Prisma.FieldRef<"Service", 'String'>
   readonly category: Prisma.FieldRef<"Service", 'ServiceCategory'>
+  readonly departmentId: Prisma.FieldRef<"Service", 'String'>
   readonly pricePaise: Prisma.FieldRef<"Service", 'Int'>
   readonly taxRateBasisPoints: Prisma.FieldRef<"Service", 'Int'>
   readonly isActive: Prisma.FieldRef<"Service", 'Boolean'>
@@ -1385,6 +1615,10 @@ export type ServiceCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensi
    */
   data: Prisma.ServiceCreateManyInput | Prisma.ServiceCreateManyInput[]
   skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ServiceIncludeCreateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1455,6 +1689,10 @@ export type ServiceUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extensi
    * Limit how many Services to update.
    */
   limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ServiceIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1521,6 +1759,25 @@ export type ServiceDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Inter
    * Limit how many Services to delete.
    */
   limit?: number
+}
+
+/**
+ * Service.department
+ */
+export type Service$departmentArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Department
+   */
+  select?: Prisma.DepartmentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Department
+   */
+  omit?: Prisma.DepartmentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DepartmentInclude<ExtArgs> | null
+  where?: Prisma.DepartmentWhereInput
 }
 
 /**

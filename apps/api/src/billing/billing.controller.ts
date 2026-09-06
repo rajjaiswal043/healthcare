@@ -20,6 +20,7 @@ import { PERMISSIONS } from '../platform/auth/permissions.js';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { BillingService, type RequestMeta } from './billing.service.js';
 import { FinanceReportService } from './finance-report.service.js';
+import { ReceiptsService } from './receipts.service.js';
 import {
   AddLineDto,
   CollectPaymentDto,
@@ -34,6 +35,7 @@ export class BillingController {
   constructor(
     private readonly billing: BillingService,
     private readonly financeReport: FinanceReportService,
+    private readonly receipts: ReceiptsService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -179,6 +181,53 @@ export class BillingController {
   @RequirePermissions(PERMISSIONS.REPORT_REVENUE)
   async finance(@CurrentTenant() tenantId: string, @Query() query: FinanceReportQueryDto) {
     return this.financeReport.report(tenantId, query);
+  }
+
+  /**
+   * The printable receipt for one payment (FR-RCP-01, -02).
+   *
+   * Behind `invoice:read`, the same permission as seeing the bill it came from.
+   * Printing paper for money already taken is not a privileged act — the finance
+   * desk, the front desk and the administrator all hold it, and a doctor holds
+   * neither this nor the invoice.
+   *
+   * A GET, so it still answers for a SUSPENDED clinic. That guard's own message
+   * promises "you can still open, print and export everything already here", and
+   * a receipt that stopped printing the day a clinic was suspended would make
+   * that sentence untrue.
+   */
+  @Get('payments/:id/receipt')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async receipt(@CurrentTenant() tenantId: string, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.receipts.forPayment(tenantId, id);
+  }
+
+  /** Who has printed this receipt, and when. The answer to "how does a second copy exist". */
+  @Get('payments/:id/receipt/prints')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async receiptPrints(
+    @CurrentTenant() tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.receipts.prints(tenantId, id);
+  }
+
+  /**
+   * Record that the receipt went on paper, and say which print it was.
+   *
+   * Returns the payload too, so the screen cannot render a sheet it forgot to
+   * log. The first print is the receipt; every one after it comes back with
+   * `isDuplicate` and the sheet says so on its face.
+   */
+  @Post('payments/:id/receipt/prints')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async recordReceiptPrint(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.receipts.recordPrint(tenantId, id, meta(req, user));
   }
 
   /** What the clinic took today, by mode and by collector (FR-BIL-09). */

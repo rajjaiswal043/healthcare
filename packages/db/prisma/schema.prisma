@@ -102,6 +102,9 @@ model Tenant {
   diagnosticOrders  DiagnosticOrder[]
   promotions            Promotion[]
   promotionApplications PromotionApplication[]
+  receiptCounter        ReceiptCounter?
+  receipts              Receipt[]
+  receiptPrints         ReceiptPrint[]
   seatLimits     TenantSeatLimit[]
 
   onboardedBy PlatformUser? @relation(fields: [onboardedByPlatformUserId], references: [id], onDelete: SetNull, map: "tenant_onboarded_by_fkey")
@@ -497,6 +500,7 @@ model User {
   promotionsCreated    Promotion[]            @relation("PromotionsCreated")
   promotionsApplied    PromotionApplication[] @relation("PromotionsApplied")
   promotionsAuthorised PromotionApplication[] @relation("PromotionsAuthorised")
+  receiptsPrinted      ReceiptPrint[]         @relation("ReceiptsPrinted")
   sessions Session[]
 
   @@unique([tenantId, email])
@@ -650,6 +654,7 @@ model Department {
   practitioners Practitioner[]
   appointments  Appointment[]
   diagnosticOrders DiagnosticOrder[]
+  services      Service[]
 
   @@unique([tenantId, name])
   @@index([tenantId, isActive, displayOrder])
@@ -1284,6 +1289,15 @@ model Service {
   /// Groups the day-end report and, later, the accounting export.
   category ServiceCategory @default(CONSULTATION)
 
+  /// Which department performs it, where that applies (FR-PRC-01).
+  ///
+  /// Nullable on purpose. An X-ray belongs to radiology; a consultation belongs
+  /// to whichever doctor gave it, and a dressing may belong to nobody in
+  /// particular. Forcing a department would make the administrator invent one,
+  /// and an invented department is worse than an absent one — it shows up in
+  /// every report afterwards looking like a fact.
+  departmentId String? @map("department_id") @db.Uuid
+
   /// Default price in paise. A practitioner may override it — see
   /// `Practitioner.consultationFeePaise`.
   pricePaise Int @map("price_paise")
@@ -1300,10 +1314,12 @@ model Service {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "service_department_fkey")
   lines InvoiceLine[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive, category])
+  @@index([tenantId, departmentId], map: "service_department_idx")
   @@map("service")
 }
 
@@ -1387,6 +1403,9 @@ model Invoice {
 
   /// Every discount this bill has ever carried, reversed ones included.
   promotionApplications PromotionApplication[] @relation("InvoicePromotionHistory")
+
+  /// One per money-in payment against this bill.
+  receipts Receipt[]
 
   @@unique([tenantId, number])
   @@index([tenantId, patientId, issuedAt])
@@ -1479,6 +1498,7 @@ model Payment {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  receipt Receipt?
 
   @@index([tenantId, invoiceId])
   @@index([tenantId, collectedAt])
@@ -1802,4 +1822,94 @@ enum PromotionReversalKind {
   AUTHORISATION_WITHDRAWN
 
   @@map("promotion_reversal_kind")
+}
+
+/// The clinic's receipt sequence.
+///
+/// A separate table from `InvoiceCounter` rather than a column on it: that
+/// model's `tenantId` is `@unique`, so it holds exactly one counter per clinic.
+/// The two sequences are independent on purpose — one invoice can produce
+/// several receipts, so sharing a number would need a suffix, and a receipt with
+/// a suffix invites somebody to invent one.
+model ReceiptCounter {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+
+  prefix     String @default("R") @db.VarChar(8)
+  lastNumber BigInt @default(0) @map("last_number")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_counter_tenant_fkey")
+
+  @@map("receipt_counter")
+}
+
+/// A receipt — proof that a PAYMENT was received (FR-RCP-01, -03).
+///
+/// One per money-in payment, never one per invoice. A ₹1,100 bill paid ₹500 now
+/// and ₹600 later is one invoice and two receipts, each showing what was paid at
+/// that moment and what remained.
+///
+/// THE MONEY BLOCK IS FROZEN HERE, not derived at print time. Deriving it looked
+/// safe — the invoice total cannot move while money is on it — until
+/// `BillingService.loadEditable` turned out to test paid MINUS refunded, so a
+/// fully refunded invoice becomes editable again and its total can change after
+/// a receipt was issued. A reprint would then show a balance that was never
+/// true. Storing the figures is also simply what a receipt is: a record of what
+/// a document said.
+model Receipt {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  paymentId String @unique @map("payment_id") @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+
+  /// Serial per clinic, from `next_receipt_number()`.
+  number String @db.VarChar(32)
+
+  /// The money block, in the order it prints. Never collapsed into one figure:
+  /// a clinic that records ₹0 rather than ₹600 less ₹600 cannot say what it
+  /// gave away.
+  totalChargedPaise Int @map("total_charged_paise")
+  discountPaise     Int @default(0) @map("discount_paise")
+  taxPaise          Int @default(0) @map("tax_paise")
+  payablePaise      Int @map("payable_paise")
+  paidNowPaise      Int @map("paid_now_paise")
+  /// What was still outstanding immediately after this payment.
+  balancePaise      Int @map("balance_paise")
+
+  issuedAt  DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_tenant_fkey")
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict, map: "receipt_payment_fkey")
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict, map: "receipt_invoice_fkey")
+
+  prints ReceiptPrint[]
+
+  @@unique([tenantId, number], map: "receipt_tenant_id_number_key")
+  @@index([tenantId, invoiceId, issuedAt], map: "receipt_invoice_idx")
+  @@map("receipt")
+}
+
+/// Every time a receipt was put on paper (FR-RCP-03).
+///
+/// Not optional. This log is the only thing that can answer "has this been
+/// printed before", which is what lets the second copy carry DUPLICATE on its
+/// face. Two identical unmarked receipts for one payment is how cash goes
+/// missing in a clinic, and the person exposed by it is the finance desk, who
+/// otherwise cannot prove which copy was the original.
+model ReceiptPrint {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  receiptId       String   @map("receipt_id") @db.Uuid
+  printedByUserId String   @map("printed_by_user_id") @db.Uuid
+  printedAt       DateTime @default(now()) @map("printed_at") @db.Timestamptz(6)
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_print_tenant_fkey")
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Restrict, map: "receipt_print_receipt_fkey")
+  printedBy User    @relation("ReceiptsPrinted", fields: [printedByUserId], references: [id], onDelete: Restrict, map: "receipt_print_user_fkey")
+
+  @@index([tenantId, receiptId, printedAt], map: "receipt_print_receipt_idx")
+  @@map("receipt_print")
 }

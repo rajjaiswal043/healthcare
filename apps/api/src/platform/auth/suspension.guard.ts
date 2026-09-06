@@ -34,6 +34,17 @@ const ALWAYS_ALLOWED = [
   '/auth/mfa/confirm',
   '/auth/password',
   '/platform/',
+  /**
+   * Recording that a receipt was printed.
+   *
+   * A POST, so the method rule would refuse it — and the sentence this guard
+   * returns says "you can still open, print and export everything already
+   * here". A suspended clinic that cannot reprint a receipt for money it already
+   * took makes that promise untrue, and leaves a patient unable to prove they
+   * paid. Nothing new is recorded about the money; the log says a sheet came out
+   * of a printer.
+   */
+  '/receipt/prints',
 ];
 
 @Injectable()
