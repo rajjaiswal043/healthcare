@@ -91,6 +91,16 @@ const USERS = [
     password: 'demo1234',
   },
   { email: 'doctor@demo.local', fullName: 'Dr Vikram Rao', role: 'doctor', password: 'demo1234' },
+  {
+    // The finance desk (FR-FIN-01). Included so the single-screen flow at
+    // /finance can be walked as the role it was built for, rather than as an
+    // administrator who holds every permission and therefore proves nothing
+    // about what finance can and cannot reach.
+    email: 'finance@demo.local',
+    fullName: 'Sunita Bhosale',
+    role: 'finance',
+    password: 'demo1234',
+  },
   { email: 'nurse@demo.local', fullName: 'Meena Joshi', role: 'nurse', password: 'demo1234' },
   {
     email: 'admin@demo.local',
@@ -175,6 +185,7 @@ try {
   console.log('  reception@demo.local / demo1234   front desk — can register');
   console.log('  nurse@demo.local     / demo1234   nurse      — read only, cannot register');
   console.log('  doctor@demo.local    / demo1234   doctor');
+  console.log('  finance@demo.local   / demo1234   finance    — bills and takes payment');
   console.log(
     DISABLE_MFA
       ? '  admin@demo.local     / demo1234   administrator\n'

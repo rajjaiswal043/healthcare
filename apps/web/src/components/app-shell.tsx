@@ -83,6 +83,16 @@ const SECTIONS: NavSection[] = [
     title: 'Billing',
     items: [
       {
+        key: 'finance',
+        label: 'Finance desk',
+        href: '/finance',
+        icon: <IconReceipt size={16} />,
+        // Whoever takes the money. Finance holds this; so does the front desk in
+        // a clinic where one person still does both, which is the point of the
+        // roles screen.
+        permission: 'payment:collect',
+      },
+      {
         key: 'collections',
         label: 'Collections',
         href: '/reports/collections',

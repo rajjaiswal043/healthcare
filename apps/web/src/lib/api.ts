@@ -760,6 +760,36 @@ export interface Invoice {
   } | null;
 }
 
+/**
+ * A discount the administrator has set up (FR-PRO-01).
+ *
+ * `value` means two different things — 1–100 for PERCENTAGE, paise for FLAT —
+ * which is why the type travels with it and nothing here does the arithmetic.
+ * What a promotion is actually worth against a given bill is worked out on the
+ * server, so the screen never shows a figure the invoice will disagree with.
+ */
+export interface Promotion {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  type: 'PERCENTAGE' | 'FLAT';
+  value: number;
+  maxDiscountPaise: number | null;
+  validFrom: string;
+  validTo: string | null;
+  isActive: boolean;
+  timesApplied: number;
+  editable: boolean;
+}
+
+export interface AppliedPromotion {
+  applicationId: string;
+  promotion: Promotion;
+  discountPaise: number;
+  authorisedBy: { id: string; fullName: string };
+}
+
 export interface ChargeableService {
   id: string;
   code: string;
@@ -1019,6 +1049,35 @@ export const api = {
   dayCollection: (date?: string) =>
     request<DayCollection>(`/reports/day-collection${date ? `?date=${date}` : ''}`),
 
+  // --- promotions -----------------------------------------------------------
+
+  /**
+   * `applicableOnly` narrows to what can be used right now — switched on and
+   * inside its dates. The finance desk wants that list; an administrator
+   * managing them wants all of it.
+   */
+  promotions: (applicableOnly = false) =>
+    request<{ promotions: Promotion[] }>(`/promotions${applicableOnly ? '?applicable=true' : ''}`),
+
+  applyPromotion: (
+    invoiceId: string,
+    input: { code?: string; promotionId?: string; authorisedByUserId: string },
+  ) =>
+    request<AppliedPromotion>(`/invoices/${invoiceId}/promotion`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /**
+   * Undo, before any payment. A DELETE by shape; the server writes a
+   * compensating row and removes nothing.
+   */
+  removePromotion: (invoiceId: string, reversalKind?: string) =>
+    request<{ discountRemovedPaise: number }>(`/invoices/${invoiceId}/promotion`, {
+      method: 'DELETE',
+      ...(reversalKind ? { body: JSON.stringify({ reversalKind }) } : {}),
+    }),
+
   // --- the consultation ----------------------------------------------------
 
   /** Opens the note, or resumes the draft. Also calls the patient in. */
@@ -1195,6 +1254,17 @@ export const api = {
   // --- staff accounts -------------------------------------------------------
 
   staff: () => request<{ users: StaffUser[]; seats: SeatUsage[] }>('/users'),
+
+  /**
+   * Id and display name of active staff, for naming who authorised a discount.
+   *
+   * Deliberately NOT `staff()`. That one is behind `user:manage` and returns
+   * emails, roles and lockout state; this returns two columns and is behind
+   * `promotion:apply`, so the finance desk can fill its approver dropdown
+   * without being handed the power to create accounts.
+   */
+  approvers: () =>
+    request<{ approvers: Array<{ id: string; fullName: string }> }>('/users/approvers'),
 
   /** The temporary password comes back ONCE. */
   createStaff: (input: { email: string; fullName: string; mobile?: string; roleKeys: string[] }) =>

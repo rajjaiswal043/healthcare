@@ -114,3 +114,20 @@ export class DayCollectionQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be YYYY-MM-DD' })
   date?: string;
 }
+
+/**
+ * The finance report's range (FR-FIN-03).
+ *
+ * Both optional and both clinic-local dates. Omitting them reports on today,
+ * which is what the desk asks for most often and means the endpoint is useful
+ * with no parameters at all. Giving `from` alone reports that single day.
+ */
+export class FinanceReportQueryDto {
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'from must be YYYY-MM-DD' })
+  from?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'to must be YYYY-MM-DD' })
+  to?: string;
+}

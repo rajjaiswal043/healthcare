@@ -19,10 +19,12 @@ import {
 import { PERMISSIONS } from '../platform/auth/permissions.js';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { BillingService, type RequestMeta } from './billing.service.js';
+import { FinanceReportService } from './finance-report.service.js';
 import {
   AddLineDto,
   CollectPaymentDto,
   DayCollectionQueryDto,
+  FinanceReportQueryDto,
   InvoiceExceptionDto,
   RefundDto,
 } from './dto.js';
@@ -31,6 +33,7 @@ import {
 export class BillingController {
   constructor(
     private readonly billing: BillingService,
+    private readonly financeReport: FinanceReportService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -159,6 +162,23 @@ export class BillingController {
     @Req() req: FastifyRequest,
   ) {
     return this.billing.setException(tenantId, id, 'CANCELLED', dto.reason, meta(req, user));
+  }
+
+  /**
+   * The finance desk's report (FR-FIN-03).
+   *
+   * Collections, per-doctor billing, discounts given, what is still owed, and
+   * money that went back — over a range, defaulting to today.
+   *
+   * Behind `report:revenue`, the same permission as the day's collections, and
+   * for the same reason: this is the screen that says what the clinic earned,
+   * and it should not be open on a monitor a waiting room can see. The finance
+   * role holds it; the front desk does not.
+   */
+  @Get('reports/finance')
+  @RequirePermissions(PERMISSIONS.REPORT_REVENUE)
+  async finance(@CurrentTenant() tenantId: string, @Query() query: FinanceReportQueryDto) {
+    return this.financeReport.report(tenantId, query);
   }
 
   /** What the clinic took today, by mode and by collector (FR-BIL-09). */
