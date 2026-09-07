@@ -1156,6 +1156,45 @@ export const api = {
   promotions: (applicableOnly = false) =>
     request<{ promotions: Promotion[] }>(`/promotions${applicableOnly ? '?applicable=true' : ''}`),
 
+  createPromotion: (input: {
+    code: string;
+    name: string;
+    description?: string;
+    type: 'PERCENTAGE' | 'FLAT';
+    /** 1-100 for a percentage, paise for a flat amount. */
+    value: number;
+    maxDiscountPaise?: number;
+    validFrom: string;
+    validTo?: string;
+  }) => request<Promotion>('/promotions', { method: 'POST', body: JSON.stringify(input) }),
+
+  /**
+   * Edit a promotion nobody has used yet.
+   *
+   * `code` and `type` are absent on purpose — the API refuses to change either,
+   * because both turn the promotion into a different thing under the same row
+   * and every report that grouped by it would silently re-group. A used
+   * promotion is refused entirely with `PROMOTION_IN_USE`.
+   */
+  updatePromotion: (
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      value?: number;
+      maxDiscountPaise?: number;
+      validFrom?: string;
+      validTo?: string;
+    },
+  ) => request<Promotion>(`/promotions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+
+  /** Switch off, or back on. This is the delete — there is no DELETE endpoint. */
+  setPromotionActive: (id: string, isActive: boolean) =>
+    request<Promotion>(`/promotions/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+
   applyPromotion: (
     invoiceId: string,
     input: { code?: string; promotionId?: string; authorisedByUserId: string },

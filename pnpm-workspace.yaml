@@ -52,3 +52,26 @@ overrides:
   # prisma.config.ts, so if a Prisma upgrade ever starts failing to read its own
   # config, look here first. Remove once @prisma/config pins 8.x itself.
   deepmerge-ts: '^8.0.0'
+  #   fast-uri    — GHSA-jqff-g426-hqxp, host confusion via percent-encoded scheme
+  #                 normalisation. Reached through fastify's schema compiler:
+  #                 @nestjs/platform-fastify > fastify > @fastify/ajv-compiler >
+  #                 ajv > fast-uri, across forty paths. Nothing we import directly.
+  #
+  #                 NOTE THE BOUND. The advisory has TWO vulnerable ranges —
+  #                 >=3.0.0 <3.1.6 and >=4.0.0 <4.1.3 — and this dependency tree
+  #                 resolves into the 4.x line. `>=3.1.6` looks like the fix and is
+  #                 not: it happily resolves 4.1.2, which is still vulnerable, and
+  #                 `pnpm audit` then reports the SAME advisory against the new
+  #                 version. Anything below 4.1.3 is wrong here.
+  fast-uri: '>=4.1.3'
+  #   mysql2      — GHSA on <3.22.0. Reached only through `prisma`, which pins it
+  #                 EXACTLY at 3.15.3, so this forces a bump past an exact pin the
+  #                 same way deepmerge-ts does above.
+  #
+  #                 Worth knowing what this actually is: mysql2 is Prisma's MySQL
+  #                 driver. This project is PostgreSQL-only (ADR-003) and connects
+  #                 through @prisma/adapter-pg, so the package ships in node_modules
+  #                 and is never loaded. The override is here to keep `pnpm audit
+  #                 --audit-level=high` — and therefore the pre-push gate — honest,
+  #                 not because the vulnerable code path is reachable.
+  mysql2: '>=3.22.0'

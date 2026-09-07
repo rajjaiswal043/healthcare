@@ -146,6 +146,15 @@ const SECTIONS: NavSection[] = [
         permission: 'tenant:configure',
       },
       {
+        key: 'promotions',
+        label: 'Promotions',
+        href: '/settings/promotions',
+        icon: <IconReceipt size={16} />,
+        // The administrator DEFINES a discount; the finance desk APPLIES one.
+        // Gated on the defining half, so finance never sees this screen.
+        permission: 'promotion:manage',
+      },
+      {
         key: 'doctors',
         label: 'Doctors and hours',
         href: '/settings/doctors',
