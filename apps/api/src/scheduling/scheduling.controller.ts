@@ -77,6 +77,16 @@ export class SchedulingController {
           specialty: true,
           qualification: true,
           registrationNumber: true,
+          /**
+           * The doctor's own consultation fee, so a screen choosing a doctor can
+           * show what the visit will cost before it commits to one.
+           *
+           * Not sensitive: it is printed on every bill and every receipt the
+           * patient is handed. `followUpFeePaise` is deliberately NOT here — the
+           * only caller that needs a price is the finance desk, which always
+           * opens a NEW consultation.
+           */
+          consultationFeePaise: true,
           department: { select: { id: true, name: true } },
         },
       }),

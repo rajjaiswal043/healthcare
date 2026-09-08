@@ -60,9 +60,22 @@ export default function FinanceDeskPage() {
   const [doctors, setDoctors] = useState<Practitioner[]>([]);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [locationId, setLocationId] = useState('');
-  const [room, setRoom] = useState<Record<string, { available: number; reason: string | null }>>(
-    {},
-  );
+
+  /**
+   * What each doctor's day looks like, for the card labels.
+   *
+   * `hours` is the window the clinic is actually offering today, derived from
+   * the first and last bookable slot rather than from the raw template — a
+   * doctor blocked from 12:00 should read as sitting until 12:00, not 13:00.
+   * `nextDay` is only filled in for a doctor who is NOT sitting today.
+   */
+  const [day, setDay] = useState<
+    Record<
+      string,
+      { consulting: boolean; hours: string | null; reason: string | null; nextDay: string | null }
+    >
+  >({});
+  const [chosenDoctorId, setChosenDoctorId] = useState<string | null>(null);
 
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -110,35 +123,77 @@ export default function FinanceDeskPage() {
   }, []);
 
   /**
-   * Who is consulting today, and whether they still have room.
+   * Who is actually consulting today, and until when.
    *
-   * One availability call per doctor. A clinic has a handful of them, and the
-   * alternative — asking the receptionist to pick blind and finding out at
-   * booking — is the thing this screen exists to remove.
+   * This replaced a "N slots free today" count, which was the wrong number on
+   * this screen: a walk-in does not occupy a numbered slot, so the count never
+   * moved as the desk admitted people. It answered a booking question on a
+   * walk-in screen. What the finance person is really being asked is "can I be
+   * seen today, and until when" — so that is what the card says.
+   *
+   * HOW EACH LABEL IS DERIVED, all from `GET /availability`:
+   *
+   *   consulting — the day returns at least one slot. A doctor who does not sit
+   *                today, or is on LEAVE, or is wholly BLOCKED, comes back with
+   *                an empty list and a reason, because the availability engine
+   *                already subtracts exceptions from the weekly template.
+   *   hours      — first slot's start to last slot's end. Derived from the
+   *                slots rather than the raw template on purpose: a doctor
+   *                blocked from midday should read as sitting until midday.
+   *   nextDay    — probed forward one day at a time, up to a week, and only for
+   *                a doctor who is not sitting today. Nobody is charged for
+   *                this on the common path.
    */
   useEffect(() => {
     if (doctors.length === 0) return;
+    let cancelled = false;
 
     void (async () => {
       const today = clinicToday();
+
       const entries = await Promise.all(
         doctors.map(async (d) => {
           try {
-            const day = await api.availability(d.id, today);
+            const today_ = await api.availability(d.id, today);
+
+            if (today_.slots.length > 0) {
+              const first = today_.slots[0]!;
+              const last = today_.slots[today_.slots.length - 1]!;
+              return [
+                d.id,
+                {
+                  consulting: true,
+                  hours: `${first.time}–${localTime(last.endAt)}`,
+                  reason: null,
+                  nextDay: null,
+                },
+              ] as const;
+            }
+
             return [
               d.id,
               {
-                available: day.slots.reduce((n, s) => n + s.available, 0),
-                reason: day.unavailableReason,
+                consulting: false,
+                hours: null,
+                reason: today_.unavailableReason,
+                nextDay: await findNextDay(d.id),
               },
             ] as const;
           } catch {
-            return [d.id, { available: 0, reason: null }] as const;
+            // A failed read must not make a doctor look unavailable — that
+            // would send a patient away over a dropped request. Unknown reads
+            // as selectable, and the server refuses if it truly cannot.
+            return [d.id, { consulting: true, hours: null, reason: null, nextDay: null }] as const;
           }
         }),
       );
-      setRoom(Object.fromEntries(entries));
+
+      if (!cancelled) setDay(Object.fromEntries(entries));
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [doctors]);
 
   // --- promotions and the approver list, only when they can be used ---------
@@ -217,6 +272,7 @@ export default function FinanceDeskPage() {
 
   function startOver() {
     setPatient(null);
+    setChosenDoctorId(null);
     setAppointmentId(null);
     setInvoice(null);
     setPaid(false);
@@ -325,35 +381,111 @@ export default function FinanceDeskPage() {
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
               {doctors.map((d) => {
-                const slots = room[d.id];
-                const chosen = appointmentId !== null;
+                const info = day[d.id];
+                const locked = appointmentId !== null;
+                const loading = info === undefined;
+                // Unknown reads as available — a dropped request must not send
+                // a patient away.
+                const consulting = loading || info.consulting;
+                const selected = chosenDoctorId === d.id;
+                const price = consultationPrice(d, services);
+
                 return (
                   <button
                     key={d.id}
                     type="button"
-                    disabled={busy || chosen || !locationId}
-                    onClick={() => void openVisit(d.id)}
+                    disabled={locked || !consulting || !locationId}
+                    aria-pressed={selected}
+                    onClick={() => setChosenDoctorId(d.id)}
                     className={[
-                      'rounded-panel border-[1.5px] p-3 text-left transition-colors disabled:opacity-55',
-                      'border-ink/10 bg-white enabled:hover:border-ink/25',
+                      'rounded-panel border-[1.5px] p-3 text-left transition-colors',
+                      // The Book tab's selected-doctor treatment, so the two
+                      // screens read as one product.
+                      selected
+                        ? 'border-clinical bg-clinical-tint'
+                        : 'border-ink/10 bg-white enabled:hover:border-ink/25',
+                      // Not consulting today is faded and unselectable, which is
+                      // a different thing from merely not-chosen.
+                      !consulting ? 'opacity-45' : '',
+                      locked && !selected ? 'opacity-55' : '',
                     ].join(' ')}
                   >
                     <p className="text-[14px] font-semibold text-ink">{d.fullName}</p>
                     <p className="text-[12.5px] text-ink-40">
                       {d.specialty ?? d.department?.name ?? 'General'}
+                      {d.qualification ? ` · ${d.qualification}` : ''}
                     </p>
-                    <p className="mono-label mt-1.5">
-                      {slots === undefined
+
+                    <p
+                      className={`mono-label mt-1.5 ${consulting && !loading ? '!text-clinical-text' : ''}`}
+                    >
+                      {loading
                         ? 'checking…'
-                        : slots.reason
-                          ? slots.reason
-                          : slots.available > 0
-                            ? `${slots.available} slots free today`
-                            : 'full today — walk-in still possible'}
+                        : info.consulting
+                          ? info.hours
+                            ? `Consulting ${info.hours} today`
+                            : 'Consulting today'
+                          : info.nextDay
+                            ? `Not available today · next ${dayLabel(info.nextDay)}`
+                            : 'Not available today'}
+
+                      {/* What the visit costs, resolved the way billing resolves
+                          it, so this never disagrees with the bill that appears
+                          after Confirm. Secondary weight — availability is the
+                          question actually being asked. */}
+                      {!loading && (
+                        <span className="!text-ink-40">
+                          {price === null
+                            ? ' · No consultation charge'
+                            : price.fromCatalogue
+                              ? ` · ${formatPaise(price.paise)} clinic rate`
+                              : ` · ${formatPaise(price.paise)}`}
+                        </span>
+                      )}
                     </p>
+
+                    {/* The engine's own sentence — "On leave", "Unavailable —
+                        equipment", "does not hold a clinic on this day". */}
+                    {!loading && !info.consulting && info.reason && (
+                      <p className="mt-1 text-[12px] text-ink-40">{info.reason}</p>
+                    )}
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {/*
+            NOTHING EXISTS ON THE SERVER UNTIL THIS BUTTON.
+            Clicking a doctor used to open the visit immediately, which burned a
+            queue token and raised an invoice on the first click — and the token
+            never comes back, because `next_queue_token()` increments a counter
+            atomically. Choosing is now local and free; committing is deliberate.
+          */}
+          {chosenDoctorId && !appointmentId && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={busy || !locationId}
+                onClick={() => void openVisit(chosenDoctorId)}
+              >
+                <IconCheck size={16} />
+                {busy
+                  ? 'Opening…'
+                  : `Confirm — open visit with ${doctors.find((d) => d.id === chosenDoctorId)?.fullName ?? 'this doctor'}`}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost text-[13px]"
+                disabled={busy}
+                onClick={() => setChosenDoctorId(null)}
+              >
+                Clear
+              </button>
+              <span className="text-[12.5px] text-ink-40">
+                The doctor cannot be changed after this.
+              </span>
             </div>
           )}
 
@@ -467,12 +599,101 @@ export default function FinanceDeskPage() {
 
 /** Clinic-local today. The clinic runs on IST; the browser may not. */
 function clinicToday(): string {
+  return clinicDate(0);
+}
+
+/** Clinic-local date, `YYYY-MM-DD`, offset by whole days. */
+function clinicDate(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(d);
+}
+
+/** An instant rendered as clinic-local `HH:mm`. */
+function localTime(iso: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso));
+}
+
+/** "Tue 10 Sep" — enough for the desk to tell a patient when to come back. */
+function dayLabel(date: string): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(`${date}T06:00:00Z`));
+}
+
+/**
+ * What this doctor's consultation will actually cost.
+ *
+ * MIRRORS `BillingService.ensureInvoiceForAppointment` EXACTLY, because a label
+ * that disagrees with the bill is worse than no label:
+ *
+ *   const override   = practitioner.consultationFeePaise;
+ *   const pricePaise = override ?? service?.pricePaise ?? null;
+ *
+ * The doctor's own fee wins over the catalogue — consultants in one clinic
+ * routinely charge differently. Falling back to `CONS-NEW` is the half most
+ * likely to be forgotten: a doctor with no fee of their own still raises a bill
+ * wherever the clinic has priced a consultation, so "no fee set" would have been
+ * a lie in exactly the clinics that have a price list.
+ *
+ * The catalogue comes from the `services` this screen already loaded — that call
+ * filters to active services, which is the same condition the billing service
+ * uses. No extra request.
+ *
+ * Returns null only when neither exists, which is the one case where no invoice
+ * is raised at all.
+ */
+function consultationPrice(
+  practitioner: Practitioner,
+  services: ChargeableService[],
+): { paise: number; fromCatalogue: boolean } | null {
+  if (practitioner.consultationFeePaise !== null) {
+    return { paise: practitioner.consultationFeePaise, fromCatalogue: false };
+  }
+
+  const catalogue = services.find((s) => s.code === 'CONS-NEW');
+  if (catalogue) return { paise: catalogue.pricePaise, fromCatalogue: true };
+
+  return null;
+}
+
+/**
+ * The next day this doctor holds a clinic, looking a week ahead.
+ *
+ * Probed one day at a time through `GET /availability`, because that is the
+ * only read the finance desk is allowed: the endpoint that returns a doctor's
+ * weekly template, `GET /setup/practitioners`, sits behind `schedule:manage`,
+ * which this role deliberately does not hold.
+ *
+ * Sequential rather than seven calls at once — the answer is usually tomorrow,
+ * and a doctor who is not sitting today is the minority case anyway. A week is
+ * the ceiling because a weekly template repeats: if nothing is found in seven
+ * days there is nothing to find.
+ */
+async function findNextDay(practitionerId: string): Promise<string | null> {
+  for (let ahead = 1; ahead <= 7; ahead++) {
+    const date = clinicDate(ahead);
+    try {
+      const day = await api.availability(practitionerId, date);
+      if (day.slots.length > 0) return date;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**

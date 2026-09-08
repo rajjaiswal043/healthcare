@@ -475,6 +475,12 @@ export interface Practitioner {
   specialty: string | null;
   qualification: string | null;
   registrationNumber: string | null;
+  /**
+   * This doctor's own consultation fee, in paise. Null when they have none, in
+   * which case the clinic's CONS-NEW catalogue price applies instead — see
+   * `consultationPrice` on the finance desk.
+   */
+  consultationFeePaise: number | null;
   department: { id: string; name: string } | null;
 }
 
