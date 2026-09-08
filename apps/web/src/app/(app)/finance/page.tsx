@@ -510,19 +510,64 @@ export default function FinanceDeskPage() {
             </Banner>
           ) : (
             <>
-              <InvoiceTable invoice={invoice} />
+              {/*
+                WHEN A CHARGE MAY BE TAKEN OFF.
 
-              {canBill && invoice.balancePaise > 0 && services.length > 0 && (
-                <AddCharge
-                  services={services}
-                  busy={busy}
-                  onAdd={(input) =>
-                    run(async () => {
-                      setInvoice(await api.addInvoiceLine(invoice.id, input));
-                    }, 'Could not add the charge.')
-                  }
-                />
+                Three conditions, and the third is the one worth explaining.
+
+                `canBill` — the permission. `paidPaise === 0` — the invoice
+                freezes once money is on it, which the server enforces in
+                `loadEditable`; showing a button the API will refuse is worse
+                than showing none.
+
+                `discountPaise === 0` — because removing a line while a
+                promotion is applied leaves the RECORD wrong even though the
+                invoice looks right. The promotion's discount is distributed
+                across the lines, so `retotal` shrinks it correctly when a line
+                goes — but `promotion_application.discountPaise` was frozen at
+                apply time and is append-only, so it keeps claiming the original
+                amount, and the finance report reads that row. The clinic would
+                be reported as giving away more than it did. Taking the discount
+                off first and re-applying it afterwards writes a fresh, correct
+                row.
+              */}
+              <InvoiceTable
+                invoice={invoice}
+                busy={busy}
+                {...(canBill && invoice.paidPaise === 0 && invoice.discountPaise === 0
+                  ? {
+                      onRemove: (lineId: string) =>
+                        run(async () => {
+                          setInvoice(await api.removeInvoiceLine(invoice.id, lineId));
+                        }, 'Could not remove that charge.'),
+                    }
+                  : {})}
+              />
+
+              {canBill && invoice.paidPaise === 0 && invoice.discountPaise > 0 && (
+                <p className="field-hint mt-2">
+                  Take the discount off before adding or removing charges, then apply it again —
+                  otherwise the discount stays recorded at the old amount.
+                </p>
               )}
+
+              {/* Same guard as removing: changing the charges under an applied
+                  discount leaves promotion_application overstating what was
+                  given. */}
+              {canBill &&
+                invoice.paidPaise === 0 &&
+                invoice.discountPaise === 0 &&
+                services.length > 0 && (
+                  <AddCharge
+                    services={services}
+                    busy={busy}
+                    onAdd={(input) =>
+                      run(async () => {
+                        setInvoice(await api.addInvoiceLine(invoice.id, input));
+                      }, 'Could not add the charge.')
+                    }
+                  />
+                )}
 
               {/* FR-PRC-02: an empty price list must say so rather than looking
                   like a missing button. The bill exists because the doctor has a
@@ -532,10 +577,6 @@ export default function FinanceDeskPage() {
                   No services are priced yet, so nothing else can be added to this bill. Ask your
                   administrator.
                 </p>
-              )}
-
-              {canBill && invoice.lines.length > 1 && invoice.paidPaise === 0 && (
-                <p className="field-hint">Remove a charge by clicking the ✕ beside it.</p>
               )}
 
               {canDiscount && invoice.paidPaise === 0 && (
@@ -1041,7 +1082,21 @@ function InlineRegister({
 }
 
 /** The bill as it stands. Gross, discount and total stay three separate lines. */
-function InvoiceTable({ invoice }: { invoice: Invoice }) {
+/**
+ * The bill as it stands. Gross, discount and total stay three separate lines.
+ *
+ * `onRemove` is passed only when charges may still be taken off — see the note
+ * on `removableFrom` for what "may" means here.
+ */
+function InvoiceTable({
+  invoice,
+  busy,
+  onRemove,
+}: {
+  invoice: Invoice;
+  busy?: boolean;
+  onRemove?: (lineId: string) => void;
+}) {
   return (
     <div className="rounded-panel border border-ink/10 bg-white">
       <div className="flex items-center justify-between border-b border-ink/8 px-4 py-2.5">
@@ -1050,28 +1105,62 @@ function InvoiceTable({ invoice }: { invoice: Invoice }) {
       </div>
 
       <ul className="divide-y divide-ink/6">
-        {invoice.lines.map((l) => (
-          <li key={l.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-            <span className="min-w-0">
-              <span className="block truncate text-[14px] text-ink">{l.description}</span>
-              {l.quantity > 1 && (
-                <span className="block text-[12.5px] text-ink-40">
-                  {l.quantity} × {formatPaise(l.unitPricePaise)}
-                </span>
-              )}
-            </span>
-            <span className="shrink-0 text-right">
-              <span className="block font-mono text-[13.5px] text-ink">
-                {formatPaise(l.quantity * l.unitPricePaise)}
+        {invoice.lines.map((l, index) => {
+          /**
+           * THE FIRST LINE IS THE CONSULTATION, AND IT IS NOT REMOVABLE.
+           *
+           * It is created inside the invoice itself by
+           * `ensureInvoiceForAppointment`, so ordered by `createdAt` it is always
+           * first; every charge the desk adds comes later. Removing it would
+           * leave a bill with no reason to exist — the visit it belongs to would
+           * still be open and the patient would owe nothing for being seen.
+           *
+           * Position rather than `serviceId`: a clinic with no price list raises
+           * the consultation line with a null `serviceId`, which an added
+           * free-text charge also has, so the id cannot tell them apart.
+           */
+          const isConsultation = index === 0;
+          const removable = Boolean(onRemove) && !isConsultation;
+
+          return (
+            <li key={l.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <span className="min-w-0">
+                <span className="block truncate text-[14px] text-ink">{l.description}</span>
+                {l.quantity > 1 && (
+                  <span className="block text-[12.5px] text-ink-40">
+                    {l.quantity} × {formatPaise(l.unitPricePaise)}
+                  </span>
+                )}
               </span>
-              {l.discountPaise > 0 && (
-                <span className="block font-mono text-[12.5px] text-clinical-text">
-                  − {formatPaise(l.discountPaise)}
+
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="text-right">
+                  <span className="block font-mono text-[13.5px] text-ink">
+                    {formatPaise(l.quantity * l.unitPricePaise)}
+                  </span>
+                  {l.discountPaise > 0 && (
+                    <span className="block font-mono text-[12.5px] text-clinical-text">
+                      − {formatPaise(l.discountPaise)}
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
-          </li>
-        ))}
+
+                {removable && (
+                  <button
+                    type="button"
+                    className="btn-ghost !px-1.5 !py-1 text-[12px]"
+                    disabled={busy}
+                    aria-label={`Remove ${l.description}`}
+                    title={`Remove ${l.description}`}
+                    onClick={() => onRemove?.(l.id)}
+                  >
+                    <IconX size={14} />
+                  </button>
+                )}
+              </span>
+            </li>
+          );
+        })}
       </ul>
 
       <div className="space-y-1 border-t border-ink/8 px-4 py-3">

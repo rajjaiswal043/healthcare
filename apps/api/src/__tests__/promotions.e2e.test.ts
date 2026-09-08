@@ -1042,3 +1042,175 @@ describe('the application table stays append-only', () => {
     expect(granted.map((g) => g.privilege_type)).toEqual(['INSERT', 'SELECT']);
   });
 });
+
+// --- the bill cannot be edited under a discount ------------------------------
+
+describe('changing the charges while a discount is applied', () => {
+  /**
+   * WHY THIS IS REFUSED RATHER THAN RECALCULATED.
+   *
+   * A promotion's discount is DISTRIBUTED across the invoice lines, so adding or
+   * removing one leaves the invoice arithmetically fine — `retotal` sums
+   * whatever line discounts survive — while making the RECORD wrong.
+   * `promotion_application.discount_paise` was frozen when the discount was
+   * applied and that table is append-only, so it keeps claiming the original
+   * amount, and the finance report reads exactly that row.
+   *
+   * The clinic would then be reported as having given away more than it did,
+   * with nothing on any screen to show the discrepancy. Refusing is the cheap
+   * half of the fix; the expensive half would be rewriting an append-only row.
+   */
+  async function billWithTwoLines() {
+    const { invoice } = await bookedVisit();
+
+    const added = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/lines`,
+      headers: { cookie: finance.cookie },
+      payload: { description: 'Dressing', unitPricePaise: 25000 },
+    });
+    expect(added.statusCode).toBe(201);
+
+    return added.json<{ id: string; lines: Array<{ id: string; description: string }> }>();
+  }
+
+  it('refuses to add a charge', async () => {
+    await createPromotion();
+    const bill = await billWithTwoLines();
+    expect((await applyPromotion(bill.id)).statusCode).toBe(201);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${bill.id}/lines`,
+      headers: { cookie: finance.cookie },
+      payload: { description: 'Another charge', unitPricePaise: 10000 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('PROMOTION_APPLIED');
+    // The message names the promotion and says what to do about it, so the desk
+    // is not left guessing which discount is in the way.
+    expect(res.json().error.message).toContain('CAMP50');
+    expect(res.json().error.message).toContain('Take the discount off');
+  });
+
+  it('refuses to remove a charge', async () => {
+    await createPromotion();
+    const bill = await billWithTwoLines();
+    const dressing = bill.lines.find((l) => l.description === 'Dressing')!;
+    expect((await applyPromotion(bill.id)).statusCode).toBe(201);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${bill.id}/lines/${dressing.id}`,
+      headers: { cookie: finance.cookie },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('PROMOTION_APPLIED');
+  });
+
+  it('leaves the record intact when the edit is refused', async () => {
+    await createPromotion();
+    const bill = await billWithTwoLines();
+    const dressing = bill.lines.find((l) => l.description === 'Dressing')!;
+    await applyPromotion(bill.id);
+
+    const [before] = await ownerQuery<{ discount_paise: number }>(
+      fx.main.id,
+      `SELECT discount_paise FROM promotion_application WHERE invoice_id = $1`,
+      [bill.id],
+    );
+
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${bill.id}/lines/${dressing.id}`,
+      headers: { cookie: finance.cookie },
+    });
+
+    const after = (await readInvoice(bill.id)).json();
+    const [record] = await ownerQuery<{ discount_paise: number }>(
+      fx.main.id,
+      `SELECT discount_paise FROM promotion_application WHERE invoice_id = $1`,
+      [bill.id],
+    );
+
+    // The line is still there, and the frozen record still matches the invoice —
+    // which is the whole point of refusing.
+    expect(after.lines).toHaveLength(2);
+    expect(record?.discount_paise).toBe(before?.discount_paise);
+    expect(after.discountPaise).toBe(record?.discount_paise);
+  });
+
+  it('allows both again once the discount is taken off', async () => {
+    await createPromotion();
+    const bill = await billWithTwoLines();
+    const dressing = bill.lines.find((l) => l.description === 'Dressing')!;
+    await applyPromotion(bill.id);
+
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${bill.id}/promotion`,
+      headers: { cookie: finance.cookie },
+    });
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${bill.id}/lines/${dressing.id}`,
+      headers: { cookie: finance.cookie },
+    });
+    expect(removed.statusCode).toBe(200);
+
+    const added = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${bill.id}/lines`,
+      headers: { cookie: finance.cookie },
+      payload: { description: 'Replacement charge', unitPricePaise: 15000 },
+    });
+    expect(added.statusCode).toBe(201);
+  });
+
+  it('leaves an undiscounted bill freely editable', async () => {
+    // The guard must not become a general block on editing bills.
+    const bill = await billWithTwoLines();
+    const dressing = bill.lines.find((l) => l.description === 'Dressing')!;
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${bill.id}/lines/${dressing.id}`,
+      headers: { cookie: finance.cookie },
+    });
+
+    expect(removed.statusCode).toBe(200);
+    expect(removed.json().lines).toHaveLength(1);
+    expect(removed.json().subtotalPaise).toBe(CONSULT_FEE);
+  });
+
+  it('re-applying after the change records the NEW amount', async () => {
+    // The flow the refusal is steering people into, end to end.
+    await createPromotion();
+    const bill = await billWithTwoLines();
+    const dressing = bill.lines.find((l) => l.description === 'Dressing')!;
+
+    await applyPromotion(bill.id);
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${bill.id}/promotion`,
+      headers: { cookie: finance.cookie },
+    });
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${bill.id}/lines/${dressing.id}`,
+      headers: { cookie: finance.cookie },
+    });
+
+    const reapplied = await applyPromotion(bill.id);
+    expect(reapplied.statusCode).toBe(201);
+
+    // 50% of ₹600.00 now, not 50% of ₹850.00.
+    expect(reapplied.json().discountPaise).toBe(30000);
+
+    const after = (await readInvoice(bill.id)).json();
+    expect(after.discountPaise).toBe(30000);
+  });
+});

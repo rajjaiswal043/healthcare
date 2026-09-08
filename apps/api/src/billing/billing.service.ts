@@ -703,10 +703,22 @@ export class BillingService {
   }
 
   /** An invoice may only be edited before money has changed hands. */
+  /**
+   * May this invoice's LINES still be changed?
+   *
+   * The one gate `addLine` and `removeLine` share, so every rule about editing a
+   * bill lives here rather than being remembered twice.
+   */
   private async loadEditable(tx: TenantClient, id: string) {
     const invoice = await tx.invoice.findUnique({
       where: { id },
-      select: { id: true, status: true, patientId: true, totalPaise: true },
+      select: {
+        id: true,
+        status: true,
+        patientId: true,
+        totalPaise: true,
+        activePromotion: { select: { promotion: { select: { code: true } } } },
+      },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
@@ -714,6 +726,37 @@ export class BillingService {
       throw new ConflictException({
         code: 'NOT_EDITABLE',
         message: `This invoice is ${invoice.status.toLowerCase()}.`,
+      });
+    }
+
+    /**
+     * NOT WHILE A DISCOUNT IS ON THE BILL.
+     *
+     * A promotion's discount is DISTRIBUTED across the lines, so adding or
+     * removing one leaves the invoice arithmetically correct — `retotal` sums
+     * whatever line discounts remain — while making the RECORD wrong.
+     * `promotion_application.discount_paise` was frozen at apply time and that
+     * table is append-only, so it keeps claiming the original amount. The
+     * finance report reads that row, and the clinic ends up reported as giving
+     * away more (or less) than it did.
+     *
+     * Refusing here rather than trying to re-spread the discount is deliberate:
+     * re-spreading would mean rewriting an append-only row, and the correct
+     * shape for that already exists — take the discount off, which writes a
+     * compensating reversal, change the charges, apply it again, which writes a
+     * fresh and honest row.
+     *
+     * The finance desk already hides its buttons in this state. This is the
+     * layer underneath, for a direct API call or a second tab — the same
+     * reasoning as putting tenant isolation in the database rather than in a
+     * `WHERE` clause somebody has to remember.
+     */
+    if (invoice.activePromotion) {
+      throw new ConflictException({
+        code: 'PROMOTION_APPLIED',
+        message:
+          `${invoice.activePromotion.promotion.code} is on this bill. Take the discount off ` +
+          'before changing the charges, then apply it again.',
       });
     }
 
