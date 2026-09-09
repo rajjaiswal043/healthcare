@@ -100,6 +100,11 @@ model Tenant {
   clinicalDocuments ClinicalDocument[]
   patientCorrections PatientCorrection[]
   diagnosticOrders  DiagnosticOrder[]
+  promotions            Promotion[]
+  promotionApplications PromotionApplication[]
+  receiptCounter        ReceiptCounter?
+  receipts              Receipt[]
+  receiptPrints         ReceiptPrint[]
   seatLimits     TenantSeatLimit[]
 
   onboardedBy PlatformUser? @relation(fields: [onboardedByPlatformUserId], references: [id], onDelete: SetNull, map: "tenant_onboarded_by_fkey")
@@ -492,6 +497,10 @@ model User {
   patientCorrections PatientCorrection[]
   diagnosticOrdersRaised    DiagnosticOrder[] @relation("DiagnosticOrdersRaised")
   diagnosticOrdersCompleted DiagnosticOrder[] @relation("DiagnosticOrdersCompleted")
+  promotionsCreated    Promotion[]            @relation("PromotionsCreated")
+  promotionsApplied    PromotionApplication[] @relation("PromotionsApplied")
+  promotionsAuthorised PromotionApplication[] @relation("PromotionsAuthorised")
+  receiptsPrinted      ReceiptPrint[]         @relation("ReceiptsPrinted")
   sessions Session[]
 
   @@unique([tenantId, email])
@@ -645,6 +654,7 @@ model Department {
   practitioners Practitioner[]
   appointments  Appointment[]
   diagnosticOrders DiagnosticOrder[]
+  services      Service[]
 
   @@unique([tenantId, name])
   @@index([tenantId, isActive, displayOrder])
@@ -1279,6 +1289,15 @@ model Service {
   /// Groups the day-end report and, later, the accounting export.
   category ServiceCategory @default(CONSULTATION)
 
+  /// Which department performs it, where that applies (FR-PRC-01).
+  ///
+  /// Nullable on purpose. An X-ray belongs to radiology; a consultation belongs
+  /// to whichever doctor gave it, and a dressing may belong to nobody in
+  /// particular. Forcing a department would make the administrator invent one,
+  /// and an invented department is worse than an absent one — it shows up in
+  /// every report afterwards looking like a fact.
+  departmentId String? @map("department_id") @db.Uuid
+
   /// Default price in paise. A practitioner may override it — see
   /// `Practitioner.consultationFeePaise`.
   pricePaise Int @map("price_paise")
@@ -1295,10 +1314,12 @@ model Service {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "service_department_fkey")
   lines InvoiceLine[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive, category])
+  @@index([tenantId, departmentId], map: "service_department_idx")
   @@map("service")
 }
 
@@ -1370,6 +1391,21 @@ model Invoice {
 
   lines    InvoiceLine[]
   payments Payment[]
+  /// The one discount currently on this bill, or none.
+  ///
+  /// The invariant lives here rather than as a unique index on
+  /// `promotion_application` because reversals are new rows: the reversed
+  /// application keeps `reversal_kind IS NULL` on the row it reverses, so a
+  /// partial index there would block a second, legitimate discount. One
+  /// nullable column cannot hold two.
+  activePromotionApplicationId String? @map("active_promotion_application_id") @db.Uuid
+  activePromotion PromotionApplication? @relation("InvoiceActivePromotion", fields: [activePromotionApplicationId], references: [id], onDelete: Restrict, map: "invoice_active_promotion_fkey")
+
+  /// Every discount this bill has ever carried, reversed ones included.
+  promotionApplications PromotionApplication[] @relation("InvoicePromotionHistory")
+
+  /// One per money-in payment against this bill.
+  receipts Receipt[]
 
   @@unique([tenantId, number])
   @@index([tenantId, patientId, issuedAt])
@@ -1462,6 +1498,7 @@ model Payment {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  receipt Receipt?
 
   @@index([tenantId, invoiceId])
   @@index([tenantId, collectedAt])
@@ -1639,4 +1676,240 @@ enum PaymentCorrectionKind {
   RECORDED_IN_ERROR
 
   @@map("payment_correction_kind")
+}
+
+/// How a promotion reduces a bill.
+///
+/// Two kinds and no more: a clinic saying "50% off" and a clinic saying "₹200
+/// off" covers every discount asked for in the demos. Both are held in the same
+/// `value` column, which a CHECK constrains differently per kind.
+enum PromotionType {
+  /// `value` is a whole percentage, 1–100. 100 is allowed on purpose: it is the
+  /// "don't charge this patient" case, and the reason the feature exists.
+  PERCENTAGE
+  /// `value` is an amount in paise.
+  FLAT
+
+  @@map("promotion_type")
+}
+
+/// A discount the administrator has defined in advance (FR-PRO-01).
+///
+/// The point of the table is that the finance desk applies a KNOWN thing rather
+/// than inventing one. Today a discount is a verbal instruction and a
+/// hand-written note; this makes it a row somebody with `promotion:manage`
+/// created, that an invoice from March can still explain in September.
+///
+/// Never deleted, only switched off — `active` exists for exactly that, and the
+/// migration revokes DELETE from the app role so the rule is the database's
+/// rather than the service layer's.
+model Promotion {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Typed or picked at billing — CAMP50. Internal only (decision 4, 3 Sep
+  /// 2026): staff-facing, behind the auth guard, never told to a patient. That
+  /// is what lets it be a plain readable string with no usage limit and no
+  /// guessing resistance. If it ever becomes patient-facing, this column is not
+  /// what changes — the whole surface around it is.
+  code String @db.VarChar(32)
+  /// What it is for, in words. Read by whoever approves it later.
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+
+  type  PromotionType
+  /// 1–100 for PERCENTAGE, paise for FLAT. Constrained per type in the migration.
+  value Int
+
+  /// Optional cap, so "50% off" cannot become ₹4,000. Null means uncapped.
+  maxDiscountPaise Int? @map("max_discount_paise")
+
+  /// A camp offer stops working when the camp ends. Dates, not instants: a
+  /// promotion is valid for a clinic's calendar day, and the tenant timezone is
+  /// what decides which day that is.
+  validFrom DateTime  @map("valid_from") @db.Date
+  /// Null means open-ended.
+  validTo   DateTime? @map("valid_to") @db.Date
+
+  /// Switched off without being deleted.
+  isActive Boolean @default(true) @map("is_active")
+
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "promotion_tenant_fkey")
+  createdBy User   @relation("PromotionsCreated", fields: [createdByUserId], references: [id], onDelete: Restrict, map: "promotion_created_by_fkey")
+
+  applications PromotionApplication[]
+
+  @@unique([tenantId, code], map: "promotion_tenant_code_key")
+  @@index([tenantId, isActive, validFrom], map: "promotion_pickable_idx")
+  @@map("promotion")
+}
+
+/// A promotion actually applied to a bill (FR-PRO-02).
+///
+/// Append-only, like `payment` and for the same reason: this is the record that
+/// answers "who gave this money away, and on whose instruction". A row that can
+/// be edited or removed answers nothing.
+///
+/// `authorisedByUserId` is NOT NULL by decision (3 Sep 2026). The instruction
+/// arrives by telephone, so the system cannot observe it — the finance person
+/// names the approver from the clinic's own staff. Without that, the record
+/// shows the finance person gave away money and shows nothing about the
+/// instruction they were following, and the person most exposed by the gap is
+/// the finance person. Mirrors `invoice.authorised_by_user_id`, made mandatory.
+model PromotionApplication {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  promotionId String @map("promotion_id") @db.Uuid
+  invoiceId   String @map("invoice_id") @db.Uuid
+
+  /// What the promotion actually took off, in paise, resolved at apply time.
+  /// Stored rather than recomputed: the promotion can be switched off or its
+  /// dates changed later, and this invoice must keep reading the same.
+  discountPaise Int @map("discount_paise")
+
+  /// From the session. Who was at the keyboard — on a reversal row, who undid it.
+  appliedByUserId String @map("applied_by_user_id") @db.Uuid
+  /// Named by the person applying it. Who said to.
+  ///
+  /// A reversal row carries the authoriser of the discount it is withdrawing,
+  /// not a fresh one: the column is NOT NULL, and inventing an approver for an
+  /// undo would put a name against an instruction nobody gave.
+  authorisedByUserId String   @map("authorised_by_user_id") @db.Uuid
+  appliedAt          DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  /// Set only on a compensating row. NULL means this row IS an application.
+  reversalKind          PromotionReversalKind? @map("reversal_kind")
+  reversesApplicationId String?                @map("reverses_application_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "promotion_application_tenant_fkey")
+  promotion    Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict, map: "promotion_application_promotion_fkey")
+  invoice      Invoice   @relation("InvoicePromotionHistory", fields: [invoiceId], references: [id], onDelete: Restrict, map: "promotion_application_invoice_fkey")
+  appliedBy    User      @relation("PromotionsApplied", fields: [appliedByUserId], references: [id], onDelete: Restrict, map: "promotion_application_applied_by_fkey")
+  authorisedBy User      @relation("PromotionsAuthorised", fields: [authorisedByUserId], references: [id], onDelete: Restrict, map: "promotion_application_authorised_by_fkey")
+
+  reverses PromotionApplication?  @relation("PromotionReversal", fields: [reversesApplicationId], references: [id], onDelete: Restrict, map: "promotion_application_reverses_fkey")
+  reversedBy PromotionApplication[] @relation("PromotionReversal")
+
+  /// The invoices pointing at this row as their current discount. At most one,
+  /// and only while it has not been reversed.
+  activeOn Invoice[] @relation("InvoiceActivePromotion")
+
+  /// An application is reversed at most once — reversing twice would count the
+  /// money coming back twice. Partial: application rows all carry NULL here.
+  @@unique([reversesApplicationId], map: "promotion_application_reverses_key")
+  @@index([tenantId, invoiceId, appliedAt], map: "promotion_application_invoice_idx")
+  @@index([tenantId, appliedAt], map: "promotion_application_reporting_idx")
+  @@map("promotion_application")
+}
+
+/// Why a compensating promotion row exists.
+///
+/// Mirrors PaymentCorrectionKind, and the distinction is the same one: whether
+/// the thing being undone should never have happened, or happened properly and
+/// was then called back. Whoever reads the day's discounts needs to tell those
+/// apart.
+enum PromotionReversalKind {
+  /// Wrong promotion, wrong bill, wrong patient.
+  APPLIED_IN_ERROR
+  /// The discount was given correctly and the approver then withdrew it.
+  AUTHORISATION_WITHDRAWN
+
+  @@map("promotion_reversal_kind")
+}
+
+/// The clinic's receipt sequence.
+///
+/// A separate table from `InvoiceCounter` rather than a column on it: that
+/// model's `tenantId` is `@unique`, so it holds exactly one counter per clinic.
+/// The two sequences are independent on purpose — one invoice can produce
+/// several receipts, so sharing a number would need a suffix, and a receipt with
+/// a suffix invites somebody to invent one.
+model ReceiptCounter {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+
+  prefix     String @default("R") @db.VarChar(8)
+  lastNumber BigInt @default(0) @map("last_number")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_counter_tenant_fkey")
+
+  @@map("receipt_counter")
+}
+
+/// A receipt — proof that a PAYMENT was received (FR-RCP-01, -03).
+///
+/// One per money-in payment, never one per invoice. A ₹1,100 bill paid ₹500 now
+/// and ₹600 later is one invoice and two receipts, each showing what was paid at
+/// that moment and what remained.
+///
+/// THE MONEY BLOCK IS FROZEN HERE, not derived at print time. Deriving it looked
+/// safe — the invoice total cannot move while money is on it — until
+/// `BillingService.loadEditable` turned out to test paid MINUS refunded, so a
+/// fully refunded invoice becomes editable again and its total can change after
+/// a receipt was issued. A reprint would then show a balance that was never
+/// true. Storing the figures is also simply what a receipt is: a record of what
+/// a document said.
+model Receipt {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  paymentId String @unique @map("payment_id") @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+
+  /// Serial per clinic, from `next_receipt_number()`.
+  number String @db.VarChar(32)
+
+  /// The money block, in the order it prints. Never collapsed into one figure:
+  /// a clinic that records ₹0 rather than ₹600 less ₹600 cannot say what it
+  /// gave away.
+  totalChargedPaise Int @map("total_charged_paise")
+  discountPaise     Int @default(0) @map("discount_paise")
+  taxPaise          Int @default(0) @map("tax_paise")
+  payablePaise      Int @map("payable_paise")
+  paidNowPaise      Int @map("paid_now_paise")
+  /// What was still outstanding immediately after this payment.
+  balancePaise      Int @map("balance_paise")
+
+  issuedAt  DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_tenant_fkey")
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict, map: "receipt_payment_fkey")
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict, map: "receipt_invoice_fkey")
+
+  prints ReceiptPrint[]
+
+  @@unique([tenantId, number], map: "receipt_tenant_id_number_key")
+  @@index([tenantId, invoiceId, issuedAt], map: "receipt_invoice_idx")
+  @@map("receipt")
+}
+
+/// Every time a receipt was put on paper (FR-RCP-03).
+///
+/// Not optional. This log is the only thing that can answer "has this been
+/// printed before", which is what lets the second copy carry DUPLICATE on its
+/// face. Two identical unmarked receipts for one payment is how cash goes
+/// missing in a clinic, and the person exposed by it is the finance desk, who
+/// otherwise cannot prove which copy was the original.
+model ReceiptPrint {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  receiptId       String   @map("receipt_id") @db.Uuid
+  printedByUserId String   @map("printed_by_user_id") @db.Uuid
+  printedAt       DateTime @default(now()) @map("printed_at") @db.Timestamptz(6)
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_print_tenant_fkey")
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Restrict, map: "receipt_print_receipt_fkey")
+  printedBy User    @relation("ReceiptsPrinted", fields: [printedByUserId], references: [id], onDelete: Restrict, map: "receipt_print_user_fkey")
+
+  @@index([tenantId, receiptId, printedAt], map: "receipt_print_receipt_idx")
+  @@map("receipt_print")
 }

@@ -77,6 +77,16 @@ export class SchedulingController {
           specialty: true,
           qualification: true,
           registrationNumber: true,
+          /**
+           * The doctor's own consultation fee, so a screen choosing a doctor can
+           * show what the visit will cost before it commits to one.
+           *
+           * Not sensitive: it is printed on every bill and every receipt the
+           * patient is handed. `followUpFeePaise` is deliberately NOT here — the
+           * only caller that needs a price is the finance desk, which always
+           * opens a NEW consultation.
+           */
+          consultationFeePaise: true,
           department: { select: { id: true, name: true } },
         },
       }),
@@ -122,8 +132,17 @@ export class SchedulingController {
     return this.appointments.book(tenantId, dto, metaFrom(req, user));
   }
 
+  /**
+   * A patient who is here now, for a doctor who is consulting now.
+   *
+   * Guarded by `visit:open` rather than `appointment:write` since 5 Sep 2026.
+   * Opening today's visit and holding the clinic's diary are two different
+   * powers, and they were one permission — which meant a finance desk that
+   * needed the first could only be given it by also handing over the second.
+   * The front desk and the administrator hold both and lost nothing.
+   */
   @Post('appointments/walk-in')
-  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  @RequirePermissions(PERMISSIONS.VISIT_OPEN)
   async walkIn(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,

@@ -43,6 +43,40 @@ export class UsersService {
   ) {}
 
   /** Everyone in the clinic, with what they can do and when they were last here. */
+  /**
+   * Names and ids of active staff, and nothing else.
+   *
+   * Exists because applying a promotion requires naming the person who
+   * authorised it (FR-PRO-02, decision 3), and the finance desk had no way to
+   * get a list of people to name: `list()` is behind `user:manage`, which
+   * finance deliberately does not hold. Giving finance `user:manage` to fill a
+   * dropdown would have handed it the power to create accounts and reset
+   * passwords — the exact trade least privilege exists to refuse.
+   *
+   * SO THE SELECT IS THE SECURITY BOUNDARY, and it is deliberately two columns.
+   * No email, no mobile, no roles, no login history, no lockout state. A
+   * dropdown needs a name and an id; anything more would be a staff directory
+   * handed to a desk that was never meant to have one. If a caller ever needs a
+   * third field, that is a decision somebody makes on purpose — not a field
+   * quietly added here because it was already loaded.
+   *
+   * Inactive accounts are excluded rather than flagged: a switched-off member of
+   * staff cannot authorise anything, and the apply endpoint refuses them anyway.
+   * Offering a name that will be rejected is a worse experience than not
+   * offering it.
+   */
+  async approvers(tenantId: string) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const approvers = await tx.user.findMany({
+        where: { isActive: true },
+        orderBy: { fullName: 'asc' },
+        select: { id: true, fullName: true },
+      });
+
+      return { approvers };
+    });
+  }
+
   async list(tenantId: string) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const users = await tx.user.findMany({

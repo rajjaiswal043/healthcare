@@ -180,10 +180,52 @@ class ServiceDto {
   @IsIn(['CONSULTATION', 'PROCEDURE', 'DIAGNOSTIC', 'CONSUMABLE', 'OTHER'])
   category!: string;
 
+  /**
+   * In paise. The screen takes rupees and converts at the edge — a float never
+   * reaches this field and never reaches the column.
+   */
   @IsInt()
   @Min(0)
   @Max(100_000_000)
   pricePaise!: number;
+
+  /**
+   * Basis points, so 5% is 500. Zero for almost every clinic: healthcare
+   * services by a clinical establishment are GST-exempt under Notification
+   * 12/2017, which is why the column defaulted to zero and had no way to set it
+   * until now.
+   *
+   * Storing a rate is all this does. What a GST-registered clinic's RECEIPT must
+   * legally carry — GSTIN, HSN or SAC codes, a tax breakdown — is a separate
+   * question and deliberately not answered here.
+   *
+   * Capped at 10000 (100%). A tax rate above the price itself is a typo.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  taxRateBasisPoints?: number;
+
+  /** Null detaches the service from its department; absent leaves it alone. */
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string | null;
+
+  /**
+   * Absent means "do not change it".
+   *
+   * This used to be forced to true on every update, so correcting the price of a
+   * withdrawn service quietly put it back on the finance desk's dropdown.
+   */
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+class ServiceActiveDto {
+  @IsBoolean()
+  isActive!: boolean;
 }
 
 /**
@@ -293,6 +335,35 @@ export class ClinicSetupController {
   }
 
   // --- fees ----------------------------------------------------------------
+
+  /**
+   * The whole price list, switched-off services included (FR-PRC-01).
+   *
+   * Deliberately NOT the same endpoint as `GET /services`. That one answers
+   * "what may I put on a bill", hides inactive rows and sits behind
+   * `invoice:read` so the finance desk can read it. This answers "what does this
+   * clinic charge for", shows everything, and sits behind `tenant:configure` —
+   * an administrator pricing a clinic needs to see the withdrawn ones to bring
+   * one back, and the desk must never be offered them.
+   */
+  @Get('setup/services')
+  @RequirePermissions(PERMISSIONS.TENANT_CONFIGURE)
+  async priceList(@CurrentTenant() tenantId: string) {
+    return this.setup.priceList(tenantId);
+  }
+
+  /** Switch a service off, or back on. There is no delete — see FR-PRC-03. */
+  @Patch('setup/services/:id/active')
+  @RequirePermissions(PERMISSIONS.TENANT_CONFIGURE)
+  async setServiceActive(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ServiceActiveDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.setup.setServiceActive(tenantId, id, dto.isActive, meta(req, user));
+  }
 
   @Post('setup/services')
   @RequirePermissions(PERMISSIONS.TENANT_CONFIGURE)

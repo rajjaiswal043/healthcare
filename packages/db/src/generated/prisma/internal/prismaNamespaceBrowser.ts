@@ -83,7 +83,12 @@ export const ModelName = {
   QueueCounter: 'QueueCounter',
   ClinicalDocument: 'ClinicalDocument',
   DiagnosticOrder: 'DiagnosticOrder',
-  PatientCorrection: 'PatientCorrection'
+  PatientCorrection: 'PatientCorrection',
+  Promotion: 'Promotion',
+  PromotionApplication: 'PromotionApplication',
+  ReceiptCounter: 'ReceiptCounter',
+  Receipt: 'Receipt',
+  ReceiptPrint: 'ReceiptPrint'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -571,6 +576,7 @@ export const ServiceScalarFieldEnum = {
   code: 'code',
   name: 'name',
   category: 'category',
+  departmentId: 'departmentId',
   pricePaise: 'pricePaise',
   taxRateBasisPoints: 'taxRateBasisPoints',
   isActive: 'isActive',
@@ -598,7 +604,8 @@ export const InvoiceScalarFieldEnum = {
   issuedAt: 'issuedAt',
   cancelledAt: 'cancelledAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  activePromotionApplicationId: 'activePromotionApplicationId'
 } as const
 
 export type InvoiceScalarFieldEnum = (typeof InvoiceScalarFieldEnum)[keyof typeof InvoiceScalarFieldEnum]
@@ -708,6 +715,83 @@ export const PatientCorrectionScalarFieldEnum = {
 } as const
 
 export type PatientCorrectionScalarFieldEnum = (typeof PatientCorrectionScalarFieldEnum)[keyof typeof PatientCorrectionScalarFieldEnum]
+
+
+export const PromotionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  code: 'code',
+  name: 'name',
+  description: 'description',
+  type: 'type',
+  value: 'value',
+  maxDiscountPaise: 'maxDiscountPaise',
+  validFrom: 'validFrom',
+  validTo: 'validTo',
+  isActive: 'isActive',
+  createdByUserId: 'createdByUserId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PromotionScalarFieldEnum = (typeof PromotionScalarFieldEnum)[keyof typeof PromotionScalarFieldEnum]
+
+
+export const PromotionApplicationScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  promotionId: 'promotionId',
+  invoiceId: 'invoiceId',
+  discountPaise: 'discountPaise',
+  appliedByUserId: 'appliedByUserId',
+  authorisedByUserId: 'authorisedByUserId',
+  appliedAt: 'appliedAt',
+  reversalKind: 'reversalKind',
+  reversesApplicationId: 'reversesApplicationId',
+  createdAt: 'createdAt'
+} as const
+
+export type PromotionApplicationScalarFieldEnum = (typeof PromotionApplicationScalarFieldEnum)[keyof typeof PromotionApplicationScalarFieldEnum]
+
+
+export const ReceiptCounterScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  prefix: 'prefix',
+  lastNumber: 'lastNumber'
+} as const
+
+export type ReceiptCounterScalarFieldEnum = (typeof ReceiptCounterScalarFieldEnum)[keyof typeof ReceiptCounterScalarFieldEnum]
+
+
+export const ReceiptScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  paymentId: 'paymentId',
+  invoiceId: 'invoiceId',
+  number: 'number',
+  totalChargedPaise: 'totalChargedPaise',
+  discountPaise: 'discountPaise',
+  taxPaise: 'taxPaise',
+  payablePaise: 'payablePaise',
+  paidNowPaise: 'paidNowPaise',
+  balancePaise: 'balancePaise',
+  issuedAt: 'issuedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type ReceiptScalarFieldEnum = (typeof ReceiptScalarFieldEnum)[keyof typeof ReceiptScalarFieldEnum]
+
+
+export const ReceiptPrintScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  receiptId: 'receiptId',
+  printedByUserId: 'printedByUserId',
+  printedAt: 'printedAt'
+} as const
+
+export type ReceiptPrintScalarFieldEnum = (typeof ReceiptPrintScalarFieldEnum)[keyof typeof ReceiptPrintScalarFieldEnum]
 
 
 export const SortOrder = {

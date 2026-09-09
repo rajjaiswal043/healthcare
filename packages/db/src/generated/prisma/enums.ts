@@ -202,3 +202,19 @@ export const PaymentCorrectionKind = {
 } as const
 
 export type PaymentCorrectionKind = (typeof PaymentCorrectionKind)[keyof typeof PaymentCorrectionKind]
+
+
+export const PromotionType = {
+  PERCENTAGE: 'PERCENTAGE',
+  FLAT: 'FLAT'
+} as const
+
+export type PromotionType = (typeof PromotionType)[keyof typeof PromotionType]
+
+
+export const PromotionReversalKind = {
+  APPLIED_IN_ERROR: 'APPLIED_IN_ERROR',
+  AUTHORISATION_WITHDRAWN: 'AUTHORISATION_WITHDRAWN'
+} as const
+
+export type PromotionReversalKind = (typeof PromotionReversalKind)[keyof typeof PromotionReversalKind]

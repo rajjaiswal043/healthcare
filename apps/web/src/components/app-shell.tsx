@@ -83,6 +83,16 @@ const SECTIONS: NavSection[] = [
     title: 'Billing',
     items: [
       {
+        key: 'finance',
+        label: 'Finance desk',
+        href: '/finance',
+        icon: <IconReceipt size={16} />,
+        // Whoever takes the money. Finance holds this; so does the front desk in
+        // a clinic where one person still does both, which is the point of the
+        // roles screen.
+        permission: 'payment:collect',
+      },
+      {
         key: 'collections',
         label: 'Collections',
         href: '/reports/collections',
@@ -125,6 +135,24 @@ const SECTIONS: NavSection[] = [
         // Sits next to Staff on purpose: adding someone and deciding what they
         // may do are the same job, two screens apart.
         permission: 'role:manage',
+      },
+      {
+        key: 'prices',
+        label: 'Prices',
+        href: '/settings/prices',
+        icon: <IconReceipt size={16} />,
+        // The administrator owns what things cost. Finance applies the prices;
+        // it does not set them.
+        permission: 'tenant:configure',
+      },
+      {
+        key: 'promotions',
+        label: 'Promotions',
+        href: '/settings/promotions',
+        icon: <IconReceipt size={16} />,
+        // The administrator DEFINES a discount; the finance desk APPLIES one.
+        // Gated on the defining half, so finance never sees this screen.
+        permission: 'promotion:manage',
       },
       {
         key: 'doctors',

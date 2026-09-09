@@ -304,6 +304,10 @@ export type UserWhereInput = {
   patientCorrections?: Prisma.PatientCorrectionListRelationFilter
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderListRelationFilter
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderListRelationFilter
+  promotionsCreated?: Prisma.PromotionListRelationFilter
+  promotionsApplied?: Prisma.PromotionApplicationListRelationFilter
+  promotionsAuthorised?: Prisma.PromotionApplicationListRelationFilter
+  receiptsPrinted?: Prisma.ReceiptPrintListRelationFilter
   sessions?: Prisma.SessionListRelationFilter
 }
 
@@ -328,6 +332,10 @@ export type UserOrderByWithRelationInput = {
   patientCorrections?: Prisma.PatientCorrectionOrderByRelationAggregateInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderOrderByRelationAggregateInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderOrderByRelationAggregateInput
+  promotionsCreated?: Prisma.PromotionOrderByRelationAggregateInput
+  promotionsApplied?: Prisma.PromotionApplicationOrderByRelationAggregateInput
+  promotionsAuthorised?: Prisma.PromotionApplicationOrderByRelationAggregateInput
+  receiptsPrinted?: Prisma.ReceiptPrintOrderByRelationAggregateInput
   sessions?: Prisma.SessionOrderByRelationAggregateInput
 }
 
@@ -356,6 +364,10 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   patientCorrections?: Prisma.PatientCorrectionListRelationFilter
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderListRelationFilter
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderListRelationFilter
+  promotionsCreated?: Prisma.PromotionListRelationFilter
+  promotionsApplied?: Prisma.PromotionApplicationListRelationFilter
+  promotionsAuthorised?: Prisma.PromotionApplicationListRelationFilter
+  receiptsPrinted?: Prisma.ReceiptPrintListRelationFilter
   sessions?: Prisma.SessionListRelationFilter
 }, "id" | "tenantId_email">
 
@@ -424,6 +436,10 @@ export type UserCreateInput = {
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
 }
 
@@ -448,6 +464,10 @@ export type UserUncheckedCreateInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
 }
 
@@ -472,6 +492,10 @@ export type UserUpdateInput = {
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
 }
 
@@ -496,6 +520,10 @@ export type UserUncheckedUpdateInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
@@ -716,6 +744,62 @@ export type UserUpdateOneRequiredWithoutPatientCorrectionsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutPatientCorrectionsInput, Prisma.UserUpdateWithoutPatientCorrectionsInput>, Prisma.UserUncheckedUpdateWithoutPatientCorrectionsInput>
 }
 
+export type UserCreateNestedOneWithoutPromotionsCreatedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPromotionsCreatedInput, Prisma.UserUncheckedCreateWithoutPromotionsCreatedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPromotionsCreatedInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutPromotionsCreatedNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPromotionsCreatedInput, Prisma.UserUncheckedCreateWithoutPromotionsCreatedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPromotionsCreatedInput
+  upsert?: Prisma.UserUpsertWithoutPromotionsCreatedInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutPromotionsCreatedInput, Prisma.UserUpdateWithoutPromotionsCreatedInput>, Prisma.UserUncheckedUpdateWithoutPromotionsCreatedInput>
+}
+
+export type UserCreateNestedOneWithoutPromotionsAppliedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAppliedInput, Prisma.UserUncheckedCreateWithoutPromotionsAppliedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPromotionsAppliedInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserCreateNestedOneWithoutPromotionsAuthorisedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAuthorisedInput, Prisma.UserUncheckedCreateWithoutPromotionsAuthorisedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPromotionsAuthorisedInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutPromotionsAppliedNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAppliedInput, Prisma.UserUncheckedCreateWithoutPromotionsAppliedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPromotionsAppliedInput
+  upsert?: Prisma.UserUpsertWithoutPromotionsAppliedInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutPromotionsAppliedInput, Prisma.UserUpdateWithoutPromotionsAppliedInput>, Prisma.UserUncheckedUpdateWithoutPromotionsAppliedInput>
+}
+
+export type UserUpdateOneRequiredWithoutPromotionsAuthorisedNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAuthorisedInput, Prisma.UserUncheckedCreateWithoutPromotionsAuthorisedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPromotionsAuthorisedInput
+  upsert?: Prisma.UserUpsertWithoutPromotionsAuthorisedInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutPromotionsAuthorisedInput, Prisma.UserUpdateWithoutPromotionsAuthorisedInput>, Prisma.UserUncheckedUpdateWithoutPromotionsAuthorisedInput>
+}
+
+export type UserCreateNestedOneWithoutReceiptsPrintedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutReceiptsPrintedInput, Prisma.UserUncheckedCreateWithoutReceiptsPrintedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutReceiptsPrintedInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutReceiptsPrintedNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutReceiptsPrintedInput, Prisma.UserUncheckedCreateWithoutReceiptsPrintedInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutReceiptsPrintedInput
+  upsert?: Prisma.UserUpsertWithoutReceiptsPrintedInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutReceiptsPrintedInput, Prisma.UserUpdateWithoutReceiptsPrintedInput>, Prisma.UserUncheckedUpdateWithoutReceiptsPrintedInput>
+}
+
 export type UserCreateWithoutRolesInput = {
   id?: string
   tenantId: string
@@ -736,6 +820,10 @@ export type UserCreateWithoutRolesInput = {
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
 }
 
@@ -759,6 +847,10 @@ export type UserUncheckedCreateWithoutRolesInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
 }
 
@@ -798,6 +890,10 @@ export type UserUpdateWithoutRolesInput = {
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
 }
 
@@ -821,6 +917,10 @@ export type UserUncheckedUpdateWithoutRolesInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
@@ -845,6 +945,10 @@ export type UserCreateWithoutSessionsInput = {
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
 }
 
 export type UserUncheckedCreateWithoutSessionsInput = {
@@ -868,6 +972,10 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
 }
 
 export type UserCreateOrConnectWithoutSessionsInput = {
@@ -907,6 +1015,10 @@ export type UserUpdateWithoutSessionsInput = {
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSessionsInput = {
@@ -930,6 +1042,10 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
 }
 
 export type UserCreateWithoutUploadedDocumentsInput = {
@@ -952,6 +1068,10 @@ export type UserCreateWithoutUploadedDocumentsInput = {
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
 }
 
@@ -975,6 +1095,10 @@ export type UserUncheckedCreateWithoutUploadedDocumentsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
 }
 
@@ -1014,6 +1138,10 @@ export type UserUpdateWithoutUploadedDocumentsInput = {
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
 }
 
@@ -1037,6 +1165,10 @@ export type UserUncheckedUpdateWithoutUploadedDocumentsInput = {
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
@@ -1060,6 +1192,10 @@ export type UserCreateWithoutDiagnosticOrdersRaisedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
 }
 
@@ -1083,6 +1219,10 @@ export type UserUncheckedCreateWithoutDiagnosticOrdersRaisedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
 }
 
@@ -1111,6 +1251,10 @@ export type UserCreateWithoutDiagnosticOrdersCompletedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
 }
 
@@ -1134,6 +1278,10 @@ export type UserUncheckedCreateWithoutDiagnosticOrdersCompletedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
 }
 
@@ -1173,6 +1321,10 @@ export type UserUpdateWithoutDiagnosticOrdersRaisedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
 }
 
@@ -1196,6 +1348,10 @@ export type UserUncheckedUpdateWithoutDiagnosticOrdersRaisedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
@@ -1230,6 +1386,10 @@ export type UserUpdateWithoutDiagnosticOrdersCompletedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
 }
 
@@ -1253,6 +1413,10 @@ export type UserUncheckedUpdateWithoutDiagnosticOrdersCompletedInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
@@ -1276,6 +1440,10 @@ export type UserCreateWithoutPatientCorrectionsInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
 }
 
@@ -1299,6 +1467,10 @@ export type UserUncheckedCreateWithoutPatientCorrectionsInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
 }
 
@@ -1338,6 +1510,10 @@ export type UserUpdateWithoutPatientCorrectionsInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
 }
 
@@ -1361,6 +1537,506 @@ export type UserUncheckedUpdateWithoutPatientCorrectionsInput = {
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutPromotionsCreatedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutPromotionsCreatedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutPromotionsCreatedInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutPromotionsCreatedInput, Prisma.UserUncheckedCreateWithoutPromotionsCreatedInput>
+}
+
+export type UserUpsertWithoutPromotionsCreatedInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutPromotionsCreatedInput, Prisma.UserUncheckedUpdateWithoutPromotionsCreatedInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutPromotionsCreatedInput, Prisma.UserUncheckedCreateWithoutPromotionsCreatedInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutPromotionsCreatedInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutPromotionsCreatedInput, Prisma.UserUncheckedUpdateWithoutPromotionsCreatedInput>
+}
+
+export type UserUpdateWithoutPromotionsCreatedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutPromotionsCreatedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutPromotionsAppliedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutPromotionsAppliedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutPromotionsAppliedInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAppliedInput, Prisma.UserUncheckedCreateWithoutPromotionsAppliedInput>
+}
+
+export type UserCreateWithoutPromotionsAuthorisedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutPromotionsAuthorisedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutPromotionsAuthorisedInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAuthorisedInput, Prisma.UserUncheckedCreateWithoutPromotionsAuthorisedInput>
+}
+
+export type UserUpsertWithoutPromotionsAppliedInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutPromotionsAppliedInput, Prisma.UserUncheckedUpdateWithoutPromotionsAppliedInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAppliedInput, Prisma.UserUncheckedCreateWithoutPromotionsAppliedInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutPromotionsAppliedInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutPromotionsAppliedInput, Prisma.UserUncheckedUpdateWithoutPromotionsAppliedInput>
+}
+
+export type UserUpdateWithoutPromotionsAppliedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutPromotionsAppliedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserUpsertWithoutPromotionsAuthorisedInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutPromotionsAuthorisedInput, Prisma.UserUncheckedUpdateWithoutPromotionsAuthorisedInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutPromotionsAuthorisedInput, Prisma.UserUncheckedCreateWithoutPromotionsAuthorisedInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutPromotionsAuthorisedInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutPromotionsAuthorisedInput, Prisma.UserUncheckedUpdateWithoutPromotionsAuthorisedInput>
+}
+
+export type UserUpdateWithoutPromotionsAuthorisedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutPromotionsAuthorisedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutReceiptsPrintedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutReceiptsPrintedInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutReceiptsPrintedInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutReceiptsPrintedInput, Prisma.UserUncheckedCreateWithoutReceiptsPrintedInput>
+}
+
+export type UserUpsertWithoutReceiptsPrintedInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutReceiptsPrintedInput, Prisma.UserUncheckedUpdateWithoutReceiptsPrintedInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutReceiptsPrintedInput, Prisma.UserUncheckedCreateWithoutReceiptsPrintedInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutReceiptsPrintedInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutReceiptsPrintedInput, Prisma.UserUncheckedUpdateWithoutReceiptsPrintedInput>
+}
+
+export type UserUpdateWithoutReceiptsPrintedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutReceiptsPrintedInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
@@ -1375,6 +2051,10 @@ export type UserCountOutputType = {
   patientCorrections: number
   diagnosticOrdersRaised: number
   diagnosticOrdersCompleted: number
+  promotionsCreated: number
+  promotionsApplied: number
+  promotionsAuthorised: number
+  receiptsPrinted: number
   sessions: number
 }
 
@@ -1384,6 +2064,10 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   patientCorrections?: boolean | UserCountOutputTypeCountPatientCorrectionsArgs
   diagnosticOrdersRaised?: boolean | UserCountOutputTypeCountDiagnosticOrdersRaisedArgs
   diagnosticOrdersCompleted?: boolean | UserCountOutputTypeCountDiagnosticOrdersCompletedArgs
+  promotionsCreated?: boolean | UserCountOutputTypeCountPromotionsCreatedArgs
+  promotionsApplied?: boolean | UserCountOutputTypeCountPromotionsAppliedArgs
+  promotionsAuthorised?: boolean | UserCountOutputTypeCountPromotionsAuthorisedArgs
+  receiptsPrinted?: boolean | UserCountOutputTypeCountReceiptsPrintedArgs
   sessions?: boolean | UserCountOutputTypeCountSessionsArgs
 }
 
@@ -1435,6 +2119,34 @@ export type UserCountOutputTypeCountDiagnosticOrdersCompletedArgs<ExtArgs extend
 /**
  * UserCountOutputType without action
  */
+export type UserCountOutputTypeCountPromotionsCreatedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PromotionWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountPromotionsAppliedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PromotionApplicationWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountPromotionsAuthorisedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PromotionApplicationWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountReceiptsPrintedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ReceiptPrintWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
 export type UserCountOutputTypeCountSessionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.SessionWhereInput
 }
@@ -1461,6 +2173,10 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   patientCorrections?: boolean | Prisma.User$patientCorrectionsArgs<ExtArgs>
   diagnosticOrdersRaised?: boolean | Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs>
   diagnosticOrdersCompleted?: boolean | Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs>
+  promotionsCreated?: boolean | Prisma.User$promotionsCreatedArgs<ExtArgs>
+  promotionsApplied?: boolean | Prisma.User$promotionsAppliedArgs<ExtArgs>
+  promotionsAuthorised?: boolean | Prisma.User$promotionsAuthorisedArgs<ExtArgs>
+  receiptsPrinted?: boolean | Prisma.User$receiptsPrintedArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
@@ -1526,6 +2242,10 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   patientCorrections?: boolean | Prisma.User$patientCorrectionsArgs<ExtArgs>
   diagnosticOrdersRaised?: boolean | Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs>
   diagnosticOrdersCompleted?: boolean | Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs>
+  promotionsCreated?: boolean | Prisma.User$promotionsCreatedArgs<ExtArgs>
+  promotionsApplied?: boolean | Prisma.User$promotionsAppliedArgs<ExtArgs>
+  promotionsAuthorised?: boolean | Prisma.User$promotionsAuthorisedArgs<ExtArgs>
+  receiptsPrinted?: boolean | Prisma.User$receiptsPrintedArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
@@ -1540,6 +2260,10 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     patientCorrections: Prisma.$PatientCorrectionPayload<ExtArgs>[]
     diagnosticOrdersRaised: Prisma.$DiagnosticOrderPayload<ExtArgs>[]
     diagnosticOrdersCompleted: Prisma.$DiagnosticOrderPayload<ExtArgs>[]
+    promotionsCreated: Prisma.$PromotionPayload<ExtArgs>[]
+    promotionsApplied: Prisma.$PromotionApplicationPayload<ExtArgs>[]
+    promotionsAuthorised: Prisma.$PromotionApplicationPayload<ExtArgs>[]
+    receiptsPrinted: Prisma.$ReceiptPrintPayload<ExtArgs>[]
     sessions: Prisma.$SessionPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -1977,6 +2701,10 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   patientCorrections<T extends Prisma.User$patientCorrectionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$patientCorrectionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PatientCorrectionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   diagnosticOrdersRaised<T extends Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   diagnosticOrdersCompleted<T extends Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  promotionsCreated<T extends Prisma.User$promotionsCreatedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$promotionsCreatedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  promotionsApplied<T extends Prisma.User$promotionsAppliedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$promotionsAppliedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  promotionsAuthorised<T extends Prisma.User$promotionsAuthorisedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$promotionsAuthorisedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  receiptsPrinted<T extends Prisma.User$receiptsPrintedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$receiptsPrintedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ReceiptPrintPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   sessions<T extends Prisma.User$sessionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$sessionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SessionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -2532,6 +3260,102 @@ export type User$diagnosticOrdersCompletedArgs<ExtArgs extends runtime.Types.Ext
   take?: number
   skip?: number
   distinct?: Prisma.DiagnosticOrderScalarFieldEnum | Prisma.DiagnosticOrderScalarFieldEnum[]
+}
+
+/**
+ * User.promotionsCreated
+ */
+export type User$promotionsCreatedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Promotion
+   */
+  select?: Prisma.PromotionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Promotion
+   */
+  omit?: Prisma.PromotionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PromotionInclude<ExtArgs> | null
+  where?: Prisma.PromotionWhereInput
+  orderBy?: Prisma.PromotionOrderByWithRelationInput | Prisma.PromotionOrderByWithRelationInput[]
+  cursor?: Prisma.PromotionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PromotionScalarFieldEnum | Prisma.PromotionScalarFieldEnum[]
+}
+
+/**
+ * User.promotionsApplied
+ */
+export type User$promotionsAppliedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PromotionApplication
+   */
+  select?: Prisma.PromotionApplicationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PromotionApplication
+   */
+  omit?: Prisma.PromotionApplicationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PromotionApplicationInclude<ExtArgs> | null
+  where?: Prisma.PromotionApplicationWhereInput
+  orderBy?: Prisma.PromotionApplicationOrderByWithRelationInput | Prisma.PromotionApplicationOrderByWithRelationInput[]
+  cursor?: Prisma.PromotionApplicationWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PromotionApplicationScalarFieldEnum | Prisma.PromotionApplicationScalarFieldEnum[]
+}
+
+/**
+ * User.promotionsAuthorised
+ */
+export type User$promotionsAuthorisedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PromotionApplication
+   */
+  select?: Prisma.PromotionApplicationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PromotionApplication
+   */
+  omit?: Prisma.PromotionApplicationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PromotionApplicationInclude<ExtArgs> | null
+  where?: Prisma.PromotionApplicationWhereInput
+  orderBy?: Prisma.PromotionApplicationOrderByWithRelationInput | Prisma.PromotionApplicationOrderByWithRelationInput[]
+  cursor?: Prisma.PromotionApplicationWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PromotionApplicationScalarFieldEnum | Prisma.PromotionApplicationScalarFieldEnum[]
+}
+
+/**
+ * User.receiptsPrinted
+ */
+export type User$receiptsPrintedArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ReceiptPrint
+   */
+  select?: Prisma.ReceiptPrintSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ReceiptPrint
+   */
+  omit?: Prisma.ReceiptPrintOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ReceiptPrintInclude<ExtArgs> | null
+  where?: Prisma.ReceiptPrintWhereInput
+  orderBy?: Prisma.ReceiptPrintOrderByWithRelationInput | Prisma.ReceiptPrintOrderByWithRelationInput[]
+  cursor?: Prisma.ReceiptPrintWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ReceiptPrintScalarFieldEnum | Prisma.ReceiptPrintScalarFieldEnum[]
 }
 
 /**

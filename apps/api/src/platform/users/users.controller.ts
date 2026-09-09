@@ -71,13 +71,37 @@ class SetActiveDto {
  * Staff accounts for one clinic.
  *
  * Everything here is behind `user:manage`, which only the administrator role
- * holds. Note what is NOT here: any way to change what a role can do. The
- * permission vocabulary is fixed in code (packages/db/src/permissions.ts) —
- * membership is tenant data, contents are not.
+ * holds — with one deliberate exception, `GET /users/approvers`, which returns
+ * two columns and is explained on its own handler. Note what is NOT here: any
+ * way to change what a role can do. The permission vocabulary is fixed in code
+ * (packages/db/src/permissions.ts) — membership is tenant data, contents are
+ * not.
  */
 @Controller('users')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
+
+  /**
+   * Who may be named as the person who authorised a discount.
+   *
+   * Id and display name of active staff. Nothing else — see the service, where
+   * the narrow `select` is the actual control.
+   *
+   * Gated on `promotion:apply` rather than `user:manage`, which is the whole
+   * point: the finance desk has to name an approver and must not be given the
+   * power to create accounts in order to do it. The administrator reaches it
+   * too, by holding every permission.
+   *
+   * Declared BEFORE the `:id` routes. Nest matches in declaration order, and a
+   * `@Get(':id')` added above this later would swallow `/users/approvers` and
+   * answer it with a not-found for a patient id that is really the word
+   * "approvers".
+   */
+  @Get('approvers')
+  @RequirePermissions(PERMISSIONS.PROMOTION_APPLY)
+  async approvers(@CurrentTenant() tenantId: string) {
+    return this.users.approvers(tenantId);
+  }
 
   @Get()
   @RequirePermissions(PERMISSIONS.USER_MANAGE)

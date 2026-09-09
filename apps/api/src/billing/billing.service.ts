@@ -330,7 +330,7 @@ export class BillingService {
         });
       }
 
-      await tx.payment.create({
+      const payment = await tx.payment.create({
         data: {
           tenantId,
           invoiceId: id,
@@ -339,6 +339,44 @@ export class BillingService {
           amountPaise: input.amountPaise,
           reference: input.reference ?? null,
           collectedByUserId,
+        },
+        select: { id: true, collectedAt: true },
+      });
+
+      /**
+       * The receipt, written in the same transaction as the payment.
+       *
+       * FR-RCP-01: every time the desk takes money, there is a receipt to hand
+       * over. Created HERE rather than at print time so its figures are the ones
+       * that were true when the money moved — a payment without a receipt is not
+       * a state this database can hold.
+       *
+       * The money block is FROZEN rather than derived. Deriving it looked safe,
+       * since the total cannot move while money sits on the invoice — but
+       * `loadEditable` tests paid MINUS refunded, so a fully refunded invoice
+       * becomes editable again and its total can change afterwards. A reprint
+       * would then show a balance that was never true on the day.
+       */
+      const full = await tx.invoice.findUniqueOrThrow({
+        where: { id },
+        select: { subtotalPaise: true, discountPaise: true, taxPaise: true, totalPaise: true },
+      });
+
+      await tx.receipt.create({
+        data: {
+          tenantId,
+          paymentId: payment.id,
+          invoiceId: id,
+          number: await this.nextReceiptNumber(tx, tenantId),
+          totalChargedPaise: full.subtotalPaise,
+          discountPaise: full.discountPaise,
+          taxPaise: full.taxPaise,
+          payablePaise: full.totalPaise,
+          paidNowPaise: input.amountPaise,
+          // What was still outstanding immediately after this payment. The
+          // balance read above is the one BEFORE it.
+          balancePaise: balancePaise - input.amountPaise,
+          issuedAt: payment.collectedAt,
         },
       });
 
@@ -634,6 +672,25 @@ export class BillingService {
 
   // --- internals -----------------------------------------------------------
 
+  /**
+   * The next receipt number. Its own sequence, not the invoice's.
+   *
+   * One invoice can produce several receipts, so they cannot share a number
+   * without a suffix — and a receipt with a suffix invites somebody to invent
+   * one. Same atomic function pattern as invoice numbering, against its own
+   * counter table.
+   */
+  private async nextReceiptNumber(tx: TenantClient, tenantId: string): Promise<string> {
+    const rows = await tx.$queryRaw<Array<{ next_receipt_number: string }>>`
+      SELECT next_receipt_number(${tenantId}::uuid)
+    `;
+    const number = rows[0]?.next_receipt_number;
+    if (!number) {
+      throw new Error('Receipt numbering returned nothing — is the receipts migration applied?');
+    }
+    return number;
+  }
+
   private async nextNumber(tx: TenantClient, tenantId: string): Promise<string> {
     const rows = await tx.$queryRaw<Array<{ next_invoice_number: string }>>`
       SELECT next_invoice_number(${tenantId}::uuid)
@@ -646,10 +703,22 @@ export class BillingService {
   }
 
   /** An invoice may only be edited before money has changed hands. */
+  /**
+   * May this invoice's LINES still be changed?
+   *
+   * The one gate `addLine` and `removeLine` share, so every rule about editing a
+   * bill lives here rather than being remembered twice.
+   */
   private async loadEditable(tx: TenantClient, id: string) {
     const invoice = await tx.invoice.findUnique({
       where: { id },
-      select: { id: true, status: true, patientId: true, totalPaise: true },
+      select: {
+        id: true,
+        status: true,
+        patientId: true,
+        totalPaise: true,
+        activePromotion: { select: { promotion: { select: { code: true } } } },
+      },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
 
@@ -657,6 +726,37 @@ export class BillingService {
       throw new ConflictException({
         code: 'NOT_EDITABLE',
         message: `This invoice is ${invoice.status.toLowerCase()}.`,
+      });
+    }
+
+    /**
+     * NOT WHILE A DISCOUNT IS ON THE BILL.
+     *
+     * A promotion's discount is DISTRIBUTED across the lines, so adding or
+     * removing one leaves the invoice arithmetically correct — `retotal` sums
+     * whatever line discounts remain — while making the RECORD wrong.
+     * `promotion_application.discount_paise` was frozen at apply time and that
+     * table is append-only, so it keeps claiming the original amount. The
+     * finance report reads that row, and the clinic ends up reported as giving
+     * away more (or less) than it did.
+     *
+     * Refusing here rather than trying to re-spread the discount is deliberate:
+     * re-spreading would mean rewriting an append-only row, and the correct
+     * shape for that already exists — take the discount off, which writes a
+     * compensating reversal, change the charges, apply it again, which writes a
+     * fresh and honest row.
+     *
+     * The finance desk already hides its buttons in this state. This is the
+     * layer underneath, for a direct API call or a second tab — the same
+     * reasoning as putting tenant isolation in the database rather than in a
+     * `WHERE` clause somebody has to remember.
+     */
+    if (invoice.activePromotion) {
+      throw new ConflictException({
+        code: 'PROMOTION_APPLIED',
+        message:
+          `${invoice.activePromotion.promotion.code} is on this bill. Take the discount off ` +
+          'before changing the charges, then apply it again.',
       });
     }
 

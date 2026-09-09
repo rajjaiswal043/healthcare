@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { AuditService } from '../platform/audit/audit.service.js';
 import { BillingController } from './billing.controller.js';
 import { BillingService } from './billing.service.js';
+import { FinanceReportService } from './finance-report.service.js';
+import { ReceiptsService } from './receipts.service.js';
+import { PromotionsController } from './promotions.controller.js';
+import { PromotionsService } from './promotions.service.js';
 
 /**
  * Exported because scheduling depends on it: booking raises the invoice, and
@@ -10,8 +14,14 @@ import { BillingService } from './billing.service.js';
  * it.
  */
 @Module({
-  controllers: [BillingController],
-  providers: [BillingService, AuditService],
+  controllers: [BillingController, PromotionsController],
+  providers: [
+    BillingService,
+    FinanceReportService,
+    ReceiptsService,
+    PromotionsService,
+    AuditService,
+  ],
   exports: [BillingService],
 })
 export class BillingModule {}

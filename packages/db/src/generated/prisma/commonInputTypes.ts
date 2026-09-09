@@ -633,6 +633,40 @@ export type EnumDiagnosticOrderStatusWithAggregatesFilter<$PrismaModel = never> 
   _max?: Prisma.NestedEnumDiagnosticOrderStatusFilter<$PrismaModel>
 }
 
+export type EnumPromotionTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionType | Prisma.EnumPromotionTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPromotionTypeFilter<$PrismaModel> | $Enums.PromotionType
+}
+
+export type EnumPromotionTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionType | Prisma.EnumPromotionTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPromotionTypeWithAggregatesFilter<$PrismaModel> | $Enums.PromotionType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPromotionTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPromotionTypeFilter<$PrismaModel>
+}
+
+export type EnumPromotionReversalKindNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionReversalKind | Prisma.EnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  in?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumPromotionReversalKindNullableFilter<$PrismaModel> | $Enums.PromotionReversalKind | null
+}
+
+export type EnumPromotionReversalKindNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionReversalKind | Prisma.EnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  in?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumPromotionReversalKindNullableWithAggregatesFilter<$PrismaModel> | $Enums.PromotionReversalKind | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPromotionReversalKindNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPromotionReversalKindNullableFilter<$PrismaModel>
+}
+
 export type NestedUuidFilter<$PrismaModel = never> = {
   equals?: string | Prisma.StringFieldRefInput<$PrismaModel>
   in?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
@@ -1259,6 +1293,40 @@ export type NestedEnumDiagnosticOrderStatusWithAggregatesFilter<$PrismaModel = n
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumDiagnosticOrderStatusFilter<$PrismaModel>
   _max?: Prisma.NestedEnumDiagnosticOrderStatusFilter<$PrismaModel>
+}
+
+export type NestedEnumPromotionTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionType | Prisma.EnumPromotionTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPromotionTypeFilter<$PrismaModel> | $Enums.PromotionType
+}
+
+export type NestedEnumPromotionTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionType | Prisma.EnumPromotionTypeFieldRefInput<$PrismaModel>
+  in?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  notIn?: $Enums.PromotionType[] | Prisma.ListEnumPromotionTypeFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumPromotionTypeWithAggregatesFilter<$PrismaModel> | $Enums.PromotionType
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPromotionTypeFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPromotionTypeFilter<$PrismaModel>
+}
+
+export type NestedEnumPromotionReversalKindNullableFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionReversalKind | Prisma.EnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  in?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumPromotionReversalKindNullableFilter<$PrismaModel> | $Enums.PromotionReversalKind | null
+}
+
+export type NestedEnumPromotionReversalKindNullableWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.PromotionReversalKind | Prisma.EnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  in?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  notIn?: $Enums.PromotionReversalKind[] | Prisma.ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> | null
+  not?: Prisma.NestedEnumPromotionReversalKindNullableWithAggregatesFilter<$PrismaModel> | $Enums.PromotionReversalKind | null
+  _count?: Prisma.NestedIntNullableFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumPromotionReversalKindNullableFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumPromotionReversalKindNullableFilter<$PrismaModel>
 }
 
 

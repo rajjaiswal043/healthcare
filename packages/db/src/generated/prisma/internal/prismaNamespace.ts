@@ -429,7 +429,12 @@ export const ModelName = {
   QueueCounter: 'QueueCounter',
   ClinicalDocument: 'ClinicalDocument',
   DiagnosticOrder: 'DiagnosticOrder',
-  PatientCorrection: 'PatientCorrection'
+  PatientCorrection: 'PatientCorrection',
+  Promotion: 'Promotion',
+  PromotionApplication: 'PromotionApplication',
+  ReceiptCounter: 'ReceiptCounter',
+  Receipt: 'Receipt',
+  ReceiptPrint: 'ReceiptPrint'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -445,7 +450,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "tenant" | "platformUser" | "platformSession" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "tenantSeatLimit" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter" | "clinicalDocument" | "diagnosticOrder" | "patientCorrection"
+    modelProps: "tenant" | "platformUser" | "platformSession" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "tenantSeatLimit" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter" | "clinicalDocument" | "diagnosticOrder" | "patientCorrection" | "promotion" | "promotionApplication" | "receiptCounter" | "receipt" | "receiptPrint"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2891,6 +2896,376 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    Promotion: {
+      payload: Prisma.$PromotionPayload<ExtArgs>
+      fields: Prisma.PromotionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PromotionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PromotionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>
+        }
+        findFirst: {
+          args: Prisma.PromotionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PromotionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>
+        }
+        findMany: {
+          args: Prisma.PromotionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>[]
+        }
+        create: {
+          args: Prisma.PromotionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>
+        }
+        createMany: {
+          args: Prisma.PromotionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PromotionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>[]
+        }
+        delete: {
+          args: Prisma.PromotionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>
+        }
+        update: {
+          args: Prisma.PromotionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>
+        }
+        deleteMany: {
+          args: Prisma.PromotionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PromotionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PromotionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>[]
+        }
+        upsert: {
+          args: Prisma.PromotionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionPayload>
+        }
+        aggregate: {
+          args: Prisma.PromotionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePromotion>
+        }
+        groupBy: {
+          args: Prisma.PromotionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PromotionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PromotionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PromotionCountAggregateOutputType> | number
+        }
+      }
+    }
+    PromotionApplication: {
+      payload: Prisma.$PromotionApplicationPayload<ExtArgs>
+      fields: Prisma.PromotionApplicationFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PromotionApplicationFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PromotionApplicationFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>
+        }
+        findFirst: {
+          args: Prisma.PromotionApplicationFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PromotionApplicationFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>
+        }
+        findMany: {
+          args: Prisma.PromotionApplicationFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>[]
+        }
+        create: {
+          args: Prisma.PromotionApplicationCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>
+        }
+        createMany: {
+          args: Prisma.PromotionApplicationCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PromotionApplicationCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>[]
+        }
+        delete: {
+          args: Prisma.PromotionApplicationDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>
+        }
+        update: {
+          args: Prisma.PromotionApplicationUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>
+        }
+        deleteMany: {
+          args: Prisma.PromotionApplicationDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PromotionApplicationUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PromotionApplicationUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>[]
+        }
+        upsert: {
+          args: Prisma.PromotionApplicationUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PromotionApplicationPayload>
+        }
+        aggregate: {
+          args: Prisma.PromotionApplicationAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePromotionApplication>
+        }
+        groupBy: {
+          args: Prisma.PromotionApplicationGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PromotionApplicationGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PromotionApplicationCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PromotionApplicationCountAggregateOutputType> | number
+        }
+      }
+    }
+    ReceiptCounter: {
+      payload: Prisma.$ReceiptCounterPayload<ExtArgs>
+      fields: Prisma.ReceiptCounterFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ReceiptCounterFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ReceiptCounterFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>
+        }
+        findFirst: {
+          args: Prisma.ReceiptCounterFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ReceiptCounterFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>
+        }
+        findMany: {
+          args: Prisma.ReceiptCounterFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>[]
+        }
+        create: {
+          args: Prisma.ReceiptCounterCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>
+        }
+        createMany: {
+          args: Prisma.ReceiptCounterCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ReceiptCounterCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>[]
+        }
+        delete: {
+          args: Prisma.ReceiptCounterDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>
+        }
+        update: {
+          args: Prisma.ReceiptCounterUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>
+        }
+        deleteMany: {
+          args: Prisma.ReceiptCounterDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ReceiptCounterUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ReceiptCounterUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>[]
+        }
+        upsert: {
+          args: Prisma.ReceiptCounterUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptCounterPayload>
+        }
+        aggregate: {
+          args: Prisma.ReceiptCounterAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateReceiptCounter>
+        }
+        groupBy: {
+          args: Prisma.ReceiptCounterGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReceiptCounterGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ReceiptCounterCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReceiptCounterCountAggregateOutputType> | number
+        }
+      }
+    }
+    Receipt: {
+      payload: Prisma.$ReceiptPayload<ExtArgs>
+      fields: Prisma.ReceiptFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ReceiptFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ReceiptFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>
+        }
+        findFirst: {
+          args: Prisma.ReceiptFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ReceiptFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>
+        }
+        findMany: {
+          args: Prisma.ReceiptFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>[]
+        }
+        create: {
+          args: Prisma.ReceiptCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>
+        }
+        createMany: {
+          args: Prisma.ReceiptCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ReceiptCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>[]
+        }
+        delete: {
+          args: Prisma.ReceiptDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>
+        }
+        update: {
+          args: Prisma.ReceiptUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>
+        }
+        deleteMany: {
+          args: Prisma.ReceiptDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ReceiptUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ReceiptUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>[]
+        }
+        upsert: {
+          args: Prisma.ReceiptUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPayload>
+        }
+        aggregate: {
+          args: Prisma.ReceiptAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateReceipt>
+        }
+        groupBy: {
+          args: Prisma.ReceiptGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReceiptGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ReceiptCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReceiptCountAggregateOutputType> | number
+        }
+      }
+    }
+    ReceiptPrint: {
+      payload: Prisma.$ReceiptPrintPayload<ExtArgs>
+      fields: Prisma.ReceiptPrintFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ReceiptPrintFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ReceiptPrintFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>
+        }
+        findFirst: {
+          args: Prisma.ReceiptPrintFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ReceiptPrintFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>
+        }
+        findMany: {
+          args: Prisma.ReceiptPrintFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>[]
+        }
+        create: {
+          args: Prisma.ReceiptPrintCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>
+        }
+        createMany: {
+          args: Prisma.ReceiptPrintCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ReceiptPrintCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>[]
+        }
+        delete: {
+          args: Prisma.ReceiptPrintDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>
+        }
+        update: {
+          args: Prisma.ReceiptPrintUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>
+        }
+        deleteMany: {
+          args: Prisma.ReceiptPrintDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ReceiptPrintUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ReceiptPrintUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>[]
+        }
+        upsert: {
+          args: Prisma.ReceiptPrintUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReceiptPrintPayload>
+        }
+        aggregate: {
+          args: Prisma.ReceiptPrintAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateReceiptPrint>
+        }
+        groupBy: {
+          args: Prisma.ReceiptPrintGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReceiptPrintGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ReceiptPrintCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReceiptPrintCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -3399,6 +3774,7 @@ export const ServiceScalarFieldEnum = {
   code: 'code',
   name: 'name',
   category: 'category',
+  departmentId: 'departmentId',
   pricePaise: 'pricePaise',
   taxRateBasisPoints: 'taxRateBasisPoints',
   isActive: 'isActive',
@@ -3426,7 +3802,8 @@ export const InvoiceScalarFieldEnum = {
   issuedAt: 'issuedAt',
   cancelledAt: 'cancelledAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  activePromotionApplicationId: 'activePromotionApplicationId'
 } as const
 
 export type InvoiceScalarFieldEnum = (typeof InvoiceScalarFieldEnum)[keyof typeof InvoiceScalarFieldEnum]
@@ -3536,6 +3913,83 @@ export const PatientCorrectionScalarFieldEnum = {
 } as const
 
 export type PatientCorrectionScalarFieldEnum = (typeof PatientCorrectionScalarFieldEnum)[keyof typeof PatientCorrectionScalarFieldEnum]
+
+
+export const PromotionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  code: 'code',
+  name: 'name',
+  description: 'description',
+  type: 'type',
+  value: 'value',
+  maxDiscountPaise: 'maxDiscountPaise',
+  validFrom: 'validFrom',
+  validTo: 'validTo',
+  isActive: 'isActive',
+  createdByUserId: 'createdByUserId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PromotionScalarFieldEnum = (typeof PromotionScalarFieldEnum)[keyof typeof PromotionScalarFieldEnum]
+
+
+export const PromotionApplicationScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  promotionId: 'promotionId',
+  invoiceId: 'invoiceId',
+  discountPaise: 'discountPaise',
+  appliedByUserId: 'appliedByUserId',
+  authorisedByUserId: 'authorisedByUserId',
+  appliedAt: 'appliedAt',
+  reversalKind: 'reversalKind',
+  reversesApplicationId: 'reversesApplicationId',
+  createdAt: 'createdAt'
+} as const
+
+export type PromotionApplicationScalarFieldEnum = (typeof PromotionApplicationScalarFieldEnum)[keyof typeof PromotionApplicationScalarFieldEnum]
+
+
+export const ReceiptCounterScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  prefix: 'prefix',
+  lastNumber: 'lastNumber'
+} as const
+
+export type ReceiptCounterScalarFieldEnum = (typeof ReceiptCounterScalarFieldEnum)[keyof typeof ReceiptCounterScalarFieldEnum]
+
+
+export const ReceiptScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  paymentId: 'paymentId',
+  invoiceId: 'invoiceId',
+  number: 'number',
+  totalChargedPaise: 'totalChargedPaise',
+  discountPaise: 'discountPaise',
+  taxPaise: 'taxPaise',
+  payablePaise: 'payablePaise',
+  paidNowPaise: 'paidNowPaise',
+  balancePaise: 'balancePaise',
+  issuedAt: 'issuedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type ReceiptScalarFieldEnum = (typeof ReceiptScalarFieldEnum)[keyof typeof ReceiptScalarFieldEnum]
+
+
+export const ReceiptPrintScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  receiptId: 'receiptId',
+  printedByUserId: 'printedByUserId',
+  printedAt: 'printedAt'
+} as const
+
+export type ReceiptPrintScalarFieldEnum = (typeof ReceiptPrintScalarFieldEnum)[keyof typeof ReceiptPrintScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -3912,6 +4366,34 @@ export type ListEnumDiagnosticOrderStatusFieldRefInput<$PrismaModel> = FieldRefI
 
 
 /**
+ * Reference to a field of type 'PromotionType'
+ */
+export type EnumPromotionTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PromotionType'>
+    
+
+
+/**
+ * Reference to a field of type 'PromotionType[]'
+ */
+export type ListEnumPromotionTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PromotionType[]'>
+    
+
+
+/**
+ * Reference to a field of type 'PromotionReversalKind'
+ */
+export type EnumPromotionReversalKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PromotionReversalKind'>
+    
+
+
+/**
+ * Reference to a field of type 'PromotionReversalKind[]'
+ */
+export type ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PromotionReversalKind[]'>
+    
+
+
+/**
  * Reference to a field of type 'Float'
  */
 export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
@@ -4108,6 +4590,11 @@ export type GlobalOmitConfig = {
   clinicalDocument?: Prisma.ClinicalDocumentOmit
   diagnosticOrder?: Prisma.DiagnosticOrderOmit
   patientCorrection?: Prisma.PatientCorrectionOmit
+  promotion?: Prisma.PromotionOmit
+  promotionApplication?: Prisma.PromotionApplicationOmit
+  receiptCounter?: Prisma.ReceiptCounterOmit
+  receipt?: Prisma.ReceiptOmit
+  receiptPrint?: Prisma.ReceiptPrintOmit
 }
 
 /* Types for Logging */

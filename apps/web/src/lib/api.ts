@@ -475,6 +475,12 @@ export interface Practitioner {
   specialty: string | null;
   qualification: string | null;
   registrationNumber: string | null;
+  /**
+   * This doctor's own consultation fee, in paise. Null when they have none, in
+   * which case the clinic's CONS-NEW catalogue price applies instead — see
+   * `consultationPrice` on the finance desk.
+   */
+  consultationFeePaise: number | null;
   department: { id: string; name: string } | null;
 }
 
@@ -760,6 +766,113 @@ export interface Invoice {
   } | null;
 }
 
+/**
+ * A discount the administrator has set up (FR-PRO-01).
+ *
+ * `value` means two different things — 1–100 for PERCENTAGE, paise for FLAT —
+ * which is why the type travels with it and nothing here does the arithmetic.
+ * What a promotion is actually worth against a given bill is worked out on the
+ * server, so the screen never shows a figure the invoice will disagree with.
+ */
+export interface Promotion {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  type: 'PERCENTAGE' | 'FLAT';
+  value: number;
+  maxDiscountPaise: number | null;
+  validFrom: string;
+  validTo: string | null;
+  isActive: boolean;
+  timesApplied: number;
+  editable: boolean;
+}
+
+export interface AppliedPromotion {
+  applicationId: string;
+  promotion: Promotion;
+  discountPaise: number;
+  authorisedBy: { id: string; fullName: string };
+}
+
+/** A row on the administrator's price list (FR-PRC-01). */
+export interface PricedService {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  /** In paise. Rupees exist only on screen. */
+  pricePaise: number;
+  /** Basis points — 500 is 5%. Zero for almost every clinic. */
+  taxRateBasisPoints: number;
+  isActive: boolean;
+  updatedAt: string;
+  department: { id: string; name: string } | null;
+}
+
+export interface PriceListInput {
+  code: string;
+  name: string;
+  category: string;
+  pricePaise: number;
+  taxRateBasisPoints?: number;
+  departmentId?: string | null;
+  isActive?: boolean;
+}
+
+/** Everything the printed receipt needs — FR-RCP-02. */
+export interface ReceiptPayload {
+  receiptNumber: string;
+  issuedAt: string;
+  invoiceNumber: string;
+  clinic: {
+    name: string;
+    phone: string | null;
+    addressLine: string | null;
+    city: string | null;
+    logoUpdatedAt: string | null;
+  };
+  patient: {
+    uhid: string;
+    name: string;
+    mobile: string;
+    gender: string;
+    ageYears: number | null;
+    birthDate: string | null;
+  };
+  /** Null for a walk-in with no doctor. The sheet does not invent one. */
+  doctor: { fullName: string; prefix: string | null } | null;
+  lines: Array<{
+    description: string;
+    quantity: number;
+    unitPricePaise: number;
+    amountPaise: number;
+  }>;
+  /** In this order, never collapsed. */
+  money: {
+    totalChargedPaise: number;
+    discountPaise: number;
+    discountLabel: string | null;
+    taxPaise: number;
+    payablePaise: number;
+    paidNowPaise: number;
+    mode: string;
+    reference: string | null;
+    balancePaise: number;
+  };
+  /** True only when something actually carries tax. */
+  showTax: boolean;
+  receivedBy: string;
+  /** Present only on the response that RECORDED a print. */
+  print?: {
+    printCount: number;
+    isDuplicate: boolean;
+    printedAt: string;
+    printedBy: string;
+  };
+}
+
 export interface ChargeableService {
   id: string;
   code: string;
@@ -1019,6 +1132,94 @@ export const api = {
   dayCollection: (date?: string) =>
     request<DayCollection>(`/reports/day-collection${date ? `?date=${date}` : ''}`),
 
+  // --- receipts -------------------------------------------------------------
+
+  /** Read a receipt without recording a print. */
+  receipt: (paymentId: string) => request<ReceiptPayload>(`/payments/${paymentId}/receipt`),
+
+  /**
+   * Record that the receipt went on paper, and get it back.
+   *
+   * One call rather than two, so the screen cannot render a sheet it forgot to
+   * log — the log is the only thing that can mark a second copy DUPLICATE.
+   */
+  printReceipt: (paymentId: string) =>
+    request<ReceiptPayload>(`/payments/${paymentId}/receipt/prints`, { method: 'POST' }),
+
+  receiptPrints: (paymentId: string) =>
+    request<{
+      number: string;
+      prints: Array<{ printedAt: string; printedBy: string; isDuplicate: boolean }>;
+    }>(`/payments/${paymentId}/receipt/prints`),
+
+  // --- promotions -----------------------------------------------------------
+
+  /**
+   * `applicableOnly` narrows to what can be used right now — switched on and
+   * inside its dates. The finance desk wants that list; an administrator
+   * managing them wants all of it.
+   */
+  promotions: (applicableOnly = false) =>
+    request<{ promotions: Promotion[] }>(`/promotions${applicableOnly ? '?applicable=true' : ''}`),
+
+  createPromotion: (input: {
+    code: string;
+    name: string;
+    description?: string;
+    type: 'PERCENTAGE' | 'FLAT';
+    /** 1-100 for a percentage, paise for a flat amount. */
+    value: number;
+    maxDiscountPaise?: number;
+    validFrom: string;
+    validTo?: string;
+  }) => request<Promotion>('/promotions', { method: 'POST', body: JSON.stringify(input) }),
+
+  /**
+   * Edit a promotion nobody has used yet.
+   *
+   * `code` and `type` are absent on purpose — the API refuses to change either,
+   * because both turn the promotion into a different thing under the same row
+   * and every report that grouped by it would silently re-group. A used
+   * promotion is refused entirely with `PROMOTION_IN_USE`.
+   */
+  updatePromotion: (
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      value?: number;
+      maxDiscountPaise?: number;
+      validFrom?: string;
+      validTo?: string;
+    },
+  ) => request<Promotion>(`/promotions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+
+  /** Switch off, or back on. This is the delete — there is no DELETE endpoint. */
+  setPromotionActive: (id: string, isActive: boolean) =>
+    request<Promotion>(`/promotions/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+
+  applyPromotion: (
+    invoiceId: string,
+    input: { code?: string; promotionId?: string; authorisedByUserId: string },
+  ) =>
+    request<AppliedPromotion>(`/invoices/${invoiceId}/promotion`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /**
+   * Undo, before any payment. A DELETE by shape; the server writes a
+   * compensating row and removes nothing.
+   */
+  removePromotion: (invoiceId: string, reversalKind?: string) =>
+    request<{ discountRemovedPaise: number }>(`/invoices/${invoiceId}/promotion`, {
+      method: 'DELETE',
+      ...(reversalKind ? { body: JSON.stringify({ reversalKind }) } : {}),
+    }),
+
   // --- the consultation ----------------------------------------------------
 
   /** Opens the note, or resumes the draft. Also calls the patient in. */
@@ -1196,6 +1397,17 @@ export const api = {
 
   staff: () => request<{ users: StaffUser[]; seats: SeatUsage[] }>('/users'),
 
+  /**
+   * Id and display name of active staff, for naming who authorised a discount.
+   *
+   * Deliberately NOT `staff()`. That one is behind `user:manage` and returns
+   * emails, roles and lockout state; this returns two columns and is behind
+   * `promotion:apply`, so the finance desk can fill its approver dropdown
+   * without being handed the power to create accounts.
+   */
+  approvers: () =>
+    request<{ approvers: Array<{ id: string; fullName: string }> }>('/users/approvers'),
+
   /** The temporary password comes back ONCE. */
   createStaff: (input: { email: string; fullName: string; mobile?: string; roleKeys: string[] }) =>
     request<{ id: string; email: string; fullName: string; temporaryPassword: string }>('/users', {
@@ -1263,8 +1475,28 @@ export const api = {
   removeSchedule: (id: string) =>
     request<{ id: string }>(`/setup/schedules/${id}`, { method: 'DELETE' }),
 
-  upsertService: (input: { code: string; name: string; category: string; pricePaise: number }) =>
-    request<{ id: string }>('/setup/services', { method: 'POST', body: JSON.stringify(input) }),
+  upsertService: (input: PriceListInput) =>
+    request<PricedService>('/setup/services', { method: 'POST', body: JSON.stringify(input) }),
+
+  /**
+   * The administrator's price list — everything, switched-off included.
+   *
+   * Not `services()`. That one is what may go on a bill: active only, behind
+   * `invoice:read`. This is what the clinic charges for, behind
+   * `tenant:configure`, and it has to show the withdrawn ones so one can be
+   * brought back.
+   */
+  priceList: () =>
+    request<{ services: PricedService[]; departments: Array<{ id: string; name: string }> }>(
+      '/setup/services',
+    ),
+
+  /** Switch a service off, or back on. There is no delete — FR-PRC-03. */
+  setServiceActive: (id: string, isActive: boolean) =>
+    request<PricedService>(`/setup/services/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
 
   resetStaffPassword: (id: string) =>
     request<{ id: string; fullName: string; email: string; temporaryPassword: string }>(

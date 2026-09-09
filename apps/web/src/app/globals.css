@@ -297,25 +297,46 @@
     color: #000 !important;
   }
 
-  .no-print,
-  header[data-app-shell],
-  nav,
-  aside {
+  /**
+   * ONE RULE: everything that is not the document being printed is hidden.
+   *
+   * This used to be a list — nav, aside, header[data-app-shell], .no-print — and
+   * a list is wrong the moment a page renders something not on it. That is
+   * exactly what happened: a page's own content lives inside `<main>`, which was
+   * on no list, so the queue board printed straight through the receipt on the
+   * same sheet. The prescription escaped only because that one page wrapped its
+   * own markup in `.no-print`, which every future page would have had to
+   * remember to do.
+   *
+   * `PrintPortal` renders each printable document as a direct child of `<body>`,
+   * which is what lets this be a single structural rule with nothing to keep in
+   * step.
+   */
+  body > *:not([data-print-document]) {
     display: none !important;
   }
 
+  [data-print-document] {
+    display: block !important;
+  }
+
+  /**
+   * A `.print-only` block that was NOT portalled stays hidden, because its
+   * ancestor is. That is the safe direction to fail: a sheet that does not print
+   * is noticed immediately, one that prints underneath the app is not.
+   */
   .print-only {
     display: block !important;
+  }
+
+  /* Still useful INSIDE a printable document, to keep something off the paper. */
+  .no-print {
+    display: none !important;
   }
 
   body {
     margin: 0;
     padding: 0;
-  }
-
-  main {
-    padding: 0 !important;
-    max-width: none !important;
   }
 
   @page {

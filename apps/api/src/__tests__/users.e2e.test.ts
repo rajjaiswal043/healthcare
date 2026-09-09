@@ -24,12 +24,18 @@ let app: NestFastifyApplication;
 let fx: Fixtures;
 let admin: Session;
 let frontDesk: Session;
+let finance: Session;
+let doctor: Session;
+let otherFinance: Session;
 
 beforeAll(async () => {
   fx = await seedFixtures();
   app = await createTestApp();
 
   frontDesk = await login(app, fx.main.slug, 'frontdesk@main.test');
+  finance = await login(app, fx.main.slug, 'finance@main.test');
+  doctor = await login(app, fx.main.slug, 'doctor@main.test');
+  otherFinance = await login(app, fx.other.slug, 'finance@other.test');
   admin = await loginWithMfa(app, fx.main.slug, 'admin@main.test');
 });
 
@@ -403,5 +409,103 @@ describe('changing a password', () => {
       headers: { cookie },
     });
     expect(stillIn.statusCode).toBe(200);
+  });
+});
+
+/**
+ * The approver list — `GET /users/approvers`.
+ *
+ * Built for one reason: applying a promotion requires naming the person who
+ * authorised it, and the finance desk had no way to get a list of people to
+ * name. The alternative on the table was giving finance `user:manage`, which
+ * would have handed a billing desk the power to create accounts and reset
+ * passwords in order to fill a dropdown.
+ *
+ * So the value of this endpoint is entirely in what it does NOT return, and
+ * that is what these tests assert. A test that only checked the names came back
+ * would pass just as happily if the response also carried every email and
+ * lockout state in the clinic.
+ */
+describe('the approver list', () => {
+  function approvers(session: Session) {
+    return app.inject({
+      method: 'GET',
+      url: '/api/v1/users/approvers',
+      headers: { cookie: session.cookie },
+    });
+  }
+
+  it('answers the finance desk, which cannot read the staff list', async () => {
+    // Both halves matter. The second is what makes the first worth having.
+    expect((await approvers(finance)).statusCode).toBe(200);
+    expect((await listUsers(finance)).statusCode).toBe(403);
+  });
+
+  it('returns id and full name, and nothing else at all', async () => {
+    const body = (await approvers(finance)).json<{
+      approvers: Array<Record<string, unknown>>;
+    }>();
+
+    expect(body.approvers.length).toBeGreaterThan(0);
+
+    for (const row of body.approvers) {
+      // Asserted as an exact key set, not with a handful of `not.toHaveProperty`
+      // checks. A field added to the service's `select` later would slip past
+      // those and be caught by this.
+      expect(Object.keys(row).sort()).toEqual(['fullName', 'id']);
+    }
+  });
+
+  it('never leaks an email address', async () => {
+    // The one field most likely to be added back by accident, and the one that
+    // turns a dropdown into a staff directory.
+    const payload = (await approvers(finance)).payload;
+
+    expect(payload).not.toContain('@main.test');
+    expect(payload).toContain('Front Desk');
+  });
+
+  it('leaves out staff who have been switched off', async () => {
+    const [nurse] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `UPDATE app_user SET is_active = false WHERE email = 'nurse@main.test' RETURNING id`,
+    );
+
+    const names = (await approvers(finance))
+      .json<{ approvers: Array<{ fullName: string }> }>()
+      .approvers.map((a) => a.fullName);
+
+    // A switched-off account cannot authorise anything — the apply endpoint
+    // refuses it — so offering the name would only produce a refusal later.
+    expect(names).not.toContain('Nurse');
+
+    await ownerQuery(fx.main.id, `UPDATE app_user SET is_active = true WHERE id = $1`, [nurse!.id]);
+  });
+
+  it('shows a clinic only its own staff', async () => {
+    const mine = (await approvers(finance)).json<{ approvers: Array<{ fullName: string }> }>();
+    const theirs = (await approvers(otherFinance)).json<{
+      approvers: Array<{ fullName: string }>;
+    }>();
+
+    expect(mine.approvers.map((a) => a.fullName)).toContain('Dr Asha Menon');
+    expect(theirs.approvers.map((a) => a.fullName)).toContain('Dr Rohit Bhat');
+    expect(theirs.approvers.map((a) => a.fullName)).not.toContain('Dr Asha Menon');
+  });
+
+  it('refuses a role without promotion:apply', async () => {
+    // The front desk takes money and still cannot read this: it holds
+    // payment:collect but not promotion:apply, and the gate is the second one.
+    expect((await approvers(frontDesk)).statusCode).toBe(403);
+    expect((await approvers(doctor)).statusCode).toBe(403);
+  });
+
+  it('answers the administrator, who holds every permission', async () => {
+    expect((await approvers(admin)).statusCode).toBe(200);
+  });
+
+  it('refuses an unauthenticated caller', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/users/approvers' });
+    expect(res.statusCode).toBe(401);
   });
 });

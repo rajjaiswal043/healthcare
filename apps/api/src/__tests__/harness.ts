@@ -56,6 +56,12 @@ const TABLES = [
   // own, but the list is explicit for the reason in the comment above.
   'platform_session',
   'tenant_seat_limit',
+  // Before `payment` and `invoice`, both of which they reference.
+  'receipt_print',
+  'receipt',
+  'receipt_counter',
+  'promotion_application',
+  'promotion',
   'payment',
   'invoice_line',
   'invoice',
@@ -174,7 +180,7 @@ export async function resetDatabase(): Promise<void> {
 export async function resetAppointments(): Promise<void> {
   const db = await owner();
   await db.query(
-    `TRUNCATE payment, invoice_line, invoice,
+    `TRUNCATE receipt_print, receipt, promotion_application, payment, invoice_line, invoice,
               encounter_addendum, prescription, diagnosis, vitals_observation, encounter,
               appointment, queue_counter
      RESTART IDENTITY CASCADE`,
@@ -326,6 +332,7 @@ async function seedTenant(input: {
       { email: `frontdesk@${input.emailDomain}`, name: 'Front Desk', role: 'front_desk' },
       { email: `nurse@${input.emailDomain}`, name: 'Nurse', role: 'nurse' },
       { email: `doctor@${input.emailDomain}`, name: input.doctorName, role: 'doctor' },
+      { email: `finance@${input.emailDomain}`, name: 'Finance Desk', role: 'finance' },
       { email: `admin@${input.emailDomain}`, name: 'Administrator', role: 'administrator' },
       // A user of its own for the lockout test, so counting failures on it does
       // not leave every other test fighting a locked account.
