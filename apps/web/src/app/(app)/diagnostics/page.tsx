@@ -12,6 +12,7 @@ import { useAuth } from '@/components/auth-provider';
 import { genderInitial } from '@/lib/format';
 
 import { IconAlert, IconCheck, IconCheckCircle, IconRefresh } from '@/components/icons';
+import { TestBillingBadge, testIsBlocked } from '@/components/test-billing-badge';
 /**
  * Age from the order payload alone.
  *
@@ -42,7 +43,7 @@ export default function DiagnosticsPage() {
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState('');
-  const [status, setStatus] = useState<'PENDING' | 'COMPLETED'>('PENDING');
+  const [status, setStatus] = useState<'PENDING' | 'COMPLETED' | 'DECLINED'>('PENDING');
   const [orders, setOrders] = useState<DiagnosticOrder[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
@@ -153,7 +154,11 @@ export default function DiagnosticsPage() {
         <div>
           <p className="eyebrow">Diagnostics</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">
-            {status === 'PENDING' ? 'Tests to do' : 'Completed today'}
+            {status === 'PENDING'
+              ? 'Tests to do'
+              : status === 'COMPLETED'
+                ? 'Completed today'
+                : 'Declined by the patient'}
           </h1>
           <p className="mt-1 text-[14px] text-ink-60">
             Oldest first — the order a patient has already waited in.
@@ -188,10 +193,14 @@ export default function DiagnosticsPage() {
               id="status"
               className="field-input min-w-[150px]"
               value={status}
-              onChange={(e) => setStatus(e.target.value as 'PENDING' | 'COMPLETED')}
+              onChange={(e) => setStatus(e.target.value as 'PENDING' | 'COMPLETED' | 'DECLINED')}
             >
               <option value="PENDING">To do</option>
               <option value="COMPLETED">Done</option>
+              {/* Not work, so not on the to-do list — but the department's real
+                  question is "what happened to the X-ray I was expecting", and
+                  it needs somewhere to be answered. */}
+              <option value="DECLINED">Declined</option>
             </select>
           </div>
 
@@ -222,7 +231,11 @@ export default function DiagnosticsPage() {
       {orders.length === 0 ? (
         <div className="card px-6 py-12 text-center">
           <p className="font-display text-[18px] font-bold">
-            {status === 'PENDING' ? 'Nothing waiting' : 'Nothing done yet today'}
+            {status === 'PENDING'
+              ? 'Nothing waiting'
+              : status === 'COMPLETED'
+                ? 'Nothing done yet today'
+                : 'Nothing declined'}
           </p>
           <p className="mt-1 text-[13.5px] text-ink-40">
             {status === 'PENDING'
@@ -250,6 +263,12 @@ export default function DiagnosticsPage() {
                 </p>
               </div>
 
+              {/* Decision (c): the row stays visible. A patient standing at the
+                  counter must not disappear from the list because their bill is
+                  open — what is withheld is the result, not the fact of the
+                  request. */}
+              <TestBillingBadge billing={o.billing} />
+
               {o._count.documents > 0 && (
                 <span className="badge-clinical">
                   {o._count.documents} {o._count.documents === 1 ? 'file' : 'files'}
@@ -260,6 +279,12 @@ export default function DiagnosticsPage() {
                 <span className="badge-green">
                   <IconCheck size={11} /> done
                 </span>
+              )}
+
+              {/* Its own words. "Cancelled" would say the clinician called it
+                  off; this says the request stood and the patient said no. */}
+              {o.status === 'DECLINED' && (
+                <span className="badge-neutral">declined by patient</span>
               )}
 
               <button type="button" className="btn-secondary" onClick={() => void openDetail(o.id)}>
@@ -325,11 +350,35 @@ export default function DiagnosticsPage() {
 
             {openOrder.status === 'PENDING' && mayResult ? (
               <>
+                {testIsBlocked(openOrder.billing) && (
+                  <div
+                    role="alert"
+                    className="mt-4 flex items-start gap-2 rounded-panel border border-coral/30 bg-coral/8 p-3 text-[13px] text-coral-text"
+                  >
+                    <span className="mt-0.5 shrink-0">
+                      <IconAlert size={13} />
+                    </span>
+                    <span>
+                      {openOrder.billing.status === 'VOID' ? (
+                        <>
+                          The bill for this test was cancelled. Send the patient to the finance desk
+                          to have the charge raised again.
+                        </>
+                      ) : (
+                        <>
+                          This test has not been paid for. Send the patient to the finance desk —
+                          the result cannot go out until the bill is cleared.
+                        </>
+                      )}
+                    </span>
+                  </div>
+                )}
+
                 <div className="mt-4">
                   <button
                     type="button"
                     className="btn-secondary"
-                    disabled={busy !== null}
+                    disabled={busy !== null || testIsBlocked(openOrder.billing)}
                     onClick={() => fileInput.current?.click()}
                   >
                     {busy === 'attach' ? 'Uploading…' : 'Add a file'}
@@ -372,7 +421,9 @@ export default function DiagnosticsPage() {
                     type="button"
                     className="btn-primary"
                     disabled={
-                      busy !== null || (note.trim() === '' && openOrder.documents.length === 0)
+                      busy !== null ||
+                      testIsBlocked(openOrder.billing) ||
+                      (note.trim() === '' && openOrder.documents.length === 0)
                     }
                     onClick={() => void complete()}
                   >

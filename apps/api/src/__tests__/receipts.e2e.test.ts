@@ -418,6 +418,35 @@ describe('what the sheet carries', () => {
     expect(receipt.clinic.name).toBe('Main Clinic');
   });
 
+  it('names the doctor on a test bill, which has no appointment_id of its own', async () => {
+    const { appointmentId } = await bookedVisit();
+
+    // A test bill: tied to the visit through `visit_appointment_id`, and
+    // deliberately NOT through `appointment_id`, which is unique and already
+    // taken by the consultation invoice. Before the visit link existed this
+    // receipt printed a blank doctor and fell back to the clinic's first
+    // location — wrong for anyone running two branches.
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, number, patient_id, visit_appointment_id,
+                            subtotal_paise, total_paise, updated_at)
+       VALUES ($1, 'INV-TEST01', $2, $3, 45000, 45000, now()) RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0], appointmentId],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO invoice_line (tenant_id, invoice_id, description, quantity, unit_price_paise, total_paise)
+       VALUES ($1, $2, 'X-ray Knee', 1, 45000, 45000)`,
+      [fx.main.id, invoice!.id],
+    );
+
+    await pay(invoice!.id, 45000);
+    const [paymentId] = await paymentIds(invoice!.id);
+    const receipt = (await readReceipt(paymentId!)).json();
+
+    expect(receipt.doctor?.fullName).toBe('Dr Asha Menon');
+  });
+
   it('names the doctor when there is one', async () => {
     const invoice = await walkInVisit();
     await pay(invoice.id, CONSULT_FEE);

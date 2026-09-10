@@ -190,7 +190,8 @@ export type PaymentDirection = (typeof PaymentDirection)[keyof typeof PaymentDir
 export const DiagnosticOrderStatus = {
   PENDING: 'PENDING',
   COMPLETED: 'COMPLETED',
-  CANCELLED: 'CANCELLED'
+  CANCELLED: 'CANCELLED',
+  DECLINED: 'DECLINED'
 } as const
 
 export type DiagnosticOrderStatus = (typeof DiagnosticOrderStatus)[keyof typeof DiagnosticOrderStatus]

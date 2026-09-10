@@ -128,6 +128,20 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
           on first; this is the detail underneath it. Renders nothing when
           empty — an empty heading on a clinical document reads as something
           omitted rather than something absent. */}
+        {/* Tests this centre does not perform (decision (b)).
+            Above the pharmacy note and below advice, because it is something
+            the patient has to go and DO — and plainly worded, because they
+            will hand this sheet to somebody else. */}
+        {encounter.appointment.externalTestNote && (
+          <section className="border-t border-ink/40 py-2.5 text-[12.5px]">
+            <p className="mb-1 font-semibold uppercase tracking-[0.08em]">
+              Tests to be done elsewhere
+            </p>
+            <p className="whitespace-pre-wrap">{encounter.appointment.externalTestNote}</p>
+            <p className="mt-1 italic">Not performed at this centre.</p>
+          </section>
+        )}
+
         {encounter.prescriptionNote && (
           <section className="border-t border-ink/40 py-2.5 text-[12.5px]">
             <p className="font-bold uppercase tracking-wide">Note</p>

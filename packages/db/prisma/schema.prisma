@@ -952,7 +952,21 @@ model Appointment {
   practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
   department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   encounter    Encounter?
+  /// Tests the patient needs that this centre does not perform (decision (b)).
+  ///
+  /// Free text, printed on the slip and shown to the finance desk. Never an
+  /// order and never a charge: there is no department here to do it and no
+  /// price to put on it, so making it either would create work nobody can
+  /// clear and a gate over money that will never arrive.
+  ///
+  /// On the appointment rather than the encounter so it survives signing, and
+  /// so the finance desk — which holds `appointment:read` and not
+  /// `consultation:read` — can read it without being given the clinical record.
+  externalTestNote String? @map("external_test_note") @db.VarChar(1000)
+
   invoice      Invoice?
+  /// Every bill this visit produced — the consultation's, and its test bills.
+  visitInvoices Invoice[] @relation("InvoiceVisit")
 
   /// A token number is unique per doctor per day. Enforced here as well as in
   /// the allocation function â€” the function makes collisions unlikely, the
@@ -1364,6 +1378,16 @@ model Invoice {
   /// which is why this is nullable rather than the primary key.
   appointmentId String? @unique @map("appointment_id") @db.Uuid
 
+  /// The visit this bill came out of.
+  ///
+  /// Not unique, and that is the whole point of its existing separately from
+  /// `appointmentId`. That column is unique and means "this IS the consultation
+  /// bill", so a test bill for the same visit cannot borrow it. This one means
+  /// the weaker thing — "this money came out of that visit" — which lets a
+  /// visit carry a consultation bill and its test bills, and lets reporting
+  /// attribute all of them to the doctor who was seeing the patient.
+  visitAppointmentId String? @map("visit_appointment_id") @db.Uuid
+
   status InvoiceStatus @default(UNPAID)
 
   /// Denormalised sums over the lines, in paise. Written in the same transaction
@@ -1389,6 +1413,7 @@ model Invoice {
 
   patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  visitAppointment Appointment? @relation("InvoiceVisit", fields: [visitAppointmentId], references: [id], onDelete: Restrict, map: "invoice_visit_appointment_fkey")
 
   lines    InvoiceLine[]
   payments Payment[]
@@ -1412,6 +1437,7 @@ model Invoice {
   @@index([tenantId, patientId, issuedAt])
   @@index([tenantId, status])
   @@index([tenantId, issuedAt])
+  @@index([tenantId, visitAppointmentId], map: "invoice_visit_appointment_idx")
   @@map("invoice")
 }
 
@@ -1440,6 +1466,7 @@ model InvoiceLine {
 
   invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  diagnosticOrder DiagnosticOrder?
 
   @@index([tenantId, invoiceId])
   @@map("invoice_line")
@@ -1586,7 +1613,14 @@ model ClinicalDocument {
 enum DiagnosticOrderStatus {
   PENDING
   COMPLETED
+  /// The clinician withdrew the request. The test should not happen.
   CANCELLED
+  /// The patient refused it at the desk. The request stood; the answer was no.
+  ///
+  /// Distinct from CANCELLED, and distinct from the derived "unpaid" state: one
+  /// says the test was called off, the other says money is still expected. A
+  /// technician has to be able to tell those apart at a glance.
+  DECLINED
 
   @@map("diagnostic_order_status")
 }
@@ -1621,6 +1655,20 @@ model DiagnosticOrder {
   /// lets an order be priced and, in phase 2, billed.
   serviceId String? @map("service_id") @db.Uuid
 
+  /// The charge raised for this test, when one was raised.
+  ///
+  /// The pay-first gate reads the invoice through this link rather than through
+  /// the appointment, because a walk-in test has no appointment and the same
+  /// gate has to serve both flows.
+  invoiceLineId String? @map("invoice_line_id") @db.Uuid
+
+  /// Raised before diagnostics were billable, so the gate lets it through.
+  ///
+  /// A pure timestamp cutoff, stamped by the migration's column default rather
+  /// than by any code here. Without it, the day the gate ships is the day every
+  /// clinic finds its existing worklist impossible to clear.
+  legacyUnbilled Boolean @default(false) @map("legacy_unbilled")
+
   description String                @db.VarChar(300)
   status      DiagnosticOrderStatus @default(PENDING)
 
@@ -1637,6 +1685,7 @@ model DiagnosticOrder {
   patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "diagnostic_order_patient_fkey")
   department  Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_department_fkey")
   service     Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull, map: "diagnostic_order_service_fkey")
+  invoiceLine InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict, map: "diagnostic_order_invoice_line_fkey")
   orderedBy   User        @relation("DiagnosticOrdersRaised", fields: [orderedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_ordered_by_fkey")
   completedBy User?       @relation("DiagnosticOrdersCompleted", fields: [completedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_completed_by_fkey")
 
@@ -1645,6 +1694,7 @@ model DiagnosticOrder {
   @@index([tenantId, departmentId, status, createdAt], map: "diagnostic_order_worklist_idx")
   @@index([tenantId, appointmentId], map: "diagnostic_order_visit_idx")
   @@index([tenantId, serviceId], map: "diagnostic_order_service_idx")
+  @@unique([invoiceLineId], map: "diagnostic_order_invoice_line_key")
   @@map("diagnostic_order")
 }
 

@@ -465,7 +465,14 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 department and nothing has been requested. */}
             <DiagnosticOrdersPanel
               appointmentId={encounter.appointment.id}
+              encounterId={encounter.id}
               editable={Boolean(editable)}
+              externalTestNote={encounter.appointment.externalTestNote}
+              onExternalTestNote={(note) =>
+                setEncounter((e) =>
+                  e ? { ...e, appointment: { ...e.appointment, externalTestNote: note } } : e,
+                )
+              }
             />
 
             {(signed || encounter.addenda.length > 0) && (

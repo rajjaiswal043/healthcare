@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
@@ -54,6 +55,17 @@ class CreateOrderDto {
   description?: string;
 }
 
+class ExternalTestNoteDto {
+  /**
+   * Null or blank clears it. A doctor who deletes the line meant to delete it,
+   * and there is no "unsay" for something already printed.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string | null;
+}
+
 class CatalogueQueryDto {
   @IsOptional()
   @IsUUID()
@@ -78,9 +90,17 @@ class WorklistQueryDto {
   @IsUUID()
   departmentId?: string;
 
+  /**
+   * DECLINED is a filter value, not part of the PENDING list.
+   *
+   * A declined test is not work, so it does not belong on the queue of work —
+   * but it must be findable, because the question the department actually asks
+   * is "what happened to the X-ray I was expecting". Left on the pending list
+   * it would accumulate forever; unreachable it would just vanish.
+   */
   @IsOptional()
-  @IsIn(['PENDING', 'COMPLETED'])
-  status?: 'PENDING' | 'COMPLETED';
+  @IsIn(['PENDING', 'COMPLETED', 'DECLINED'])
+  status?: 'PENDING' | 'COMPLETED' | 'DECLINED';
 }
 
 @Controller()
@@ -117,6 +137,50 @@ export class DiagnosticsController {
   @RequirePermissions(PERMISSIONS.DIAGNOSTIC_READ)
   async worklist(@CurrentTenant() tenantId: string, @Query() query: WorklistQueryDto) {
     return this.diagnostics.worklist(tenantId, query);
+  }
+
+  /**
+   * Tests this centre does not perform, for the slip (decision (b)).
+   *
+   * `diagnostic:order`: it is the same act as ordering a test — the doctor
+   * deciding the patient needs one — and only the destination differs. Written
+   * to the appointment, which is why the finance desk can read it back without
+   * being handed the consultation.
+   */
+  @Put('appointments/:id/external-test-note')
+  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_ORDER)
+  async setExternalTestNote(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) appointmentId: string,
+    @Body() dto: ExternalTestNoteDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.diagnostics.setExternalTestNote(
+      tenantId,
+      appointmentId,
+      dto.note ?? null,
+      meta(req, user),
+    );
+  }
+
+  /**
+   * This patient's completed tests, for the doctor seeing them right now.
+   *
+   * `consultation:read` gets you to the door; the service decides whether it
+   * opens. The permission cannot express the rule — "the doctor with this
+   * patient in front of them, today" is about a relationship between three
+   * rows, not about a role — so the gate lives in `patientTestHistory` and is
+   * checked on every call. See decision (e).
+   */
+  @Get('encounters/:id/patient-test-history')
+  @RequirePermissions(PERMISSIONS.CONSULTATION_READ)
+  async patientTestHistory(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) encounterId: string,
+  ) {
+    return this.diagnostics.patientTestHistory(tenantId, encounterId, user);
   }
 
   /** What was ordered on one visit. The consultation reads this. */
@@ -201,6 +265,25 @@ export class DiagnosticsController {
     @Req() req: FastifyRequest,
   ) {
     return this.diagnostics.completeOrder(tenantId, id, dto.resultNote, meta(req, user));
+  }
+
+  /**
+   * The patient refused the test at the desk.
+   *
+   * `invoice:write`, not `diagnostic:order`. This is a money action wearing a
+   * clinical hat: it takes a charge to zero, and the person who has that
+   * conversation with the patient is at the finance desk, not in the room. The
+   * doctor's equivalent is `cancel` below, which withdraws the request.
+   */
+  @Post('diagnostics/orders/:id/decline')
+  @RequirePermissions(PERMISSIONS.INVOICE_WRITE)
+  async decline(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.diagnostics.declineOrder(tenantId, id, meta(req, user));
   }
 
   @Patch('diagnostics/orders/:id/cancel')

@@ -165,6 +165,28 @@ describe('raising the bill', () => {
     expect(n(second.number)).toBe(n(first.number) + 1);
   });
 
+  it('ties the bill to the visit through both columns, which mean different things', async () => {
+    const appointmentId = await book();
+    await invoiceFor(appointmentId);
+
+    const [row] = await ownerQuery<{
+      appointment_id: string | null;
+      visit_appointment_id: string | null;
+    }>(
+      fx.main.id,
+      `SELECT appointment_id, visit_appointment_id FROM invoice WHERE appointment_id = $1`,
+      [appointmentId],
+    );
+
+    // `appointment_id` is unique and means "this IS the consultation bill".
+    expect(row?.appointment_id).toBe(appointmentId);
+    // `visit_appointment_id` is not unique and means "this money came out of
+    // that visit". Reporting reads the second one, so it has to be set here
+    // too — otherwise only invoices old enough to have been backfilled carry
+    // it, and every bill raised from now on goes unattributed.
+    expect(row?.visit_appointment_id).toBe(appointmentId);
+  });
+
   it('raises nothing for a clinic that has priced nothing', async () => {
     // The other tenant has no services and no doctor fees. It must keep working
     // exactly as it did before this module existed, rather than finding its

@@ -453,7 +453,8 @@ export const AppointmentScalarFieldEnum = {
   bookedByUserId: 'bookedByUserId',
   reminderSentAt: 'reminderSentAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  externalTestNote: 'externalTestNote'
 } as const
 
 export type AppointmentScalarFieldEnum = (typeof AppointmentScalarFieldEnum)[keyof typeof AppointmentScalarFieldEnum]
@@ -593,6 +594,7 @@ export const InvoiceScalarFieldEnum = {
   number: 'number',
   patientId: 'patientId',
   appointmentId: 'appointmentId',
+  visitAppointmentId: 'visitAppointmentId',
   status: 'status',
   subtotalPaise: 'subtotalPaise',
   discountPaise: 'discountPaise',
@@ -692,6 +694,8 @@ export const DiagnosticOrderScalarFieldEnum = {
   departmentId: 'departmentId',
   orderedByUserId: 'orderedByUserId',
   serviceId: 'serviceId',
+  invoiceLineId: 'invoiceLineId',
+  legacyUnbilled: 'legacyUnbilled',
   description: 'description',
   status: 'status',
   resultNote: 'resultNote',
