@@ -7,9 +7,19 @@ import {
   type ClinicalDocument,
   type Department,
   type DiagnosticOrder,
+  type DiagnosticTest,
 } from '@/lib/api';
+import { formatPaise } from '@/lib/format';
 import { useAuth } from '@/components/auth-provider';
 import { IconAlert, IconCheck, IconStethoscope } from '@/components/icons';
+
+/**
+ * The catalogue option for a test the clinic does not perform.
+ *
+ * Not a service id, and never sent to the server — it means "we do not do this
+ * here", which is a different thing from "we do it and it is unpriced".
+ */
+const OTHER = '__other__';
 
 /**
  * Tests, inside the consultation.
@@ -41,11 +51,30 @@ export function DiagnosticOrdersPanel({
   const [departmentId, setDepartmentId] = useState('');
   const [description, setDescription] = useState('');
 
+  /**
+   * The clinic's priced tests. Empty for a clinic that has not priced any, and
+   * the form then behaves exactly as it did before the catalogue existed.
+   */
+  const [catalogue, setCatalogue] = useState<DiagnosticTest[]>([]);
+  /**
+   * The picked test: '' until one is chosen, a service id, or OTHER.
+   *
+   * It starts empty rather than on the first test in the list. A form that opens
+   * with a test already selected is one mis-click away from ordering a scan
+   * nobody asked for, and the doctor would not see it until it appeared on the
+   * bill.
+   */
+  const [serviceId, setServiceId] = useState<string>('');
+
   /** Which order's files are expanded. Null when none. */
   const [openId, setOpenId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<ClinicalDocument[]>([]);
 
   const mayOrder = can('diagnostic:order');
+
+  /** What this department can be asked for. */
+  const testsHere = catalogue.filter((t) => t.department.id === departmentId);
+  const picked = serviceId === OTHER ? null : (testsHere.find((t) => t.id === serviceId) ?? null);
 
   const load = useCallback(async () => {
     try {
@@ -64,8 +93,12 @@ export function DiagnosticOrdersPanel({
     if (!mayOrder) return;
     void (async () => {
       try {
-        const { departments } = await api.diagnosticDepartments();
+        const [{ departments }, { tests }] = await Promise.all([
+          api.diagnosticDepartments(),
+          api.diagnosticCatalogue(),
+        ]);
         setDepartments(departments);
+        setCatalogue(tests);
         if (departments.length > 0) setDepartmentId(departments[0]!.id);
       } catch {
         // The panel still lists existing orders without this.
@@ -80,9 +113,11 @@ export function DiagnosticOrdersPanel({
       await api.raiseDiagnosticOrder({
         appointmentId,
         departmentId,
-        description: description.trim(),
+        ...(serviceId === OTHER ? {} : { serviceId }),
+        ...(description.trim() ? { description: description.trim() } : {}),
       });
       setDescription('');
+      setServiceId('');
       setAdding(false);
       await load();
     } catch (err) {
@@ -158,7 +193,13 @@ export function DiagnosticOrdersPanel({
                 id="testDepartment"
                 className="field-input !py-2"
                 value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
+                onChange={(e) => {
+                  // A test belongs to one department; keeping the pick across a
+                  // switch would send the server a mismatch it would reject.
+                  setDepartmentId(e.target.value);
+                  setServiceId('');
+                  setDescription('');
+                }}
               >
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -167,6 +208,37 @@ export function DiagnosticOrdersPanel({
                 ))}
               </select>
             </div>
+
+            {testsHere.length > 0 && (
+              <div className="min-w-[220px]">
+                <label htmlFor="testService" className="field-label">
+                  Test
+                </label>
+                <select
+                  id="testService"
+                  className="field-input !py-2"
+                  value={serviceId}
+                  aria-describedby={picked ? 'testFee' : undefined}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setServiceId(next);
+                    // Pre-fill so the doctor adds the side and the view rather
+                    // than retyping the name. Their own words are never
+                    // overwritten by a later pick — the field is cleared first.
+                    const test = testsHere.find((t) => t.id === next);
+                    setDescription(test ? test.name : '');
+                  }}
+                >
+                  <option value="">Select a test…</option>
+                  {testsHere.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} — {formatPaise(t.pricePaise)}
+                    </option>
+                  ))}
+                  <option value={OTHER}>Other — not done here</option>
+                </select>
+              </div>
+            )}
 
             <div className="min-w-[240px] flex-1">
               <label htmlFor="testDescription" className="field-label">
@@ -183,11 +255,27 @@ export function DiagnosticOrdersPanel({
             </div>
           </div>
 
+          {/* The fee, where the decision is made. A doctor who can see it can
+              tell the patient before the bill does. */}
+          {picked && (
+            <p id="testFee" className="text-[12.5px] text-ink-soft">
+              <span className="mono-label mr-2">Fee</span>
+              <span className="font-semibold tabular-nums text-ink">
+                {formatPaise(picked.pricePaise)}
+              </span>
+            </p>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className="btn-primary !py-2"
-              disabled={busy || description.trim().length < 2 || !departmentId}
+              disabled={
+                busy ||
+                !departmentId ||
+                description.trim().length < 2 ||
+                (testsHere.length > 0 && serviceId === '')
+              }
               onClick={() => void raise()}
             >
               {busy ? 'Requesting…' : 'Request'}
@@ -198,6 +286,7 @@ export function DiagnosticOrdersPanel({
               onClick={() => {
                 setAdding(false);
                 setDescription('');
+                setServiceId('');
               }}
             >
               Cancel

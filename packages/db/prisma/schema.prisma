@@ -1316,6 +1316,7 @@ model Service {
 
   department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "service_department_fkey")
   lines InvoiceLine[]
+  diagnosticOrders DiagnosticOrder[]
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive, category])
@@ -1610,6 +1611,16 @@ model DiagnosticOrder {
   departmentId    String @map("department_id") @db.Uuid
   orderedByUserId String @map("ordered_by_user_id") @db.Uuid
 
+  /// The priced catalogue test this order names, when it names one.
+  ///
+  /// Null for orders raised before the catalogue existed, and null for anything
+  /// the clinic does not offer — those never become orders at all (decision (b):
+  /// "Other" is a line on the printed slip, not work for a department).
+  ///
+  /// `description` stays the record of what was ordered. This is the join that
+  /// lets an order be priced and, in phase 2, billed.
+  serviceId String? @map("service_id") @db.Uuid
+
   description String                @db.VarChar(300)
   status      DiagnosticOrderStatus @default(PENDING)
 
@@ -1625,6 +1636,7 @@ model DiagnosticOrder {
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_appointment_fkey")
   patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "diagnostic_order_patient_fkey")
   department  Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_department_fkey")
+  service     Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull, map: "diagnostic_order_service_fkey")
   orderedBy   User        @relation("DiagnosticOrdersRaised", fields: [orderedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_ordered_by_fkey")
   completedBy User?       @relation("DiagnosticOrdersCompleted", fields: [completedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_completed_by_fkey")
 
@@ -1632,6 +1644,7 @@ model DiagnosticOrder {
 
   @@index([tenantId, departmentId, status, createdAt], map: "diagnostic_order_worklist_idx")
   @@index([tenantId, appointmentId], map: "diagnostic_order_visit_idx")
+  @@index([tenantId, serviceId], map: "diagnostic_order_service_idx")
   @@map("diagnostic_order")
 }
 

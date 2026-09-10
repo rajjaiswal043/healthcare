@@ -442,10 +442,21 @@ export interface DiagnosticOrder {
   resultNote: string | null;
   appointmentId: string;
   department: { id: string; name: string };
+  /** The catalogue test, when the order named one. No price — see `DiagnosticTest`. */
+  service: { id: string; code: string; name: string } | null;
   patient: { id: string; name: string; uhid: string; gender: string; ageYears: number | null };
   orderedBy: { id: string; fullName: string };
   completedBy: { id: string; fullName: string } | null;
   _count: { documents: number };
+}
+
+/** An orderable test with its fee. Only reaches screens that may order. */
+export interface DiagnosticTest {
+  id: string;
+  code: string;
+  name: string;
+  pricePaise: number;
+  department: { id: string; name: string };
 }
 
 /** A file held against a patient. Note the absence of an object key. */
@@ -954,6 +965,12 @@ export const api = {
 
   diagnosticDepartments: () => request<{ departments: Department[] }>('/diagnostics/departments'),
 
+  /** What can be ordered, and what it costs. Behind `diagnostic:order`. */
+  diagnosticCatalogue: (departmentId?: string) =>
+    request<{ tests: DiagnosticTest[] }>(
+      `/diagnostics/catalogue${departmentId ? `?departmentId=${departmentId}` : ''}`,
+    ),
+
   diagnosticWorklist: (
     params: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' } = {},
   ) => {
@@ -975,7 +992,8 @@ export const api = {
   raiseDiagnosticOrder: (input: {
     appointmentId: string;
     departmentId: string;
-    description: string;
+    serviceId?: string;
+    description?: string;
   }) =>
     request<DiagnosticOrder>('/diagnostics/orders', {
       method: 'POST',

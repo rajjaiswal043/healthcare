@@ -38,6 +38,47 @@ export class DiagnosticsService {
   }
 
   /**
+   * The orderable tests, with their fees (FR-DIA decision (f)).
+   *
+   * A doctor in India knows roughly what a test costs and says so in the room.
+   * Hiding the number here would not protect anything — it is printed on the
+   * bill and on the receipt the patient is handed — and it would make the
+   * doctor order a scan without knowing they have just added ₹4,000 to a bill
+   * the patient may not be able to settle.
+   *
+   * Behind `diagnostic:order` rather than `invoice:read`, which no doctor holds
+   * and which would hand over the whole billing surface to buy one number. Same
+   * reasoning as `GET /practitioners`, which already returns
+   * `consultationFeePaise` for the screen that has to choose a doctor.
+   *
+   * A DIAGNOSTIC service with no department is excluded, and that is not an
+   * oversight: an order has to land on some department's worklist, so a test
+   * nobody performs cannot be ordered. It shows up as a gap in the price list,
+   * which is where an administrator can fix it.
+   */
+  async catalogue(tenantId: string, departmentId?: string) {
+    const tests = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.service.findMany({
+        where: {
+          isActive: true,
+          category: 'DIAGNOSTIC',
+          ...(departmentId ? { departmentId } : { departmentId: { not: null } }),
+          department: { isActive: true, isDiagnostic: true },
+        },
+        orderBy: [{ name: 'asc' }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          pricePaise: true,
+          department: { select: { id: true, name: true } },
+        },
+      }),
+    );
+    return { tests };
+  }
+
+  /**
    * Raise an order against a visit.
    *
    * The appointment is looked up inside the tenant's policy, which is what binds
@@ -48,7 +89,12 @@ export class DiagnosticsService {
    */
   async createOrder(
     tenantId: string,
-    input: { appointmentId: string; departmentId: string; description: string },
+    input: {
+      appointmentId: string;
+      departmentId: string;
+      description?: string;
+      serviceId?: string;
+    },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
@@ -79,6 +125,63 @@ export class DiagnosticsService {
         });
       }
 
+      /**
+       * A catalogue test, when one was picked.
+       *
+       * Looked up rather than trusted, and checked against the department the
+       * order is being raised on — otherwise a request could file "MRI Brain"
+       * under pathology, and in phase 2 that mismatch becomes a charge on a
+       * worklist that will never run it.
+       */
+      let serviceId: string | undefined;
+      let description = input.description?.trim();
+
+      if (input.serviceId) {
+        const service = await tx.service.findUnique({
+          where: { id: input.serviceId },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            category: true,
+            departmentId: true,
+          },
+        });
+        if (!service) throw new NotFoundException('No such test.');
+
+        if (!service.isActive) {
+          throw new BadRequestException({
+            code: 'TEST_INACTIVE',
+            message: `“${service.name}” is no longer offered. Pick another test.`,
+          });
+        }
+        if (service.category !== 'DIAGNOSTIC') {
+          throw new BadRequestException({
+            code: 'NOT_A_TEST',
+            message: `“${service.name}” is not a diagnostic test.`,
+          });
+        }
+        if (service.departmentId !== department.id) {
+          throw new BadRequestException({
+            code: 'TEST_WRONG_DEPARTMENT',
+            message: `“${service.name}” is not performed by ${department.name}.`,
+          });
+        }
+
+        serviceId = service.id;
+        // The catalogue name is the floor, not the ceiling: the form pre-fills
+        // it so the doctor can add "left knee, AP and lateral". If they cleared
+        // it, the order still has to say what it is.
+        if (!description) description = service.name;
+      }
+
+      if (!description || description.length < 2) {
+        throw new BadRequestException({
+          code: 'DESCRIPTION_REQUIRED',
+          message: 'Say what test is being ordered.',
+        });
+      }
+
       const order = await tx.diagnosticOrder.create({
         data: {
           tenantId,
@@ -86,7 +189,8 @@ export class DiagnosticsService {
           patientId: appointment.patientId,
           departmentId: department.id,
           orderedByUserId: meta.actorUserId,
-          description: input.description.trim(),
+          description,
+          ...(serviceId ? { serviceId } : {}),
         },
         select: ORDER_SELECT,
       });
@@ -96,7 +200,7 @@ export class DiagnosticsService {
         resourceType: 'DiagnosticOrder',
         resourceId: order.id,
         patientId: appointment.patientId,
-        changedFields: ['description', 'departmentId'],
+        changedFields: ['description', 'departmentId', 'serviceId'],
         ...meta,
       });
 
@@ -316,6 +420,13 @@ const ORDER_SELECT = {
   resultNote: true,
   appointmentId: true,
   department: { select: { id: true, name: true } },
+  /**
+   * Which catalogue test this was, when it was one. Deliberately without the
+   * price: the worklist is read by the diagnostics role, which holds no billing
+   * permission, and a department does not need to know what it charges to run
+   * the machine. The fee is served by `catalogue()` to whoever may order.
+   */
+  service: { select: { id: true, code: true, name: true } },
   patient: { select: { id: true, name: true, uhid: true, gender: true, ageYears: true } },
   orderedBy: { select: { id: true, fullName: true } },
   completedBy: { select: { id: true, fullName: true } },

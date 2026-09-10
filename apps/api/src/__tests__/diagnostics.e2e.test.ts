@@ -36,6 +36,11 @@ let otherAdmin: Session;
 let xrayDepartmentId: string;
 let diagnosticsUser: Session;
 
+/** A priced X-ray on the catalogue, and a priced test the X-ray room does not do. */
+let kneeXrayId: string;
+let bloodCountId: string;
+let pathologyDepartmentId: string;
+
 /** A real PDF, by signature. Four bytes is all the sniffer reads. */
 const REPORT = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(64, 0x20)]);
 
@@ -101,6 +106,23 @@ async function createVisit(tenant: 'main' | 'other'): Promise<string> {
 let mainVisit: string;
 let otherVisit: string;
 
+/** Put a priced test on the clinic's catalogue, the way an administrator would. */
+async function priceTest(
+  session: Session,
+  body: { code: string; name: string; pricePaise: number; departmentId: string | null },
+): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/setup/services',
+    headers: { cookie: session.cookie },
+    payload: { category: 'DIAGNOSTIC', ...body },
+  });
+  if (res.statusCode !== 201 && res.statusCode !== 200) {
+    throw new Error(`Could not price a test: ${res.statusCode} ${res.payload}`);
+  }
+  return res.json<{ id: string }>().id;
+}
+
 async function order(session: Session, body: Record<string, unknown>) {
   return app.inject({
     method: 'POST',
@@ -127,6 +149,28 @@ beforeAll(async () => {
   });
   expect(created.statusCode).toBe(201);
   xrayDepartmentId = created.json<{ id: string }>().id;
+
+  const pathology = await app.inject({
+    method: 'POST',
+    url: '/api/v1/departments',
+    headers: { cookie: admin.cookie },
+    payload: { name: 'Pathology', isDiagnostic: true },
+  });
+  expect(pathology.statusCode).toBe(201);
+  pathologyDepartmentId = pathology.json<{ id: string }>().id;
+
+  kneeXrayId = await priceTest(admin, {
+    code: 'XR-KNEE',
+    name: 'X-ray Knee',
+    pricePaise: 45_000,
+    departmentId: xrayDepartmentId,
+  });
+  bloodCountId = await priceTest(admin, {
+    code: 'PATH-CBC',
+    name: 'Complete Blood Count',
+    pricePaise: 30_000,
+    departmentId: pathologyDepartmentId,
+  });
 
   mainVisit = await createVisit('main');
   otherVisit = await createVisit('other');
@@ -283,6 +327,180 @@ describe('raising an order', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('the test catalogue', () => {
+  it('lists the clinic\u2019s priced tests, with the fee, to whoever may order', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { tests } = res.json<{
+      tests: Array<{ id: string; name: string; pricePaise: number }>;
+    }>();
+
+    const knee = tests.find((t) => t.id === kneeXrayId);
+    expect(knee).toBeDefined();
+    // The fee is the point of the endpoint (decision (f)). A doctor who cannot
+    // see it orders a scan without knowing what it costs the patient.
+    expect(knee?.pricePaise).toBe(45_000);
+  });
+
+  it('narrows to one department, so the form offers only what that room does', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/diagnostics/catalogue?departmentId=${xrayDepartmentId}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const ids = res.json<{ tests: Array<{ id: string }> }>().tests.map((t) => t.id);
+    expect(ids).toContain(kneeXrayId);
+    expect(ids).not.toContain(bloodCountId);
+  });
+
+  it('leaves out a test no department performs \u2014 it has no worklist to land on', async () => {
+    const orphan = await priceTest(admin, {
+      code: 'XR-ORPHAN',
+      name: 'Unassigned Scan',
+      pricePaise: 10_000,
+      departmentId: null,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.json<{ tests: Array<{ id: string }> }>().tests.map((t) => t.id)).not.toContain(
+      orphan,
+    );
+  });
+
+  it('refuses the diagnostics room, which does not order its own work', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("never shows one clinic another's price list", async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: otherAdmin.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ tests: Array<{ id: string }> }>().tests.map((t) => t.id)).not.toContain(
+      kneeXrayId,
+    );
+  });
+});
+
+describe('ordering a catalogue test', () => {
+  it('records which test it was, and keeps the description as the record', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray Knee \u2014 left, AP and lateral',
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ service: { id: string; name: string } | null; description: string }>();
+    expect(body.service?.id).toBe(kneeXrayId);
+    // The doctor's own words survive the pick: laterality and view are exactly
+    // what a catalogue entry cannot carry.
+    expect(body.description).toBe('X-ray Knee \u2014 left, AP and lateral');
+  });
+
+  it('falls back to the catalogue name when the doctor typed nothing', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ description: string }>().description).toBe('X-ray Knee');
+  });
+
+  it('refuses a test the chosen department does not perform', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: bloodCountId,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('TEST_WRONG_DEPARTMENT');
+  });
+
+  it('refuses a test that is no longer offered', async () => {
+    const retired = await priceTest(admin, {
+      code: 'XR-OLD',
+      name: 'Retired View',
+      pricePaise: 5_000,
+      departmentId: xrayDepartmentId,
+    });
+    const off = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/setup/services/${retired}/active`,
+      headers: { cookie: admin.cookie },
+      payload: { isActive: false },
+    });
+    expect(off.statusCode).toBe(200);
+
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: retired,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('TEST_INACTIVE');
+  });
+
+  it("refuses another clinic's test, which is how a price list leaks", async () => {
+    const res = await order(otherAdmin, {
+      appointmentId: otherVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+
+    // The department belongs to the main clinic too, so this never reaches the
+    // service check \u2014 either refusal proves the tenant boundary held.
+    expect([400, 404]).toContain(res.statusCode);
+  });
+
+  it('still takes a free-text order, for a clinic that has priced nothing', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      description: 'X-ray left knee, AP and lateral',
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ service: unknown }>().service).toBeNull();
+  });
+
+  it('refuses an order that says nothing at all', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('DESCRIPTION_REQUIRED');
   });
 });
 

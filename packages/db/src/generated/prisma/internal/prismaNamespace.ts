@@ -3889,6 +3889,7 @@ export const DiagnosticOrderScalarFieldEnum = {
   patientId: 'patientId',
   departmentId: 'departmentId',
   orderedByUserId: 'orderedByUserId',
+  serviceId: 'serviceId',
   description: 'description',
   status: 'status',
   resultNote: 'resultNote',

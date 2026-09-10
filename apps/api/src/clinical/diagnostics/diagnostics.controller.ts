@@ -29,11 +29,35 @@ class CreateOrderDto {
   @IsUUID()
   departmentId!: string;
 
-  /** "X-ray, left knee, AP and lateral". Free text — see the service. */
+  /**
+   * The catalogue test being ordered, when the clinic offers it.
+   *
+   * Optional so a clinic that has priced nothing yet can still raise orders the
+   * way it always has. The service checks it against `departmentId`.
+   */
+  @IsOptional()
+  @IsUUID()
+  serviceId?: string;
+
+  /**
+   * "X-ray, left knee, AP and lateral".
+   *
+   * Optional only when `serviceId` is given — the service falls back to the
+   * catalogue name, and refuses an order that would say nothing at all. Kept as
+   * free text on top of the picker because laterality and view are the part a
+   * catalogue entry cannot carry.
+   */
+  @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(300)
-  description!: string;
+  description?: string;
+}
+
+class CatalogueQueryDto {
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
 }
 
 class CompleteOrderDto {
@@ -68,6 +92,18 @@ export class DiagnosticsController {
   @RequirePermissions(PERMISSIONS.DIAGNOSTIC_READ)
   async departments(@CurrentTenant() tenantId: string) {
     return this.diagnostics.departments(tenantId);
+  }
+
+  /**
+   * The orderable tests and their fees.
+   *
+   * `diagnostic:order`, not `diagnostic:read`: this carries prices, and the one
+   * screen that needs them is the one deciding to spend the patient's money.
+   */
+  @Get('diagnostics/catalogue')
+  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_ORDER)
+  async catalogue(@CurrentTenant() tenantId: string, @Query() query: CatalogueQueryDto) {
+    return this.diagnostics.catalogue(tenantId, query.departmentId);
   }
 
   /**
