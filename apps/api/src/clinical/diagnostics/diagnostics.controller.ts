@@ -286,6 +286,20 @@ export class DiagnosticsController {
     return this.diagnostics.declineOrder(tenantId, id, meta(req, user));
   }
 
+  /**
+   * Put a declined test back. Finance-only, the same hand that declined it.
+   */
+  @Post('diagnostics/orders/:id/undecline')
+  @RequirePermissions(PERMISSIONS.INVOICE_WRITE)
+  async undecline(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.diagnostics.undeclineOrder(tenantId, id, meta(req, user));
+  }
+
   @Patch('diagnostics/orders/:id/cancel')
   @RequirePermissions(PERMISSIONS.DIAGNOSTIC_ORDER)
   async cancel(

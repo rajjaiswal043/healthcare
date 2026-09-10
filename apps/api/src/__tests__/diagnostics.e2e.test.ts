@@ -489,6 +489,46 @@ describe('ordering a catalogue test', () => {
     expect(res.json<{ description: string }>().description).toBe('X-ray Knee');
   });
 
+  it('refuses the same test twice on one visit', async () => {
+    const first = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(first.statusCode).toBe(201);
+
+    const again = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('TEST_ALREADY_ORDERED');
+  });
+
+  it('lets it be ordered again once the first was declined', async () => {
+    const first = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${first.json<{ id: string }>().id}/decline`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // The guard counts ACTIVE orders only. Counting declined ones would leave
+    // a mis-click permanently blocking the test it removed.
+    const again = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(again.statusCode).toBe(201);
+  });
+
   it('refuses a test the chosen department does not perform', async () => {
     const res = await order(doctor, {
       appointmentId: mainVisit,
@@ -964,44 +1004,138 @@ describe('declining a test', () => {
     });
   }
 
-  it('takes the charge to zero and leaves the line on the bill', async () => {
+  it('takes the charge off the bill entirely, leaving no phantom discount', async () => {
     const { orderId, invoiceId, lineId } = await billedOrder();
 
     const res = await decline(frontDesk, orderId);
     expect(res.statusCode).toBe(201);
     expect(res.json<{ status: string }>().status).toBe('DECLINED');
 
-    const [line] = await ownerQuery<{
-      unit_price_paise: number;
-      discount_paise: number;
-      tax_paise: number;
-      total_paise: number;
-    }>(
-      fx.main.id,
-      `SELECT unit_price_paise, discount_paise, tax_paise, total_paise FROM invoice_line WHERE id = $1`,
-      [lineId],
-    );
-
-    // Not deleted. The bill keeps the whole story: it was ordered, it was
-    // priced at ₹450, and it came to nothing.
-    expect(line).toBeDefined();
-    expect(line?.unit_price_paise).toBe(45_000);
-    expect(line?.discount_paise).toBe(45_000);
-    expect(line?.tax_paise).toBe(0);
-    expect(line?.total_paise).toBe(0);
+    // The line is gone. Writing its value into `discountPaise` instead printed
+    // the patient a charge they never incurred beside a discount they never
+    // got — and, because promotions live in that same column, broke every
+    // guard that read it and inflated "discount given" in the revenue report.
+    const lines = await ownerQuery(fx.main.id, `SELECT id FROM invoice_line WHERE id = $1`, [
+      lineId,
+    ]);
+    expect(lines).toHaveLength(0);
 
     const [invoice] = await ownerQuery<{
       subtotal_paise: number;
       discount_paise: number;
       total_paise: number;
+      status: string;
     }>(
       fx.main.id,
-      `SELECT subtotal_paise, discount_paise, total_paise FROM invoice WHERE id = $1`,
+      `SELECT subtotal_paise, discount_paise, total_paise, status FROM invoice WHERE id = $1`,
       [invoiceId],
     );
-    expect(invoice?.subtotal_paise).toBe(45_000);
-    expect(invoice?.discount_paise).toBe(45_000);
+    expect(invoice?.subtotal_paise).toBe(0);
+    expect(invoice?.discount_paise).toBe(0);
     expect(invoice?.total_paise).toBe(0);
+  });
+
+  it('cancels the bill when that was the last charge on it', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const [invoice] = await ownerQuery<{ status: string; reason: string | null }>(
+      fx.main.id,
+      `SELECT status, reason FROM invoice WHERE id = $1`,
+      [invoiceId],
+    );
+
+    // Otherwise every declined single-test visit leaves a ₹0 bill on the
+    // outstanding list forever, and a list full of nothing is a list nobody reads.
+    expect(invoice?.status).toBe('CANCELLED');
+    expect(invoice?.reason).toBeTruthy();
+  });
+
+  it('leaves a bill alone while other charges remain on it', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: pathologyDepartmentId,
+      serviceId: bloodCountId,
+    });
+
+    await decline(frontDesk, orderId);
+
+    const [invoice] = await ownerQuery<{ status: string; total_paise: number }>(
+      fx.main.id,
+      `SELECT status, total_paise FROM invoice WHERE id = $1`,
+      [invoiceId],
+    );
+    expect(invoice?.status).toBe('UNPAID');
+    expect(invoice?.total_paise).toBe(30_000);
+  });
+
+  it('lets more than one test be taken off the same bill', async () => {
+    const first = await billedOrder();
+    const second = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: pathologyDepartmentId,
+      serviceId: bloodCountId,
+    });
+
+    expect((await decline(frontDesk, first.orderId)).statusCode).toBe(201);
+
+    // The old version wrote a line discount, which made `invoice.discountPaise`
+    // non-zero — and the desk's Decline button was gated on that being zero, so
+    // exactly one test could ever be removed.
+    expect((await decline(frontDesk, second.json<{ id: string }>().id)).statusCode).toBe(201);
+  });
+
+  it('puts a declined test back, on a fresh charge', async () => {
+    const { orderId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/undecline`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ status: string; invoiceLineId: string | null }>();
+    expect(body.status).toBe('PENDING');
+    expect(body.invoiceLineId).not.toBeNull();
+
+    // A new bill, because the old one auto-cancelled when its last line went.
+    const open = await ownerQuery<{ total_paise: number }>(
+      fx.main.id,
+      `SELECT total_paise FROM invoice
+        WHERE appointment_id IS NULL AND visit_appointment_id = $1 AND status = 'UNPAID'`,
+      [mainVisit],
+    );
+    expect(open).toHaveLength(1);
+    expect(open[0]?.total_paise).toBe(45_000);
+  });
+
+  it('refuses to put back something that was never declined', async () => {
+    const { orderId } = await billedOrder();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/undecline`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('ORDER_NOT_DECLINED');
+  });
+
+  it('refuses the diagnostics room a put-back — it is a money action', async () => {
+    const { orderId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/undecline`,
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    expect(res.statusCode).toBe(403);
   });
 
   it('stops the department running it, and says why', async () => {
@@ -1660,6 +1794,64 @@ describe('attaching a result', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.details?.code).toBe('ORDER_CANCELLED');
+  });
+});
+
+describe('opening an uploaded report', () => {
+  it('serves the bytes when the clinic runs without a bucket', async () => {
+    const raised = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'USG abdomen',
+    });
+    const orderId = raised.json<{ id: string }>().id;
+    const attached = await attach(diagnosticsUser, orderId, 'usg.pdf');
+    expect(attached.statusCode).toBe(201);
+    const documentId = attached.json<{ id: string }>().id;
+
+    const url = await app.inject({
+      method: 'GET',
+      url: `/api/v1/documents/${documentId}/url`,
+      headers: { cookie: doctor.cookie },
+    });
+    expect(url.statusCode).toBe(200);
+
+    /**
+     * The in-memory store used to answer `memory://…`, which a browser cannot
+     * follow — a doctor clicking an uploaded report got a blank tab. It now
+     * points at this API's own route, which is the only honest thing a store
+     * with no bucket can hand back.
+     */
+    const href = url.json<{ url: string }>().url;
+    expect(href).toBe(`/documents/${documentId}/raw`);
+
+    const raw = await app.inject({
+      method: 'GET',
+      url: `/api/v1${href}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(raw.statusCode).toBe(200);
+    expect(raw.headers['content-type']).toContain('application/pdf');
+    expect(raw.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  it("never serves another clinic's file", async () => {
+    const raised = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'USG abdomen',
+    });
+    const attached = await attach(diagnosticsUser, raised.json<{ id: string }>().id, 'usg.pdf');
+    const documentId = attached.json<{ id: string }>().id;
+
+    const raw = await app.inject({
+      method: 'GET',
+      url: `/api/v1/documents/${documentId}/raw`,
+      headers: { cookie: otherAdmin.cookie },
+    });
+
+    expect(raw.statusCode).toBe(404);
   });
 });
 

@@ -812,6 +812,19 @@ export interface Invoice {
     externalTestNote: string | null;
     practitioner: { fullName: string; prefix: string | null };
   } | null;
+  /**
+   * Set while a promotion is on this bill.
+   *
+   * The signal for "a discount was granted" — NOT `discountPaise`, which also
+   * moves when charges change and once had decline write-offs folded into it.
+   */
+  activePromotionApplicationId: string | null;
+  /** Tests taken off this visit's bills, which the desk may put back. */
+  removedTests: Array<{
+    id: string;
+    description: string;
+    service: { name: string; pricePaise: number } | null;
+  }>;
   /** The visit a test bill came out of — its only link, since `appointment` is the consultation's. */
   visitAppointment: {
     id: string;
@@ -1065,9 +1078,13 @@ export const api = {
       { method: 'PUT', body: JSON.stringify({ note }) },
     ),
 
-  /** The patient refused it at the desk: charge to zero, department stood down. */
+  /** The patient refused it: charge off the bill, department stood down. */
   declineDiagnosticOrder: (id: string) =>
     request<DiagnosticOrder>(`/diagnostics/orders/${id}/decline`, { method: 'POST' }),
+
+  /** Declined by mistake — raise the charge again and put it back on the worklist. */
+  undeclineDiagnosticOrder: (id: string) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}/undecline`, { method: 'POST' }),
 
   attachResult: (orderId: string, file: File) =>
     upload<ClinicalDocument>(`/diagnostics/orders/${orderId}/documents`, file),
@@ -1078,8 +1095,20 @@ export const api = {
       body: JSON.stringify({ resultNote }),
     }),
 
-  /** A short-lived URL to open a file. Expires in five minutes. */
-  documentUrl: (id: string) =>
+  /**
+   * A short-lived URL to open a file. Expires in five minutes.
+   *
+   * The server returns an absolute S3 URL in normal use, and a path relative to
+   * the API when the clinic is running without a bucket — resolved here so all
+   * four callers can just `window.open` what they are handed.
+   */
+  documentUrl: async (id: string) => {
+    const res = await api.documentUrlRaw(id);
+    return res.url.startsWith('/') ? { ...res, url: `${API_BASE}${res.url}` } : res;
+  },
+
+  /** The server's answer, unresolved. */
+  documentUrlRaw: (id: string) =>
     request<{ url: string; expiresInSeconds: number; fileName: string; contentType: string }>(
       `/documents/${id}/url`,
     ),

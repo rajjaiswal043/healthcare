@@ -6,8 +6,9 @@ import {
   ParseUUIDPipe,
   Post,
   Req,
+  Res,
 } from '@nestjs/common';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
   CurrentUser,
@@ -87,6 +88,32 @@ export class DocumentsController {
    * audited — "who looked at this X-ray" is a question that cannot be answered
    * later if it was not recorded at the time.
    */
+  /**
+   * The bytes themselves, for a local store with no bucket behind it.
+   *
+   * Not a way around the signed URL — on S3 this refuses, because the point of
+   * signing one is that a 25MB scan goes from the bucket to the browser and
+   * not through this process. It exists so a clinic running without AWS
+   * credentials can still open the report it just uploaded.
+   */
+  @Get('documents/:id/raw')
+  @RequirePermissions(PERMISSIONS.DOCUMENT_READ)
+  async raw(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) documentId: string,
+    @Req() req: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ) {
+    const file = await this.documents.rawBytes(tenantId, documentId, meta(req, user));
+
+    return reply
+      .header('content-type', file.contentType)
+      .header('content-disposition', `inline; filename="${encodeURIComponent(file.fileName)}"`)
+      .header('cache-control', 'private, no-store')
+      .send(file.bytes);
+  }
+
   @Get('documents/:id/url')
   @RequirePermissions(PERMISSIONS.DOCUMENT_READ)
   async url(

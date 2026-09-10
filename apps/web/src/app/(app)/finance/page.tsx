@@ -658,7 +658,7 @@ export default function FinanceDeskPage() {
               <InvoiceTable
                 invoice={invoice}
                 busy={busy}
-                {...(canBill && invoice.paidPaise === 0 && invoice.discountPaise === 0
+                {...(canBill && invoice.paidPaise === 0 && !invoice.activePromotionApplicationId
                   ? {
                       onRemove: (lineId: string) =>
                         run(async () => {
@@ -680,6 +680,46 @@ export default function FinanceDeskPage() {
                   : {})}
               />
 
+              {/* Declined by mistake? Put it back.
+                  A removed test has no line any more — that is the point — so
+                  it cannot be shown among the charges. Without this the only
+                  way back from a mis-click is a telephone call to the doctor. */}
+              {canBill && invoice.removedTests.length > 0 && (
+                <div className="mt-3 rounded-panel border border-ink/10 bg-bg-soft px-3.5 py-3">
+                  <p className="mono-label mb-2">Taken off this visit</p>
+                  <ul className="space-y-1.5">
+                    {invoice.removedTests.map((t) => (
+                      <li key={t.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[13.5px] text-ink-60">
+                          {t.description}
+                          {t.service && (
+                            <span className="ml-2 font-mono text-[12.5px] text-ink-40">
+                              {formatPaise(t.service.pricePaise)}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-ghost !px-2 !py-1 text-[12px]"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await api.undeclineDiagnosticOrder(t.id);
+                              setInvoice(await api.invoice(invoice.id));
+                            }, `Could not put ${t.description} back.`)
+                          }
+                        >
+                          Put it back
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* Said plainly: the charge is raised fresh, so a repricing
+                      between then and now shows up here rather than silently. */}
+                  <p className="field-hint">Charged at today’s price.</p>
+                </div>
+              )}
+
               {/* Tests this centre does not perform, written by the doctor in
                   the room. Shown here so the desk can say "that one is not done
                   here" before the patient has waited for it. */}
@@ -694,7 +734,7 @@ export default function FinanceDeskPage() {
                 </div>
               )}
 
-              {canBill && invoice.paidPaise === 0 && invoice.discountPaise > 0 && (
+              {canBill && invoice.paidPaise === 0 && invoice.activePromotionApplicationId && (
                 <p className="field-hint mt-2">
                   Take the discount off before adding or removing charges, then apply it again —
                   otherwise the discount stays recorded at the old amount.
@@ -706,7 +746,7 @@ export default function FinanceDeskPage() {
                   given. */}
               {canBill &&
                 invoice.paidPaise === 0 &&
-                invoice.discountPaise === 0 &&
+                !invoice.activePromotionApplicationId &&
                 services.length > 0 && (
                   <AddCharge
                     services={services}
@@ -1284,25 +1324,15 @@ function InvoiceTable({
            * thing the desk actually wants when the patient says no.
            */
           const test = l.diagnosticOrder;
-          const declined = test?.status === 'DECLINED';
+          // A declined test has no line at all, so there is no struck-through
+          // state to render here — see `removedTests` on the invoice.
           const declinable = Boolean(onDecline) && test?.status === 'PENDING';
           const removable = Boolean(onRemove) && !isConsultation && !test;
 
           return (
             <li key={l.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
               <span className="min-w-0">
-                <span
-                  className={`block truncate text-[14px] ${
-                    declined ? 'text-ink-40 line-through' : 'text-ink'
-                  }`}
-                >
-                  {l.description}
-                </span>
-                {declined && (
-                  <span className="block text-[12.5px] text-ink-40">
-                    declined by the patient — nothing to pay
-                  </span>
-                )}
+                <span className="block truncate text-[14px] text-ink">{l.description}</span>
                 {l.quantity > 1 && (
                   <span className="block text-[12.5px] text-ink-40">
                     {l.quantity} × {formatPaise(l.unitPricePaise)}
@@ -1465,7 +1495,14 @@ function PromotionPanel({
   const [promotionId, setPromotionId] = useState('');
   const [authorisedByUserId, setAuthorisedByUserId] = useState('');
 
-  if (invoice.discountPaise > 0) {
+  /**
+   * A promotion is on the bill — the application row, not the money.
+   *
+   * `discountPaise` is the wrong question: it moves whenever charges change,
+   * and while declines were written as line discounts this widget offered to
+   * "take off" a discount that had never been applied.
+   */
+  if (invoice.activePromotionApplicationId) {
     return (
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-clinical/25 bg-clinical-tint px-4 py-3">
         <p className="text-[13.5px] text-clinical-text">

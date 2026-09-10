@@ -394,31 +394,26 @@ export class BillingService {
   }
 
   /**
-   * Discount a declined test's charge to nothing, leaving the line in place.
+   * Take a declined test's charge off the bill.
    *
-   * **Not a deletion.** The invoice keeps the whole story — the test was
-   * ordered, it was priced at ₹450, and it came to nothing — because an invoice
-   * that quietly loses a line cannot be reconciled against the order that
-   * produced it, and "we removed it" is a claim somebody may have to prove.
-   * The sheet reads `Discount −₹450.00 / Net ₹0.00`, which is what happened.
+   * **Deleted, not discounted to zero.** The first version of this wrote the
+   * line's own value into `discountPaise` so the invoice would still show that
+   * the test had been ordered. That was wrong in three ways at once, all of
+   * them from reusing a column that already meant something else: the printed
+   * bill showed the patient a charge they never incurred beside a discount they
+   * never received; every guard that read `invoice.discountPaise` to detect a
+   * promotion started firing on declines, which is why only one test could be
+   * removed; and the revenue report, which sums line discounts, began counting
+   * cancelled tests as money given away.
    *
-   * Tax goes to zero with it. A line discounted to nothing carries no tax; the
-   * `invoice_line_total_is_consistent` CHECK would otherwise leave a declined
-   * test costing the patient the tax on a test they refused.
+   * The record is not lost by removing the line. `diagnostic_order` keeps the
+   * DECLINED status and `audit_event` keeps who did it and when — which is
+   * where that belongs. An invoice is a bill: it should say what is owed.
    *
-   * Guarded by `loadEditable`, and that is the point of routing this through
-   * billing rather than writing the update from the diagnostics module. It
-   * gives four protections at once, and one of them is not optional:
-   *
-   *   **A promotion on the bill blocks this.** `apply` distributes a
-   *   promotion's discount across the LINES by writing `discountPaise`, and
-   *   `promotion_application.discount_paise` freezes the total at apply time in
-   *   an append-only row. Zeroing a line here would overwrite that line's share
-   *   while the frozen row kept claiming the original figure, and the finance
-   *   report — which reads that row — would report the clinic giving away money
-   *   it did not. Take the discount off, decline the test, put it back on.
+   * `loadEditable` still guards it, so a bill with money on it refuses — that
+   * is a refund, not a decline — and a promotion has to come off first.
    */
-  async declineDiagnosticLine(
+  async removeDiagnosticLine(
     tx: TenantClient,
     tenantId: string,
     lineId: string,
@@ -426,29 +421,43 @@ export class BillingService {
   ): Promise<void> {
     const line = await tx.invoiceLine.findUnique({
       where: { id: lineId },
-      select: { id: true, invoiceId: true, quantity: true, unitPricePaise: true },
+      select: { id: true, invoiceId: true },
     });
-    if (!line) throw new NotFoundException('No charge to decline.');
+    if (!line) throw new NotFoundException('No charge to remove.');
 
     const invoice = await this.loadEditable(tx, line.invoiceId);
 
-    await tx.invoiceLine.update({
-      where: { id: line.id },
-      data: {
-        discountPaise: line.quantity * line.unitPricePaise,
-        taxPaise: 0,
-        totalPaise: 0,
-      },
-    });
-
+    await tx.invoiceLine.delete({ where: { id: line.id } });
     await this.retotal(tx, line.invoiceId);
 
+    /**
+     * A bill with nothing left on it is cancelled, not left at zero.
+     *
+     * Otherwise every declined single-test visit leaves a ₹0 invoice sitting on
+     * the desk's outstanding list forever, and a list full of nothing is a list
+     * nobody reads. CANCELLED carries a reason and an authoriser because the
+     * table's CHECK requires both — the person who removed the last charge is
+     * the honest answer to who authorised it.
+     */
+    const remaining = await tx.invoiceLine.count({ where: { invoiceId: line.invoiceId } });
+    if (remaining === 0) {
+      await tx.invoice.update({
+        where: { id: line.invoiceId },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          reason: 'Every charge on this bill was removed.',
+          authorisedByUserId: meta.actorUserId ?? null,
+        },
+      });
+    }
+
     await this.audit.record(tx, tenantId, {
-      action: 'invoice.decline_line',
+      action: 'invoice.remove_line',
       resourceType: 'Invoice',
       resourceId: line.invoiceId,
       patientId: invoice.patientId,
-      changedFields: ['lines', 'discountPaise', 'totalPaise'],
+      changedFields: remaining === 0 ? ['lines', 'totalPaise', 'status'] : ['lines', 'totalPaise'],
       ...meta,
     });
   }
@@ -1265,8 +1274,38 @@ export class BillingService {
       : [];
     const nameOf = new Map(authors.map((a) => [a.id, a.fullName]));
 
+    /**
+     * Tests taken off this visit's bills, so the desk can put one back.
+     *
+     * A declined test has no line any more — that is the point of the removal —
+     * so it cannot appear in `lines`, and without this the only way back from a
+     * mis-click would be a telephone call to the doctor. Keyed on the visit
+     * rather than on this invoice, because the charge may have been on an
+     * earlier bill for the same visit that has since been cancelled.
+     *
+     * Served here, on `invoice:read`, rather than through the diagnostics API:
+     * the finance role holds no diagnostic permission at all, and widening that
+     * to buy one list would hand the desk the whole clinical worklist.
+     */
+    const removedTests = invoice.visitAppointmentId
+      ? await tx.diagnosticOrder.findMany({
+          where: {
+            appointmentId: invoice.visitAppointmentId,
+            status: 'DECLINED',
+            invoiceLineId: null,
+          },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            description: true,
+            service: { select: { name: true, pricePaise: true } },
+          },
+        })
+      : [];
+
     return {
       ...invoice,
+      removedTests,
       payments: invoice.payments.map((p) => ({
         ...p,
         collectedBy: { id: p.collectedByUserId, fullName: nameOf.get(p.collectedByUserId) ?? null },

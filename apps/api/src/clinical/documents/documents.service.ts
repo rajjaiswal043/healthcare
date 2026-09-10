@@ -158,6 +158,54 @@ export class DocumentsService {
    * and "who looked at this X-ray" is a question a clinic may one day have to
    * answer — it cannot be answered retrospectively if it was never recorded.
    */
+  /**
+   * The bytes, for a store that has no bucket to point at.
+   *
+   * Same tenant checks as `signedUrlFor`, and the same prefix assertion —
+   * this hands over file contents, so it gets the belt and braces too. Refuses
+   * outright on a store that CAN sign a URL: on S3 the whole design is that
+   * bytes never travel through this process.
+   */
+  async rawBytes(
+    tenantId: string,
+    documentId: string,
+    meta: RequestMeta,
+  ): Promise<{ bytes: Buffer; contentType: string; fileName: string }> {
+    if (!this.store.fetch) {
+      throw new NotFoundException('This document is served by a signed URL, not by the API.');
+    }
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const document = await tx.clinicalDocument.findUnique({
+        where: { id: documentId },
+        select: { id: true, objectKey: true, fileName: true, contentType: true, patientId: true },
+      });
+      if (!document) throw new NotFoundException('No such document.');
+
+      if (!document.objectKey.startsWith(tenantPrefix(tenantId))) {
+        throw new NotFoundException('No such document.');
+      }
+
+      const object = await this.store.fetch!(document.objectKey);
+      if (!object) throw new NotFoundException('No such document.');
+
+      await this.audit.record(tx, tenantId, {
+        action: 'document.read',
+        resourceType: 'ClinicalDocument',
+        resourceId: document.id,
+        patientId: document.patientId,
+        changedFields: [],
+        ...meta,
+      });
+
+      return {
+        bytes: object.bytes,
+        contentType: document.contentType,
+        fileName: document.fileName,
+      };
+    });
+  }
+
   async signedUrlFor(
     tenantId: string,
     documentId: string,
@@ -195,8 +243,20 @@ export class DocumentsService {
         ...meta,
       });
 
+      /**
+       * A store with no bucket serves its own bytes.
+       *
+       * `signedUrl` is meant to hand back something a browser can follow, and
+       * the in-memory store cannot — it has no host. Pointing at this API's own
+       * `raw` route keeps the contract true for local work without a bucket,
+       * and S3 is untouched: its URL still goes straight to the bucket, which
+       * is the point of signing one at all.
+       */
+      const signed = await this.store.signedUrl(document.objectKey);
+      const url = signed.startsWith('memory:') ? `/documents/${document.id}/raw` : signed;
+
       return {
-        url: await this.store.signedUrl(document.objectKey),
+        url,
         expiresInSeconds: SIGNED_URL_TTL_SECONDS,
         fileName: document.fileName,
         contentType: document.contentType,

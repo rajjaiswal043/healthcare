@@ -215,7 +215,31 @@ describe('reading a document', () => {
     const body = res.json<{ url: string; expiresInSeconds: number; fileName: string }>();
     expect(body.expiresInSeconds).toBe(300);
     expect(body.fileName).toBe('knee-ap.pdf');
-    expect(body.url).toContain(`tenants/${fx.main.id}/`);
+
+    /**
+     * The suite runs on the in-memory store, which has no bucket to point at
+     * and now answers with this API's own route rather than an unopenable
+     * `memory://` placeholder. On S3 this is the signed bucket URL instead.
+     *
+     * The tenant no longer appears in the string, and it does not need to:
+     * isolation was never enforced by what the URL spelled out. The next test
+     * is the one that proves it, and `raw` below is held to the same rule.
+     */
+    expect(body.url).toBe(`/documents/${id}/raw`);
+  });
+
+  it('refuses to serve the bytes to another clinic', async () => {
+    const id = await uploadedId(admin, fx.main.patientIds[0]!);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/documents/${id}/raw`,
+      headers: { cookie: otherAdmin.cookie },
+    });
+
+    // Same answer as "no such document", for the same reason as everywhere
+    // else here: under the tenant policy the two are one query result.
+    expect(res.statusCode).toBe(404);
   });
 
   /**

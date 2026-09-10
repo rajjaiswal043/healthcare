@@ -182,6 +182,35 @@ export class DiagnosticsService {
           });
         }
 
+        /**
+         * The same test twice on one visit is a mis-click, not an order.
+         *
+         * Scoped to this VISIT, not to the patient forever: the same knee needs
+         * re-imaging next month, and that must not be refused. Scoped to ACTIVE
+         * orders too — a declined or cancelled one leaves the way clear, which
+         * is what makes `undeclineOrder` and a simple re-order possible at all.
+         *
+         * A genuine repeat inside one visit does exist — bloods after a meal,
+         * an ECG after fresh chest pain — and this refuses it. That is the
+         * clinic's call, taken on 10 Sep 2026; the way to take it is to order
+         * the second one after the first is completed, or to say so in the
+         * description of one order.
+         */
+        const already = await tx.diagnosticOrder.findFirst({
+          where: {
+            appointmentId: appointment.id,
+            serviceId: service.id,
+            status: { in: ['PENDING', 'COMPLETED'] },
+          },
+          select: { id: true },
+        });
+        if (already) {
+          throw new ConflictException({
+            code: 'TEST_ALREADY_ORDERED',
+            message: `“${service.name}” has already been ordered on this visit.`,
+          });
+        }
+
         serviceId = service.id;
         // The catalogue name is the floor, not the ceiling: the form pre-fills
         // it so the doctor can add "left knee, AP and lateral". If they cleared
@@ -684,7 +713,17 @@ export class DiagnosticsService {
         });
       }
 
-      await this.billing.declineDiagnosticLine(tx, tenantId, existing.invoiceLineId, meta);
+      /**
+       * Unlink before deleting. The foreign key is RESTRICT — deliberately, so
+       * a charge cannot vanish from under an order by accident — which means
+       * the order has to let go of it first.
+       */
+      await tx.diagnosticOrder.update({
+        where: { id: orderId },
+        data: { invoiceLineId: null },
+      });
+
+      await this.billing.removeDiagnosticLine(tx, tenantId, existing.invoiceLineId, meta);
 
       const order = await tx.diagnosticOrder.update({
         where: { id: orderId },
@@ -698,6 +737,85 @@ export class DiagnosticsService {
         resourceId: orderId,
         patientId: existing.patientId,
         changedFields: ['status'],
+        ...meta,
+      });
+
+      return toView(order);
+    });
+  }
+
+  /**
+   * Put a declined test back — the desk pressed it by mistake.
+   *
+   * Decline takes money off a bill and stands a department down in one move,
+   * so a mis-click costs more than most. Without this the only way back is for
+   * the doctor to order the test again, from a screen the finance desk cannot
+   * reach, over a telephone call that should not have been necessary.
+   *
+   * Finance-only (`invoice:write`), the same hand that declined it. The charge
+   * is raised fresh rather than resurrected: the old line is gone, and
+   * `chargeDiagnosticTest` will reuse the visit's open test bill or open a new
+   * one — which is what happens when the previous bill auto-cancelled because
+   * this was the last thing on it.
+   *
+   * Priced at TODAY'S catalogue price, not the original. The alternative is
+   * storing the old price on the order to resurrect it, and a bill that quietly
+   * charges last month's rate is harder to explain than one that charges the
+   * rate on the price list.
+   */
+  async undeclineOrder(tenantId: string, orderId: string, meta: RequestMeta) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const existing = await tx.diagnosticOrder.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          status: true,
+          patientId: true,
+          appointmentId: true,
+          serviceId: true,
+          description: true,
+        },
+      });
+      if (!existing) throw new NotFoundException('No such order.');
+
+      if (existing.status !== 'DECLINED') {
+        throw new BadRequestException({
+          code: 'ORDER_NOT_DECLINED',
+          message: 'That test was not declined, so there is nothing to put back.',
+        });
+      }
+
+      if (!existing.serviceId) {
+        throw new BadRequestException({
+          code: 'ORDER_NOT_BILLED',
+          message: 'That test has no catalogue price, so there is no charge to raise.',
+        });
+      }
+
+      const charge = await this.billing.chargeDiagnosticTest(
+        tx,
+        tenantId,
+        {
+          patientId: existing.patientId,
+          visitAppointmentId: existing.appointmentId,
+          serviceId: existing.serviceId,
+          description: existing.description,
+        },
+        meta,
+      );
+
+      const order = await tx.diagnosticOrder.update({
+        where: { id: orderId },
+        data: { status: 'PENDING', invoiceLineId: charge.lineId },
+        select: ORDER_SELECT,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'diagnostic.undecline',
+        resourceType: 'DiagnosticOrder',
+        resourceId: orderId,
+        patientId: existing.patientId,
+        changedFields: ['status', 'invoiceLineId'],
         ...meta,
       });
 
