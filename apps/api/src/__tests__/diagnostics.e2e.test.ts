@@ -36,6 +36,21 @@ let otherAdmin: Session;
 let xrayDepartmentId: string;
 let diagnosticsUser: Session;
 
+/** A priced X-ray on the catalogue, and a priced test the X-ray room does not do. */
+let kneeXrayId: string;
+let bloodCountId: string;
+let pathologyDepartmentId: string;
+/**
+ * A diagnostic department with nothing priced against it.
+ *
+ * Free text is only an order where the department HAS no catalogue — once it
+ * has one, "anything else" means the centre does not do it and belongs on the
+ * slip instead (decision (b)). Every test below that raises an unpriced order
+ * uses this department, which is the only place such an order is still legal.
+ */
+let plainDepartmentId: string;
+let adminUserId: string;
+
 /** A real PDF, by signature. Four bytes is all the sniffer reads. */
 const REPORT = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(64, 0x20)]);
 
@@ -101,6 +116,23 @@ async function createVisit(tenant: 'main' | 'other'): Promise<string> {
 let mainVisit: string;
 let otherVisit: string;
 
+/** Put a priced test on the clinic's catalogue, the way an administrator would. */
+async function priceTest(
+  session: Session,
+  body: { code: string; name: string; pricePaise: number; departmentId: string | null },
+): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/setup/services',
+    headers: { cookie: session.cookie },
+    payload: { category: 'DIAGNOSTIC', ...body },
+  });
+  if (res.statusCode !== 201 && res.statusCode !== 200) {
+    throw new Error(`Could not price a test: ${res.statusCode} ${res.payload}`);
+  }
+  return res.json<{ id: string }>().id;
+}
+
 async function order(session: Session, body: Record<string, unknown>) {
   return app.inject({
     method: 'POST',
@@ -127,6 +159,43 @@ beforeAll(async () => {
   });
   expect(created.statusCode).toBe(201);
   xrayDepartmentId = created.json<{ id: string }>().id;
+
+  const pathology = await app.inject({
+    method: 'POST',
+    url: '/api/v1/departments',
+    headers: { cookie: admin.cookie },
+    payload: { name: 'Pathology', isDiagnostic: true },
+  });
+  expect(pathology.statusCode).toBe(201);
+  pathologyDepartmentId = pathology.json<{ id: string }>().id;
+
+  const plain = await app.inject({
+    method: 'POST',
+    url: '/api/v1/departments',
+    headers: { cookie: admin.cookie },
+    payload: { name: 'ECG', isDiagnostic: true },
+  });
+  expect(plain.statusCode).toBe(201);
+  plainDepartmentId = plain.json<{ id: string }>().id;
+
+  kneeXrayId = await priceTest(admin, {
+    code: 'XR-KNEE',
+    name: 'X-ray Knee',
+    pricePaise: 45_000,
+    departmentId: xrayDepartmentId,
+  });
+  bloodCountId = await priceTest(admin, {
+    code: 'PATH-CBC',
+    name: 'Complete Blood Count',
+    pricePaise: 30_000,
+    departmentId: pathologyDepartmentId,
+  });
+
+  const [adminRow] = await ownerQuery<{ id: string }>(
+    fx.main.id,
+    `SELECT id FROM app_user WHERE email = 'admin@main.test'`,
+  );
+  adminUserId = adminRow!.id;
 
   mainVisit = await createVisit('main');
   otherVisit = await createVisit('other');
@@ -173,6 +242,36 @@ beforeEach(async () => {
   await ownerQuery(fx.other.id, 'DELETE FROM clinical_document');
   await ownerQuery(fx.main.id, 'DELETE FROM diagnostic_order');
   await ownerQuery(fx.other.id, 'DELETE FROM diagnostic_order');
+  // Encounters and the past visits the history tests fabricate. Encounters
+  // first: they reference the appointment rows below them.
+  await ownerQuery(fx.main.id, 'DELETE FROM encounter');
+  await ownerQuery(fx.main.id, `DELETE FROM appointment WHERE status = 'FULFILLED'`);
+
+  /**
+   * Test bills, and only test bills.
+   *
+   * The consultation invoice for each visit is raised once at walk-in and has
+   * to survive, or every assertion about "two bills, one of each" would be
+   * testing a clinic that never billed the consultation. A test bill is the one
+   * with no `appointment_id` — see the migration for why that column means
+   * something narrower than "belongs to this visit".
+   */
+  for (const tenant of [fx.main.id, fx.other.id]) {
+    const scope = 'SELECT id FROM invoice WHERE appointment_id IS NULL';
+    await ownerQuery(
+      tenant,
+      'UPDATE invoice SET active_promotion_application_id = NULL WHERE appointment_id IS NULL',
+    );
+    await ownerQuery(tenant, `DELETE FROM promotion_application WHERE invoice_id IN (${scope})`);
+    await ownerQuery(
+      tenant,
+      `DELETE FROM receipt_print WHERE receipt_id IN (SELECT id FROM receipt WHERE invoice_id IN (${scope}))`,
+    );
+    await ownerQuery(tenant, `DELETE FROM receipt WHERE invoice_id IN (${scope})`);
+    await ownerQuery(tenant, `DELETE FROM payment WHERE invoice_id IN (${scope})`);
+    await ownerQuery(tenant, `DELETE FROM invoice_line WHERE invoice_id IN (${scope})`);
+    await ownerQuery(tenant, 'DELETE FROM invoice WHERE appointment_id IS NULL');
+  }
 });
 
 describe('diagnostic departments', () => {
@@ -229,7 +328,7 @@ describe('raising an order', () => {
   it('records it against the visit and its patient', async () => {
     const res = await order(doctor, {
       appointmentId: mainVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'X-ray left knee, AP and lateral',
     });
 
@@ -243,7 +342,7 @@ describe('raising an order', () => {
 
     expect(body.status).toBe('PENDING');
     expect(body.description).toBe('X-ray left knee, AP and lateral');
-    expect(body.department.name).toBe('X-ray');
+    expect(body.department.name).toBe('ECG');
 
     // The patient came from the appointment, not from the request — there is no
     // patientId field to send.
@@ -268,7 +367,7 @@ describe('raising an order', () => {
   it('refuses a visit from another clinic', async () => {
     const res = await order(doctor, {
       appointmentId: otherVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'X-ray left knee',
     });
 
@@ -278,7 +377,7 @@ describe('raising an order', () => {
   it('refuses a caller without diagnostic:order', async () => {
     const res = await order(frontDesk, {
       appointmentId: mainVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'X-ray left knee',
     });
 
@@ -286,15 +385,1231 @@ describe('raising an order', () => {
   });
 });
 
-describe('the worklist', () => {
-  it('shows pending orders oldest first, with enough to identify the patient', async () => {
-    const appointmentId = mainVisit;
-    await order(doctor, { appointmentId, departmentId: xrayDepartmentId, description: 'First' });
-    await order(doctor, { appointmentId, departmentId: xrayDepartmentId, description: 'Second' });
+describe('the test catalogue', () => {
+  it('lists the clinic\u2019s priced tests, with the fee, to whoever may order', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { tests } = res.json<{
+      tests: Array<{ id: string; name: string; pricePaise: number }>;
+    }>();
+
+    const knee = tests.find((t) => t.id === kneeXrayId);
+    expect(knee).toBeDefined();
+    // The fee is the point of the endpoint (decision (f)). A doctor who cannot
+    // see it orders a scan without knowing what it costs the patient.
+    expect(knee?.pricePaise).toBe(45_000);
+  });
+
+  it('narrows to one department, so the form offers only what that room does', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/diagnostics/catalogue?departmentId=${xrayDepartmentId}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const ids = res.json<{ tests: Array<{ id: string }> }>().tests.map((t) => t.id);
+    expect(ids).toContain(kneeXrayId);
+    expect(ids).not.toContain(bloodCountId);
+  });
+
+  it('leaves out a test no department performs \u2014 it has no worklist to land on', async () => {
+    const orphan = await priceTest(admin, {
+      code: 'XR-ORPHAN',
+      name: 'Unassigned Scan',
+      pricePaise: 10_000,
+      departmentId: null,
+    });
 
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/diagnostics/orders?departmentId=${xrayDepartmentId}`,
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(res.json<{ tests: Array<{ id: string }> }>().tests.map((t) => t.id)).not.toContain(
+      orphan,
+    );
+  });
+
+  it('refuses the diagnostics room, which does not order its own work', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("never shows one clinic another's price list", async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: otherAdmin.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ tests: Array<{ id: string }> }>().tests.map((t) => t.id)).not.toContain(
+      kneeXrayId,
+    );
+  });
+});
+
+describe('ordering a catalogue test', () => {
+  it('records which test it was, and keeps the description as the record', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray Knee \u2014 left, AP and lateral',
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ service: { id: string; name: string } | null; description: string }>();
+    expect(body.service?.id).toBe(kneeXrayId);
+    // The doctor's own words survive the pick: laterality and view are exactly
+    // what a catalogue entry cannot carry.
+    expect(body.description).toBe('X-ray Knee \u2014 left, AP and lateral');
+  });
+
+  it('falls back to the catalogue name when the doctor typed nothing', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ description: string }>().description).toBe('X-ray Knee');
+  });
+
+  it('refuses the same test twice on one visit', async () => {
+    const first = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(first.statusCode).toBe(201);
+
+    const again = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('TEST_ALREADY_ORDERED');
+  });
+
+  it('lets it be ordered again once the first was declined', async () => {
+    const first = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${first.json<{ id: string }>().id}/decline`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // The guard counts ACTIVE orders only. Counting declined ones would leave
+    // a mis-click permanently blocking the test it removed.
+    const again = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(again.statusCode).toBe(201);
+  });
+
+  it('refuses a test the chosen department does not perform', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: bloodCountId,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('TEST_WRONG_DEPARTMENT');
+  });
+
+  it('refuses a test that is no longer offered', async () => {
+    const retired = await priceTest(admin, {
+      code: 'XR-OLD',
+      name: 'Retired View',
+      pricePaise: 5_000,
+      departmentId: xrayDepartmentId,
+    });
+    const off = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/setup/services/${retired}/active`,
+      headers: { cookie: admin.cookie },
+      payload: { isActive: false },
+    });
+    expect(off.statusCode).toBe(200);
+
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: retired,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('TEST_INACTIVE');
+  });
+
+  it("refuses another clinic's test, which is how a price list leaks", async () => {
+    const res = await order(otherAdmin, {
+      appointmentId: otherVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+
+    // The department belongs to the main clinic too, so this never reaches the
+    // service check \u2014 either refusal proves the tenant boundary held.
+    expect([400, 404]).toContain(res.statusCode);
+  });
+
+  it('still takes a free-text order, for a clinic that has priced nothing', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'X-ray left knee, AP and lateral',
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ service: unknown }>().service).toBeNull();
+  });
+
+  it('refuses an order that says nothing at all', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('DESCRIPTION_REQUIRED');
+  });
+});
+
+describe('billing a doctor-ordered test', () => {
+  /** Every invoice this visit produced, newest first. */
+  async function billsFor(appointmentId: string) {
+    return ownerQuery<{
+      id: string;
+      appointment_id: string | null;
+      visit_appointment_id: string | null;
+      total_paise: number;
+      status: string;
+    }>(
+      fx.main.id,
+      `SELECT id, appointment_id, visit_appointment_id, total_paise, status
+         FROM invoice
+        WHERE visit_appointment_id = $1
+        ORDER BY issued_at DESC, number DESC`,
+      [appointmentId],
+    );
+  }
+
+  /** The test bills only — the consultation's is the one holding appointment_id. */
+  async function testBillsFor(appointmentId: string) {
+    return (await billsFor(appointmentId)).filter((i) => i.appointment_id === null);
+  }
+
+  it('raises the charge on its own bill, never on the consultation invoice', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(res.statusCode).toBe(201);
+
+    const tests = await testBillsFor(mainVisit);
+
+    // Its own bill: `appointment_id` null, so it is not the consultation
+    // invoice — that one is settled at the desk before the doctor is reached
+    // and will not take another line. This is the trade-off the clinic
+    // accepted, two bills for one visit.
+    expect(tests).toHaveLength(1);
+    expect(tests[0]!.total_paise).toBe(45_000);
+
+    // And still tied to the visit, which is what keeps test revenue out of the
+    // finance report's "not attributed to a doctor" bucket.
+    expect(tests[0]!.visit_appointment_id).toBe(mainVisit);
+
+    // This clinic has priced no consultation, so there is no consultation bill
+    // to confuse with it. Billing is opt-in per tenant — see `seedBilling`.
+    expect((await billsFor(mainVisit)).filter((i) => i.appointment_id !== null)).toHaveLength(0);
+  });
+
+  it('puts a second test on the same open bill rather than a second one', async () => {
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: pathologyDepartmentId,
+      serviceId: bloodCountId,
+    });
+
+    const tests = await testBillsFor(mainVisit);
+    expect(tests).toHaveLength(1);
+    // 45,000 + 30,000: one bill the patient pays once.
+    expect(tests[0]!.total_paise).toBe(75_000);
+  });
+
+  it('snapshots the price and the words onto the line', async () => {
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray Knee — left, AP and lateral',
+    });
+
+    const [line] = await ownerQuery<{
+      description: string;
+      unit_price_paise: number;
+      service_id: string;
+    }>(
+      fx.main.id,
+      `SELECT l.description, l.unit_price_paise, l.service_id
+         FROM invoice_line l
+         JOIN invoice i ON i.id = l.invoice_id
+        WHERE i.appointment_id IS NULL AND i.visit_appointment_id = $1`,
+      [mainVisit],
+    );
+
+    expect(line?.description).toBe('X-ray Knee — left, AP and lateral');
+    expect(line?.unit_price_paise).toBe(45_000);
+    expect(line?.service_id).toBe(kneeXrayId);
+  });
+
+  it('links the order to its charge, and marks it billable', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+
+    const body = res.json<{ invoiceLineId: string | null; billing: { status: string } }>();
+    expect(body.invoiceLineId).not.toBeNull();
+    // Raised after the migration, so the gate applies to it — and the bill is
+    // open the instant it is raised. `legacyUnbilled` is deliberately not on
+    // the wire: screens get the state, not the flags behind it.
+    expect(body.billing.status).toBe('UNPAID');
+  });
+
+  it('raises nothing for a free-text order — the clinic has no price for it', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'MRI brain, plain',
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ invoiceLineId: string | null }>().invoiceLineId).toBeNull();
+    expect(await testBillsFor(mainVisit)).toHaveLength(0);
+  });
+
+  it('opens a fresh bill once the open one has been paid', async () => {
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    const [first] = await testBillsFor(mainVisit);
+
+    const paid = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${first!.id}/payments`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { mode: 'CASH', amountPaise: 45_000 },
+    });
+    expect(paid.statusCode).toBe(201);
+
+    const second = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: pathologyDepartmentId,
+      serviceId: bloodCountId,
+    });
+    expect(second.statusCode).toBe(201);
+
+    const tests = await testBillsFor(mainVisit);
+    expect(tests).toHaveLength(2);
+    // The paid one is untouched — appending to it is exactly what `loadEditable`
+    // refuses, and rightly.
+    expect(tests.find((i) => i.id === first!.id)?.total_paise).toBe(45_000);
+  });
+
+  it('opens a fresh bill rather than failing when finance has put a discount on the open one', async () => {
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    const [first] = await testBillsFor(mainVisit);
+
+    const promotion = await app.inject({
+      method: 'POST',
+      url: '/api/v1/promotions',
+      headers: { cookie: admin.cookie },
+      payload: {
+        code: `CAMP${Date.now() % 100000}`,
+        name: 'Camp discount',
+        type: 'PERCENTAGE',
+        value: 10,
+        validFrom: '2026-01-01',
+      },
+    });
+    expect(promotion.statusCode).toBe(201);
+
+    const applied = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${first!.id}/promotion`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        promotionId: promotion.json<{ id: string }>().id,
+        authorisedByUserId: adminUserId,
+      },
+    });
+    expect(applied.statusCode).toBe(201);
+
+    /**
+     * The point of the whole test.
+     *
+     * A promotion closes an invoice to new lines — see `loadEditable`. Finance
+     * applied it in another room; the doctor cannot see it and could not undo
+     * it. If the order failed here, the doctor would get a billing error about
+     * a discount they know nothing about, on a screen with no way to act on it.
+     */
+    const second = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: pathologyDepartmentId,
+      serviceId: bloodCountId,
+    });
+    expect(second.statusCode).toBe(201);
+
+    const tests = await testBillsFor(mainVisit);
+    expect(tests).toHaveLength(2);
+    expect(tests.find((i) => i.id !== first!.id)?.total_paise).toBe(30_000);
+  });
+
+  it('leaves no charge behind when the order itself is refused', async () => {
+    // The department does not perform this test, so the order fails after the
+    // point where a charge could have been raised. One transaction or none.
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: bloodCountId,
+    });
+    expect(res.statusCode).toBe(400);
+
+    expect(await testBillsFor(mainVisit)).toHaveLength(0);
+  });
+});
+
+describe('the pay-first gate on a test', () => {
+  /** Order a priced test and hand back the order id and its bill. */
+  async function billedOrder(): Promise<{ orderId: string; invoiceId: string }> {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(res.statusCode).toBe(201);
+
+    const [bill] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM invoice WHERE appointment_id IS NULL AND visit_appointment_id = $1`,
+      [mainVisit],
+    );
+    return { orderId: res.json<{ id: string }>().id, invoiceId: bill!.id };
+  }
+
+  async function pay(invoiceId: string, amountPaise: number) {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/payments`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { mode: 'CASH', amountPaise },
+    });
+    expect(res.statusCode).toBe(201);
+  }
+
+  async function complete(orderId: string) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'No fracture.' },
+    });
+  }
+
+  it('still shows the order on the worklist, with the bill flagged', async () => {
+    const { orderId } = await billedOrder();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/orders',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    const row = res
+      .json<{ orders: Array<{ id: string; billing: { status: string; balancePaise: number } }> }>()
+      .orders.find((o) => o.id === orderId);
+
+    // Decision (c). The patient is standing at the counter; a row that quietly
+    // vanishes is how a clinic loses somebody in a corridor.
+    expect(row).toBeDefined();
+    expect(row?.billing.status).toBe('UNPAID');
+    expect(row?.billing.balancePaise).toBe(45_000);
+  });
+
+  it('never puts the bill’s payments in front of the diagnostics room', async () => {
+    await billedOrder();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/orders',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    // The state, not the ledger. This role holds no billing permission at all.
+    expect(res.payload).not.toContain('"payments"');
+    expect(res.payload).not.toContain('"invoiceLine"');
+  });
+
+  it('refuses to attach a result while the bill is open', async () => {
+    const { orderId } = await billedOrder();
+
+    const res = await attach(diagnosticsUser, orderId);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('TEST_NOT_PAID');
+  });
+
+  it('refuses to mark it done while the bill is open', async () => {
+    const { orderId } = await billedOrder();
+
+    const res = await complete(orderId);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('TEST_NOT_PAID');
+  });
+
+  it('still refuses after a part payment', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+    await pay(invoiceId, 20_000);
+
+    const res = await complete(orderId);
+
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('lets both through the moment the bill is cleared', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+    await pay(invoiceId, 45_000);
+
+    expect((await attach(diagnosticsUser, orderId)).statusCode).toBe(201);
+    expect((await complete(orderId)).statusCode).toBe(200);
+  });
+
+  it('lets a free-text order through — it was never billed, and that is not the patient’s doing', async () => {
+    const raised = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'MRI brain, plain',
+    });
+    const orderId = raised.json<{ id: string; billing: { status: string } }>().id;
+
+    // Shown for information, so the desk can see the gap in the price list.
+    expect(raised.json<{ billing: { status: string } }>().billing.status).toBe('NOT_BILLED');
+
+    // But never blocked: a gap in the price list is an administrator's problem,
+    // not a reason to hold a patient's report.
+    expect((await attach(diagnosticsUser, orderId)).statusCode).toBe(201);
+    expect((await complete(orderId)).statusCode).toBe(200);
+  });
+
+  it('lets an order raised before billing existed through', async () => {
+    const { orderId } = await billedOrder();
+
+    // Exactly what the migration's column default did to every row that already
+    // existed. Without this the gate would freeze a clinic's whole worklist on
+    // the morning it ships.
+    await ownerQuery(
+      fx.main.id,
+      'UPDATE diagnostic_order SET legacy_unbilled = true WHERE id = $1',
+      [orderId],
+    );
+
+    expect((await complete(orderId)).statusCode).toBe(200);
+  });
+
+  it('blocks a test whose bill was cancelled, and says so', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+
+    const cancelled = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/cancel`,
+      headers: { cookie: admin.cookie },
+      payload: { reason: 'Raised against the wrong patient' },
+    });
+    expect(cancelled.statusCode).toBe(201);
+
+    const res = await complete(orderId);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.message).toContain('cancelled');
+  });
+});
+
+describe('declining a test', () => {
+  async function billedOrder(): Promise<{ orderId: string; invoiceId: string; lineId: string }> {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(res.statusCode).toBe(201);
+
+    const [line] = await ownerQuery<{ id: string; invoice_id: string }>(
+      fx.main.id,
+      `SELECT l.id, l.invoice_id
+         FROM invoice_line l
+         JOIN invoice i ON i.id = l.invoice_id
+        WHERE i.appointment_id IS NULL AND i.visit_appointment_id = $1`,
+      [mainVisit],
+    );
+    return {
+      orderId: res.json<{ id: string }>().id,
+      invoiceId: line!.invoice_id,
+      lineId: line!.id,
+    };
+  }
+
+  async function decline(session: Session, orderId: string) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/decline`,
+      headers: { cookie: session.cookie },
+    });
+  }
+
+  it('takes the charge off the bill entirely, leaving no phantom discount', async () => {
+    const { orderId, invoiceId, lineId } = await billedOrder();
+
+    const res = await decline(frontDesk, orderId);
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ status: string }>().status).toBe('DECLINED');
+
+    // The line is gone. Writing its value into `discountPaise` instead printed
+    // the patient a charge they never incurred beside a discount they never
+    // got — and, because promotions live in that same column, broke every
+    // guard that read it and inflated "discount given" in the revenue report.
+    const lines = await ownerQuery(fx.main.id, `SELECT id FROM invoice_line WHERE id = $1`, [
+      lineId,
+    ]);
+    expect(lines).toHaveLength(0);
+
+    const [invoice] = await ownerQuery<{
+      subtotal_paise: number;
+      discount_paise: number;
+      total_paise: number;
+      status: string;
+    }>(
+      fx.main.id,
+      `SELECT subtotal_paise, discount_paise, total_paise, status FROM invoice WHERE id = $1`,
+      [invoiceId],
+    );
+    expect(invoice?.subtotal_paise).toBe(0);
+    expect(invoice?.discount_paise).toBe(0);
+    expect(invoice?.total_paise).toBe(0);
+  });
+
+  it('cancels the bill when that was the last charge on it', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const [invoice] = await ownerQuery<{ status: string; reason: string | null }>(
+      fx.main.id,
+      `SELECT status, reason FROM invoice WHERE id = $1`,
+      [invoiceId],
+    );
+
+    // Otherwise every declined single-test visit leaves a ₹0 bill on the
+    // outstanding list forever, and a list full of nothing is a list nobody reads.
+    expect(invoice?.status).toBe('CANCELLED');
+    expect(invoice?.reason).toBeTruthy();
+  });
+
+  it('leaves a bill alone while other charges remain on it', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: pathologyDepartmentId,
+      serviceId: bloodCountId,
+    });
+
+    await decline(frontDesk, orderId);
+
+    const [invoice] = await ownerQuery<{ status: string; total_paise: number }>(
+      fx.main.id,
+      `SELECT status, total_paise FROM invoice WHERE id = $1`,
+      [invoiceId],
+    );
+    expect(invoice?.status).toBe('UNPAID');
+    expect(invoice?.total_paise).toBe(30_000);
+  });
+
+  it('lets more than one test be taken off the same bill', async () => {
+    const first = await billedOrder();
+    const second = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: pathologyDepartmentId,
+      serviceId: bloodCountId,
+    });
+
+    expect((await decline(frontDesk, first.orderId)).statusCode).toBe(201);
+
+    // The old version wrote a line discount, which made `invoice.discountPaise`
+    // non-zero — and the desk's Decline button was gated on that being zero, so
+    // exactly one test could ever be removed.
+    expect((await decline(frontDesk, second.json<{ id: string }>().id)).statusCode).toBe(201);
+  });
+
+  it('puts a declined test back, on a fresh charge', async () => {
+    const { orderId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/undecline`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ status: string; invoiceLineId: string | null }>();
+    expect(body.status).toBe('PENDING');
+    expect(body.invoiceLineId).not.toBeNull();
+
+    // A new bill, because the old one auto-cancelled when its last line went.
+    const open = await ownerQuery<{ total_paise: number }>(
+      fx.main.id,
+      `SELECT total_paise FROM invoice
+        WHERE appointment_id IS NULL AND visit_appointment_id = $1 AND status = 'UNPAID'`,
+      [mainVisit],
+    );
+    expect(open).toHaveLength(1);
+    expect(open[0]?.total_paise).toBe(45_000);
+  });
+
+  it('refuses to put back something that was never declined', async () => {
+    const { orderId } = await billedOrder();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/undecline`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('ORDER_NOT_DECLINED');
+  });
+
+  it('refuses the diagnostics room a put-back — it is a money action', async () => {
+    const { orderId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/undecline`,
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('stops the department running it, and says why', async () => {
+    const { orderId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const attached = await attach(diagnosticsUser, orderId);
+    expect(attached.statusCode).toBe(400);
+    expect(attached.json().error.details?.code).toBe('ORDER_DECLINED');
+
+    const completed = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'No fracture.' },
+    });
+    expect(completed.statusCode).toBe(400);
+    // Told apart from "unpaid" in as many words: nobody is coming, and no
+    // money is due. A technician must not be left chasing a bill.
+    expect(completed.json().error.message).toContain('declined');
+  });
+
+  it('drops off the to-do list and turns up under declined', async () => {
+    const { orderId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    const pending = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/orders?status=PENDING',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+    expect(pending.json<{ orders: Array<{ id: string }> }>().orders).toHaveLength(0);
+
+    const declined = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/orders?status=DECLINED',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+    expect(declined.json<{ orders: Array<{ id: string }> }>().orders.map((o) => o.id)).toContain(
+      orderId,
+    );
+  });
+
+  it('refuses once money has been taken — that is a refund, not a decline', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+
+    const paid = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/payments`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { mode: 'CASH', amountPaise: 45_000 },
+    });
+    expect(paid.statusCode).toBe(201);
+
+    const res = await decline(frontDesk, orderId);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('ALREADY_PAID');
+  });
+
+  it('refuses while a promotion is on the bill, which is the whole reason it goes through loadEditable', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+
+    const promotion = await app.inject({
+      method: 'POST',
+      url: '/api/v1/promotions',
+      headers: { cookie: admin.cookie },
+      payload: {
+        code: `DECL${Date.now() % 100000}`,
+        name: 'Camp discount',
+        type: 'PERCENTAGE',
+        value: 10,
+        validFrom: '2026-01-01',
+      },
+    });
+    const applied = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/promotion`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        promotionId: promotion.json<{ id: string }>().id,
+        authorisedByUserId: adminUserId,
+      },
+    });
+    expect(applied.statusCode).toBe(201);
+
+    /**
+     * `apply` writes the promotion's share onto the LINE, and freezes the
+     * total in an append-only `promotion_application` row. Zeroing the line
+     * here would overwrite that share while the frozen row kept claiming the
+     * original figure — and the finance report reads the frozen row, so the
+     * clinic would be reported giving away money it never gave.
+     */
+    const res = await decline(frontDesk, orderId);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('PROMOTION_APPLIED');
+  });
+
+  it('refuses a test that was never charged for — cancelling is the right verb', async () => {
+    const raised = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'MRI brain, plain',
+    });
+
+    const res = await decline(frontDesk, raised.json<{ id: string }>().id);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('ORDER_NOT_BILLED');
+  });
+
+  it('refuses a second time, and refuses one already done', async () => {
+    const { orderId, invoiceId } = await billedOrder();
+    await decline(frontDesk, orderId);
+
+    expect((await decline(frontDesk, orderId)).statusCode).toBe(400);
+
+    const other = await billedOrder();
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${other.invoiceId}/payments`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { mode: 'CASH', amountPaise: 45_000 },
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${other.orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'No fracture.' },
+    });
+
+    const res = await decline(frontDesk, other.orderId);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('already been done');
+    expect(invoiceId).toBeDefined();
+  });
+
+  it('refuses the diagnostics room, which does not decide what a patient pays for', async () => {
+    const { orderId } = await billedOrder();
+
+    expect((await decline(diagnosticsUser, orderId)).statusCode).toBe(403);
+  });
+
+  it('will not let the charge be deleted instead, and says what to do', async () => {
+    const { invoiceId, lineId } = await billedOrder();
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${invoiceId}/lines/${lineId}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    // The foreign key is RESTRICT, so this would have failed anyway — as a
+    // constraint violation reaching the desk as a 500 that explains nothing.
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('LINE_IS_A_TEST');
+    expect(res.json().error.message).toContain('Decline the test instead');
+  });
+});
+
+describe('a test this centre does not do', () => {
+  async function setNote(session: Session, note: string | null) {
+    return app.inject({
+      method: 'PUT',
+      url: `/api/v1/appointments/${mainVisit}/external-test-note`,
+      headers: { cookie: session.cookie },
+      payload: { note },
+    });
+  }
+
+  it('refuses to make an order out of free text once the department has a price list', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      description: 'MRI brain, plain',
+    });
+
+    // Decision (b): the centre does not do it, so there is no department to
+    // send it to and no price to charge. An order would sit on a worklist
+    // nobody can clear, behind a gate over money that will never arrive.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('TEST_NOT_OFFERED');
+  });
+
+  it('still takes free text where the department has priced nothing', async () => {
+    const bare = await app.inject({
+      method: 'POST',
+      url: '/api/v1/departments',
+      headers: { cookie: admin.cookie },
+      payload: { name: 'Ultrasound', isDiagnostic: true },
+    });
+    expect(bare.statusCode).toBe(201);
+
+    // Billing is opt-in per tenant everywhere else in this codebase, and this
+    // is no place to make it compulsory: a clinic that has priced nothing must
+    // keep ordering the way it always has.
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: bare.json<{ id: string }>().id,
+      description: 'USG abdomen',
+    });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('records it on the visit, raising no order and no charge', async () => {
+    const res = await setNote(doctor, 'MRI brain, plain — have done at the district hospital');
+    expect(res.statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ external_test_note: string | null }>(
+      fx.main.id,
+      `SELECT external_test_note FROM appointment WHERE id = $1`,
+      [mainVisit],
+    );
+    expect(row?.external_test_note).toContain('MRI brain');
+
+    // No order, so no worklist row and no gate.
+    const worklist = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/orders',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+    expect(worklist.json<{ orders: unknown[] }>().orders).toHaveLength(0);
+
+    // And no charge.
+    const bills = await ownerQuery(
+      fx.main.id,
+      `SELECT id FROM invoice WHERE visit_appointment_id = $1`,
+      [mainVisit],
+    );
+    expect(bills).toHaveLength(0);
+  });
+
+  it('clears on a blank, because a doctor who deletes the line meant to', async () => {
+    await setNote(doctor, 'MRI brain');
+    const res = await setNote(doctor, null);
+
+    expect(res.json<{ externalTestNote: string | null }>().externalTestNote).toBeNull();
+  });
+
+  it('reaches the finance desk without handing over the consultation', async () => {
+    await setNote(doctor, 'MRI brain, plain — not done here');
+
+    // Raise a test bill so finance has an invoice to open on this visit.
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    const [bill] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM invoice WHERE appointment_id IS NULL AND visit_appointment_id = $1`,
+      [mainVisit],
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/invoices/${bill!.id}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Through `visitAppointment`: a test bill holds no `appointment_id` of its
+    // own, so without that link the desk would see nothing on exactly the
+    // bills where this note matters most.
+    expect(
+      res.json<{ visitAppointment: { externalTestNote: string } | null }>().visitAppointment
+        ?.externalTestNote,
+    ).toContain('MRI brain');
+  });
+
+  it('refuses a caller who may not order tests', async () => {
+    expect((await setNote(diagnosticsUser, 'MRI brain')).statusCode).toBe(403);
+  });
+
+  it("never reaches another clinic's visit", async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/appointments/${otherVisit}/external-test-note`,
+      headers: { cookie: doctor.cookie },
+      payload: { note: 'MRI brain' },
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('a patient’s test history, inside the consultation', () => {
+  /**
+   * A completed test on an EARLIER visit for the same patient.
+   *
+   * Done by hand rather than through the API: a second walk-in for a patient
+   * who already has one open is its own argument, and what this endpoint is
+   * being asked about is a test from a visit that has already finished.
+   */
+  async function completedTestOnAnotherVisit(description: string): Promise<string> {
+    const [past] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, status, visit_type, updated_at)
+       VALUES ($1, $2, $3, $4, now() - interval '30 days', now() - interval '30 days',
+               'FULFILLED', 'NEW', now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0], fx.main.practitionerId, fx.main.locationId],
+    );
+
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO diagnostic_order (tenant_id, appointment_id, patient_id, department_id,
+                                     ordered_by_user_id, description, status, result_note,
+                                     completed_at, completed_by_user_id, legacy_unbilled, updated_at)
+       SELECT $1, $2, $3, $4, u.id, $5, 'COMPLETED', 'No fracture seen.', now(), u.id, true, now()
+         FROM app_user u WHERE u.email = 'doctor@main.test'
+       RETURNING id`,
+      [fx.main.id, past!.id, fx.main.patientIds[0], xrayDepartmentId, description],
+    );
+    return row!.id;
+  }
+
+  async function openConsultation(session: Session = doctor) {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/encounters',
+      headers: { cookie: session.cookie },
+      payload: { appointmentId: mainVisit },
+    });
+    if (res.statusCode !== 201 && res.statusCode !== 200) {
+      throw new Error(`Could not open the consultation: ${res.statusCode} ${res.payload}`);
+    }
+    return res.json<{ id: string }>().id;
+  }
+
+  async function history(session: Session, encounterId: string) {
+    return app.inject({
+      method: 'GET',
+      url: `/api/v1/encounters/${encounterId}/patient-test-history`,
+      headers: { cookie: session.cookie },
+    });
+  }
+
+  it('gives the doctor every earlier completed test, whatever visit it came from', async () => {
+    await completedTestOnAnotherVisit('X-ray Knee — 30 days ago');
+    const encounterId = await openConsultation();
+
+    const res = await history(doctor, encounterId);
+
+    expect(res.statusCode).toBe(200);
+    const { orders } = res.json<{ orders: Array<{ description: string; resultNote: string }> }>();
+    expect(orders.map((o) => o.description)).toContain('X-ray Knee — 30 days ago');
+    expect(orders[0]?.resultNote).toBe('No fracture seen.');
+  });
+
+  it('reaches past the three-visit window the quick view stops at', async () => {
+    // That earlier visit has no encounter at all, so `previousVisits` — which
+    // takes the last three SIGNED encounters — cannot see it. This can.
+    await completedTestOnAnotherVisit('CT head — long ago');
+    const encounterId = await openConsultation();
+
+    const { orders } = (await history(doctor, encounterId)).json<{
+      orders: Array<{ description: string }>;
+    }>();
+    expect(orders.map((o) => o.description)).toContain('CT head — long ago');
+  });
+
+  it('leaves out this visit’s own tests, which are already on the screen', async () => {
+    const mine = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    const orderId = mine.json<{ id: string }>().id;
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE diagnostic_order
+          SET status = 'COMPLETED',
+              completed_at = now(),
+              completed_by_user_id = ordered_by_user_id
+        WHERE id = $1`,
+      [orderId],
+    );
+
+    const encounterId = await openConsultation();
+    const { orders } = (await history(doctor, encounterId)).json<{
+      orders: Array<{ id: string }>;
+    }>();
+
+    expect(orders.map((o) => o.id)).not.toContain(orderId);
+  });
+
+  it('leaves out a test that has not come back yet', async () => {
+    await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    const encounterId = await openConsultation();
+
+    // COMPLETED only. A pending test is not a result, and showing it as one is
+    // how a doctor reads an absence as a normal finding.
+    expect((await history(doctor, encounterId)).json<{ orders: unknown[] }>().orders).toHaveLength(
+      0,
+    );
+  });
+
+  it('refuses the administrator, who holds every permission in the clinic', async () => {
+    await completedTestOnAnotherVisit('X-ray Knee');
+    const encounterId = await openConsultation();
+
+    // Decision (e): no standing access to a patient's record, and the person
+    // holding every permission is exactly who that is about.
+    expect((await history(admin, encounterId)).statusCode).toBe(403);
+  });
+
+  it('refuses the diagnostics room and the front desk', async () => {
+    const encounterId = await openConsultation();
+
+    expect((await history(diagnosticsUser, encounterId)).statusCode).toBe(403);
+    expect((await history(frontDesk, encounterId)).statusCode).toBe(403);
+  });
+
+  it('closes overnight, so it never becomes standing access', async () => {
+    await completedTestOnAnotherVisit('X-ray Knee');
+    const encounterId = await openConsultation();
+    expect((await history(doctor, encounterId)).statusCode).toBe(200);
+
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE appointment SET start_at = start_at - interval '2 days' WHERE id = $1`,
+      [mainVisit],
+    );
+
+    const res = await history(doctor, encounterId);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toContain('another day');
+
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE appointment SET start_at = start_at + interval '2 days' WHERE id = $1`,
+      [mainVisit],
+    );
+  });
+
+  it('stays open after the consultation is signed, for the addendum', async () => {
+    await completedTestOnAnotherVisit('X-ray Knee');
+    const encounterId = await openConsultation();
+
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE encounter
+          SET status = 'SIGNED',
+              signed_at = now(),
+              signed_by_user_id = (SELECT id FROM app_user WHERE email = 'doctor@main.test')
+        WHERE id = $1`,
+      [encounterId],
+    );
+
+    // A doctor writing an addendum an hour later is still on the same visit and
+    // must not lose the history mid-sentence. The DAY is the bound, not signing.
+    expect((await history(doctor, encounterId)).statusCode).toBe(200);
+  });
+
+  it("never reaches another clinic's consultation", async () => {
+    const encounterId = await openConsultation();
+
+    expect((await history(otherAdmin, encounterId)).statusCode).toBe(404);
+  });
+});
+
+describe('the worklist', () => {
+  it('shows pending orders oldest first, with enough to identify the patient', async () => {
+    const appointmentId = mainVisit;
+    await order(doctor, { appointmentId, departmentId: plainDepartmentId, description: 'First' });
+    await order(doctor, { appointmentId, departmentId: plainDepartmentId, description: 'Second' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/diagnostics/orders?departmentId=${plainDepartmentId}`,
       headers: { cookie: frontDesk.cookie },
     });
 
@@ -312,7 +1627,7 @@ describe('the worklist', () => {
   it("never shows one clinic another's orders", async () => {
     await order(doctor, {
       appointmentId: mainVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'Main clinic order',
     });
 
@@ -328,7 +1643,7 @@ describe('the worklist', () => {
 
   it('lists what was ordered on one visit', async () => {
     const appointmentId = mainVisit;
-    await order(doctor, { appointmentId, departmentId: xrayDepartmentId, description: 'Knee' });
+    await order(doctor, { appointmentId, departmentId: plainDepartmentId, description: 'Knee' });
 
     const res = await app.inject({
       method: 'GET',
@@ -344,7 +1659,7 @@ describe('cancelling', () => {
   it('marks it cancelled rather than deleting it', async () => {
     const created = await order(doctor, {
       appointmentId: mainVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'Ordered by mistake',
     });
 
@@ -365,7 +1680,7 @@ describe('cancelling', () => {
   it('drops off the pending worklist once cancelled', async () => {
     const created = await order(doctor, {
       appointmentId: mainVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'Ordered by mistake',
     });
 
@@ -413,7 +1728,7 @@ describe('attaching a result', () => {
   async function pendingOrder(): Promise<string> {
     const res = await order(doctor, {
       appointmentId: mainVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'X-ray left knee',
     });
     return res.json<{ id: string }>().id;
@@ -482,11 +1797,69 @@ describe('attaching a result', () => {
   });
 });
 
+describe('opening an uploaded report', () => {
+  it('serves the bytes when the clinic runs without a bucket', async () => {
+    const raised = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'USG abdomen',
+    });
+    const orderId = raised.json<{ id: string }>().id;
+    const attached = await attach(diagnosticsUser, orderId, 'usg.pdf');
+    expect(attached.statusCode).toBe(201);
+    const documentId = attached.json<{ id: string }>().id;
+
+    const url = await app.inject({
+      method: 'GET',
+      url: `/api/v1/documents/${documentId}/url`,
+      headers: { cookie: doctor.cookie },
+    });
+    expect(url.statusCode).toBe(200);
+
+    /**
+     * The in-memory store used to answer `memory://…`, which a browser cannot
+     * follow — a doctor clicking an uploaded report got a blank tab. It now
+     * points at this API's own route, which is the only honest thing a store
+     * with no bucket can hand back.
+     */
+    const href = url.json<{ url: string }>().url;
+    expect(href).toBe(`/documents/${documentId}/raw`);
+
+    const raw = await app.inject({
+      method: 'GET',
+      url: `/api/v1${href}`,
+      headers: { cookie: doctor.cookie },
+    });
+
+    expect(raw.statusCode).toBe(200);
+    expect(raw.headers['content-type']).toContain('application/pdf');
+    expect(raw.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  it("never serves another clinic's file", async () => {
+    const raised = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'USG abdomen',
+    });
+    const attached = await attach(diagnosticsUser, raised.json<{ id: string }>().id, 'usg.pdf');
+    const documentId = attached.json<{ id: string }>().id;
+
+    const raw = await app.inject({
+      method: 'GET',
+      url: `/api/v1/documents/${documentId}/raw`,
+      headers: { cookie: otherAdmin.cookie },
+    });
+
+    expect(raw.statusCode).toBe(404);
+  });
+});
+
 describe('completing an order', () => {
   async function pendingOrder(): Promise<string> {
     const res = await order(doctor, {
       appointmentId: mainVisit,
-      departmentId: xrayDepartmentId,
+      departmentId: plainDepartmentId,
       description: 'X-ray left knee',
     });
     return res.json<{ id: string }>().id;

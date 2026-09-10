@@ -7,6 +7,7 @@ import {
   api,
   ApiRequestError,
   type ChargeableService,
+  type OutstandingInvoice,
   type ClinicLocation,
   type Invoice,
   type PatientSummary,
@@ -80,6 +81,16 @@ export default function FinanceDeskPage() {
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [services, setServices] = useState<ChargeableService[]>([]);
+
+  /**
+   * Bills this patient already owes, from the clinic-wide outstanding list.
+   *
+   * Filtered here rather than server-side: `GET /invoices` already returns the
+   * open bills with their patient, and a per-patient endpoint would be a second
+   * way to ask the same question. If a clinic ever carries more open bills than
+   * that endpoint returns, this is the place that needs the narrower query.
+   */
+  const [outstanding, setOutstanding] = useState<OutstandingInvoice[]>([]);
 
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [approvers, setApprovers] = useState<Array<{ id: string; fullName: string }>>([]);
@@ -225,6 +236,23 @@ export default function FinanceDeskPage() {
 
   // --- actions --------------------------------------------------------------
 
+  useEffect(() => {
+    if (!patient) {
+      setOutstanding([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const { invoices } = await api.outstandingInvoices();
+        setOutstanding(invoices.filter((i) => i.patient.id === patient.id));
+      } catch {
+        // The rest of the desk works without this; a failure here must not
+        // stop somebody being registered and seen.
+        setOutstanding([]);
+      }
+    })();
+  }, [patient]);
+
   const refreshInvoice = useCallback(async (id: string) => {
     setInvoice(await api.invoice(id));
   }, []);
@@ -287,13 +315,34 @@ export default function FinanceDeskPage() {
       <Finished
         patient={patient}
         invoice={invoice}
+        /** No visit was opened here — the desk settled a bill that already existed. */
+        standalone={!appointmentId}
         onAnother={startOver}
         onQueue={() => router.push('/queue')}
       />
     );
   }
 
-  const step: Step = !patient ? 1 : !appointmentId ? 3 : paid ? 7 : invoice ? 4 : 6;
+  /**
+   * Where the desk is in the seven steps.
+   *
+   * An outstanding bill opened from "Already owing" is not part of that
+   * sequence — there is no visit being opened — so it reports as the bill step
+   * rather than falling through to "choose a doctor", which is not what the
+   * person is doing.
+   */
+  const step: Step = !patient ? 1 : !appointmentId ? (invoice ? 4 : 3) : paid ? 7 : invoice ? 4 : 6;
+
+  /**
+   * The desk is settling a bill that already existed, not opening a visit.
+   *
+   * A doctor-ordered test bill arrives this way: raised from inside a
+   * consultation that is already over, reached from "Already owing" with no
+   * appointment in hand. The seven-step flow does not apply, so the steps that
+   * belong to it are put away — otherwise the bill renders below a full grid of
+   * doctor cards, off the bottom of the screen, and the Open button looks dead.
+   */
+  const settlingExistingBill = Boolean(invoice) && !appointmentId;
 
   return (
     <div className="space-y-6">
@@ -344,8 +393,60 @@ export default function FinanceDeskPage() {
         )}
       </section>
 
-      {/* 3 — the doctor */}
-      {patient && (
+      {/*
+        Bills this patient already owes.
+        
+        Everything else on this screen is about a visit the desk is opening RIGHT
+        NOW. A test bill is not that: the doctor raised it from inside a
+        consultation that started before the patient walked back out to the
+        counter, and until this section existed there was no screen anywhere
+        that could reach it. The patient would have been sent to pay for an
+        X-ray at a desk with no way to find the charge.
+      */}
+      {patient && outstanding.length > 0 && !appointmentId && (
+        <section className="card p-5">
+          <p className="mono-label mb-3">Already owing</p>
+          <ul className="space-y-2">
+            {outstanding.map((o) => (
+              <li
+                key={o.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-ink/10 px-3.5 py-2.5"
+              >
+                <span className="min-w-0">
+                  <span className="block font-mono text-[13px] text-ink-60">{o.number}</span>
+                  <span className="block text-[13px] text-ink-40">
+                    {new Date(o.issuedAt).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className="font-mono text-[14px] font-semibold tabular-nums">
+                    {formatPaise(o.balancePaise)}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-secondary !py-1.5"
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => {
+                        setInvoice(await api.invoice(o.id));
+                        setAppointmentId(null);
+                      }, 'Could not open that bill.')
+                    }
+                  >
+                    Open
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* 3 — the doctor. Not part of settling a bill that already exists. */}
+      {patient && !settlingExistingBill && (
         <section className="card p-5">
           <p className="mono-label mb-3">2 · Doctor consulting today</p>
 
@@ -498,9 +599,32 @@ export default function FinanceDeskPage() {
       )}
 
       {/* 4, 5 and 6 — the bill */}
-      {appointmentId && (
+      {/*
+        Two ways to be looking at a bill.
+
+        The seven-step flow reaches one by opening a visit, so this was gated on
+        `appointmentId`. A test bill raised by a doctor from inside a
+        consultation has no visit to open here — the desk arrives at it from
+        "Already owing" instead, with no appointment in hand — and gating on the
+        appointment alone left that button loading an invoice into a section
+        that never rendered.
+      */}
+      {(appointmentId || invoice) && (
         <section className="card p-5">
-          <p className="mono-label mb-3">3 · The bill</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="mono-label">
+              {settlingExistingBill ? 'Outstanding bill' : '3 · The bill'}
+            </p>
+            {settlingExistingBill && (
+              <button
+                type="button"
+                className="btn-ghost text-[13px]"
+                onClick={() => setInvoice(null)}
+              >
+                Close
+              </button>
+            )}
+          </div>
 
           {!invoice ? (
             <Banner tone="info">
@@ -534,17 +658,83 @@ export default function FinanceDeskPage() {
               <InvoiceTable
                 invoice={invoice}
                 busy={busy}
-                {...(canBill && invoice.paidPaise === 0 && invoice.discountPaise === 0
+                {...(canBill && invoice.paidPaise === 0 && !invoice.activePromotionApplicationId
                   ? {
                       onRemove: (lineId: string) =>
                         run(async () => {
                           setInvoice(await api.removeInvoiceLine(invoice.id, lineId));
                         }, 'Could not remove that charge.'),
+                      /**
+                       * Same guard as removing, and for the same reason: the
+                       * decline writes a line discount, which under an applied
+                       * promotion would overwrite that line's share while the
+                       * frozen `promotion_application` row kept claiming the
+                       * original figure. The server refuses it too.
+                       */
+                      onDecline: (orderId: string, description: string) =>
+                        run(async () => {
+                          await api.declineDiagnosticOrder(orderId);
+                          setInvoice(await api.invoice(invoice.id));
+                        }, `Could not decline ${description}.`),
                     }
                   : {})}
               />
 
-              {canBill && invoice.paidPaise === 0 && invoice.discountPaise > 0 && (
+              {/* Declined by mistake? Put it back.
+                  A removed test has no line any more — that is the point — so
+                  it cannot be shown among the charges. Without this the only
+                  way back from a mis-click is a telephone call to the doctor. */}
+              {canBill && invoice.removedTests.length > 0 && (
+                <div className="mt-3 rounded-panel border border-ink/10 bg-bg-soft px-3.5 py-3">
+                  <p className="mono-label mb-2">Taken off this visit</p>
+                  <ul className="space-y-1.5">
+                    {invoice.removedTests.map((t) => (
+                      <li key={t.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[13.5px] text-ink-60">
+                          {t.description}
+                          {t.service && (
+                            <span className="ml-2 font-mono text-[12.5px] text-ink-40">
+                              {formatPaise(t.service.pricePaise)}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-ghost !px-2 !py-1 text-[12px]"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await api.undeclineDiagnosticOrder(t.id);
+                              setInvoice(await api.invoice(invoice.id));
+                            }, `Could not put ${t.description} back.`)
+                          }
+                        >
+                          Put it back
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* Said plainly: the charge is raised fresh, so a repricing
+                      between then and now shows up here rather than silently. */}
+                  <p className="field-hint">Charged at today’s price.</p>
+                </div>
+              )}
+
+              {/* Tests this centre does not perform, written by the doctor in
+                  the room. Shown here so the desk can say "that one is not done
+                  here" before the patient has waited for it. */}
+              {(invoice.appointment?.externalTestNote ??
+                invoice.visitAppointment?.externalTestNote) && (
+                <div className="mt-3 rounded-panel border border-dashed border-ink/20 bg-bg-soft px-3.5 py-3">
+                  <p className="mono-label">Not done here — patient to have elsewhere</p>
+                  <p className="mt-1 whitespace-pre-wrap text-[13.5px]">
+                    {invoice.appointment?.externalTestNote ??
+                      invoice.visitAppointment?.externalTestNote}
+                  </p>
+                </div>
+              )}
+
+              {canBill && invoice.paidPaise === 0 && invoice.activePromotionApplicationId && (
                 <p className="field-hint mt-2">
                   Take the discount off before adding or removing charges, then apply it again —
                   otherwise the discount stays recorded at the old amount.
@@ -556,7 +746,7 @@ export default function FinanceDeskPage() {
                   given. */}
               {canBill &&
                 invoice.paidPaise === 0 &&
-                invoice.discountPaise === 0 &&
+                !invoice.activePromotionApplicationId &&
                 services.length > 0 && (
                   <AddCharge
                     services={services}
@@ -1092,10 +1282,13 @@ function InvoiceTable({
   invoice,
   busy,
   onRemove,
+  onDecline,
 }: {
   invoice: Invoice;
   busy?: boolean;
   onRemove?: (lineId: string) => void;
+  /** Declining a test zeroes its charge. Deleting the line is refused. */
+  onDecline?: (orderId: string, description: string) => void;
 }) {
   return (
     <div className="rounded-panel border border-ink/10 bg-white">
@@ -1120,7 +1313,21 @@ function InvoiceTable({
            * free-text charge also has, so the id cannot tell them apart.
            */
           const isConsultation = index === 0;
-          const removable = Boolean(onRemove) && !isConsultation;
+
+          /**
+           * A test's charge is declined, never removed.
+           *
+           * The order points at this line with a RESTRICT foreign key, so the
+           * delete is refused by the database and by `removeLine` above it —
+           * offering the X here would only produce an error. Declining takes
+           * the charge to zero AND stands the department down, which is the
+           * thing the desk actually wants when the patient says no.
+           */
+          const test = l.diagnosticOrder;
+          // A declined test has no line at all, so there is no struck-through
+          // state to render here — see `removedTests` on the invoice.
+          const declinable = Boolean(onDecline) && test?.status === 'PENDING';
+          const removable = Boolean(onRemove) && !isConsultation && !test;
 
           return (
             <li key={l.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
@@ -1155,6 +1362,18 @@ function InvoiceTable({
                     onClick={() => onRemove?.(l.id)}
                   >
                     <IconX size={14} />
+                  </button>
+                )}
+
+                {declinable && test && (
+                  <button
+                    type="button"
+                    className="btn-ghost !px-2 !py-1 text-[12px]"
+                    disabled={busy}
+                    title={`The patient does not want ${l.description}`}
+                    onClick={() => onDecline?.(test.id, l.description)}
+                  >
+                    Decline
                   </button>
                 )}
               </span>
@@ -1276,7 +1495,14 @@ function PromotionPanel({
   const [promotionId, setPromotionId] = useState('');
   const [authorisedByUserId, setAuthorisedByUserId] = useState('');
 
-  if (invoice.discountPaise > 0) {
+  /**
+   * A promotion is on the bill — the application row, not the money.
+   *
+   * `discountPaise` is the wrong question: it moves whenever charges change,
+   * and while declines were written as line discounts this widget offered to
+   * "take off" a discount that had never been applied.
+   */
+  if (invoice.activePromotionApplicationId) {
     return (
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-clinical/25 bg-clinical-tint px-4 py-3">
         <p className="text-[13.5px] text-clinical-text">
@@ -1438,9 +1664,11 @@ function CollectPayment({
 function Finished({
   patient,
   invoice,
+  standalone,
   onAnother,
   onQueue,
 }: {
+  standalone?: boolean;
   patient: PatientSummary;
   invoice: Invoice | null;
   onAnother: () => void;
@@ -1455,8 +1683,13 @@ function Finished({
           </span>
           <p className="mono-label mt-4 !text-clinical-text">Nothing outstanding</p>
           <p className="mt-3 font-display text-[19px] font-bold">{patient.name}</p>
+          {/* Where the patient goes next is not the same in both cases. Somebody
+              who just paid for an X-ray has already been seen and checked in —
+              sending them back to reception is a wasted trip across a clinic. */}
           <p className="mt-1 text-[13px] text-ink-60">
-            Send them to the front desk to be checked in.
+            {standalone
+              ? 'Send them to the test room — the department can release the result now.'
+              : 'Send them to the front desk to be checked in.'}
           </p>
         </div>
 
@@ -1480,10 +1713,12 @@ function Finished({
             <IconUserPlus size={16} />
             Next patient
           </button>
-          <button type="button" className="btn-secondary" onClick={onQueue}>
-            <IconClock size={16} />
-            Open the queue
-          </button>
+          {!standalone && (
+            <button type="button" className="btn-secondary" onClick={onQueue}>
+              <IconClock size={16} />
+              Open the queue
+            </button>
+          )}
         </div>
       </div>
     </div>

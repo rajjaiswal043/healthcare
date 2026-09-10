@@ -41,6 +41,9 @@ export type DiagnosticOrderMinAggregateOutputType = {
   patientId: string | null
   departmentId: string | null
   orderedByUserId: string | null
+  serviceId: string | null
+  invoiceLineId: string | null
+  legacyUnbilled: boolean | null
   description: string | null
   status: $Enums.DiagnosticOrderStatus | null
   resultNote: string | null
@@ -57,6 +60,9 @@ export type DiagnosticOrderMaxAggregateOutputType = {
   patientId: string | null
   departmentId: string | null
   orderedByUserId: string | null
+  serviceId: string | null
+  invoiceLineId: string | null
+  legacyUnbilled: boolean | null
   description: string | null
   status: $Enums.DiagnosticOrderStatus | null
   resultNote: string | null
@@ -73,6 +79,9 @@ export type DiagnosticOrderCountAggregateOutputType = {
   patientId: number
   departmentId: number
   orderedByUserId: number
+  serviceId: number
+  invoiceLineId: number
+  legacyUnbilled: number
   description: number
   status: number
   resultNote: number
@@ -91,6 +100,9 @@ export type DiagnosticOrderMinAggregateInputType = {
   patientId?: true
   departmentId?: true
   orderedByUserId?: true
+  serviceId?: true
+  invoiceLineId?: true
+  legacyUnbilled?: true
   description?: true
   status?: true
   resultNote?: true
@@ -107,6 +119,9 @@ export type DiagnosticOrderMaxAggregateInputType = {
   patientId?: true
   departmentId?: true
   orderedByUserId?: true
+  serviceId?: true
+  invoiceLineId?: true
+  legacyUnbilled?: true
   description?: true
   status?: true
   resultNote?: true
@@ -123,6 +138,9 @@ export type DiagnosticOrderCountAggregateInputType = {
   patientId?: true
   departmentId?: true
   orderedByUserId?: true
+  serviceId?: true
+  invoiceLineId?: true
+  legacyUnbilled?: true
   description?: true
   status?: true
   resultNote?: true
@@ -212,6 +230,9 @@ export type DiagnosticOrderGroupByOutputType = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId: string | null
+  invoiceLineId: string | null
+  legacyUnbilled: boolean
   description: string
   status: $Enums.DiagnosticOrderStatus
   resultNote: string | null
@@ -249,6 +270,9 @@ export type DiagnosticOrderWhereInput = {
   patientId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
   departmentId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
   orderedByUserId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
+  serviceId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
+  invoiceLineId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
+  legacyUnbilled?: Prisma.BoolFilter<"DiagnosticOrder"> | boolean
   description?: Prisma.StringFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
@@ -260,6 +284,8 @@ export type DiagnosticOrderWhereInput = {
   appointment?: Prisma.XOR<Prisma.AppointmentScalarRelationFilter, Prisma.AppointmentWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   department?: Prisma.XOR<Prisma.DepartmentScalarRelationFilter, Prisma.DepartmentWhereInput>
+  service?: Prisma.XOR<Prisma.ServiceNullableScalarRelationFilter, Prisma.ServiceWhereInput> | null
+  invoiceLine?: Prisma.XOR<Prisma.InvoiceLineNullableScalarRelationFilter, Prisma.InvoiceLineWhereInput> | null
   orderedBy?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   completedBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   documents?: Prisma.ClinicalDocumentListRelationFilter
@@ -272,6 +298,9 @@ export type DiagnosticOrderOrderByWithRelationInput = {
   patientId?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   orderedByUserId?: Prisma.SortOrder
+  serviceId?: Prisma.SortOrderInput | Prisma.SortOrder
+  invoiceLineId?: Prisma.SortOrderInput | Prisma.SortOrder
+  legacyUnbilled?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -283,6 +312,8 @@ export type DiagnosticOrderOrderByWithRelationInput = {
   appointment?: Prisma.AppointmentOrderByWithRelationInput
   patient?: Prisma.PatientOrderByWithRelationInput
   department?: Prisma.DepartmentOrderByWithRelationInput
+  service?: Prisma.ServiceOrderByWithRelationInput
+  invoiceLine?: Prisma.InvoiceLineOrderByWithRelationInput
   orderedBy?: Prisma.UserOrderByWithRelationInput
   completedBy?: Prisma.UserOrderByWithRelationInput
   documents?: Prisma.ClinicalDocumentOrderByRelationAggregateInput
@@ -290,6 +321,7 @@ export type DiagnosticOrderOrderByWithRelationInput = {
 
 export type DiagnosticOrderWhereUniqueInput = Prisma.AtLeast<{
   id?: string
+  invoiceLineId?: string
   AND?: Prisma.DiagnosticOrderWhereInput | Prisma.DiagnosticOrderWhereInput[]
   OR?: Prisma.DiagnosticOrderWhereInput[]
   NOT?: Prisma.DiagnosticOrderWhereInput | Prisma.DiagnosticOrderWhereInput[]
@@ -298,6 +330,8 @@ export type DiagnosticOrderWhereUniqueInput = Prisma.AtLeast<{
   patientId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
   departmentId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
   orderedByUserId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
+  serviceId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
+  legacyUnbilled?: Prisma.BoolFilter<"DiagnosticOrder"> | boolean
   description?: Prisma.StringFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
@@ -309,10 +343,12 @@ export type DiagnosticOrderWhereUniqueInput = Prisma.AtLeast<{
   appointment?: Prisma.XOR<Prisma.AppointmentScalarRelationFilter, Prisma.AppointmentWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   department?: Prisma.XOR<Prisma.DepartmentScalarRelationFilter, Prisma.DepartmentWhereInput>
+  service?: Prisma.XOR<Prisma.ServiceNullableScalarRelationFilter, Prisma.ServiceWhereInput> | null
+  invoiceLine?: Prisma.XOR<Prisma.InvoiceLineNullableScalarRelationFilter, Prisma.InvoiceLineWhereInput> | null
   orderedBy?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   completedBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   documents?: Prisma.ClinicalDocumentListRelationFilter
-}, "id">
+}, "id" | "invoiceLineId">
 
 export type DiagnosticOrderOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -321,6 +357,9 @@ export type DiagnosticOrderOrderByWithAggregationInput = {
   patientId?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   orderedByUserId?: Prisma.SortOrder
+  serviceId?: Prisma.SortOrderInput | Prisma.SortOrder
+  invoiceLineId?: Prisma.SortOrderInput | Prisma.SortOrder
+  legacyUnbilled?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -343,6 +382,9 @@ export type DiagnosticOrderScalarWhereWithAggregatesInput = {
   patientId?: Prisma.UuidWithAggregatesFilter<"DiagnosticOrder"> | string
   departmentId?: Prisma.UuidWithAggregatesFilter<"DiagnosticOrder"> | string
   orderedByUserId?: Prisma.UuidWithAggregatesFilter<"DiagnosticOrder"> | string
+  serviceId?: Prisma.UuidNullableWithAggregatesFilter<"DiagnosticOrder"> | string | null
+  invoiceLineId?: Prisma.UuidNullableWithAggregatesFilter<"DiagnosticOrder"> | string | null
+  legacyUnbilled?: Prisma.BoolWithAggregatesFilter<"DiagnosticOrder"> | boolean
   description?: Prisma.StringWithAggregatesFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusWithAggregatesFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableWithAggregatesFilter<"DiagnosticOrder"> | string | null
@@ -354,6 +396,7 @@ export type DiagnosticOrderScalarWhereWithAggregatesInput = {
 
 export type DiagnosticOrderCreateInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -364,6 +407,8 @@ export type DiagnosticOrderCreateInput = {
   appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
   patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
   department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
   completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
   documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
@@ -376,6 +421,9 @@ export type DiagnosticOrderUncheckedCreateInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -388,6 +436,7 @@ export type DiagnosticOrderUncheckedCreateInput = {
 
 export type DiagnosticOrderUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -398,6 +447,8 @@ export type DiagnosticOrderUpdateInput = {
   appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
   completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
   documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
@@ -410,6 +461,9 @@ export type DiagnosticOrderUncheckedUpdateInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -427,6 +481,9 @@ export type DiagnosticOrderCreateManyInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -438,6 +495,7 @@ export type DiagnosticOrderCreateManyInput = {
 
 export type DiagnosticOrderUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -453,6 +511,9 @@ export type DiagnosticOrderUncheckedUpdateManyInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -484,6 +545,9 @@ export type DiagnosticOrderCountOrderByAggregateInput = {
   patientId?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   orderedByUserId?: Prisma.SortOrder
+  serviceId?: Prisma.SortOrder
+  invoiceLineId?: Prisma.SortOrder
+  legacyUnbilled?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrder
@@ -500,6 +564,9 @@ export type DiagnosticOrderMaxOrderByAggregateInput = {
   patientId?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   orderedByUserId?: Prisma.SortOrder
+  serviceId?: Prisma.SortOrder
+  invoiceLineId?: Prisma.SortOrder
+  legacyUnbilled?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrder
@@ -516,6 +583,9 @@ export type DiagnosticOrderMinOrderByAggregateInput = {
   patientId?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   orderedByUserId?: Prisma.SortOrder
+  serviceId?: Prisma.SortOrder
+  invoiceLineId?: Prisma.SortOrder
+  legacyUnbilled?: Prisma.SortOrder
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrder
@@ -777,6 +847,80 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutAppointmentNestedInput = {
   deleteMany?: Prisma.DiagnosticOrderScalarWhereInput | Prisma.DiagnosticOrderScalarWhereInput[]
 }
 
+export type DiagnosticOrderCreateNestedManyWithoutServiceInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput> | Prisma.DiagnosticOrderCreateWithoutServiceInput[] | Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput[]
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput | Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput[]
+  createMany?: Prisma.DiagnosticOrderCreateManyServiceInputEnvelope
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+}
+
+export type DiagnosticOrderUncheckedCreateNestedManyWithoutServiceInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput> | Prisma.DiagnosticOrderCreateWithoutServiceInput[] | Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput[]
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput | Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput[]
+  createMany?: Prisma.DiagnosticOrderCreateManyServiceInputEnvelope
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+}
+
+export type DiagnosticOrderUpdateManyWithoutServiceNestedInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput> | Prisma.DiagnosticOrderCreateWithoutServiceInput[] | Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput[]
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput | Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput[]
+  upsert?: Prisma.DiagnosticOrderUpsertWithWhereUniqueWithoutServiceInput | Prisma.DiagnosticOrderUpsertWithWhereUniqueWithoutServiceInput[]
+  createMany?: Prisma.DiagnosticOrderCreateManyServiceInputEnvelope
+  set?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  disconnect?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  delete?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  update?: Prisma.DiagnosticOrderUpdateWithWhereUniqueWithoutServiceInput | Prisma.DiagnosticOrderUpdateWithWhereUniqueWithoutServiceInput[]
+  updateMany?: Prisma.DiagnosticOrderUpdateManyWithWhereWithoutServiceInput | Prisma.DiagnosticOrderUpdateManyWithWhereWithoutServiceInput[]
+  deleteMany?: Prisma.DiagnosticOrderScalarWhereInput | Prisma.DiagnosticOrderScalarWhereInput[]
+}
+
+export type DiagnosticOrderUncheckedUpdateManyWithoutServiceNestedInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput> | Prisma.DiagnosticOrderCreateWithoutServiceInput[] | Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput[]
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput | Prisma.DiagnosticOrderCreateOrConnectWithoutServiceInput[]
+  upsert?: Prisma.DiagnosticOrderUpsertWithWhereUniqueWithoutServiceInput | Prisma.DiagnosticOrderUpsertWithWhereUniqueWithoutServiceInput[]
+  createMany?: Prisma.DiagnosticOrderCreateManyServiceInputEnvelope
+  set?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  disconnect?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  delete?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput | Prisma.DiagnosticOrderWhereUniqueInput[]
+  update?: Prisma.DiagnosticOrderUpdateWithWhereUniqueWithoutServiceInput | Prisma.DiagnosticOrderUpdateWithWhereUniqueWithoutServiceInput[]
+  updateMany?: Prisma.DiagnosticOrderUpdateManyWithWhereWithoutServiceInput | Prisma.DiagnosticOrderUpdateManyWithWhereWithoutServiceInput[]
+  deleteMany?: Prisma.DiagnosticOrderScalarWhereInput | Prisma.DiagnosticOrderScalarWhereInput[]
+}
+
+export type DiagnosticOrderCreateNestedOneWithoutInvoiceLineInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput>
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutInvoiceLineInput
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput
+}
+
+export type DiagnosticOrderUncheckedCreateNestedOneWithoutInvoiceLineInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput>
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutInvoiceLineInput
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput
+}
+
+export type DiagnosticOrderUpdateOneWithoutInvoiceLineNestedInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput>
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutInvoiceLineInput
+  upsert?: Prisma.DiagnosticOrderUpsertWithoutInvoiceLineInput
+  disconnect?: Prisma.DiagnosticOrderWhereInput | boolean
+  delete?: Prisma.DiagnosticOrderWhereInput | boolean
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.DiagnosticOrderUpdateToOneWithWhereWithoutInvoiceLineInput, Prisma.DiagnosticOrderUpdateWithoutInvoiceLineInput>, Prisma.DiagnosticOrderUncheckedUpdateWithoutInvoiceLineInput>
+}
+
+export type DiagnosticOrderUncheckedUpdateOneWithoutInvoiceLineNestedInput = {
+  create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput>
+  connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutInvoiceLineInput
+  upsert?: Prisma.DiagnosticOrderUpsertWithoutInvoiceLineInput
+  disconnect?: Prisma.DiagnosticOrderWhereInput | boolean
+  delete?: Prisma.DiagnosticOrderWhereInput | boolean
+  connect?: Prisma.DiagnosticOrderWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.DiagnosticOrderUpdateToOneWithWhereWithoutInvoiceLineInput, Prisma.DiagnosticOrderUpdateWithoutInvoiceLineInput>, Prisma.DiagnosticOrderUncheckedUpdateWithoutInvoiceLineInput>
+}
+
 export type DiagnosticOrderCreateNestedOneWithoutDocumentsInput = {
   create?: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutDocumentsInput, Prisma.DiagnosticOrderUncheckedCreateWithoutDocumentsInput>
   connectOrCreate?: Prisma.DiagnosticOrderCreateOrConnectWithoutDocumentsInput
@@ -799,6 +943,7 @@ export type EnumDiagnosticOrderStatusFieldUpdateOperationsInput = {
 
 export type DiagnosticOrderCreateWithoutTenantInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -808,6 +953,8 @@ export type DiagnosticOrderCreateWithoutTenantInput = {
   appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
   patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
   department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
   completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
   documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
@@ -819,6 +966,9 @@ export type DiagnosticOrderUncheckedCreateWithoutTenantInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -865,6 +1015,9 @@ export type DiagnosticOrderScalarWhereInput = {
   patientId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
   departmentId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
   orderedByUserId?: Prisma.UuidFilter<"DiagnosticOrder"> | string
+  serviceId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
+  invoiceLineId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
+  legacyUnbilled?: Prisma.BoolFilter<"DiagnosticOrder"> | boolean
   description?: Prisma.StringFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
@@ -876,6 +1029,7 @@ export type DiagnosticOrderScalarWhereInput = {
 
 export type DiagnosticOrderCreateWithoutPatientInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -885,6 +1039,8 @@ export type DiagnosticOrderCreateWithoutPatientInput = {
   tenant: Prisma.TenantCreateNestedOneWithoutDiagnosticOrdersInput
   appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
   department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
   completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
   documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
@@ -896,6 +1052,9 @@ export type DiagnosticOrderUncheckedCreateWithoutPatientInput = {
   appointmentId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -934,6 +1093,7 @@ export type DiagnosticOrderUpdateManyWithWhereWithoutPatientInput = {
 
 export type DiagnosticOrderCreateWithoutOrderedByInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -944,6 +1104,8 @@ export type DiagnosticOrderCreateWithoutOrderedByInput = {
   appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
   patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
   department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
   documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
 }
@@ -954,6 +1116,9 @@ export type DiagnosticOrderUncheckedCreateWithoutOrderedByInput = {
   appointmentId: string
   patientId: string
   departmentId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -976,6 +1141,7 @@ export type DiagnosticOrderCreateManyOrderedByInputEnvelope = {
 
 export type DiagnosticOrderCreateWithoutCompletedByInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -986,6 +1152,8 @@ export type DiagnosticOrderCreateWithoutCompletedByInput = {
   appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
   patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
   department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
   documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
 }
@@ -997,6 +1165,9 @@ export type DiagnosticOrderUncheckedCreateWithoutCompletedByInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1050,6 +1221,7 @@ export type DiagnosticOrderUpdateManyWithWhereWithoutCompletedByInput = {
 
 export type DiagnosticOrderCreateWithoutDepartmentInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1059,6 +1231,8 @@ export type DiagnosticOrderCreateWithoutDepartmentInput = {
   tenant: Prisma.TenantCreateNestedOneWithoutDiagnosticOrdersInput
   appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
   patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
   completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
   documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
@@ -1070,6 +1244,9 @@ export type DiagnosticOrderUncheckedCreateWithoutDepartmentInput = {
   appointmentId: string
   patientId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1108,6 +1285,7 @@ export type DiagnosticOrderUpdateManyWithWhereWithoutDepartmentInput = {
 
 export type DiagnosticOrderCreateWithoutAppointmentInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1117,6 +1295,8 @@ export type DiagnosticOrderCreateWithoutAppointmentInput = {
   tenant: Prisma.TenantCreateNestedOneWithoutDiagnosticOrdersInput
   patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
   department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
   completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
   documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
@@ -1128,6 +1308,9 @@ export type DiagnosticOrderUncheckedCreateWithoutAppointmentInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1164,8 +1347,9 @@ export type DiagnosticOrderUpdateManyWithWhereWithoutAppointmentInput = {
   data: Prisma.XOR<Prisma.DiagnosticOrderUpdateManyMutationInput, Prisma.DiagnosticOrderUncheckedUpdateManyWithoutAppointmentInput>
 }
 
-export type DiagnosticOrderCreateWithoutDocumentsInput = {
+export type DiagnosticOrderCreateWithoutServiceInput = {
   id?: string
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1176,6 +1360,164 @@ export type DiagnosticOrderCreateWithoutDocumentsInput = {
   appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
   patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
   department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
+  orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
+  completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
+  documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
+}
+
+export type DiagnosticOrderUncheckedCreateWithoutServiceInput = {
+  id?: string
+  tenantId: string
+  appointmentId: string
+  patientId: string
+  departmentId: string
+  orderedByUserId: string
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
+  description: string
+  status?: $Enums.DiagnosticOrderStatus
+  resultNote?: string | null
+  completedAt?: Date | string | null
+  completedByUserId?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  documents?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutDiagnosticOrderInput
+}
+
+export type DiagnosticOrderCreateOrConnectWithoutServiceInput = {
+  where: Prisma.DiagnosticOrderWhereUniqueInput
+  create: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput>
+}
+
+export type DiagnosticOrderCreateManyServiceInputEnvelope = {
+  data: Prisma.DiagnosticOrderCreateManyServiceInput | Prisma.DiagnosticOrderCreateManyServiceInput[]
+  skipDuplicates?: boolean
+}
+
+export type DiagnosticOrderUpsertWithWhereUniqueWithoutServiceInput = {
+  where: Prisma.DiagnosticOrderWhereUniqueInput
+  update: Prisma.XOR<Prisma.DiagnosticOrderUpdateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedUpdateWithoutServiceInput>
+  create: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedCreateWithoutServiceInput>
+}
+
+export type DiagnosticOrderUpdateWithWhereUniqueWithoutServiceInput = {
+  where: Prisma.DiagnosticOrderWhereUniqueInput
+  data: Prisma.XOR<Prisma.DiagnosticOrderUpdateWithoutServiceInput, Prisma.DiagnosticOrderUncheckedUpdateWithoutServiceInput>
+}
+
+export type DiagnosticOrderUpdateManyWithWhereWithoutServiceInput = {
+  where: Prisma.DiagnosticOrderScalarWhereInput
+  data: Prisma.XOR<Prisma.DiagnosticOrderUpdateManyMutationInput, Prisma.DiagnosticOrderUncheckedUpdateManyWithoutServiceInput>
+}
+
+export type DiagnosticOrderCreateWithoutInvoiceLineInput = {
+  id?: string
+  legacyUnbilled?: boolean
+  description: string
+  status?: $Enums.DiagnosticOrderStatus
+  resultNote?: string | null
+  completedAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  tenant: Prisma.TenantCreateNestedOneWithoutDiagnosticOrdersInput
+  appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
+  patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
+  department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
+  completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
+  documents?: Prisma.ClinicalDocumentCreateNestedManyWithoutDiagnosticOrderInput
+}
+
+export type DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput = {
+  id?: string
+  tenantId: string
+  appointmentId: string
+  patientId: string
+  departmentId: string
+  orderedByUserId: string
+  serviceId?: string | null
+  legacyUnbilled?: boolean
+  description: string
+  status?: $Enums.DiagnosticOrderStatus
+  resultNote?: string | null
+  completedAt?: Date | string | null
+  completedByUserId?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  documents?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutDiagnosticOrderInput
+}
+
+export type DiagnosticOrderCreateOrConnectWithoutInvoiceLineInput = {
+  where: Prisma.DiagnosticOrderWhereUniqueInput
+  create: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput>
+}
+
+export type DiagnosticOrderUpsertWithoutInvoiceLineInput = {
+  update: Prisma.XOR<Prisma.DiagnosticOrderUpdateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedUpdateWithoutInvoiceLineInput>
+  create: Prisma.XOR<Prisma.DiagnosticOrderCreateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput>
+  where?: Prisma.DiagnosticOrderWhereInput
+}
+
+export type DiagnosticOrderUpdateToOneWithWhereWithoutInvoiceLineInput = {
+  where?: Prisma.DiagnosticOrderWhereInput
+  data: Prisma.XOR<Prisma.DiagnosticOrderUpdateWithoutInvoiceLineInput, Prisma.DiagnosticOrderUncheckedUpdateWithoutInvoiceLineInput>
+}
+
+export type DiagnosticOrderUpdateWithoutInvoiceLineInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
+  resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
+  completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
+  documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
+}
+
+export type DiagnosticOrderUncheckedUpdateWithoutInvoiceLineInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  departmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
+  resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  documents?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutDiagnosticOrderNestedInput
+}
+
+export type DiagnosticOrderCreateWithoutDocumentsInput = {
+  id?: string
+  legacyUnbilled?: boolean
+  description: string
+  status?: $Enums.DiagnosticOrderStatus
+  resultNote?: string | null
+  completedAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  tenant: Prisma.TenantCreateNestedOneWithoutDiagnosticOrdersInput
+  appointment: Prisma.AppointmentCreateNestedOneWithoutDiagnosticOrdersInput
+  patient: Prisma.PatientCreateNestedOneWithoutDiagnosticOrdersInput
+  department: Prisma.DepartmentCreateNestedOneWithoutDiagnosticOrdersInput
+  service?: Prisma.ServiceCreateNestedOneWithoutDiagnosticOrdersInput
+  invoiceLine?: Prisma.InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput
   orderedBy: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput
   completedBy?: Prisma.UserCreateNestedOneWithoutDiagnosticOrdersCompletedInput
 }
@@ -1187,6 +1529,9 @@ export type DiagnosticOrderUncheckedCreateWithoutDocumentsInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1214,6 +1559,7 @@ export type DiagnosticOrderUpdateToOneWithWhereWithoutDocumentsInput = {
 
 export type DiagnosticOrderUpdateWithoutDocumentsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1224,6 +1570,8 @@ export type DiagnosticOrderUpdateWithoutDocumentsInput = {
   appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
   completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
 }
@@ -1235,6 +1583,9 @@ export type DiagnosticOrderUncheckedUpdateWithoutDocumentsInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1250,6 +1601,9 @@ export type DiagnosticOrderCreateManyTenantInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1261,6 +1615,7 @@ export type DiagnosticOrderCreateManyTenantInput = {
 
 export type DiagnosticOrderUpdateWithoutTenantInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1270,6 +1625,8 @@ export type DiagnosticOrderUpdateWithoutTenantInput = {
   appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
   completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
   documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
@@ -1281,6 +1638,9 @@ export type DiagnosticOrderUncheckedUpdateWithoutTenantInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1297,6 +1657,9 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutTenantInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1312,6 +1675,9 @@ export type DiagnosticOrderCreateManyPatientInput = {
   appointmentId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1323,6 +1689,7 @@ export type DiagnosticOrderCreateManyPatientInput = {
 
 export type DiagnosticOrderUpdateWithoutPatientInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1332,6 +1699,8 @@ export type DiagnosticOrderUpdateWithoutPatientInput = {
   tenant?: Prisma.TenantUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
   completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
   documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
@@ -1343,6 +1712,9 @@ export type DiagnosticOrderUncheckedUpdateWithoutPatientInput = {
   appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1359,6 +1731,9 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutPatientInput = {
   appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1374,6 +1749,9 @@ export type DiagnosticOrderCreateManyOrderedByInput = {
   appointmentId: string
   patientId: string
   departmentId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1390,6 +1768,9 @@ export type DiagnosticOrderCreateManyCompletedByInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1400,6 +1781,7 @@ export type DiagnosticOrderCreateManyCompletedByInput = {
 
 export type DiagnosticOrderUpdateWithoutOrderedByInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1410,6 +1792,8 @@ export type DiagnosticOrderUpdateWithoutOrderedByInput = {
   appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
   documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
 }
@@ -1420,6 +1804,9 @@ export type DiagnosticOrderUncheckedUpdateWithoutOrderedByInput = {
   appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1436,6 +1823,9 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutOrderedByInput = {
   appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1447,6 +1837,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutOrderedByInput = {
 
 export type DiagnosticOrderUpdateWithoutCompletedByInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1457,6 +1848,8 @@ export type DiagnosticOrderUpdateWithoutCompletedByInput = {
   appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
   documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
 }
@@ -1468,6 +1861,9 @@ export type DiagnosticOrderUncheckedUpdateWithoutCompletedByInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1484,6 +1880,9 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutCompletedByInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1498,6 +1897,9 @@ export type DiagnosticOrderCreateManyDepartmentInput = {
   appointmentId: string
   patientId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1509,6 +1911,7 @@ export type DiagnosticOrderCreateManyDepartmentInput = {
 
 export type DiagnosticOrderUpdateWithoutDepartmentInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1518,6 +1921,8 @@ export type DiagnosticOrderUpdateWithoutDepartmentInput = {
   tenant?: Prisma.TenantUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
   completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
   documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
@@ -1529,6 +1934,9 @@ export type DiagnosticOrderUncheckedUpdateWithoutDepartmentInput = {
   appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1545,6 +1953,9 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutDepartmentInput = {
   appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1560,6 +1971,9 @@ export type DiagnosticOrderCreateManyAppointmentInput = {
   patientId: string
   departmentId: string
   orderedByUserId: string
+  serviceId?: string | null
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
@@ -1571,6 +1985,7 @@ export type DiagnosticOrderCreateManyAppointmentInput = {
 
 export type DiagnosticOrderUpdateWithoutAppointmentInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1580,6 +1995,8 @@ export type DiagnosticOrderUpdateWithoutAppointmentInput = {
   tenant?: Prisma.TenantUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
   department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
   orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
   completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
   documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
@@ -1591,6 +2008,9 @@ export type DiagnosticOrderUncheckedUpdateWithoutAppointmentInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1607,6 +2027,83 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutAppointmentInput = {
   patientId?: Prisma.StringFieldUpdateOperationsInput | string
   departmentId?: Prisma.StringFieldUpdateOperationsInput | string
   orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
+  resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type DiagnosticOrderCreateManyServiceInput = {
+  id?: string
+  tenantId: string
+  appointmentId: string
+  patientId: string
+  departmentId: string
+  orderedByUserId: string
+  invoiceLineId?: string | null
+  legacyUnbilled?: boolean
+  description: string
+  status?: $Enums.DiagnosticOrderStatus
+  resultNote?: string | null
+  completedAt?: Date | string | null
+  completedByUserId?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+}
+
+export type DiagnosticOrderUpdateWithoutServiceInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
+  resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  appointment?: Prisma.AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  patient?: Prisma.PatientUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  department?: Prisma.DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput
+  invoiceLine?: Prisma.InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput
+  orderedBy?: Prisma.UserUpdateOneRequiredWithoutDiagnosticOrdersRaisedNestedInput
+  completedBy?: Prisma.UserUpdateOneWithoutDiagnosticOrdersCompletedNestedInput
+  documents?: Prisma.ClinicalDocumentUpdateManyWithoutDiagnosticOrderNestedInput
+}
+
+export type DiagnosticOrderUncheckedUpdateWithoutServiceInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  departmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
+  resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  documents?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutDiagnosticOrderNestedInput
+}
+
+export type DiagnosticOrderUncheckedUpdateManyWithoutServiceInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  departmentId?: Prisma.StringFieldUpdateOperationsInput | string
+  orderedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  invoiceLineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  legacyUnbilled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1654,6 +2151,9 @@ export type DiagnosticOrderSelect<ExtArgs extends runtime.Types.Extensions.Inter
   patientId?: boolean
   departmentId?: boolean
   orderedByUserId?: boolean
+  serviceId?: boolean
+  invoiceLineId?: boolean
+  legacyUnbilled?: boolean
   description?: boolean
   status?: boolean
   resultNote?: boolean
@@ -1665,6 +2165,8 @@ export type DiagnosticOrderSelect<ExtArgs extends runtime.Types.Extensions.Inter
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   department?: boolean | Prisma.DepartmentDefaultArgs<ExtArgs>
+  service?: boolean | Prisma.DiagnosticOrder$serviceArgs<ExtArgs>
+  invoiceLine?: boolean | Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs>
   orderedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   completedBy?: boolean | Prisma.DiagnosticOrder$completedByArgs<ExtArgs>
   documents?: boolean | Prisma.DiagnosticOrder$documentsArgs<ExtArgs>
@@ -1678,6 +2180,9 @@ export type DiagnosticOrderSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   patientId?: boolean
   departmentId?: boolean
   orderedByUserId?: boolean
+  serviceId?: boolean
+  invoiceLineId?: boolean
+  legacyUnbilled?: boolean
   description?: boolean
   status?: boolean
   resultNote?: boolean
@@ -1689,6 +2194,8 @@ export type DiagnosticOrderSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   department?: boolean | Prisma.DepartmentDefaultArgs<ExtArgs>
+  service?: boolean | Prisma.DiagnosticOrder$serviceArgs<ExtArgs>
+  invoiceLine?: boolean | Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs>
   orderedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   completedBy?: boolean | Prisma.DiagnosticOrder$completedByArgs<ExtArgs>
 }, ExtArgs["result"]["diagnosticOrder"]>
@@ -1700,6 +2207,9 @@ export type DiagnosticOrderSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   patientId?: boolean
   departmentId?: boolean
   orderedByUserId?: boolean
+  serviceId?: boolean
+  invoiceLineId?: boolean
+  legacyUnbilled?: boolean
   description?: boolean
   status?: boolean
   resultNote?: boolean
@@ -1711,6 +2221,8 @@ export type DiagnosticOrderSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   department?: boolean | Prisma.DepartmentDefaultArgs<ExtArgs>
+  service?: boolean | Prisma.DiagnosticOrder$serviceArgs<ExtArgs>
+  invoiceLine?: boolean | Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs>
   orderedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   completedBy?: boolean | Prisma.DiagnosticOrder$completedByArgs<ExtArgs>
 }, ExtArgs["result"]["diagnosticOrder"]>
@@ -1722,6 +2234,9 @@ export type DiagnosticOrderSelectScalar = {
   patientId?: boolean
   departmentId?: boolean
   orderedByUserId?: boolean
+  serviceId?: boolean
+  invoiceLineId?: boolean
+  legacyUnbilled?: boolean
   description?: boolean
   status?: boolean
   resultNote?: boolean
@@ -1731,12 +2246,14 @@ export type DiagnosticOrderSelectScalar = {
   updatedAt?: boolean
 }
 
-export type DiagnosticOrderOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "departmentId" | "orderedByUserId" | "description" | "status" | "resultNote" | "completedAt" | "completedByUserId" | "createdAt" | "updatedAt", ExtArgs["result"]["diagnosticOrder"]>
+export type DiagnosticOrderOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "departmentId" | "orderedByUserId" | "serviceId" | "invoiceLineId" | "legacyUnbilled" | "description" | "status" | "resultNote" | "completedAt" | "completedByUserId" | "createdAt" | "updatedAt", ExtArgs["result"]["diagnosticOrder"]>
 export type DiagnosticOrderInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   department?: boolean | Prisma.DepartmentDefaultArgs<ExtArgs>
+  service?: boolean | Prisma.DiagnosticOrder$serviceArgs<ExtArgs>
+  invoiceLine?: boolean | Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs>
   orderedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   completedBy?: boolean | Prisma.DiagnosticOrder$completedByArgs<ExtArgs>
   documents?: boolean | Prisma.DiagnosticOrder$documentsArgs<ExtArgs>
@@ -1747,6 +2264,8 @@ export type DiagnosticOrderIncludeCreateManyAndReturn<ExtArgs extends runtime.Ty
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   department?: boolean | Prisma.DepartmentDefaultArgs<ExtArgs>
+  service?: boolean | Prisma.DiagnosticOrder$serviceArgs<ExtArgs>
+  invoiceLine?: boolean | Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs>
   orderedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   completedBy?: boolean | Prisma.DiagnosticOrder$completedByArgs<ExtArgs>
 }
@@ -1755,6 +2274,8 @@ export type DiagnosticOrderIncludeUpdateManyAndReturn<ExtArgs extends runtime.Ty
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   department?: boolean | Prisma.DepartmentDefaultArgs<ExtArgs>
+  service?: boolean | Prisma.DiagnosticOrder$serviceArgs<ExtArgs>
+  invoiceLine?: boolean | Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs>
   orderedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   completedBy?: boolean | Prisma.DiagnosticOrder$completedByArgs<ExtArgs>
 }
@@ -1766,6 +2287,8 @@ export type $DiagnosticOrderPayload<ExtArgs extends runtime.Types.Extensions.Int
     appointment: Prisma.$AppointmentPayload<ExtArgs>
     patient: Prisma.$PatientPayload<ExtArgs>
     department: Prisma.$DepartmentPayload<ExtArgs>
+    service: Prisma.$ServicePayload<ExtArgs> | null
+    invoiceLine: Prisma.$InvoiceLinePayload<ExtArgs> | null
     orderedBy: Prisma.$UserPayload<ExtArgs>
     completedBy: Prisma.$UserPayload<ExtArgs> | null
     documents: Prisma.$ClinicalDocumentPayload<ExtArgs>[]
@@ -1777,6 +2300,33 @@ export type $DiagnosticOrderPayload<ExtArgs extends runtime.Types.Extensions.Int
     patientId: string
     departmentId: string
     orderedByUserId: string
+    /**
+     * The priced catalogue test this order names, when it names one.
+     * 
+     * Null for orders raised before the catalogue existed, and null for anything
+     * the clinic does not offer — those never become orders at all (decision (b):
+     * "Other" is a line on the printed slip, not work for a department).
+     * 
+     * `description` stays the record of what was ordered. This is the join that
+     * lets an order be priced and, in phase 2, billed.
+     */
+    serviceId: string | null
+    /**
+     * The charge raised for this test, when one was raised.
+     * 
+     * The pay-first gate reads the invoice through this link rather than through
+     * the appointment, because a walk-in test has no appointment and the same
+     * gate has to serve both flows.
+     */
+    invoiceLineId: string | null
+    /**
+     * Raised before diagnostics were billable, so the gate lets it through.
+     * 
+     * A pure timestamp cutoff, stamped by the migration's column default rather
+     * than by any code here. Without it, the day the gate ships is the day every
+     * clinic finds its existing worklist impossible to clear.
+     */
+    legacyUnbilled: boolean
     description: string
     status: $Enums.DiagnosticOrderStatus
     /**
@@ -2185,6 +2735,8 @@ export interface Prisma__DiagnosticOrderClient<T, Null = never, ExtArgs extends 
   appointment<T extends Prisma.AppointmentDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AppointmentDefaultArgs<ExtArgs>>): Prisma.Prisma__AppointmentClient<runtime.Types.Result.GetResult<Prisma.$AppointmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   patient<T extends Prisma.PatientDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PatientDefaultArgs<ExtArgs>>): Prisma.Prisma__PatientClient<runtime.Types.Result.GetResult<Prisma.$PatientPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   department<T extends Prisma.DepartmentDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DepartmentDefaultArgs<ExtArgs>>): Prisma.Prisma__DepartmentClient<runtime.Types.Result.GetResult<Prisma.$DepartmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  service<T extends Prisma.DiagnosticOrder$serviceArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DiagnosticOrder$serviceArgs<ExtArgs>>): Prisma.Prisma__ServiceClient<runtime.Types.Result.GetResult<Prisma.$ServicePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  invoiceLine<T extends Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DiagnosticOrder$invoiceLineArgs<ExtArgs>>): Prisma.Prisma__InvoiceLineClient<runtime.Types.Result.GetResult<Prisma.$InvoiceLinePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   orderedBy<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   completedBy<T extends Prisma.DiagnosticOrder$completedByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DiagnosticOrder$completedByArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   documents<T extends Prisma.DiagnosticOrder$documentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DiagnosticOrder$documentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ClinicalDocumentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -2223,6 +2775,9 @@ export interface DiagnosticOrderFieldRefs {
   readonly patientId: Prisma.FieldRef<"DiagnosticOrder", 'String'>
   readonly departmentId: Prisma.FieldRef<"DiagnosticOrder", 'String'>
   readonly orderedByUserId: Prisma.FieldRef<"DiagnosticOrder", 'String'>
+  readonly serviceId: Prisma.FieldRef<"DiagnosticOrder", 'String'>
+  readonly invoiceLineId: Prisma.FieldRef<"DiagnosticOrder", 'String'>
+  readonly legacyUnbilled: Prisma.FieldRef<"DiagnosticOrder", 'Boolean'>
   readonly description: Prisma.FieldRef<"DiagnosticOrder", 'String'>
   readonly status: Prisma.FieldRef<"DiagnosticOrder", 'DiagnosticOrderStatus'>
   readonly resultNote: Prisma.FieldRef<"DiagnosticOrder", 'String'>
@@ -2628,6 +3183,44 @@ export type DiagnosticOrderDeleteManyArgs<ExtArgs extends runtime.Types.Extensio
    * Limit how many DiagnosticOrders to delete.
    */
   limit?: number
+}
+
+/**
+ * DiagnosticOrder.service
+ */
+export type DiagnosticOrder$serviceArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Service
+   */
+  select?: Prisma.ServiceSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Service
+   */
+  omit?: Prisma.ServiceOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ServiceInclude<ExtArgs> | null
+  where?: Prisma.ServiceWhereInput
+}
+
+/**
+ * DiagnosticOrder.invoiceLine
+ */
+export type DiagnosticOrder$invoiceLineArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the InvoiceLine
+   */
+  select?: Prisma.InvoiceLineSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the InvoiceLine
+   */
+  omit?: Prisma.InvoiceLineOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InvoiceLineInclude<ExtArgs> | null
+  where?: Prisma.InvoiceLineWhereInput
 }
 
 /**

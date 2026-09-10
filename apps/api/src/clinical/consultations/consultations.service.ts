@@ -686,7 +686,15 @@ export class ConsultationsService {
           },
         },
         appointment: {
-          select: { id: true, startAt: true, tokenNumber: true, status: true, visitType: true },
+          select: {
+            id: true,
+            startAt: true,
+            tokenNumber: true,
+            status: true,
+            visitType: true,
+            // Tests this centre does not do, for the printed slip (decision (b)).
+            externalTestNote: true,
+          },
         },
         vitals: { orderBy: { recordedAt: 'desc' } },
         diagnoses: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },

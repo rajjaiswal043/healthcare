@@ -294,6 +294,7 @@ export type InvoiceLineWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"InvoiceLine"> | Date | string
   invoice?: Prisma.XOR<Prisma.InvoiceScalarRelationFilter, Prisma.InvoiceWhereInput>
   service?: Prisma.XOR<Prisma.ServiceNullableScalarRelationFilter, Prisma.ServiceWhereInput> | null
+  diagnosticOrder?: Prisma.XOR<Prisma.DiagnosticOrderNullableScalarRelationFilter, Prisma.DiagnosticOrderWhereInput> | null
 }
 
 export type InvoiceLineOrderByWithRelationInput = {
@@ -311,6 +312,7 @@ export type InvoiceLineOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   invoice?: Prisma.InvoiceOrderByWithRelationInput
   service?: Prisma.ServiceOrderByWithRelationInput
+  diagnosticOrder?: Prisma.DiagnosticOrderOrderByWithRelationInput
 }
 
 export type InvoiceLineWhereUniqueInput = Prisma.AtLeast<{
@@ -331,6 +333,7 @@ export type InvoiceLineWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"InvoiceLine"> | Date | string
   invoice?: Prisma.XOR<Prisma.InvoiceScalarRelationFilter, Prisma.InvoiceWhereInput>
   service?: Prisma.XOR<Prisma.ServiceNullableScalarRelationFilter, Prisma.ServiceWhereInput> | null
+  diagnosticOrder?: Prisma.XOR<Prisma.DiagnosticOrderNullableScalarRelationFilter, Prisma.DiagnosticOrderWhereInput> | null
 }, "id">
 
 export type InvoiceLineOrderByWithAggregationInput = {
@@ -384,6 +387,7 @@ export type InvoiceLineCreateInput = {
   createdAt?: Date | string
   invoice: Prisma.InvoiceCreateNestedOneWithoutLinesInput
   service?: Prisma.ServiceCreateNestedOneWithoutLinesInput
+  diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutInvoiceLineInput
 }
 
 export type InvoiceLineUncheckedCreateInput = {
@@ -399,6 +403,7 @@ export type InvoiceLineUncheckedCreateInput = {
   taxPaise?: number
   totalPaise: number
   createdAt?: Date | string
+  diagnosticOrder?: Prisma.DiagnosticOrderUncheckedCreateNestedOneWithoutInvoiceLineInput
 }
 
 export type InvoiceLineUpdateInput = {
@@ -414,6 +419,7 @@ export type InvoiceLineUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   invoice?: Prisma.InvoiceUpdateOneRequiredWithoutLinesNestedInput
   service?: Prisma.ServiceUpdateOneWithoutLinesNestedInput
+  diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutInvoiceLineNestedInput
 }
 
 export type InvoiceLineUncheckedUpdateInput = {
@@ -429,6 +435,7 @@ export type InvoiceLineUncheckedUpdateInput = {
   taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
   totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  diagnosticOrder?: Prisma.DiagnosticOrderUncheckedUpdateOneWithoutInvoiceLineNestedInput
 }
 
 export type InvoiceLineCreateManyInput = {
@@ -547,6 +554,11 @@ export type InvoiceLineSumOrderByAggregateInput = {
   totalPaise?: Prisma.SortOrder
 }
 
+export type InvoiceLineNullableScalarRelationFilter = {
+  is?: Prisma.InvoiceLineWhereInput | null
+  isNot?: Prisma.InvoiceLineWhereInput | null
+}
+
 export type InvoiceLineCreateNestedManyWithoutServiceInput = {
   create?: Prisma.XOR<Prisma.InvoiceLineCreateWithoutServiceInput, Prisma.InvoiceLineUncheckedCreateWithoutServiceInput> | Prisma.InvoiceLineCreateWithoutServiceInput[] | Prisma.InvoiceLineUncheckedCreateWithoutServiceInput[]
   connectOrCreate?: Prisma.InvoiceLineCreateOrConnectWithoutServiceInput | Prisma.InvoiceLineCreateOrConnectWithoutServiceInput[]
@@ -631,6 +643,22 @@ export type InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput = {
   deleteMany?: Prisma.InvoiceLineScalarWhereInput | Prisma.InvoiceLineScalarWhereInput[]
 }
 
+export type InvoiceLineCreateNestedOneWithoutDiagnosticOrderInput = {
+  create?: Prisma.XOR<Prisma.InvoiceLineCreateWithoutDiagnosticOrderInput, Prisma.InvoiceLineUncheckedCreateWithoutDiagnosticOrderInput>
+  connectOrCreate?: Prisma.InvoiceLineCreateOrConnectWithoutDiagnosticOrderInput
+  connect?: Prisma.InvoiceLineWhereUniqueInput
+}
+
+export type InvoiceLineUpdateOneWithoutDiagnosticOrderNestedInput = {
+  create?: Prisma.XOR<Prisma.InvoiceLineCreateWithoutDiagnosticOrderInput, Prisma.InvoiceLineUncheckedCreateWithoutDiagnosticOrderInput>
+  connectOrCreate?: Prisma.InvoiceLineCreateOrConnectWithoutDiagnosticOrderInput
+  upsert?: Prisma.InvoiceLineUpsertWithoutDiagnosticOrderInput
+  disconnect?: Prisma.InvoiceLineWhereInput | boolean
+  delete?: Prisma.InvoiceLineWhereInput | boolean
+  connect?: Prisma.InvoiceLineWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.InvoiceLineUpdateToOneWithWhereWithoutDiagnosticOrderInput, Prisma.InvoiceLineUpdateWithoutDiagnosticOrderInput>, Prisma.InvoiceLineUncheckedUpdateWithoutDiagnosticOrderInput>
+}
+
 export type InvoiceLineCreateWithoutServiceInput = {
   id?: string
   tenantId: string
@@ -643,6 +671,7 @@ export type InvoiceLineCreateWithoutServiceInput = {
   totalPaise: number
   createdAt?: Date | string
   invoice: Prisma.InvoiceCreateNestedOneWithoutLinesInput
+  diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutInvoiceLineInput
 }
 
 export type InvoiceLineUncheckedCreateWithoutServiceInput = {
@@ -657,6 +686,7 @@ export type InvoiceLineUncheckedCreateWithoutServiceInput = {
   taxPaise?: number
   totalPaise: number
   createdAt?: Date | string
+  diagnosticOrder?: Prisma.DiagnosticOrderUncheckedCreateNestedOneWithoutInvoiceLineInput
 }
 
 export type InvoiceLineCreateOrConnectWithoutServiceInput = {
@@ -715,6 +745,7 @@ export type InvoiceLineCreateWithoutInvoiceInput = {
   totalPaise: number
   createdAt?: Date | string
   service?: Prisma.ServiceCreateNestedOneWithoutLinesInput
+  diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutInvoiceLineInput
 }
 
 export type InvoiceLineUncheckedCreateWithoutInvoiceInput = {
@@ -729,6 +760,7 @@ export type InvoiceLineUncheckedCreateWithoutInvoiceInput = {
   taxPaise?: number
   totalPaise: number
   createdAt?: Date | string
+  diagnosticOrder?: Prisma.DiagnosticOrderUncheckedCreateNestedOneWithoutInvoiceLineInput
 }
 
 export type InvoiceLineCreateOrConnectWithoutInvoiceInput = {
@@ -757,6 +789,82 @@ export type InvoiceLineUpdateManyWithWhereWithoutInvoiceInput = {
   data: Prisma.XOR<Prisma.InvoiceLineUpdateManyMutationInput, Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceInput>
 }
 
+export type InvoiceLineCreateWithoutDiagnosticOrderInput = {
+  id?: string
+  tenantId: string
+  description: string
+  quantity?: number
+  unitPricePaise: number
+  discountPaise?: number
+  taxRateBasisPoints?: number
+  taxPaise?: number
+  totalPaise: number
+  createdAt?: Date | string
+  invoice: Prisma.InvoiceCreateNestedOneWithoutLinesInput
+  service?: Prisma.ServiceCreateNestedOneWithoutLinesInput
+}
+
+export type InvoiceLineUncheckedCreateWithoutDiagnosticOrderInput = {
+  id?: string
+  tenantId: string
+  invoiceId: string
+  serviceId?: string | null
+  description: string
+  quantity?: number
+  unitPricePaise: number
+  discountPaise?: number
+  taxRateBasisPoints?: number
+  taxPaise?: number
+  totalPaise: number
+  createdAt?: Date | string
+}
+
+export type InvoiceLineCreateOrConnectWithoutDiagnosticOrderInput = {
+  where: Prisma.InvoiceLineWhereUniqueInput
+  create: Prisma.XOR<Prisma.InvoiceLineCreateWithoutDiagnosticOrderInput, Prisma.InvoiceLineUncheckedCreateWithoutDiagnosticOrderInput>
+}
+
+export type InvoiceLineUpsertWithoutDiagnosticOrderInput = {
+  update: Prisma.XOR<Prisma.InvoiceLineUpdateWithoutDiagnosticOrderInput, Prisma.InvoiceLineUncheckedUpdateWithoutDiagnosticOrderInput>
+  create: Prisma.XOR<Prisma.InvoiceLineCreateWithoutDiagnosticOrderInput, Prisma.InvoiceLineUncheckedCreateWithoutDiagnosticOrderInput>
+  where?: Prisma.InvoiceLineWhereInput
+}
+
+export type InvoiceLineUpdateToOneWithWhereWithoutDiagnosticOrderInput = {
+  where?: Prisma.InvoiceLineWhereInput
+  data: Prisma.XOR<Prisma.InvoiceLineUpdateWithoutDiagnosticOrderInput, Prisma.InvoiceLineUncheckedUpdateWithoutDiagnosticOrderInput>
+}
+
+export type InvoiceLineUpdateWithoutDiagnosticOrderInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.StringFieldUpdateOperationsInput | string
+  quantity?: Prisma.IntFieldUpdateOperationsInput | number
+  unitPricePaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxRateBasisPoints?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  invoice?: Prisma.InvoiceUpdateOneRequiredWithoutLinesNestedInput
+  service?: Prisma.ServiceUpdateOneWithoutLinesNestedInput
+}
+
+export type InvoiceLineUncheckedUpdateWithoutDiagnosticOrderInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  invoiceId?: Prisma.StringFieldUpdateOperationsInput | string
+  serviceId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  description?: Prisma.StringFieldUpdateOperationsInput | string
+  quantity?: Prisma.IntFieldUpdateOperationsInput | number
+  unitPricePaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxRateBasisPoints?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
 export type InvoiceLineCreateManyServiceInput = {
   id?: string
   tenantId: string
@@ -783,6 +891,7 @@ export type InvoiceLineUpdateWithoutServiceInput = {
   totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   invoice?: Prisma.InvoiceUpdateOneRequiredWithoutLinesNestedInput
+  diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutInvoiceLineNestedInput
 }
 
 export type InvoiceLineUncheckedUpdateWithoutServiceInput = {
@@ -797,6 +906,7 @@ export type InvoiceLineUncheckedUpdateWithoutServiceInput = {
   taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
   totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  diagnosticOrder?: Prisma.DiagnosticOrderUncheckedUpdateOneWithoutInvoiceLineNestedInput
 }
 
 export type InvoiceLineUncheckedUpdateManyWithoutServiceInput = {
@@ -839,6 +949,7 @@ export type InvoiceLineUpdateWithoutInvoiceInput = {
   totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   service?: Prisma.ServiceUpdateOneWithoutLinesNestedInput
+  diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutInvoiceLineNestedInput
 }
 
 export type InvoiceLineUncheckedUpdateWithoutInvoiceInput = {
@@ -853,6 +964,7 @@ export type InvoiceLineUncheckedUpdateWithoutInvoiceInput = {
   taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
   totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  diagnosticOrder?: Prisma.DiagnosticOrderUncheckedUpdateOneWithoutInvoiceLineNestedInput
 }
 
 export type InvoiceLineUncheckedUpdateManyWithoutInvoiceInput = {
@@ -886,6 +998,7 @@ export type InvoiceLineSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   createdAt?: boolean
   invoice?: boolean | Prisma.InvoiceDefaultArgs<ExtArgs>
   service?: boolean | Prisma.InvoiceLine$serviceArgs<ExtArgs>
+  diagnosticOrder?: boolean | Prisma.InvoiceLine$diagnosticOrderArgs<ExtArgs>
 }, ExtArgs["result"]["invoiceLine"]>
 
 export type InvoiceLineSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -941,6 +1054,7 @@ export type InvoiceLineOmit<ExtArgs extends runtime.Types.Extensions.InternalArg
 export type InvoiceLineInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   invoice?: boolean | Prisma.InvoiceDefaultArgs<ExtArgs>
   service?: boolean | Prisma.InvoiceLine$serviceArgs<ExtArgs>
+  diagnosticOrder?: boolean | Prisma.InvoiceLine$diagnosticOrderArgs<ExtArgs>
 }
 export type InvoiceLineIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   invoice?: boolean | Prisma.InvoiceDefaultArgs<ExtArgs>
@@ -956,6 +1070,7 @@ export type $InvoiceLinePayload<ExtArgs extends runtime.Types.Extensions.Interna
   objects: {
     invoice: Prisma.$InvoicePayload<ExtArgs>
     service: Prisma.$ServicePayload<ExtArgs> | null
+    diagnosticOrder: Prisma.$DiagnosticOrderPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1375,6 +1490,7 @@ export interface Prisma__InvoiceLineClient<T, Null = never, ExtArgs extends runt
   readonly [Symbol.toStringTag]: "PrismaPromise"
   invoice<T extends Prisma.InvoiceDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.InvoiceDefaultArgs<ExtArgs>>): Prisma.Prisma__InvoiceClient<runtime.Types.Result.GetResult<Prisma.$InvoicePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   service<T extends Prisma.InvoiceLine$serviceArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.InvoiceLine$serviceArgs<ExtArgs>>): Prisma.Prisma__ServiceClient<runtime.Types.Result.GetResult<Prisma.$ServicePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  diagnosticOrder<T extends Prisma.InvoiceLine$diagnosticOrderArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.InvoiceLine$diagnosticOrderArgs<ExtArgs>>): Prisma.Prisma__DiagnosticOrderClient<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1833,6 +1949,25 @@ export type InvoiceLine$serviceArgs<ExtArgs extends runtime.Types.Extensions.Int
    */
   include?: Prisma.ServiceInclude<ExtArgs> | null
   where?: Prisma.ServiceWhereInput
+}
+
+/**
+ * InvoiceLine.diagnosticOrder
+ */
+export type InvoiceLine$diagnosticOrderArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DiagnosticOrder
+   */
+  select?: Prisma.DiagnosticOrderSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the DiagnosticOrder
+   */
+  omit?: Prisma.DiagnosticOrderOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DiagnosticOrderInclude<ExtArgs> | null
+  where?: Prisma.DiagnosticOrderWhereInput
 }
 
 /**

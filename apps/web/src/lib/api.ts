@@ -436,16 +436,59 @@ export interface PreviousVisit {
 export interface DiagnosticOrder {
   id: string;
   description: string;
-  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+  status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'DECLINED';
   createdAt: string;
   completedAt: string | null;
   resultNote: string | null;
   appointmentId: string;
   department: { id: string; name: string };
+  /** The catalogue test, when the order named one. No price — see `DiagnosticTest`. */
+  service: { id: string; code: string; name: string } | null;
+  /** The charge raised for it. Null for a free-text order and for legacy ones. */
+  invoiceLineId: string | null;
+  /**
+   * Where this test stands with the money. UNPAID and VOID block the result;
+   * LEGACY and NOT_BILLED are shown for information and never block.
+   */
+  billing: DiagnosticBillingState;
   patient: { id: string; name: string; uhid: string; gender: string; ageYears: number | null };
   orderedBy: { id: string; fullName: string };
   completedBy: { id: string; fullName: string } | null;
   _count: { documents: number };
+}
+
+/**
+ * Where a test stands with the money.
+ *
+ * The server sends the state, never the payments behind it: the diagnostics
+ * room holds no billing permission and has no business seeing a bill's takings.
+ */
+export type DiagnosticBillingState =
+  | { status: 'LEGACY' }
+  | { status: 'NOT_BILLED' }
+  | { status: 'UNPAID'; invoiceNumber: string; balancePaise: number }
+  | { status: 'SETTLED'; invoiceNumber: string }
+  | { status: 'VOID'; invoiceNumber: string };
+
+/** One completed test in a patient's history. No billing here — this is clinical. */
+export interface PastTest {
+  id: string;
+  description: string;
+  resultNote: string | null;
+  completedAt: string;
+  appointmentId: string | null;
+  department: { name: string };
+  service: { name: string } | null;
+  documents: Array<{ id: string; fileName: string }>;
+}
+
+/** An orderable test with its fee. Only reaches screens that may order. */
+export interface DiagnosticTest {
+  id: string;
+  code: string;
+  name: string;
+  pricePaise: number;
+  department: { id: string; name: string };
 }
 
 /** A file held against a patient. Note the absence of an object key. */
@@ -669,6 +712,8 @@ export interface Encounter {
     tokenNumber: number | null;
     status: string;
     visitType: string;
+    /** Tests this centre does not do. Printed on the slip (decision (b)). */
+    externalTestNote: string | null;
   };
   vitals: Vitals[];
   latestVitals: Vitals | null;
@@ -718,6 +763,8 @@ export interface InvoiceLine {
   discountPaise: number;
   taxPaise: number;
   totalPaise: number;
+  /** Set when this charge is a diagnostic test. Such a line is declined, never deleted. */
+  diagnosticOrder: { id: string; status: DiagnosticOrder['status'] } | null;
 }
 
 /** Why a compensating entry exists — null on money-in. */
@@ -762,6 +809,28 @@ export interface Invoice {
     id: string;
     startAt: string;
     status: string;
+    externalTestNote: string | null;
+    practitioner: { fullName: string; prefix: string | null };
+  } | null;
+  /**
+   * Set while a promotion is on this bill.
+   *
+   * The signal for "a discount was granted" — NOT `discountPaise`, which also
+   * moves when charges change and once had decline write-offs folded into it.
+   */
+  activePromotionApplicationId: string | null;
+  /** Tests taken off this visit's bills, which the desk may put back. */
+  removedTests: Array<{
+    id: string;
+    description: string;
+    service: { name: string; pricePaise: number } | null;
+  }>;
+  /** The visit a test bill came out of — its only link, since `appointment` is the consultation's. */
+  visitAppointment: {
+    id: string;
+    startAt: string;
+    status: string;
+    externalTestNote: string | null;
     practitioner: { fullName: string; prefix: string | null };
   } | null;
 }
@@ -954,8 +1023,14 @@ export const api = {
 
   diagnosticDepartments: () => request<{ departments: Department[] }>('/diagnostics/departments'),
 
+  /** What can be ordered, and what it costs. Behind `diagnostic:order`. */
+  diagnosticCatalogue: (departmentId?: string) =>
+    request<{ tests: DiagnosticTest[] }>(
+      `/diagnostics/catalogue${departmentId ? `?departmentId=${departmentId}` : ''}`,
+    ),
+
   diagnosticWorklist: (
-    params: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' } = {},
+    params: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' | 'DECLINED' } = {},
   ) => {
     const query = new URLSearchParams();
     if (params.departmentId) query.set('departmentId', params.departmentId);
@@ -975,7 +1050,8 @@ export const api = {
   raiseDiagnosticOrder: (input: {
     appointmentId: string;
     departmentId: string;
-    description: string;
+    serviceId?: string;
+    description?: string;
   }) =>
     request<DiagnosticOrder>('/diagnostics/orders', {
       method: 'POST',
@@ -984,6 +1060,31 @@ export const api = {
 
   cancelDiagnosticOrder: (id: string) =>
     request<DiagnosticOrder>(`/diagnostics/orders/${id}/cancel`, { method: 'PATCH' }),
+
+  /**
+   * Every completed test this patient has had, for the doctor seeing them now.
+   *
+   * 403 unless the caller is this encounter's own doctor and it is still that
+   * visit's day — the gate is the point, so callers should expect the refusal
+   * and not treat it as an error worth surfacing loudly.
+   */
+  patientTestHistory: (encounterId: string) =>
+    request<{ orders: PastTest[] }>(`/encounters/${encounterId}/patient-test-history`),
+
+  /** Tests this centre does not perform. Goes on the slip, never on a worklist. */
+  setExternalTestNote: (appointmentId: string, note: string | null) =>
+    request<{ externalTestNote: string | null }>(
+      `/appointments/${appointmentId}/external-test-note`,
+      { method: 'PUT', body: JSON.stringify({ note }) },
+    ),
+
+  /** The patient refused it: charge off the bill, department stood down. */
+  declineDiagnosticOrder: (id: string) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}/decline`, { method: 'POST' }),
+
+  /** Declined by mistake — raise the charge again and put it back on the worklist. */
+  undeclineDiagnosticOrder: (id: string) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}/undecline`, { method: 'POST' }),
 
   attachResult: (orderId: string, file: File) =>
     upload<ClinicalDocument>(`/diagnostics/orders/${orderId}/documents`, file),
@@ -994,8 +1095,20 @@ export const api = {
       body: JSON.stringify({ resultNote }),
     }),
 
-  /** A short-lived URL to open a file. Expires in five minutes. */
-  documentUrl: (id: string) =>
+  /**
+   * A short-lived URL to open a file. Expires in five minutes.
+   *
+   * The server returns an absolute S3 URL in normal use, and a path relative to
+   * the API when the clinic is running without a bucket — resolved here so all
+   * four callers can just `window.open` what they are handed.
+   */
+  documentUrl: async (id: string) => {
+    const res = await api.documentUrlRaw(id);
+    return res.url.startsWith('/') ? { ...res, url: `${API_BASE}${res.url}` } : res;
+  },
+
+  /** The server's answer, unresolved. */
+  documentUrlRaw: (id: string) =>
     request<{ url: string; expiresInSeconds: number; fileName: string; contentType: string }>(
       `/documents/${id}/url`,
     ),

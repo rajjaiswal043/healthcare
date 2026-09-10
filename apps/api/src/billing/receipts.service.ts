@@ -211,6 +211,19 @@ export class ReceiptsService {
           },
         },
         /**
+         * The visit this bill came out of, which for a test bill is the ONLY
+         * link it has: `appointment` above is the unique "this IS the
+         * consultation bill" column, and a test invoice cannot hold it. Without
+         * this, every test receipt printed a blank doctor and fell back to the
+         * clinic's first location — wrong for anyone with two branches.
+         */
+        visitAppointment: {
+          select: {
+            locationId: true,
+            practitioner: { select: { fullName: true, prefix: true } },
+          },
+        },
+        /**
          * The promotion to NAME beside the discount.
          *
          * `activePromotion`, not the history: a reversed discount is not on this
@@ -234,15 +247,17 @@ export class ReceiptsService {
      * The clinic's address for the letterhead.
      *
      * `tenant` has no address column — the only one in the schema lives on
-     * `location`. Reached through the appointment, which is where the visit
-     * actually happened. An invoice raised without an appointment has no
-     * location to point at, so it falls back to the clinic's FIRST location
-     * rather than printing a blank line: a receipt with no address on it is not
-     * much use to a patient claiming from an employer, and the clinic almost
-     * always has exactly one.
+     * `location`. Reached through the visit, which is where it actually
+     * happened, and through `visitAppointment` so a test bill resolves it too.
+     * A bill with no visit at all — a walk-in test — still has no location to
+     * point at and falls back to the clinic's FIRST location rather than
+     * printing a blank line: a receipt with no address is not much use to a
+     * patient claiming from an employer, and most clinics have exactly one.
      */
+    const visit = invoice.appointment ?? invoice.visitAppointment;
+
     const location = await tx.location.findFirst({
-      where: invoice.appointment?.locationId ? { id: invoice.appointment.locationId } : {},
+      where: visit?.locationId ? { id: visit.locationId } : {},
       orderBy: { createdAt: 'asc' },
       select: { name: true, addressLine: true, city: true },
     });
@@ -252,7 +267,7 @@ export class ReceiptsService {
       select: { fullName: true },
     });
 
-    const doctor = invoice.appointment?.practitioner ?? null;
+    const doctor = visit?.practitioner ?? null;
 
     return {
       receiptNumber: receipt.number,
@@ -270,8 +285,10 @@ export class ReceiptsService {
       patient: invoice.patient,
 
       /**
-       * Null for a walk-in test with no doctor, and left null on purpose. The
-       * requirement is explicit: the receipt should not pretend otherwise.
+       * Null for a walk-in test, where there genuinely is no doctor, and left
+       * null on purpose — the requirement is explicit that the receipt should
+       * not pretend otherwise. A test ordered inside a consultation DOES have
+       * one, and now names them: it is reached through `visitAppointment`.
        */
       doctor: doctor ? { fullName: doctor.fullName, prefix: doctor.prefix } : null,
 

@@ -1,0 +1,33 @@
+-- =============================================================================
+-- THE PATIENT SAID NO
+--
+-- Phase 4 of the doctor-ordered diagnostics loop. Tests are auto-charged the
+-- moment the doctor orders them (decision (d)), which is right — an order and
+-- its charge should not be able to come apart — but it means the patient is
+-- billed before anybody has asked them. Sometimes the answer at the desk is
+-- "not today". DECLINED is that answer, recorded.
+--
+-- Its own status, deliberately, and not folded into CANCELLED or into the
+-- derived "unpaid" state:
+--
+--   * CANCELLED means the clinician withdrew the request — the test should not
+--     happen. DECLINED means the request stands and the patient refused it.
+--     They read the same on a worklist and mean different things in a record.
+--
+--   * "Unpaid" is DERIVED, from the balance on the bill, and it means money is
+--     still expected. DECLINED is STORED and means no money is coming. A
+--     technician looking at a blocked test has to be able to tell "the patient
+--     is at the counter paying" from "this is not happening" — decision (d)
+--     says so in as many words, and one badge for both is how a patient waits
+--     an hour for a scan nobody is going to perform.
+--
+-- No column for it. The charge is not deleted — it is discounted to zero, in
+-- the service, so the invoice keeps the whole story: the test was ordered, it
+-- was priced, and it came to nothing. An invoice that quietly loses a line
+-- cannot be reconciled against the order that produced it.
+--
+-- Nothing to backfill: no order has ever been declined, because until now
+-- there was no way to.
+-- =============================================================================
+
+ALTER TYPE "diagnostic_order_status" ADD VALUE 'DECLINED';

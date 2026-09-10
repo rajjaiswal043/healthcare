@@ -37,6 +37,15 @@ export interface ClinicalDocumentStore {
   }): Promise<{ objectKey: string; sizeBytes: number }>;
 
   signedUrl(objectKey: string, expiresInSeconds?: number): Promise<string>;
+
+  /**
+   * The bytes, for a store that cannot hand out a URL a browser can follow.
+   *
+   * Only the in-memory store implements this. S3 deliberately does not: the
+   * whole reason `signedUrl` exists is so a 25MB scan travels from the bucket
+   * to the radiologist rather than through this process.
+   */
+  fetch?(objectKey: string): Promise<{ bytes: Buffer; contentType: string } | null>;
 }
 
 export const CLINICAL_DOCUMENT_STORE = Symbol('CLINICAL_DOCUMENT_STORE');
@@ -182,7 +191,21 @@ export class InMemoryClinicalDocumentStore implements ClinicalDocumentStore {
     return { objectKey, sizeBytes: input.bytes.length };
   }
 
+  /**
+   * A URL the API itself will serve, not a `memory://` placeholder.
+   *
+   * The placeholder was honest about there being no bucket, and useless in a
+   * browser: a doctor clicking an uploaded report got a blank tab. Since this
+   * store holds the bytes, it can serve them — `documents/:id/raw` does, behind
+   * the same permission as everything else here. Relative, because only the
+   * caller knows what host it is answering on.
+   */
   async signedUrl(objectKey: string, expiresIn = SIGNED_URL_TTL_SECONDS): Promise<string> {
-    return `memory://${objectKey}?expires=${expiresIn}`;
+    void expiresIn;
+    return `memory:${objectKey}`;
+  }
+
+  async fetch(objectKey: string): Promise<{ bytes: Buffer; contentType: string } | null> {
+    return this.objects.get(objectKey) ?? null;
   }
 }

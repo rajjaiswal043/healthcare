@@ -40,7 +40,13 @@ allowBuilds:
 #                 still vulnerable, so there is no in-major escape.
 overrides:
   find-my-way: '>=9.6.1'
-  sharp: '>=0.35.0'
+  #   sharp       — GHSA-rgj7-g3m4-5g8c, two libheif flaws reachable through the
+  #                 bundled decoder. Fixed in 0.35.4. Reached twice: directly from
+  #                 the API, which resizes clinic logos, and through next's image
+  #                 optimiser. The bound was '>=0.35.0' and resolved 0.35.3, which
+  #                 is still vulnerable — an open range is only as good as the
+  #                 floor you put under it.
+  sharp: '>=0.35.4'
   postcss: '>=8.5.18'
   # Caret, not '>=': an open range resolved to nanoid 6, which is ESM-only and
   # not what postcss expects. The fix shipped in the 3.x line, so stay in it.
@@ -75,3 +81,15 @@ overrides:
   #                 --audit-level=high` — and therefore the pre-push gate — honest,
   #                 not because the vulnerable code path is reachable.
   mysql2: '>=3.22.0'
+  #   js-yaml     — GHSA-2883-xcg3-v3hh, empty merge sources escape the
+  #                 maxTotalMergeKeys cap and burn CPU. Dev-only: every one of the
+  #                 fourteen paths runs through eslint, so nothing ships with it.
+  #                 Overridden rather than chased through an eslint major bump —
+  #                 the tree holds exactly one js-yaml (4.3.1), so this is a patch
+  #                 bump with no 3.x callers to break on the 4.x API.
+  #
+  #                 CARET, NOT '>='. An open range here resolved js-yaml 5.4.1 —
+  #                 a major bump on eslint's own config loader, bought for a
+  #                 dev-only advisory that is fixed inside the 4.x line. Same
+  #                 trap as nanoid above. The fix is 4.3.2; stay in 4.x.
+  js-yaml: '^4.3.2'
