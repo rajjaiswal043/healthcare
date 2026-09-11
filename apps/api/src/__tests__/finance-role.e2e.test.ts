@@ -63,6 +63,10 @@ const EXPECTED_FINANCE_PERMISSIONS = [
   'payment:collect',
   // "Apply an authorised promotion"
   'promotion:apply',
+  // FR-DIA-12 decision 1, 11 Sep 2026: a walk-in test is priced, paid for and
+  // requested at this desk in one action. Deliberately NOT `diagnostic:order`,
+  // which would let finance order tests on anybody's consultation.
+  'diagnostic:order:walkin',
   // "See all financial reporting"
   'report:revenue',
 ].sort();
@@ -130,6 +134,12 @@ afterAll(async () => {
 const FINANCE_ROLE_MIGRATIONS = [
   '20260905093000_finance_role',
   '20260905120000_finance_role_consent',
+  // A walk-in test is priced and requested at this desk (FR-DIA-12, decision 1
+  // of 11 Sep 2026). Listed here because this test replays the backfill for a
+  // clinic that already existed, and the list has to be every migration that
+  // touches the finance role — otherwise the replay produces a role the real
+  // deploy would not, which is the exact drift this file exists to catch.
+  '20260911120000_walkin_order_permission',
 ];
 
 function financeRoleMigrationSql(): string[] {

@@ -440,7 +440,13 @@ export interface DiagnosticOrder {
   createdAt: string;
   completedAt: string | null;
   resultNote: string | null;
-  appointmentId: string;
+  /** Null for a walk-in test — it came out of no consultation (FR-DIA-10). */
+  appointmentId: string | null;
+  /** Who decided the test was needed. Distinct from who keyed the order in. */
+  referralSource: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
+  referrerName: string | null;
+  referrerClinic: string | null;
+  referrerPhone: string | null;
   department: { id: string; name: string };
   /** The catalogue test, when the order named one. No price — see `DiagnosticTest`. */
   service: { id: string; code: string; name: string } | null;
@@ -454,6 +460,10 @@ export interface DiagnosticOrder {
   patient: { id: string; name: string; uhid: string; gender: string; ageYears: number | null };
   orderedBy: { id: string; fullName: string };
   completedBy: { id: string; fullName: string } | null;
+  /** Set once the patient has actually been given the report (FR-DIA-13). */
+  handedOverAt: string | null;
+  handedOverTo: string | null;
+  handedOverBy: { id: string; fullName: string } | null;
   _count: { documents: number };
 }
 
@@ -480,6 +490,89 @@ export interface PastTest {
   department: { name: string };
   service: { name: string } | null;
   documents: Array<{ id: string; fileName: string }>;
+}
+
+/**
+ * The finance desk's report — FR-FIN-03, as amended by FR-DIA-15.
+ *
+ * `byDoctor` and `byDepartment` are two answers to two questions, not one
+ * answer twice: a walk-in test patient never meets a doctor, so the first
+ * cannot see them at all.
+ */
+export interface FinanceReport {
+  from: string;
+  to: string;
+  timezone: string;
+  collections: {
+    collectedPaise: number;
+    refundedPaise: number;
+    netPaise: number;
+    transactionCount: number;
+    byMode: Array<{
+      mode: string;
+      collectedPaise: number;
+      refundedPaise: number;
+      netPaise: number;
+    }>;
+  };
+  byDoctor: Array<{
+    practitionerId: string | null;
+    name: string;
+    patientsSeen: number;
+    visits: number;
+    grossPaise: number;
+    discountPaise: number;
+    netBilledPaise: number;
+    netCollectedPaise: number;
+  }>;
+  /**
+   * Optional, and not because the server may omit it.
+   *
+   * A browser can hold a bundle newer than the API it is talking to — a
+   * rolling deploy guarantees a window of exactly that, and a dev machine
+   * running a stale build makes it a daily occurrence. These two sections are
+   * the newest in the payload, so they are the ones that go missing. Declared
+   * optional so the page degrades to the sections it did get instead of
+   * white-screening on a property read.
+   */
+  byDepartment?: {
+    rows: Array<{
+      departmentId: string | null;
+      name: string;
+      patientsSeen: number;
+      items: number;
+      grossPaise: number;
+      discountPaise: number;
+      netBilledPaise: number;
+    }>;
+    totalBilledPaise: number;
+    /** At invoice level. Deliberately NOT split per department — see the service. */
+    collectedPaise: number;
+  };
+  byReferralSource?: Array<{
+    source: string;
+    patients: number;
+    tests: number;
+    netBilledPaise: number;
+    referrers: Array<{ name: string; tests: number; netBilledPaise: number }>;
+  }>;
+  discounts: {
+    givenCount: number;
+    givenPaise: number;
+    reversedCount: number;
+    reversedPaise: number;
+    byPromotion: Array<{ code: string; count: number; discountPaise: number }>;
+  };
+  outstanding: {
+    count: number;
+    totalPaise: number;
+    deferred: { count: number; totalPaise: number };
+  };
+  refundsAndReversals: {
+    patientRefundedPaise: number;
+    recordedInErrorPaise: number;
+    totalPaise: number;
+  };
 }
 
 /** An orderable test with its fee. Only reaches screens that may order. */
@@ -1048,10 +1141,17 @@ export const api = {
     request<{ orders: DiagnosticOrder[] }>(`/appointments/${appointmentId}/diagnostic-orders`),
 
   raiseDiagnosticOrder: (input: {
-    appointmentId: string;
+    /** A consultation, for a doctor's order. Omitted for a walk-in. */
+    appointmentId?: string;
+    /** The patient, for a walk-in. Read off the visit when there is one. */
+    patientId?: string;
     departmentId: string;
     serviceId?: string;
     description?: string;
+    referralSource?: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
+    referrerName?: string;
+    referrerClinic?: string;
+    referrerPhone?: string;
   }) =>
     request<DiagnosticOrder>('/diagnostics/orders', {
       method: 'POST',
@@ -1081,6 +1181,32 @@ export const api = {
   /** The patient refused it: charge off the bill, department stood down. */
   declineDiagnosticOrder: (id: string) =>
     request<DiagnosticOrder>(`/diagnostics/orders/${id}/decline`, { method: 'POST' }),
+
+  /**
+   * A patient who walked in wanting tests (FR-DIA-10).
+   *
+   * Several tests, one invoice, one transaction — behind
+   * `diagnostic:order:walkin`, which finance holds and the front desk does not.
+   */
+  raiseWalkInTests: (input: {
+    patientId: string;
+    serviceIds: string[];
+    referralSource: 'EXTERNAL_DOCTOR' | 'SELF';
+    referrerName?: string;
+    referrerClinic?: string;
+    referrerPhone?: string;
+  }) =>
+    request<{ invoiceId: string; orders: DiagnosticOrder[] }>('/diagnostics/walk-in-orders', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** The patient has been given their report. Recorded once, not a flag. */
+  recordHandover: (id: string, handedOverTo: string) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}/handover`, {
+      method: 'POST',
+      body: JSON.stringify({ handedOverTo }),
+    }),
 
   /** Declined by mistake — raise the charge again and put it back on the worklist. */
   undeclineDiagnosticOrder: (id: string) =>
@@ -1241,6 +1367,15 @@ export const api = {
     request<Invoice>(`/invoices/${id}/defer`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
   outstandingInvoices: () => request<{ invoices: OutstandingInvoice[] }>('/invoices'),
+
+  /** FR-FIN-03. A range, defaulting to today when neither end is given. */
+  financeReport: (from?: string, to?: string) => {
+    const q = new URLSearchParams();
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    const suffix = q.toString();
+    return request<FinanceReport>(`/reports/finance${suffix ? `?${suffix}` : ''}`);
+  },
 
   dayCollection: (date?: string) =>
     request<DayCollection>(`/reports/day-collection${date ? `?date=${date}` : ''}`),

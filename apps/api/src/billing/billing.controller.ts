@@ -167,10 +167,15 @@ export class BillingController {
   }
 
   /**
-   * The finance desk's report (FR-FIN-03).
+   * The finance desk's report (FR-FIN-03, as amended by FR-DIA-15).
    *
-   * Collections, per-doctor billing, discounts given, what is still owed, and
-   * money that went back — over a range, defaulting to today.
+   * Collections, billing per doctor AND per department, where the diagnostic
+   * work came from, discounts given, what is still owed, and money that went
+   * back — over a range, defaulting to today.
+   *
+   * The department split exists because a walk-in test patient never meets a
+   * doctor, so a by-doctor report cannot see them: their money would sit in a
+   * nameless bucket while the department that earned it looked idle.
    *
    * Behind `report:revenue`, the same permission as the day's collections, and
    * for the same reason: this is the screen that says what the clinic earned,

@@ -7,6 +7,7 @@ import {
   api,
   ApiRequestError,
   type ChargeableService,
+  type DiagnosticTest,
   type OutstandingInvoice,
   type ClinicLocation,
   type Invoice,
@@ -92,6 +93,21 @@ export default function FinanceDeskPage() {
    */
   const [outstanding, setOutstanding] = useState<OutstandingInvoice[]>([]);
 
+  /**
+   * A patient who wants tests and no doctor (FR-DIA-10).
+   *
+   * Its own branch off the patient step rather than a step in the seven: there
+   * is no visit, no doctor and no queue in it. The desk prices the tests, takes
+   * the money and the patient walks to the department.
+   */
+  const [walkInTests, setWalkInTests] = useState<DiagnosticTest[]>([]);
+  const [walkIn, setWalkIn] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [referralSource, setReferralSource] = useState<'SELF' | 'EXTERNAL_DOCTOR'>('SELF');
+  const [referrerName, setReferrerName] = useState('');
+  const [referrerClinic, setReferrerClinic] = useState('');
+  const [referrerPhone, setReferrerPhone] = useState('');
+
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [approvers, setApprovers] = useState<Array<{ id: string; fullName: string }>>([]);
   const [approversBlocked, setApproversBlocked] = useState(false);
@@ -103,6 +119,7 @@ export default function FinanceDeskPage() {
   const canBill = can('invoice:write');
   const canCollect = can('payment:collect');
   const canDiscount = can('promotion:apply');
+  const canWalkIn = can('diagnostic:order:walkin');
 
   // --- clinic setup, once ---------------------------------------------------
 
@@ -235,6 +252,17 @@ export default function FinanceDeskPage() {
   }, [canDiscount]);
 
   // --- actions --------------------------------------------------------------
+
+  useEffect(() => {
+    if (!canWalkIn) return;
+    void (async () => {
+      try {
+        setWalkInTests((await api.diagnosticCatalogue()).tests);
+      } catch {
+        // No catalogue, no walk-in tests to sell. The rest of the desk works.
+      }
+    })();
+  }, [canWalkIn]);
 
   useEffect(() => {
     if (!patient) {
@@ -444,6 +472,199 @@ export default function FinanceDeskPage() {
           </ul>
         </section>
       )}
+
+      {/*
+        A patient who wants a test and no doctor (FR-DIA-10).
+
+        Offered beside the doctor step rather than inside it, because it is not
+        a step in the same sequence: no visit is opened, no doctor is chosen,
+        and nobody joins the queue. The desk prices the tests, takes the money,
+        and points the patient at the department.
+      */}
+      {patient &&
+        canWalkIn &&
+        !settlingExistingBill &&
+        !appointmentId &&
+        walkInTests.length > 0 && (
+          <section className="card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="mono-label">Tests only — no doctor</p>
+              {!walkIn && (
+                <button
+                  type="button"
+                  className="btn-secondary !py-1.5"
+                  onClick={() => setWalkIn(true)}
+                >
+                  Sell a test
+                </button>
+              )}
+            </div>
+
+            {walkIn && (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <p className="field-label">Which tests</p>
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {walkInTests.map((t) => {
+                      const on = picked.includes(t.id);
+                      return (
+                        <li key={t.id}>
+                          <label
+                            className={`flex cursor-pointer items-center justify-between gap-3 rounded-panel border px-3.5 py-2.5 text-[13.5px] ${
+                              on ? 'border-clinical/40 bg-clinical-tint' : 'border-ink/10'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2.5">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-clinical"
+                                checked={on}
+                                onChange={() =>
+                                  setPicked((p) =>
+                                    on ? p.filter((id) => id !== t.id) : [...p, t.id],
+                                  )
+                                }
+                              />
+                              <span>
+                                <span className="block font-semibold text-ink">{t.name}</span>
+                                <span className="block text-[12.5px] text-ink-40">
+                                  {t.department.name}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="font-mono text-[13px] tabular-nums">
+                              {formatPaise(t.pricePaise)}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {picked.length > 0 && (
+                    <p className="mt-2 text-[13.5px]">
+                      <span className="mono-label mr-2">Total</span>
+                      <span className="font-semibold tabular-nums">
+                        {formatPaise(
+                          walkInTests
+                            .filter((t) => picked.includes(t.id))
+                            .reduce((n, t) => n + t.pricePaise, 0),
+                        )}
+                      </span>
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="field-label">Who sent them</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        ['SELF', 'Nobody — they asked for it'],
+                        ['EXTERNAL_DOCTOR', 'A doctor elsewhere'],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={referralSource === value}
+                        className={
+                          referralSource === value ? 'btn-secondary !py-1.5' : 'btn-ghost !py-1.5'
+                        }
+                        onClick={() => setReferralSource(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Printed on the report and counted in the referral report, which
+                  is why the name is required and the rest is not. */}
+                {referralSource === 'EXTERNAL_DOCTOR' && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label>
+                      <span className="field-label">Doctor’s name</span>
+                      <input
+                        className="field-input !py-2"
+                        value={referrerName}
+                        onChange={(e) => setReferrerName(e.target.value)}
+                        placeholder="Dr S Kulkarni"
+                        maxLength={160}
+                      />
+                    </label>
+                    <label>
+                      <span className="field-label">Their clinic</span>
+                      <input
+                        className="field-input !py-2"
+                        value={referrerClinic}
+                        onChange={(e) => setReferrerClinic(e.target.value)}
+                        maxLength={160}
+                      />
+                    </label>
+                    <label>
+                      <span className="field-label">Phone</span>
+                      <input
+                        className="field-input !py-2"
+                        value={referrerPhone}
+                        onChange={(e) => setReferrerPhone(e.target.value)}
+                        maxLength={32}
+                      />
+                    </label>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary !py-2"
+                    disabled={
+                      busy ||
+                      picked.length === 0 ||
+                      (referralSource === 'EXTERNAL_DOCTOR' && referrerName.trim().length < 2)
+                    }
+                    onClick={() =>
+                      run(async () => {
+                        const { invoiceId } = await api.raiseWalkInTests({
+                          patientId: patient.id,
+                          serviceIds: picked,
+                          referralSource,
+                          ...(referralSource === 'EXTERNAL_DOCTOR'
+                            ? {
+                                referrerName: referrerName.trim(),
+                                ...(referrerClinic.trim()
+                                  ? { referrerClinic: referrerClinic.trim() }
+                                  : {}),
+                                ...(referrerPhone.trim()
+                                  ? { referrerPhone: referrerPhone.trim() }
+                                  : {}),
+                              }
+                            : {}),
+                        });
+                        // Straight to the bill: the next thing the desk does is
+                        // take the money, and the department is already told.
+                        setInvoice(await api.invoice(invoiceId));
+                        setWalkIn(false);
+                        setPicked([]);
+                      }, 'Could not raise those tests.')
+                    }
+                  >
+                    Raise and bill
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={() => {
+                      setWalkIn(false);
+                      setPicked([]);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
       {/* 3 — the doctor. Not part of settling a bill that already exists. */}
       {patient && !settlingExistingBill && (

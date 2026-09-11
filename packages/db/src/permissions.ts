@@ -84,6 +84,19 @@ export const PERMISSIONS = {
    * radiographer order their own work.
    */
   DIAGNOSTIC_ORDER: 'diagnostic:order',
+  /**
+   * Raise a test nobody prescribed (FR-DIA-10, FR-DIA-12).
+   *
+   * Separate from `diagnostic:order`, which is a clinical act: the doctor in
+   * the room deciding a patient needs a scan, on any consultation. This is a
+   * commercial act at a counter — somebody asks for a film, finance prices it
+   * and takes the money. Folding the two together would hand the finance desk
+   * the power to order tests on anybody's consultation, far more than the
+   * requirement asked for, and the front desk was deliberately given neither.
+   *
+   * Same reasoning that split `visit:open` out of `appointment:write`.
+   */
+  DIAGNOSTIC_ORDER_WALKIN: 'diagnostic:order:walkin',
   DIAGNOSTIC_READ: 'diagnostic:read',
   DIAGNOSTIC_RESULT: 'diagnostic:result',
   PRESCRIPTION_WRITE: 'prescription:write',
@@ -293,6 +306,12 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.PAYMENT_COLLECT,
       // Applies a discount the administrator already defined. Cannot define one.
       PERMISSIONS.PROMOTION_APPLY,
+
+      // A walk-in test, priced and requested at this desk in one action
+      // (decision 1). NOT `diagnostic:order`, which would let this desk order
+      // tests on anybody's consultation. The administrator holds it through
+      // ALL_PERMISSIONS; the front desk deliberately holds neither.
+      PERMISSIONS.DIAGNOSTIC_ORDER_WALKIN,
 
       // Owns the numbers, and is who the owner asks where the day's money went.
       PERMISSIONS.REPORT_REVENUE,

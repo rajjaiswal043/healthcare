@@ -616,11 +616,28 @@ export type EnumPaymentModeWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumPaymentModeFilter<$PrismaModel>
 }
 
+export type EnumDiagnosticReferralSourceFilter<$PrismaModel = never> = {
+  equals?: $Enums.DiagnosticReferralSource | Prisma.EnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  in?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  notIn?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumDiagnosticReferralSourceFilter<$PrismaModel> | $Enums.DiagnosticReferralSource
+}
+
 export type EnumDiagnosticOrderStatusFilter<$PrismaModel = never> = {
   equals?: $Enums.DiagnosticOrderStatus | Prisma.EnumDiagnosticOrderStatusFieldRefInput<$PrismaModel>
   in?: $Enums.DiagnosticOrderStatus[] | Prisma.ListEnumDiagnosticOrderStatusFieldRefInput<$PrismaModel>
   notIn?: $Enums.DiagnosticOrderStatus[] | Prisma.ListEnumDiagnosticOrderStatusFieldRefInput<$PrismaModel>
   not?: Prisma.NestedEnumDiagnosticOrderStatusFilter<$PrismaModel> | $Enums.DiagnosticOrderStatus
+}
+
+export type EnumDiagnosticReferralSourceWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.DiagnosticReferralSource | Prisma.EnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  in?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  notIn?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumDiagnosticReferralSourceWithAggregatesFilter<$PrismaModel> | $Enums.DiagnosticReferralSource
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumDiagnosticReferralSourceFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumDiagnosticReferralSourceFilter<$PrismaModel>
 }
 
 export type EnumDiagnosticOrderStatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -1278,11 +1295,28 @@ export type NestedEnumPaymentModeWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumPaymentModeFilter<$PrismaModel>
 }
 
+export type NestedEnumDiagnosticReferralSourceFilter<$PrismaModel = never> = {
+  equals?: $Enums.DiagnosticReferralSource | Prisma.EnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  in?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  notIn?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumDiagnosticReferralSourceFilter<$PrismaModel> | $Enums.DiagnosticReferralSource
+}
+
 export type NestedEnumDiagnosticOrderStatusFilter<$PrismaModel = never> = {
   equals?: $Enums.DiagnosticOrderStatus | Prisma.EnumDiagnosticOrderStatusFieldRefInput<$PrismaModel>
   in?: $Enums.DiagnosticOrderStatus[] | Prisma.ListEnumDiagnosticOrderStatusFieldRefInput<$PrismaModel>
   notIn?: $Enums.DiagnosticOrderStatus[] | Prisma.ListEnumDiagnosticOrderStatusFieldRefInput<$PrismaModel>
   not?: Prisma.NestedEnumDiagnosticOrderStatusFilter<$PrismaModel> | $Enums.DiagnosticOrderStatus
+}
+
+export type NestedEnumDiagnosticReferralSourceWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.DiagnosticReferralSource | Prisma.EnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  in?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  notIn?: $Enums.DiagnosticReferralSource[] | Prisma.ListEnumDiagnosticReferralSourceFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumDiagnosticReferralSourceWithAggregatesFilter<$PrismaModel> | $Enums.DiagnosticReferralSource
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumDiagnosticReferralSourceFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumDiagnosticReferralSourceFilter<$PrismaModel>
 }
 
 export type NestedEnumDiagnosticOrderStatusWithAggregatesFilter<$PrismaModel = never> = {

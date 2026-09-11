@@ -693,6 +693,10 @@ export const DiagnosticOrderScalarFieldEnum = {
   patientId: 'patientId',
   departmentId: 'departmentId',
   orderedByUserId: 'orderedByUserId',
+  referralSource: 'referralSource',
+  referrerName: 'referrerName',
+  referrerClinic: 'referrerClinic',
+  referrerPhone: 'referrerPhone',
   serviceId: 'serviceId',
   invoiceLineId: 'invoiceLineId',
   legacyUnbilled: 'legacyUnbilled',
@@ -701,6 +705,9 @@ export const DiagnosticOrderScalarFieldEnum = {
   resultNote: 'resultNote',
   completedAt: 'completedAt',
   completedByUserId: 'completedByUserId',
+  handedOverAt: 'handedOverAt',
+  handedOverByUserId: 'handedOverByUserId',
+  handedOverTo: 'handedOverTo',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

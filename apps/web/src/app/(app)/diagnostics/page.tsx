@@ -11,8 +11,15 @@ import {
 import { useAuth } from '@/components/auth-provider';
 import { genderInitial } from '@/lib/format';
 
-import { IconAlert, IconCheck, IconCheckCircle, IconRefresh } from '@/components/icons';
+import {
+  IconAlert,
+  IconCheck,
+  IconCheckCircle,
+  IconReceipt,
+  IconRefresh,
+} from '@/components/icons';
 import { TestBillingBadge, testIsBlocked } from '@/components/test-billing-badge';
+import { DiagnosticReportPrint } from '@/components/diagnostic-report-print';
 /**
  * Age from the order payload alone.
  *
@@ -53,6 +60,10 @@ export default function DiagnosticsPage() {
     (DiagnosticOrder & { documents: ClinicalDocument[] }) | null
   >(null);
   const [note, setNote] = useState('');
+  /** Who took the report. Its own field — the handover is a separate act. */
+  const [handedTo, setHandedTo] = useState('');
+  /** Whether the printable sheet is mounted. Only ever true for `openOrder`. */
+  const [printing, setPrinting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -93,6 +104,8 @@ export default function DiagnosticsPage() {
     try {
       const order = await api.diagnosticOrder(id);
       setOpenOrder(order);
+      // A sheet armed for the previous order must not follow us to this one.
+      setPrinting(false);
       setNote(order.resultNote ?? '');
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not open that order.');
@@ -127,6 +140,46 @@ export default function DiagnosticsPage() {
       await load();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not mark it done.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Reveal the hidden sheet and print it.
+   *
+   * The sheet renders from what is already on screen, so there is nothing to
+   * fetch — only a paint to wait for before the browser takes its snapshot.
+   * The same 60ms the receipt waits, for the same reason.
+   */
+  function closeDialog() {
+    setOpenOrder(null);
+    setPrinting(false);
+    setHandedTo('');
+  }
+
+  async function printReport() {
+    setPrinting(true);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    window.print();
+  }
+
+  async function handOver() {
+    if (!openOrder) return;
+    setBusy('handover');
+    setError(null);
+    try {
+      // Kept open rather than closed: the person at the counter has just
+      // handed something over and should see it recorded, not watch the
+      // dialog vanish and have to reopen it to check.
+      const updated = await api.recordHandover(openOrder.id, handedTo.trim());
+      setOpenOrder({ ...openOrder, ...updated });
+      setHandedTo('');
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError ? err.error.message : 'Could not record the handover.',
+      );
     } finally {
       setBusy(null);
     }
@@ -287,6 +340,16 @@ export default function DiagnosticsPage() {
                 <span className="badge-neutral">declined by patient</span>
               )}
 
+              {/* Which reports are still sitting on the counter. The Done tab
+                  otherwise looks finished while a stack of films waits to be
+                  collected — and an uncollected film is the complaint. */}
+              {o.status === 'COMPLETED' &&
+                (o.handedOverAt ? (
+                  <span className="badge-neutral">given out</span>
+                ) : (
+                  <span className="badge-amber">not collected</span>
+                ))}
+
               <button type="button" className="btn-secondary" onClick={() => void openDetail(o.id)}>
                 {o.status === 'PENDING' && mayResult ? 'Attach result' : 'Open'}
               </button>
@@ -301,6 +364,10 @@ export default function DiagnosticsPage() {
         </p>
       )}
 
+      {printing && openOrder && (
+        <DiagnosticReportPrint order={openOrder} documents={openOrder.documents} />
+      )}
+
       {/* --- the one order being worked on ---------------------------------- */}
       {openOrder && (
         <div
@@ -309,7 +376,7 @@ export default function DiagnosticsPage() {
           aria-label={openOrder.description}
           className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setOpenOrder(null);
+            if (e.target === e.currentTarget) closeDialog();
           }}
         >
           <div className="card max-h-[85vh] w-full max-w-lg overflow-y-auto p-6">
@@ -433,7 +500,7 @@ export default function DiagnosticsPage() {
                   <button
                     type="button"
                     className="btn-ghost"
-                    onClick={() => setOpenOrder(null)}
+                    onClick={closeDialog}
                     disabled={busy !== null}
                   >
                     Close
@@ -453,13 +520,69 @@ export default function DiagnosticsPage() {
                     Completed by {openOrder.completedBy.fullName}
                   </p>
                 )}
-                <button
-                  type="button"
-                  className="btn-secondary mt-5"
-                  onClick={() => setOpenOrder(null)}
-                >
-                  Close
-                </button>
+
+                {/* FR-DIA-13. A walk-in patient leaves with a sheet of paper,
+                    and "I paid and never got my film" has no answer unless
+                    somebody wrote down who took it. */}
+                {openOrder.status === 'COMPLETED' &&
+                  mayResult &&
+                  (openOrder.handedOverAt ? (
+                    <p className="mt-3 rounded-panel border border-green/30 bg-green-soft/40 px-3 py-2 text-[12.5px]">
+                      Given to <strong>{openOrder.handedOverTo}</strong> on{' '}
+                      {new Date(openOrder.handedOverAt).toLocaleString('en-IN', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                      {openOrder.handedOverBy && <> · {openOrder.handedOverBy.fullName}</>}
+                    </p>
+                  ) : (
+                    <div className="mt-4">
+                      <label htmlFor="handedOverTo" className="field-label">
+                        Report handed to
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <input
+                          id="handedOverTo"
+                          className="field-input !py-2 max-w-[260px]"
+                          value={handedTo}
+                          onChange={(e) => setHandedTo(e.target.value)}
+                          placeholder="The patient"
+                          maxLength={160}
+                        />
+                        <button
+                          type="button"
+                          className="btn-secondary !py-2"
+                          disabled={busy !== null || handedTo.trim().length < 2}
+                          onClick={() => void handOver()}
+                        >
+                          {busy === 'handover' ? 'Saving…' : 'Record handover'}
+                        </button>
+                      </div>
+                      <p className="field-hint">
+                        Recorded once. Name whoever physically took it — the patient, or the
+                        relative who collected it.
+                      </p>
+                    </div>
+                  ))}
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {/* The document the patient takes away. Only once there is
+                      something to report — printing a blank sheet is worse
+                      than the button being absent. */}
+                  {openOrder.status === 'COMPLETED' && (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => void printReport()}
+                    >
+                      <IconReceipt size={15} />
+                      Print report
+                    </button>
+                  )}
+                  <button type="button" className="btn-secondary" onClick={closeDialog}>
+                    Close
+                  </button>
+                </div>
               </>
             )}
           </div>

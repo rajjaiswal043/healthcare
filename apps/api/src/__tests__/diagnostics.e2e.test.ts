@@ -1522,6 +1522,40 @@ describe('a patient’s test history, inside the consultation', () => {
     expect(orders.map((o) => o.id)).not.toContain(orderId);
   });
 
+  it('shows a walk-in test, which a NOT filter would silently have dropped', async () => {
+    const walkIn = await order(doctor, {
+      patientId: fx.main.patientIds[0],
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      referralSource: 'SELF',
+    });
+    const orderId = walkIn.json<{ id: string }>().id;
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE diagnostic_order
+          SET status = 'COMPLETED', completed_at = now(),
+              completed_by_user_id = ordered_by_user_id
+        WHERE id = $1`,
+      [orderId],
+    );
+
+    const encounterId = await openConsultation();
+    const { orders } = (await history(doctor, encounterId)).json<{
+      orders: Array<{ id: string }>;
+    }>();
+
+    /**
+     * The whole point of decision 5: no new feature was needed to pull a
+     * walk-in test into a later consultation, because this view is
+     * patient-level. But the current-visit exclusion read
+     * `appointmentId: { not: … }`, and in SQL `appointment_id <> $1` is NULL
+     * for a row with no appointment — so the moment the column became
+     * nullable, every walk-in test would have vanished from the one endpoint
+     * built to surface it.
+     */
+    expect(orders.map((o) => o.id)).toContain(orderId);
+  });
+
   it('leaves out a test that has not come back yet', async () => {
     await order(doctor, {
       appointmentId: mainVisit,
@@ -1598,6 +1632,473 @@ describe('a patient’s test history, inside the consultation', () => {
     const encounterId = await openConsultation();
 
     expect((await history(otherAdmin, encounterId)).statusCode).toBe(404);
+  });
+});
+
+describe('a test nobody prescribed', () => {
+  async function walkIn(session: Session, body: Record<string, unknown> = {}) {
+    return order(session, {
+      patientId: fx.main.patientIds[0],
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      referralSource: 'SELF',
+      ...body,
+    });
+  }
+
+  it('raises an order with no consultation and no prescribing doctor', async () => {
+    const res = await walkIn(doctor);
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      appointmentId: string | null;
+      referralSource: string;
+      patient: { id: string };
+      orderedBy: { id: string };
+    }>();
+
+    expect(body.appointmentId).toBeNull();
+    expect(body.referralSource).toBe('SELF');
+    expect(body.patient.id).toBe(fx.main.patientIds[0]);
+    // Still keyed in by somebody, and that is a different question from who
+    // decided the test was needed.
+    expect(body.orderedBy.id).toBeTruthy();
+  });
+
+  it('lands on the department worklist like any other order', async () => {
+    await walkIn(doctor);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/diagnostics/orders?departmentId=${xrayDepartmentId}`,
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    // The worklist never joined the appointment, so this needed no change at
+    // all — the department does not have to care why an order exists.
+    expect(res.json<{ orders: unknown[] }>().orders).toHaveLength(1);
+  });
+
+  it('is billed and gated exactly like a doctor-ordered test', async () => {
+    const res = await walkIn(doctor);
+    const orderId = res.json<{ id: string }>().id;
+    expect(res.json<{ billing: { status: string } }>().billing.status).toBe('UNPAID');
+
+    const blocked = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'No fracture.' },
+    });
+    expect(blocked.statusCode).toBe(409);
+
+    // The bill has no visit to hang off, which the invoice path already allowed.
+    const [bill] = await ownerQuery<{ id: string; visit_appointment_id: string | null }>(
+      fx.main.id,
+      `SELECT i.id, i.visit_appointment_id
+         FROM invoice i JOIN invoice_line l ON l.invoice_id = i.id
+        WHERE l.service_id = $1 AND i.appointment_id IS NULL`,
+      [kneeXrayId],
+    );
+    expect(bill?.visit_appointment_id).toBeNull();
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${bill!.id}/payments`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { mode: 'CASH', amountPaise: 45_000 },
+    });
+
+    const done = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'No fracture.' },
+    });
+    expect(done.statusCode).toBe(200);
+  });
+
+  it('records the outside doctor who sent them, and refuses an unnamed one', async () => {
+    const named = await walkIn(doctor, {
+      referralSource: 'EXTERNAL_DOCTOR',
+      referrerName: 'Dr S Kulkarni',
+      referrerClinic: 'City Hospital',
+      referrerPhone: '9876543210',
+    });
+    expect(named.statusCode).toBe(201);
+    expect(named.json<{ referrerName: string }>().referrerName).toBe('Dr S Kulkarni');
+
+    const unnamed = await order(doctor, {
+      patientId: fx.main.patientIds[1],
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      referralSource: 'EXTERNAL_DOCTOR',
+    });
+    expect(unnamed.statusCode).toBe(400);
+    expect(unnamed.json().error.details?.code).toBe('REFERRER_REQUIRED');
+  });
+
+  it('refuses a walk-in attached to a consultation, and a visit order without one', async () => {
+    const contradiction = await order(doctor, {
+      appointmentId: mainVisit,
+      patientId: fx.main.patientIds[0],
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      referralSource: 'SELF',
+    });
+    expect(contradiction.statusCode).toBe(400);
+    expect(contradiction.json().error.details?.code).toBe('WALK_IN_HAS_NO_VISIT');
+
+    const noVisit = await order(doctor, {
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(noVisit.statusCode).toBe(400);
+    expect(noVisit.json().error.details?.code).toBe('VISIT_REQUIRED');
+  });
+
+  it("refuses a patient id that is not this clinic's", async () => {
+    const res = await order(doctor, {
+      patientId: fx.other.patientIds[0],
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      referralSource: 'SELF',
+    });
+
+    // Looked up under the tenant policy, so another clinic's patient is simply
+    // not there — the same answer as an id that never existed.
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('refuses the same walk-in test twice for one patient on one day', async () => {
+    expect((await walkIn(doctor)).statusCode).toBe(201);
+
+    const again = await walkIn(doctor);
+
+    // No visit to scope the guard to, so it is scoped to the patient's day —
+    // and this is the flow that most invites double entry.
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('TEST_ALREADY_ORDERED');
+  });
+
+  it('does not let a walk-in block the same test for another patient', async () => {
+    expect((await walkIn(doctor)).statusCode).toBe(201);
+
+    const other = await order(doctor, {
+      patientId: fx.main.patientIds[1],
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      referralSource: 'SELF',
+    });
+    expect(other.statusCode).toBe(201);
+  });
+});
+
+describe('finance raises a walk-in', () => {
+  let financeUser: Session;
+
+  beforeAll(async () => {
+    const staff = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users',
+      headers: { cookie: admin.cookie },
+      payload: {
+        email: 'walkinfinance@main.test',
+        fullName: 'Yogesh Finance',
+        roleKeys: ['finance'],
+      },
+    });
+    if (staff.statusCode !== 201) {
+      throw new Error(`Could not create the finance user: ${staff.statusCode} ${staff.payload}`);
+    }
+    financeUser = await login(
+      app,
+      fx.main.slug,
+      'walkinfinance@main.test',
+      staff.json<{ temporaryPassword: string }>().temporaryPassword,
+    );
+  });
+
+  async function raise(session: Session, body: Record<string, unknown> = {}) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/diagnostics/walk-in-orders',
+      headers: { cookie: session.cookie },
+      payload: {
+        patientId: fx.main.patientIds[0],
+        serviceIds: [kneeXrayId, bloodCountId],
+        referralSource: 'SELF',
+        ...body,
+      },
+    });
+  }
+
+  it('puts several tests on ONE bill', async () => {
+    const res = await raise(financeUser);
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ invoiceId: string; orders: Array<{ id: string }> }>();
+    expect(body.orders).toHaveLength(2);
+
+    const bills = await ownerQuery<{ id: string; total_paise: number }>(
+      fx.main.id,
+      `SELECT id, total_paise FROM invoice
+        WHERE appointment_id IS NULL AND visit_appointment_id IS NULL`,
+    );
+
+    // The point of the batch. One invoice per test would hand the patient two
+    // pieces of paper to pay separately, which FR-DIA-11 rules out.
+    expect(bills).toHaveLength(1);
+    expect(bills[0]?.id).toBe(body.invoiceId);
+    expect(bills[0]?.total_paise).toBe(75_000);
+  });
+
+  it('sends each test to its own department', async () => {
+    await raise(financeUser);
+
+    const xray = await app.inject({
+      method: 'GET',
+      url: `/api/v1/diagnostics/orders?departmentId=${xrayDepartmentId}`,
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+    const path = await app.inject({
+      method: 'GET',
+      url: `/api/v1/diagnostics/orders?departmentId=${pathologyDepartmentId}`,
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    expect(xray.json<{ orders: unknown[] }>().orders).toHaveLength(1);
+    expect(path.json<{ orders: unknown[] }>().orders).toHaveLength(1);
+  });
+
+  it('records the referral on every test, because it describes the visit', async () => {
+    const res = await raise(financeUser, {
+      referralSource: 'EXTERNAL_DOCTOR',
+      referrerName: 'Dr S Kulkarni',
+      referrerClinic: 'City Hospital',
+      referrerPhone: '9876543210',
+    });
+
+    const orders = res.json<{ orders: Array<{ referralSource: string; referrerName: string }> }>()
+      .orders;
+    expect(orders).toHaveLength(2);
+    for (const o of orders) {
+      expect(o.referralSource).toBe('EXTERNAL_DOCTOR');
+      expect(o.referrerName).toBe('Dr S Kulkarni');
+    }
+  });
+
+  it('writes nothing at all when one test in the list is bad', async () => {
+    const res = await raise(financeUser, {
+      serviceIds: [kneeXrayId, fx.main.patientIds[0]],
+    });
+    expect(res.statusCode).toBe(404);
+
+    /**
+     * One transaction for the lot. A half-applied batch is the worst outcome
+     * available: money raised for a test no department was told about, or a
+     * department told about a test nobody was charged for.
+     */
+    const bills = await ownerQuery(
+      fx.main.id,
+      `SELECT id FROM invoice WHERE appointment_id IS NULL AND visit_appointment_id IS NULL`,
+    );
+    const orders = await ownerQuery(
+      fx.main.id,
+      `SELECT id FROM diagnostic_order WHERE appointment_id IS NULL`,
+    );
+    expect(bills).toHaveLength(0);
+    expect(orders).toHaveLength(0);
+  });
+
+  it('refuses the same test twice in one list, and again later the same day', async () => {
+    const twice = await raise(financeUser, { serviceIds: [kneeXrayId, kneeXrayId] });
+    expect(twice.statusCode).toBe(400);
+    expect(twice.json().error.details?.code).toBe('TEST_REPEATED');
+
+    expect((await raise(financeUser, { serviceIds: [kneeXrayId] })).statusCode).toBe(201);
+
+    const again = await raise(financeUser, { serviceIds: [kneeXrayId] });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('TEST_ALREADY_ORDERED');
+  });
+
+  it('refuses an outside referral with no doctor named', async () => {
+    const res = await raise(financeUser, { referralSource: 'EXTERNAL_DOCTOR' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('REFERRER_REQUIRED');
+  });
+
+  it('refuses the front desk, which gained no new power here', async () => {
+    expect((await raise(frontDesk)).statusCode).toBe(403);
+  });
+
+  it('refuses the doctor and the diagnostics room too', async () => {
+    expect((await raise(doctor)).statusCode).toBe(403);
+    expect((await raise(diagnosticsUser)).statusCode).toBe(403);
+  });
+
+  it('gates the result on payment, with no new code for it', async () => {
+    const res = await raise(financeUser, { serviceIds: [kneeXrayId] });
+    const orderId = res.json<{ orders: Array<{ id: string }> }>().orders[0]!.id;
+    const invoiceId = res.json<{ invoiceId: string }>().invoiceId;
+
+    const blocked = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'No fracture.' },
+    });
+    expect(blocked.statusCode).toBe(409);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/payments`,
+      headers: { cookie: financeUser.cookie },
+      payload: { mode: 'CASH', amountPaise: 45_000 },
+    });
+
+    const done = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'No fracture.' },
+    });
+    expect(done.statusCode).toBe(200);
+  });
+
+  it('shows the bill under what the patient already owes', async () => {
+    await raise(financeUser, { serviceIds: [kneeXrayId] });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/invoices',
+      headers: { cookie: financeUser.cookie },
+    });
+
+    // Decision 9: `outstanding()` filters on status alone and never looked at
+    // the appointment, so a walk-in bill was already reachable. Pinned here so
+    // a future filter cannot quietly hide it.
+    const mine = res
+      .json<{ invoices: Array<{ patient: { id: string }; balancePaise: number }> }>()
+      .invoices.filter((i) => i.patient.id === fx.main.patientIds[0]);
+    expect(mine.some((i) => i.balancePaise === 45_000)).toBe(true);
+  });
+});
+
+describe('handing the report over', () => {
+  /** A completed test, ready to be collected. */
+  async function reported(): Promise<string> {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'USG abdomen',
+    });
+    const orderId = res.json<{ id: string }>().id;
+
+    const done = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}/complete`,
+      headers: { cookie: diagnosticsUser.cookie },
+      payload: { resultNote: 'Normal study.' },
+    });
+    expect(done.statusCode).toBe(200);
+    return orderId;
+  }
+
+  async function handOver(session: Session, orderId: string, handedOverTo = 'The patient') {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/diagnostics/orders/${orderId}/handover`,
+      headers: { cookie: session.cookie },
+      payload: { handedOverTo },
+    });
+  }
+
+  it('records who took it and when', async () => {
+    const orderId = await reported();
+
+    const res = await handOver(diagnosticsUser, orderId, 'Sunita Sharma (daughter)');
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      handedOverAt: string;
+      handedOverTo: string;
+      handedOverBy: { fullName: string };
+    }>();
+    expect(body.handedOverAt).toBeTruthy();
+    expect(body.handedOverTo).toBe('Sunita Sharma (daughter)');
+    // The staff member is answerable for it — that is the point of recording.
+    expect(body.handedOverBy.fullName).toBeTruthy();
+  });
+
+  it('refuses before the result exists', async () => {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description: 'USG abdomen',
+    });
+
+    const early = await handOver(diagnosticsUser, res.json<{ id: string }>().id);
+
+    expect(early.statusCode).toBe(400);
+    expect(early.json().error.details?.code).toBe('RESULT_NOT_READY');
+  });
+
+  it('refuses a second time, rather than overwriting who took it', async () => {
+    const orderId = await reported();
+    expect((await handOver(diagnosticsUser, orderId, 'The patient')).statusCode).toBe(201);
+
+    const again = await handOver(diagnosticsUser, orderId, 'Somebody else');
+
+    /**
+     * This is an event that happened, not a flag. Letting it be written twice
+     * would overwrite the name recorded the first time — which is precisely
+     * the fact a later complaint disputes.
+     */
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('ALREADY_HANDED_OVER');
+
+    const [row] = await ownerQuery<{ handed_over_to: string }>(
+      fx.main.id,
+      `SELECT handed_over_to FROM diagnostic_order WHERE id = $1`,
+      [orderId],
+    );
+    expect(row?.handed_over_to).toBe('The patient');
+  });
+
+  it('refuses with nobody named', async () => {
+    const orderId = await reported();
+
+    const res = await handOver(diagnosticsUser, orderId, '  ');
+
+    // Validation catches the blank before the service does; either refusal is
+    // the right answer, and the column's CHECK is the last line behind both.
+    expect([400, 422]).toContain(res.statusCode);
+  });
+
+  it('refuses a caller who does not report results', async () => {
+    const orderId = await reported();
+
+    expect((await handOver(doctor, orderId)).statusCode).toBe(403);
+    expect((await handOver(frontDesk, orderId)).statusCode).toBe(403);
+  });
+
+  it('shows on the worklist which reports are still uncollected', async () => {
+    const collected = await reported();
+    const waiting = await reported();
+    await handOver(diagnosticsUser, collected);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/orders?status=COMPLETED',
+      headers: { cookie: diagnosticsUser.cookie },
+    });
+
+    const rows = res.json<{ orders: Array<{ id: string; handedOverAt: string | null }> }>().orders;
+    expect(rows.find((o) => o.id === collected)?.handedOverAt).toBeTruthy();
+    expect(rows.find((o) => o.id === waiting)?.handedOverAt).toBeNull();
   });
 });
 

@@ -345,12 +345,48 @@ export class BillingService {
       meta,
     );
 
+    const line = await this.addDiagnosticLine(
+      tx,
+      tenantId,
+      invoice.id,
+      { patientId: input.patientId, serviceId: service.id, description: input.description },
+      meta,
+    );
+
+    return { invoiceId: invoice.id, lineId: line.id };
+  }
+
+  /**
+   * One test as a line on an invoice that is already open.
+   *
+   * Split out of `chargeDiagnosticTest` for the walk-in batch, which opens ONE
+   * invoice and then adds several tests to it — calling the whole of
+   * `chargeDiagnosticTest` per test would ask for a fresh invoice each time and
+   * hand the patient a bill per film.
+   *
+   * Deliberately does not go through `loadEditable`: the caller has already
+   * established that this invoice will take a line, and re-checking per test in
+   * a batch would make the third test's refusal depend on the first two.
+   */
+  async addDiagnosticLine(
+    tx: TenantClient,
+    tenantId: string,
+    invoiceId: string,
+    input: { patientId: string; serviceId: string; description: string },
+    meta: RequestMeta,
+  ): Promise<{ id: string }> {
+    const service = await tx.service.findUnique({
+      where: { id: input.serviceId },
+      select: { id: true, pricePaise: true, taxRateBasisPoints: true },
+    });
+    if (!service) throw new NotFoundException('Service not found');
+
     const taxPaise = Math.round((service.pricePaise * service.taxRateBasisPoints) / 10000);
 
     const line = await tx.invoiceLine.create({
       data: {
         tenantId,
-        invoiceId: invoice.id,
+        invoiceId,
         serviceId: service.id,
         description: input.description,
         quantity: 1,
@@ -362,18 +398,18 @@ export class BillingService {
       select: { id: true },
     });
 
-    await this.retotal(tx, invoice.id);
+    await this.retotal(tx, invoiceId);
 
     await this.audit.record(tx, tenantId, {
       action: 'invoice.add_line',
       resourceType: 'Invoice',
-      resourceId: invoice.id,
+      resourceId: invoiceId,
       patientId: input.patientId,
       changedFields: ['lines', 'totalPaise'],
       ...meta,
     });
 
-    return { invoiceId: invoice.id, lineId: line.id };
+    return line;
   }
 
   /**

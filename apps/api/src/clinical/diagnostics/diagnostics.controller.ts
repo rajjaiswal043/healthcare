@@ -11,7 +11,17 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import type { FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
@@ -24,8 +34,44 @@ import { DiagnosticsService } from './diagnostics.service.js';
 import { MAX_DOCUMENT_BYTES } from '../documents/documents.service.js';
 
 class CreateOrderDto {
+  /**
+   * The consultation, for an order from this clinic's own doctor.
+   *
+   * Optional since FR-DIA-10: a walk-in test has no consultation, and the
+   * database refuses one on any order that is not INTERNAL.
+   */
+  @IsOptional()
   @IsUUID()
-  appointmentId!: string;
+  appointmentId?: string;
+
+  /** The patient, for a walk-in. Read off the visit when there is one. */
+  @IsOptional()
+  @IsUUID()
+  patientId?: string;
+
+  /**
+   * Who decided the test was needed. Defaults to INTERNAL, which is what every
+   * order raised before walk-ins existed was.
+   */
+  @IsOptional()
+  @IsIn(['INTERNAL', 'EXTERNAL_DOCTOR', 'SELF'])
+  referralSource?: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
+
+  /** The outside doctor who sent them. Required when the source is EXTERNAL_DOCTOR. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  referrerName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  referrerClinic?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  referrerPhone?: string;
 
   @IsUUID()
   departmentId!: string;
@@ -64,6 +110,49 @@ class ExternalTestNoteDto {
   @IsString()
   @MaxLength(1000)
   note?: string | null;
+}
+
+class WalkInOrderDto {
+  @IsUUID()
+  patientId!: string;
+
+  /** Catalogue tests. Several on one bill is the point (FR-DIA-11). */
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(20)
+  // No version argument: ids here are uuidv7, and `IsUUID('4')` rejects them.
+  @IsUUID(undefined, { each: true })
+  serviceIds!: string[];
+
+  /**
+   * INTERNAL is absent on purpose: an order from this clinic's own doctor
+   * belongs to a consultation, and that is `POST /diagnostics/orders`.
+   */
+  @IsIn(['EXTERNAL_DOCTOR', 'SELF'])
+  referralSource!: 'EXTERNAL_DOCTOR' | 'SELF';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  referrerName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  referrerClinic?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  referrerPhone?: string;
+}
+
+class HandoverDto {
+  /** The patient, or the relative who collected it. Free text — see the column. */
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  handedOverTo!: string;
 }
 
 class CatalogueQueryDto {
@@ -210,6 +299,25 @@ export class DiagnosticsController {
     return this.diagnostics.createOrder(tenantId, dto, meta(req, user));
   }
 
+  /**
+   * A patient who walked in wanting tests (FR-DIA-10, FR-DIA-12).
+   *
+   * `diagnostic:order:walkin`, which finance holds and the front desk does
+   * not. The flow the clinics described had finance price the test and the
+   * front desk request it — the same information typed twice, by two people,
+   * each with a patient in front of them. Finance does both (decision 1).
+   */
+  @Post('diagnostics/walk-in-orders')
+  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_ORDER_WALKIN)
+  async walkIn(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: WalkInOrderDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.diagnostics.createWalkInOrders(tenantId, dto, meta(req, user));
+  }
+
   /** One order with everything attached to it. */
   @Get('diagnostics/orders/:id')
   @RequirePermissions(PERMISSIONS.DIAGNOSTIC_READ)
@@ -298,6 +406,24 @@ export class DiagnosticsController {
     @Req() req: FastifyRequest,
   ) {
     return this.diagnostics.undeclineOrder(tenantId, id, meta(req, user));
+  }
+
+  /**
+   * The report was given to the patient (FR-DIA-13).
+   *
+   * `diagnostic:result` — the department that did the work is the one that
+   * hands it over, and is who the requirement names.
+   */
+  @Post('diagnostics/orders/:id/handover')
+  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_RESULT)
+  async handover(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: HandoverDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.diagnostics.recordHandover(tenantId, id, dto.handedOverTo, meta(req, user));
   }
 
   @Patch('diagnostics/orders/:id/cancel')

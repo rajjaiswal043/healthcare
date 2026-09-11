@@ -5,8 +5,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
-import { clinicToday, instantToLocalDate } from '../../scheduling/clinic-time.js';
+import { clinicToday, instantToLocalDate, localToInstant } from '../../scheduling/clinic-time.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import {
@@ -49,6 +50,21 @@ export class DiagnosticsService {
       }),
     );
     return { departments };
+  }
+
+  /**
+   * Midnight today, in the clinic's own timezone.
+   *
+   * The walk-in duplicate guard is scoped to a DAY, and which day that is has
+   * to be the clinic's — using the UTC date would put every evening order in
+   * Kolkata onto tomorrow, and the guard would stop firing after 5:30pm.
+   */
+  private async startOfClinicDay(tx: TenantClient, tenantId: string): Promise<Date> {
+    const { timezone } = await tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { timezone: true },
+    });
+    return localToInstant(clinicToday(timezone), '00:00', timezone);
   }
 
   /**
@@ -104,19 +120,87 @@ export class DiagnosticsService {
   async createOrder(
     tenantId: string,
     input: {
-      appointmentId: string;
+      /** A consultation, for an INTERNAL order. Absent for a walk-in. */
+      appointmentId?: string;
+      /** The patient, for a walk-in. Ignored when an appointment is given. */
+      patientId?: string;
       departmentId: string;
       description?: string;
       serviceId?: string;
+      referralSource?: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
+      referrerName?: string;
+      referrerClinic?: string;
+      referrerPhone?: string;
     },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const appointment = await tx.appointment.findUnique({
-        where: { id: input.appointmentId },
-        select: { id: true, patientId: true },
-      });
-      if (!appointment) throw new NotFoundException('No such visit.');
+      const referralSource = input.referralSource ?? 'INTERNAL';
+
+      /**
+       * Where the patient comes from, and why it differs by referral source.
+       *
+       * With a consultation the patient is READ OFF THE VISIT and never taken
+       * from the request — a caller supplying both could otherwise file one
+       * patient's order against another's visit. A walk-in has no visit to read
+       * from, so the patient id has to be supplied; it is looked up inside the
+       * tenant's policy, which is what stops it naming somebody else's patient.
+       */
+      let appointmentId: string | null = null;
+      let patientId: string;
+
+      if (referralSource === 'INTERNAL') {
+        if (!input.appointmentId) {
+          throw new BadRequestException({
+            code: 'VISIT_REQUIRED',
+            message: 'An order from this clinic’s own doctor belongs to a visit.',
+          });
+        }
+
+        const appointment = await tx.appointment.findUnique({
+          where: { id: input.appointmentId },
+          select: { id: true, patientId: true },
+        });
+        if (!appointment) throw new NotFoundException('No such visit.');
+
+        appointmentId = appointment.id;
+        patientId = appointment.patientId;
+      } else {
+        /**
+         * A walk-in never attaches to a visit, and the database agrees: the
+         * biconditional CHECK admits an appointment only on an INTERNAL order.
+         * Refused here rather than left to the constraint so the caller gets a
+         * sentence instead of a violation.
+         */
+        if (input.appointmentId) {
+          throw new BadRequestException({
+            code: 'WALK_IN_HAS_NO_VISIT',
+            message: 'A walk-in test does not belong to a consultation.',
+          });
+        }
+        if (!input.patientId) {
+          throw new BadRequestException({
+            code: 'PATIENT_REQUIRED',
+            message: 'Say which patient this test is for.',
+          });
+        }
+
+        const patient = await tx.patient.findUnique({
+          where: { id: input.patientId },
+          select: { id: true },
+        });
+        if (!patient) throw new NotFoundException('No such patient.');
+
+        patientId = patient.id;
+      }
+
+      const referrerName = input.referrerName?.trim();
+      if (referralSource === 'EXTERNAL_DOCTOR' && !referrerName) {
+        throw new BadRequestException({
+          code: 'REFERRER_REQUIRED',
+          message: 'Name the doctor who sent them — it is printed on the report.',
+        });
+      }
 
       const department = await tx.department.findUnique({
         where: { id: input.departmentId },
@@ -198,9 +282,18 @@ export class DiagnosticsService {
          */
         const already = await tx.diagnosticOrder.findFirst({
           where: {
-            appointmentId: appointment.id,
             serviceId: service.id,
             status: { in: ['PENDING', 'COMPLETED'] },
+            /**
+             * Scoped to the visit when there is one, and to the patient's day
+             * when there is not. A walk-in has no appointment to group by, so
+             * without the second form the guard would simply never fire on the
+             * flow that most invites double entry — finance taking the money
+             * and raising the request in the same breath.
+             */
+            ...(appointmentId
+              ? { appointmentId }
+              : { patientId, createdAt: { gte: await this.startOfClinicDay(tx, tenantId) } }),
           },
           select: { id: true },
         });
@@ -269,8 +362,8 @@ export class DiagnosticsService {
           tx,
           tenantId,
           {
-            patientId: appointment.patientId,
-            visitAppointmentId: appointment.id,
+            patientId,
+            visitAppointmentId: appointmentId,
             serviceId,
             description,
           },
@@ -282,13 +375,17 @@ export class DiagnosticsService {
       const order = await tx.diagnosticOrder.create({
         data: {
           tenantId,
-          appointmentId: appointment.id,
-          patientId: appointment.patientId,
+          appointmentId,
+          patientId,
           departmentId: department.id,
           orderedByUserId: meta.actorUserId,
           description,
           ...(serviceId ? { serviceId } : {}),
           ...(invoiceLineId ? { invoiceLineId } : {}),
+          referralSource,
+          ...(referrerName ? { referrerName } : {}),
+          ...(input.referrerClinic?.trim() ? { referrerClinic: input.referrerClinic.trim() } : {}),
+          ...(input.referrerPhone?.trim() ? { referrerPhone: input.referrerPhone.trim() } : {}),
         },
         select: ORDER_SELECT,
       });
@@ -297,8 +394,8 @@ export class DiagnosticsService {
         action: 'diagnostic.order',
         resourceType: 'DiagnosticOrder',
         resourceId: order.id,
-        patientId: appointment.patientId,
-        changedFields: ['description', 'departmentId', 'serviceId'],
+        patientId,
+        changedFields: ['description', 'departmentId', 'serviceId', 'referralSource'],
         ...meta,
       });
 
@@ -327,6 +424,190 @@ export class DiagnosticsService {
     if (unpaid) {
       throw new ConflictException({ code: 'TEST_NOT_PAID', message: unpaid });
     }
+  }
+
+  /**
+   * A patient walked in wanting tests: price them, raise them, one bill.
+   *
+   * Separate from `createOrder` rather than a loop over it, and the invoice is
+   * why. `ensureInvoiceForDiagnosticOrder` groups charges by VISIT, and a
+   * walk-in has none — so calling it once per test would open one bill per
+   * test and hand the patient three pieces of paper to pay separately, which
+   * is exactly what FR-DIA-11 says must not happen. Here the invoice is opened
+   * once and every test becomes a line on it.
+   *
+   * One transaction for the lot. A half-applied batch is the worst outcome
+   * available: money raised for a test no department was told about, or a
+   * department told about a test nobody was charged for.
+   *
+   * The referral fields are recorded once and copied onto every order, because
+   * they describe the VISIT, not the individual test — the same outside doctor
+   * sent them for all three.
+   */
+  async createWalkInOrders(
+    tenantId: string,
+    input: {
+      patientId: string;
+      /** Catalogue tests, in the order the desk picked them. */
+      serviceIds: string[];
+      referralSource: 'EXTERNAL_DOCTOR' | 'SELF';
+      referrerName?: string;
+      referrerClinic?: string;
+      referrerPhone?: string;
+    },
+    meta: RequestMeta,
+  ) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const referrerName = input.referrerName?.trim();
+      if (input.referralSource === 'EXTERNAL_DOCTOR' && !referrerName) {
+        throw new BadRequestException({
+          code: 'REFERRER_REQUIRED',
+          message: 'Name the doctor who sent them — it is printed on the report.',
+        });
+      }
+
+      const unique = [...new Set(input.serviceIds)];
+      if (unique.length === 0) {
+        throw new BadRequestException({
+          code: 'NO_TESTS',
+          message: 'Pick at least one test.',
+        });
+      }
+      if (unique.length !== input.serviceIds.length) {
+        throw new BadRequestException({
+          code: 'TEST_REPEATED',
+          message: 'The same test is in this list twice.',
+        });
+      }
+
+      const patient = await tx.patient.findUnique({
+        where: { id: input.patientId },
+        select: { id: true },
+      });
+      if (!patient) throw new NotFoundException('No such patient.');
+
+      const dayStart = await this.startOfClinicDay(tx, tenantId);
+
+      /**
+       * Every test validated BEFORE anything is written.
+       *
+       * The alternative — charge, raise, move on, fail on the fourth — rolls
+       * back cleanly here but would still have taken a payment screen through
+       * three successful steps before refusing. The desk should be told the
+       * list is wrong while it is still a list.
+       */
+      const tests: Array<{
+        id: string;
+        name: string;
+        departmentId: string;
+      }> = [];
+
+      for (const serviceId of unique) {
+        const service = await tx.service.findUnique({
+          where: { id: serviceId },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            category: true,
+            departmentId: true,
+            department: { select: { isActive: true, isDiagnostic: true, name: true } },
+          },
+        });
+        if (!service) throw new NotFoundException('No such test.');
+
+        if (!service.isActive || service.category !== 'DIAGNOSTIC') {
+          throw new BadRequestException({
+            code: 'NOT_A_TEST',
+            message: `“${service.name}” is not a test this centre offers.`,
+          });
+        }
+        if (!service.departmentId || !service.department?.isDiagnostic) {
+          throw new BadRequestException({
+            code: 'TEST_HAS_NO_DEPARTMENT',
+            message: `Nobody here performs “${service.name}”. Give it a diagnostic department first.`,
+          });
+        }
+        if (!service.department.isActive) {
+          throw new BadRequestException({
+            code: 'DEPARTMENT_INACTIVE',
+            message: `“${service.department.name}” is switched off.`,
+          });
+        }
+
+        // Same guard as a doctor's order, scoped the way a walk-in has to be:
+        // there is no visit, so it is this patient, on this clinic day.
+        const already = await tx.diagnosticOrder.findFirst({
+          where: {
+            serviceId: service.id,
+            patientId: patient.id,
+            status: { in: ['PENDING', 'COMPLETED'] },
+            createdAt: { gte: dayStart },
+          },
+          select: { id: true },
+        });
+        if (already) {
+          throw new ConflictException({
+            code: 'TEST_ALREADY_ORDERED',
+            message: `“${service.name}” was already ordered for this patient today.`,
+          });
+        }
+
+        tests.push({ id: service.id, name: service.name, departmentId: service.departmentId });
+      }
+
+      /** Opened once, before the loop. This is the whole point of the method. */
+      const invoice = await this.billing.ensureInvoiceForDiagnosticOrder(
+        tx,
+        tenantId,
+        { patientId: patient.id, visitAppointmentId: null },
+        meta,
+      );
+
+      const orders = [];
+      for (const test of tests) {
+        const line = await this.billing.addDiagnosticLine(
+          tx,
+          tenantId,
+          invoice.id,
+          { patientId: patient.id, serviceId: test.id, description: test.name },
+          meta,
+        );
+
+        const order = await tx.diagnosticOrder.create({
+          data: {
+            tenantId,
+            appointmentId: null,
+            patientId: patient.id,
+            departmentId: test.departmentId,
+            orderedByUserId: meta.actorUserId,
+            serviceId: test.id,
+            description: test.name,
+            invoiceLineId: line.id,
+            referralSource: input.referralSource,
+            ...(referrerName ? { referrerName } : {}),
+            ...(input.referrerClinic?.trim()
+              ? { referrerClinic: input.referrerClinic.trim() }
+              : {}),
+            ...(input.referrerPhone?.trim() ? { referrerPhone: input.referrerPhone.trim() } : {}),
+          },
+          select: ORDER_SELECT,
+        });
+
+        await this.audit.record(tx, tenantId, {
+          action: 'diagnostic.order',
+          resourceType: 'DiagnosticOrder',
+          resourceId: order.id,
+          patientId: patient.id,
+          changedFields: ['description', 'departmentId', 'serviceId', 'referralSource'],
+          ...meta,
+        });
+
+        orders.push(toView(order));
+      }
+
+      return { invoiceId: invoice.id, orders };
+    });
   }
 
   /**
@@ -572,16 +853,14 @@ export class DiagnosticsService {
            * Everything except this visit's own tests, which the consultation
            * already has on screen.
            *
-           * **Revisit this line when walk-in diagnostics lands.**
-           * `diagnostic_order.appointment_id` is still NOT NULL, so today every
-           * order has a visit and this filter is exact. FR-DIA-10 makes the
-           * column nullable, and at that point a plain `<>` in SQL is NULL for
-           * a row with no appointment — which would silently drop every
-           * walk-in test, the exact results this endpoint exists to surface.
-           * The test below pins the behaviour so the change cannot pass
-           * unnoticed.
+           * Written as an OR rather than `appointmentId: { not: current }`,
+           * which reads as equivalent and is not. In SQL `appointment_id <> $1`
+           * evaluates to NULL for a row with no appointment, and NULL is not
+           * true, so a plain NOT silently drops every walk-in test — the exact
+           * results this endpoint exists to surface, and the reason decision 5
+           * needed no new feature. The test below pins it.
            */
-          appointmentId: { not: encounter.appointmentId },
+          OR: [{ appointmentId: null }, { appointmentId: { not: encounter.appointmentId } }],
         },
         orderBy: { completedAt: 'desc' },
         /**
@@ -824,6 +1103,79 @@ export class DiagnosticsService {
   }
 
   /**
+   * The patient has been given their report.
+   *
+   * A doctor-ordered result ends up in a consultation, where the software can
+   * watch it arrive. A walk-in result ends as a sheet of paper handed across a
+   * counter, which it cannot see at all — and "I paid and never got my film"
+   * is a complaint with no answer unless somebody wrote down who took it.
+   *
+   * Behind `diagnostic:result`, the department that did the work and, per
+   * FR-DIA-13, hands the report over. Allowed on a doctor-ordered test too:
+   * patients ask for copies of those as well, and refusing would mean the one
+   * record that answers the complaint depends on why the test was raised.
+   *
+   * Recorded once. This is an event that happened, not a flag — handing the
+   * same report over twice would overwrite who took it the first time, which
+   * is precisely the fact in dispute.
+   */
+  async recordHandover(tenantId: string, orderId: string, handedOverTo: string, meta: RequestMeta) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const existing = await tx.diagnosticOrder.findUnique({
+        where: { id: orderId },
+        select: { id: true, status: true, patientId: true, handedOverAt: true },
+      });
+      if (!existing) throw new NotFoundException('No such order.');
+
+      if (existing.status !== 'COMPLETED') {
+        throw new BadRequestException({
+          code: 'RESULT_NOT_READY',
+          message:
+            existing.status === 'PENDING'
+              ? 'That test has not been reported yet — there is nothing to hand over.'
+              : 'That test was not done, so there is no report.',
+        });
+      }
+
+      if (existing.handedOverAt) {
+        throw new ConflictException({
+          code: 'ALREADY_HANDED_OVER',
+          message: 'This report has already been handed over.',
+        });
+      }
+
+      const to = handedOverTo.trim();
+      if (!to) {
+        throw new BadRequestException({
+          code: 'RECIPIENT_REQUIRED',
+          message: 'Say who took the report — the patient, or whoever collected it.',
+        });
+      }
+
+      const order = await tx.diagnosticOrder.update({
+        where: { id: orderId },
+        data: {
+          handedOverAt: new Date(),
+          handedOverByUserId: meta.actorUserId,
+          handedOverTo: to,
+        },
+        select: ORDER_SELECT,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'diagnostic.handover',
+        resourceType: 'DiagnosticOrder',
+        resourceId: orderId,
+        patientId: existing.patientId,
+        changedFields: ['handedOverAt', 'handedOverTo'],
+        ...meta,
+      });
+
+      return toView(order);
+    });
+  }
+
+  /**
    * Cancel an order raised in error.
    *
    * Not a delete — "why was this patient sent for an X-ray" is a question with
@@ -889,6 +1241,11 @@ const ORDER_SELECT = {
    * the machine. The fee is served by `catalogue()` to whoever may order.
    */
   service: { select: { id: true, code: true, name: true } },
+  /** Who decided the test was needed, and the outside doctor when there is one. */
+  referralSource: true,
+  referrerName: true,
+  referrerClinic: true,
+  referrerPhone: true,
   /**
    * Everything the pay-first rule needs, loaded with the order.
    *
@@ -901,6 +1258,10 @@ const ORDER_SELECT = {
   patient: { select: { id: true, name: true, uhid: true, gender: true, ageYears: true } },
   orderedBy: { select: { id: true, fullName: true } },
   completedBy: { select: { id: true, fullName: true } },
+  /** Whether the patient has actually been given the report (FR-DIA-13). */
+  handedOverAt: true,
+  handedOverTo: true,
+  handedOverBy: { select: { id: true, fullName: true } },
   /** So the worklist can show "2 files" without a second query per row. */
   _count: { select: { documents: true } },
 } as const;
