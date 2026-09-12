@@ -447,6 +447,55 @@ describe('the test catalogue', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('reaches the finance desk, which sells these tests at the counter', async () => {
+    const staff = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users',
+      headers: { cookie: admin.cookie },
+      payload: {
+        email: 'catalogue-finance@main.test',
+        fullName: 'Counter Finance',
+        roleKeys: ['finance'],
+      },
+    });
+    expect(staff.statusCode).toBe(201);
+    const financeUser = await login(
+      app,
+      fx.main.slug,
+      'catalogue-finance@main.test',
+      staff.json<{ temporaryPassword: string }>().temporaryPassword,
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: financeUser.cookie },
+    });
+
+    /**
+     * Finance holds `diagnostic:order:walkin` and deliberately NOT
+     * `diagnostic:order` — giving it the latter would let the desk order tests
+     * on anybody's consultation. This route accepts either, which is why the
+     * walk-in screen can show a price list at all: it was gated on the
+     * doctor's permission alone, so the fetch 403'd, the catalogue came back
+     * empty and the whole section silently failed to render.
+     */
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ tests: Array<{ id: string }> }>().tests.map((t) => t.id)).toContain(
+      kneeXrayId,
+    );
+  });
+
+  it('still refuses somebody who orders nothing at all', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/diagnostics/catalogue',
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
   it("never shows one clinic another's price list", async () => {
     const res = await app.inject({
       method: 'GET',

@@ -5,6 +5,7 @@ import type { Permission } from './permissions.js';
 
 export const PUBLIC_KEY = 'isPublic';
 export const PERMISSIONS_KEY = 'requiredPermissions';
+export const ANY_PERMISSIONS_KEY = 'requiredAnyPermission';
 
 /**
  * Marks a route as reachable without authentication.
@@ -18,6 +19,23 @@ export const Public = () => SetMetadata(PUBLIC_KEY, true);
 /** Requires ALL listed permissions. */
 export const RequirePermissions = (...permissions: Permission[]) =>
   SetMetadata(PERMISSIONS_KEY, permissions);
+
+/**
+ * Requires ANY ONE of the listed permissions.
+ *
+ * For a route two different jobs legitimately reach by different routes. The
+ * priced test catalogue is the case it was added for: a doctor reaches it
+ * through `diagnostic:order` while choosing a test in a consultation, and the
+ * finance desk through `diagnostic:order:walkin` while selling one at the
+ * counter. Neither role should be given the other's permission to get there —
+ * that was the whole point of splitting them.
+ *
+ * Use it sparingly. `RequirePermissions` says one clear thing, and a route
+ * that needs an OR is usually a route doing two jobs. This one is not: it
+ * answers exactly one question — what can be ordered, and for how much.
+ */
+export const RequireAnyPermission = (...permissions: Permission[]) =>
+  SetMetadata(ANY_PERMISSIONS_KEY, permissions);
 
 export interface AuthenticatedUser {
   userId: string;

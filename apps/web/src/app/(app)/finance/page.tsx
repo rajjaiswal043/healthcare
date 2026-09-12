@@ -102,6 +102,8 @@ export default function FinanceDeskPage() {
    */
   const [walkInTests, setWalkInTests] = useState<DiagnosticTest[]>([]);
   const [walkIn, setWalkIn] = useState(false);
+  /** The catalogue call FAILED, as opposed to coming back empty. */
+  const [catalogueFailed, setCatalogueFailed] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [referralSource, setReferralSource] = useState<'SELF' | 'EXTERNAL_DOCTOR'>('SELF');
   const [referrerName, setReferrerName] = useState('');
@@ -258,8 +260,19 @@ export default function FinanceDeskPage() {
     void (async () => {
       try {
         setWalkInTests((await api.diagnosticCatalogue()).tests);
+        setCatalogueFailed(false);
       } catch {
-        // No catalogue, no walk-in tests to sell. The rest of the desk works.
+        /**
+         * Remembered, not swallowed.
+         *
+         * This catch used to discard the reason, and an empty catalogue then
+         * looked identical to a refused one: the whole walk-in section simply
+         * did not render, on a desk that held the permission to use it. It took
+         * a bug report to discover the request was 403ing. The desk still works
+         * without a catalogue — it just says so now.
+         */
+        setWalkInTests([]);
+        setCatalogueFailed(true);
       }
     })();
   }, [canWalkIn]);
@@ -485,11 +498,11 @@ export default function FinanceDeskPage() {
         canWalkIn &&
         !settlingExistingBill &&
         !appointmentId &&
-        walkInTests.length > 0 && (
+        (walkInTests.length > 0 || catalogueFailed) && (
           <section className="card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="mono-label">Tests only — no doctor</p>
-              {!walkIn && (
+              {!walkIn && !catalogueFailed && (
                 <button
                   type="button"
                   className="btn-secondary !py-1.5"
@@ -499,6 +512,13 @@ export default function FinanceDeskPage() {
                 </button>
               )}
             </div>
+
+            {catalogueFailed && (
+              <p className="field-hint mt-2">
+                The list of tests could not be loaded, so nothing can be sold here right now. The
+                rest of this desk is unaffected.
+              </p>
+            )}
 
             {walkIn && (
               <div className="mt-4 space-y-4">

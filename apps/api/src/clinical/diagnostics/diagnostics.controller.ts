@@ -26,6 +26,7 @@ import type { FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
   CurrentUser,
+  RequireAnyPermission,
   RequirePermissions,
   type AuthenticatedUser,
 } from '../../platform/auth/decorators.js';
@@ -206,11 +207,16 @@ export class DiagnosticsController {
   /**
    * The orderable tests and their fees.
    *
-   * `diagnostic:order`, not `diagnostic:read`: this carries prices, and the one
-   * screen that needs them is the one deciding to spend the patient's money.
+   * Either ordering permission, not `diagnostic:read`: this carries prices, and
+   * the screens that need them are the ones deciding to spend the patient's
+   * money. The doctor reaches it through `diagnostic:order` while choosing a
+   * test in a consultation; the finance desk through `diagnostic:order:walkin`
+   * while selling one at the counter. Requiring both would have meant giving
+   * finance the power to order tests on anybody's consultation, which is the
+   * thing splitting the permissions was for.
    */
   @Get('diagnostics/catalogue')
-  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_ORDER)
+  @RequireAnyPermission(PERMISSIONS.DIAGNOSTIC_ORDER, PERMISSIONS.DIAGNOSTIC_ORDER_WALKIN)
   async catalogue(@CurrentTenant() tenantId: string, @Query() query: CatalogueQueryDto) {
     return this.diagnostics.catalogue(tenantId, query.departmentId);
   }
