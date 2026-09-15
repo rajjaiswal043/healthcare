@@ -316,7 +316,7 @@ function RoleEditor({
       role="dialog"
       aria-modal="true"
       aria-label={role ? `Change ${role.name}` : 'Add a role'}
-      className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 !m-0 grid place-items-center bg-ink/40 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

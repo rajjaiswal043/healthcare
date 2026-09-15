@@ -173,9 +173,19 @@ export function PaymentDialog({
 
   const settled = invoice.settled;
 
+  /**
+   * `!m-0` on the backdrop is load-bearing.
+   *
+   * This dialog renders inside the page's own content, and pages wrap their
+   * content in `space-y-*` — which gives every later child a top margin, this
+   * one included. A margin moves a `position: fixed` box like any other box:
+   * `inset-0` plus `margin-top: 1.5rem` left a 24px strip across the top of the
+   * screen un-dimmed, with the role bar and the sidebar still clickable through
+   * it. The `!` is needed because `space-y-6`'s selector outranks a plain `m-0`.
+   */
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+      className="fixed inset-0 z-[60] !m-0 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-6"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
