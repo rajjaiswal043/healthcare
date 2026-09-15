@@ -10,6 +10,15 @@ import {
   type OnboardResult,
   type PlatformUser,
 } from '@/lib/platform-api';
+import {
+  UHID_PREFIX_MAX,
+  UHID_WIDTH_DEFAULT,
+  UHID_WIDTH_MAX,
+  UHID_WIDTH_MIN,
+  derivePrefix,
+  formatUhid,
+  uhidPrefixProblems,
+} from '@/lib/uhid-format';
 import { LogoMark } from '@/components/auth-shell';
 import {
   IconAlert,
@@ -19,11 +28,25 @@ import {
   IconUsers,
 } from '@/components/icons';
 
+/**
+ * The roles a seat limit can be set for at onboarding.
+ *
+ * Naya system role add ho to isse yahan bhi update karna. This cannot be
+ * derived from SYSTEM_ROLES in packages/db: the web bundle does not import that
+ * package, which would drag Prisma into the browser. The backend is generic —
+ * any role key the clinic has is accepted — so a role missing from THIS list is
+ * silently unlimited for every clinic onboarded without it. That is how Finance
+ * went missing until 15 Sep 2026.
+ *
+ * `owner` is left out on purpose: a rare, read-only oversight role nobody has
+ * needed to cap.
+ */
 const ROLES = [
   { key: 'doctor', label: 'Doctors' },
   { key: 'nurse', label: 'Nurses' },
   { key: 'front_desk', label: 'Front desk' },
   { key: 'diagnostics', label: 'Diagnostics' },
+  { key: 'finance', label: 'Finance' },
   { key: 'administrator', label: 'Administrators' },
 ];
 
@@ -56,6 +79,29 @@ export default function PlatformConsole() {
   const [adminEmail, setAdminEmail] = useState('');
   const [contactMobile, setContactMobile] = useState('');
   const [seats, setSeats] = useState<Record<string, string>>({});
+
+  /**
+   * The patient ID format (FR-UID-01).
+   *
+   * The prefix follows the clinic name until somebody types in it, the same way
+   * the sign-in address does — so an onboarding that never touches it still
+   * gets what it always got, and one that does is not overwritten.
+   */
+  const [prefix, setPrefix] = useState('');
+  const [prefixTouched, setPrefixTouched] = useState(false);
+  const [width, setWidth] = useState(UHID_WIDTH_DEFAULT);
+
+  /**
+   * The clinic whose patient ID format is being changed (FR-UID-03), or null.
+   *
+   * Its own error, shown inside the dialog: the page-level banner sits behind
+   * the overlay, where a refusal would go unread.
+   */
+  const [formatFor, setFormatFor] = useState<Clinic | null>(null);
+  const [newPrefix, setNewPrefix] = useState('');
+  const [newWidth, setNewWidth] = useState(UHID_WIDTH_DEFAULT);
+  const [formatReason, setFormatReason] = useState('');
+  const [formatError, setFormatError] = useState<string | null>(null);
 
   /** Shown once, and only once: the credentials handed to a new clinic. */
   const [issued, setIssued] = useState<OnboardResult | null>(null);
@@ -92,6 +138,10 @@ export default function PlatformConsole() {
       const result = await platformApi.onboard({
         name: name.trim(),
         slug: (slugTouched ? slug : slugify(name)).trim(),
+        // Sent explicitly even when untouched: what the preview showed is what
+        // the clinic gets, rather than whatever the server's default is today.
+        uhidPrefix: proposedPrefix,
+        uhidPadding: width,
         ...(contactMobile.trim() ? { contactMobile: contactMobile.trim() } : {}),
         ...(Object.keys(seatLimits).length > 0 ? { seatLimits } : {}),
         admin: { email: adminEmail.trim(), fullName: adminName.trim() },
@@ -107,6 +157,9 @@ export default function PlatformConsole() {
       setAdminEmail('');
       setContactMobile('');
       setSeats({});
+      setPrefix('');
+      setPrefixTouched(false);
+      setWidth(UHID_WIDTH_DEFAULT);
       await load();
     } catch (err) {
       setError(err instanceof PlatformRequestError ? err.error.message : 'Could not create it.');
@@ -145,7 +198,44 @@ export default function PlatformConsole() {
     }
   }
 
+  function openFormat(clinic: Clinic) {
+    setFormatFor(clinic);
+    // Start from what the clinic has, so an accidental submit changes nothing
+    // and the server's "already this format" refusal is the worst outcome.
+    setNewPrefix(clinic.uhidPrefix);
+    setNewWidth(clinic.uhidPadding);
+    setFormatReason('');
+    setFormatError(null);
+  }
+
+  async function changeFormat() {
+    if (!formatFor) return;
+    setBusyId(formatFor.id);
+    setFormatError(null);
+    try {
+      await platformApi.changeUhidFormat(formatFor.id, {
+        uhidPrefix: newPrefix,
+        uhidPadding: newWidth,
+        reason: formatReason.trim(),
+      });
+      setFormatFor(null);
+      await load();
+    } catch (err) {
+      setFormatError(
+        err instanceof PlatformRequestError ? err.error.message : 'Could not change the format.',
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const newPrefixProblems = uhidPrefixProblems(newPrefix);
+  const formatUnchanged =
+    formatFor !== null && newPrefix === formatFor.uhidPrefix && newWidth === formatFor.uhidPadding;
+
   const proposedSlug = slugTouched ? slug : slugify(name);
+  const proposedPrefix = prefixTouched ? prefix : derivePrefix(name);
+  const prefixProblems = uhidPrefixProblems(proposedPrefix);
 
   return (
     <main className="min-h-screen bg-bg">
@@ -240,6 +330,17 @@ export default function PlatformConsole() {
               <Handover label="Password" value={issued.admin.temporaryPassword} emphasis />
             </dl>
 
+            {/* The format as the clinic now has it, read back from the server
+                rather than from the form — the answer to "what do our patient
+                numbers look like" on the day it was decided. */}
+            <p className="mt-3 text-[13px] text-ink-60">
+              Patient IDs start at{' '}
+              <span className="font-mono font-semibold text-ink">
+                {formatUhid(issued.clinic.uhidPrefix, issued.clinic.uhidPadding, 1)}
+              </span>
+              .
+            </p>
+
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -301,13 +402,96 @@ export default function PlatformConsole() {
               />
             </div>
 
+            {/*
+              FR-UID-01. Asked here because it is the one moment it is free to
+              change: once a card is printed, a patient ID is permanent.
+            */}
+            <div className="mt-5 rounded-panel border border-ink/8 bg-bg-soft px-4 py-3.5">
+              <p className="mono-label">Patient IDs</p>
+              <p className="mt-1 text-[12.5px] text-ink-40">
+                Printed on every card, bill and report. Existing patients never change, so choose
+                what this hospital actually wants now.
+              </p>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <label className="block" htmlFor="uhidPrefix">
+                  <span className="field-label !mb-1">Prefix</span>
+                  <input
+                    id="uhidPrefix"
+                    className="field-input !py-2 font-mono"
+                    value={proposedPrefix}
+                    maxLength={UHID_PREFIX_MAX + 4}
+                    onChange={(e) => {
+                      setPrefixTouched(true);
+                      // Uppercase as they type: the database stores it that way,
+                      // and a preview in lowercase would show them something
+                      // they will never get.
+                      setPrefix(e.target.value.toUpperCase());
+                    }}
+                    aria-invalid={prefixProblems.length > 0}
+                    aria-describedby="uhidPreview"
+                  />
+                </label>
+
+                <label className="block" htmlFor="uhidWidth">
+                  <span className="field-label !mb-1">Number width</span>
+                  <select
+                    id="uhidWidth"
+                    className="field-input !py-2 font-mono"
+                    value={width}
+                    onChange={(e) => setWidth(Number(e.target.value))}
+                  >
+                    {Array.from(
+                      { length: UHID_WIDTH_MAX - UHID_WIDTH_MIN + 1 },
+                      (_, k) => UHID_WIDTH_MIN + k,
+                    ).map((w) => (
+                      <option key={w} value={w}>
+                        {w} digits · {formatUhid('', w, 1)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div id="uhidPreview" aria-live="polite" className="mt-3">
+                {prefixProblems.length > 0 ? (
+                  <ul className="space-y-0.5 text-[12.5px] text-coral-text">
+                    {prefixProblems.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <>
+                    <p className="text-[13.5px]">
+                      Your first patient will be{' '}
+                      <span className="font-mono font-semibold">
+                        {formatUhid(proposedPrefix, width, 1)}
+                      </span>
+                      .
+                    </p>
+                    {/* Width is a minimum, not a ceiling. Said, because
+                        somebody choosing 4 digits is otherwise guessing what
+                        happens at the ten-thousandth patient. */}
+                    <p className="mt-0.5 text-[12.5px] text-ink-40">
+                      Longer numbers are written in full — patient{' '}
+                      {(10 ** width).toLocaleString('en-IN')} will be{' '}
+                      <span className="font-mono">
+                        {formatUhid(proposedPrefix, width, 10 ** width)}
+                      </span>
+                      .
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
             <div className="mt-5 rounded-panel border border-ink/8 bg-bg-soft px-4 py-3.5">
               <p className="mono-label">Seats</p>
               <p className="mt-1 text-[12.5px] text-ink-40">
                 Leave a box empty for unlimited. Counted on active staff, so deactivating somebody
                 frees their seat.
               </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-4">
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {ROLES.map((r) => (
                   <label key={r.key} className="block">
                     <span className="field-label !mb-1">{r.label}</span>
@@ -337,7 +521,8 @@ export default function PlatformConsole() {
                   name.trim().length < 2 ||
                   !proposedSlug ||
                   adminName.trim().length < 2 ||
-                  !adminEmail.trim()
+                  !adminEmail.trim() ||
+                  prefixProblems.length > 0
                 }
                 onClick={() => void onboard()}
               >
@@ -375,6 +560,15 @@ export default function PlatformConsole() {
                       ? `last used ${new Date(c.lastSignInAt).toLocaleDateString('en-IN')}`
                       : 'never used'}
                   </span>
+                  <Dot />
+                  {/* The ID the next registration gets, not the first one ever
+                      issued — that is the question a platform user is asked. */}
+                  <span>
+                    next ID{' '}
+                    <span className="font-mono text-ink-60">
+                      {formatUhid(c.uhidPrefix, c.uhidPadding, c.uhidIssued + 1)}
+                    </span>
+                  </span>
                   {c.suspendedReason && (
                     <>
                       <Dot />
@@ -384,17 +578,166 @@ export default function PlatformConsole() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="btn-secondary !px-4 !py-1.5 !text-[13px]"
-                disabled={busyId === c.id}
-                onClick={() => void toggleSuspension(c)}
-              >
-                {c.status === 'SUSPENDED' ? 'Restore' : 'Suspend'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary !px-4 !py-1.5 !text-[13px]"
+                  disabled={busyId === c.id}
+                  onClick={() => openFormat(c)}
+                >
+                  Patient IDs
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary !px-4 !py-1.5 !text-[13px]"
+                  disabled={busyId === c.id}
+                  onClick={() => void toggleSuspension(c)}
+                >
+                  {c.status === 'SUSPENDED' ? 'Restore' : 'Suspend'}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
+
+        {/* FR-UID-03 — changing the format after patients exist. */}
+        {formatFor && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="formatTitle"
+            className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && busyId !== formatFor.id) setFormatFor(null);
+            }}
+          >
+            <div className="card max-h-[90vh] w-full max-w-lg overflow-y-auto p-6">
+              <p className="mono-label">{formatFor.name}</p>
+              <h2 id="formatTitle" className="mt-1 font-display text-[21px] font-bold">
+                Change patient IDs
+              </h2>
+              <p className="mt-1 text-[13px] text-ink-60">
+                Now <span className="font-mono">{formatFor.uhidPrefix}</span> ·{' '}
+                {formatFor.uhidPadding} digits · {formatFor.uhidIssued.toLocaleString('en-IN')}{' '}
+                issued
+              </p>
+
+              {/* The sentence the requirement asks for, word for word, and
+                  placed before the fields rather than after them. */}
+              <p className="mt-4 rounded-panel border border-amber/30 bg-amber-soft/50 px-3.5 py-2.5 text-[13px] font-semibold text-amber-text">
+                Patients already registered keep their existing IDs. This applies to new
+                registrations only.
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <label className="block" htmlFor="newUhidPrefix">
+                  <span className="field-label !mb-1">Prefix</span>
+                  <input
+                    id="newUhidPrefix"
+                    className="field-input !py-2 font-mono"
+                    value={newPrefix}
+                    maxLength={UHID_PREFIX_MAX + 4}
+                    onChange={(e) => setNewPrefix(e.target.value.toUpperCase())}
+                    aria-invalid={newPrefixProblems.length > 0}
+                    aria-describedby="newUhidPreview"
+                  />
+                </label>
+                <label className="block" htmlFor="newUhidWidth">
+                  <span className="field-label !mb-1">Number width</span>
+                  <select
+                    id="newUhidWidth"
+                    className="field-input !py-2 font-mono"
+                    value={newWidth}
+                    onChange={(e) => setNewWidth(Number(e.target.value))}
+                  >
+                    {Array.from(
+                      { length: UHID_WIDTH_MAX - UHID_WIDTH_MIN + 1 },
+                      (_, k) => UHID_WIDTH_MIN + k,
+                    ).map((w) => (
+                      <option key={w} value={w}>
+                        {w} digits
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div id="newUhidPreview" aria-live="polite" className="mt-3">
+                {newPrefixProblems.length > 0 ? (
+                  <ul className="space-y-0.5 text-[12.5px] text-coral-text">
+                    {newPrefixProblems.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <>
+                    <p className="text-[13.5px]">
+                      The next patient will be{' '}
+                      <span className="font-mono font-semibold">
+                        {formatUhid(newPrefix, newWidth, formatFor.uhidIssued + 1)}
+                      </span>
+                      .
+                    </p>
+                    {/* Said, because "restart at 0001" is the change people
+                        expect and the one that would create two patients whose
+                        IDs differ only by prefix. */}
+                    <p className="mt-0.5 text-[12.5px] text-ink-40">
+                      Numbering carries on from {(formatFor.uhidIssued + 1).toLocaleString('en-IN')}{' '}
+                      — it does not restart.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <label className="mt-4 block" htmlFor="formatReason">
+                <span className="field-label !mb-1">Why</span>
+                <textarea
+                  id="formatReason"
+                  rows={2}
+                  maxLength={300}
+                  className="field-input text-[13.5px]"
+                  placeholder="Dr Vivek asked on the phone — wants DRVIV- instead of DRV"
+                  value={formatReason}
+                  onChange={(e) => setFormatReason(e.target.value)}
+                />
+                <span className="field-hint block">
+                  Written into the clinic&rsquo;s audit trail with your name and the old and new
+                  formats.
+                </span>
+              </label>
+
+              {formatError && (
+                <p role="alert" className="mt-3 text-[13px] text-coral-text">
+                  {formatError}
+                </p>
+              )}
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={
+                    busyId === formatFor.id ||
+                    newPrefixProblems.length > 0 ||
+                    formatUnchanged ||
+                    formatReason.trim().length < 3
+                  }
+                  onClick={() => void changeFormat()}
+                >
+                  {busyId === formatFor.id ? 'Changing…' : 'Change format'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={busyId === formatFor.id}
+                  onClick={() => setFormatFor(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {clinics.length === 0 && (
           <div className="card mt-6 px-6 py-12 text-center">

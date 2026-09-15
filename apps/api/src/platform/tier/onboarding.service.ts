@@ -14,6 +14,12 @@ export interface OnboardInput {
   slug: string;
   timezone?: string;
   uhidPrefix?: string;
+  /**
+   * How many digits the patient number is padded to. 3–8, enforced by a CHECK
+   * on `tenant`. Defaults to 5, which is what every clinic onboarded so far was
+   * given. Validated in the DTO (`IsUhidWidth`) before it gets here.
+   */
+  uhidPadding?: number;
   contactEmail?: string;
   contactMobile?: string;
   /** role key → how many people may hold it. Omit a role for unlimited. */
@@ -55,6 +61,11 @@ export class OnboardingService {
         suspendedAt: true,
         suspendedReason: true,
         createdAt: true,
+        // The format, and how many IDs it has issued — what a platform user
+        // needs in front of them before changing it (FR-UID-03).
+        uhidPrefix: true,
+        uhidPadding: true,
+        uhidCounter: true,
       },
     });
 
@@ -79,10 +90,13 @@ export class OnboardingService {
     const byTenant = new Map(stats.map((s) => [s.tenant_id, s]));
 
     return {
-      clinics: tenants.map((t) => {
+      clinics: tenants.map(({ uhidCounter, ...t }) => {
         const s = byTenant.get(t.id);
         return {
           ...t,
+          // Pulled out of the spread: a bigint cannot be serialised to JSON at
+          // all, so leaving it in would fail the whole list, not just this field.
+          uhidIssued: Number(uhidCounter),
           // bigint over the wire is a string in JSON; the console wants numbers.
           activeUsers: Number(s?.active_users ?? 0),
           patients: Number(s?.patient_count ?? 0),
@@ -137,6 +151,7 @@ export class OnboardingService {
         ${input.name.trim()}::varchar,
         ${input.timezone ?? 'Asia/Kolkata'}::varchar,
         ${(input.uhidPrefix ?? defaultPrefix(input.name)).toUpperCase()}::varchar,
+        ${input.uhidPadding ?? 5}::int,
         ${input.contactEmail ?? null}::varchar,
         ${input.contactMobile ?? null}::varchar,
         ${platformUserId}::uuid
@@ -149,7 +164,9 @@ export class OnboardingService {
 
     const tenant = await this.prisma.client.tenant.findUniqueOrThrow({
       where: { id: tenantId },
-      select: { id: true, slug: true, name: true, uhidPrefix: true },
+      // The width too, so the console can show the format the clinic was given
+      // straight after creating it — "your first patient will be DRVIV-0001".
+      select: { id: true, slug: true, name: true, uhidPrefix: true, uhidPadding: true },
     });
 
     await this.prisma.forTenant(tenant.id, async (tx) => {

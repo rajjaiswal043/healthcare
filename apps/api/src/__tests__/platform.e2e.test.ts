@@ -12,7 +12,7 @@
  *     easily broken by a route added later.
  */
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 // The MFA escape hatches are cleared for every suite in setup-env.ts, so the
 // enrolment assertions below hold whatever a developer has in their .env.
@@ -307,6 +307,92 @@ describe('onboarding a clinic', () => {
     expect(domainCode(again)).toBe('SLUG_IN_USE');
   });
 
+  it('stores the patient ID format it was asked for', async () => {
+    const res = await onboard({ slug: 'made-format', uhidPrefix: 'drviv-', uhidPadding: 4 });
+
+    expect(res.statusCode).toBe(201);
+    // Uppercased on the way in — the database stores it that way regardless,
+    // so refusing lowercase would reject what the clinic ends up with anyway.
+    expect(res.json().clinic).toMatchObject({ uhidPrefix: 'DRVIV-', uhidPadding: 4 });
+
+    const [row] = await ownerQuery<{ uhid_prefix: string; uhid_padding: number }>(
+      fx.main.id,
+      `SELECT uhid_prefix, uhid_padding FROM tenant WHERE slug = 'made-format'`,
+    );
+    expect(row).toEqual({ uhid_prefix: 'DRVIV-', uhid_padding: 4 });
+  });
+
+  it('gives three letters of the name and five digits when nobody chooses', async () => {
+    const res = await onboard({ slug: 'made-default', name: 'Dr. Vivek Clinic' });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().clinic).toMatchObject({ uhidPrefix: 'DRV', uhidPadding: 5 });
+  });
+
+  it('treats a blank prefix as not chosen, rather than as a mistake', async () => {
+    const res = await onboard({ slug: 'made-blank', uhidPrefix: '   ' });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().clinic.uhidPrefix).toBe('MAD');
+  });
+
+  it.each([
+    ['DRV1', 'cannot end in a digit'],
+    ['1AB', 'must start with a letter'],
+    ['DR V', 'only letters, digits, - and /'],
+    ['DR%', 'only letters, digits, - and /'],
+    ['DRVIVEK-X', 'at most 8 characters'],
+  ])('refuses the prefix %j with a sentence saying it %s', async (uhidPrefix, sentence) => {
+    const res = await onboard({ slug: 'made-badprefix', uhidPrefix });
+
+    /**
+     * A 400 that names the rule, not the CHECK constraint turning up as a 500.
+     * The database would refuse every one of these too — this is about the
+     * person onboarding learning WHAT to fix.
+     */
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain(sentence);
+
+    const made = await ownerQuery(
+      fx.main.id,
+      `SELECT id FROM tenant WHERE slug = 'made-badprefix'`,
+    );
+    expect(made).toHaveLength(0);
+  });
+
+  it.each([2, 9, 4.5])('refuses a width of %j', async (uhidPadding) => {
+    const res = await onboard({ slug: 'made-badwidth', uhidPadding });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain('from 3 to 8');
+  });
+
+  it('saves a seat limit for finance, like any other role', async () => {
+    const res = await onboard({ slug: 'made-finance-seats', seatLimits: { finance: 1 } });
+
+    expect(res.statusCode).toBe(201);
+
+    const [tenant] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM tenant WHERE slug = 'made-finance-seats'`,
+    );
+
+    // Read in the new clinic's own context: tenant_seat_limit is under
+    // row-level security, so the fixture's context would see nothing at all.
+    const limits = await ownerQuery<{ role_key: string; max_users: number }>(
+      tenant!.id,
+      'SELECT role_key, max_users FROM tenant_seat_limit WHERE tenant_id = $1',
+      [tenant!.id],
+    );
+
+    /**
+     * The backend never needed changing for this — seat limits are keyed by
+     * role, and finance is a role every clinic has. What was missing was the
+     * field on the onboarding form, so no clinic was ever onboarded with one.
+     */
+    expect(limits).toEqual([{ role_key: 'finance', max_users: 1 }]);
+  });
+
   it('refuses a slug that would not work in a sign-in box', async () => {
     const res = await onboard({ slug: 'Made Clinic!' });
     expect(res.statusCode).toBe(400);
@@ -482,6 +568,180 @@ describe('changing what a clinic is allowed', () => {
  * The interesting assertion is the last one: this write must not appear in the
  * clinic's audit trail as though one of their own staff did it.
  */
+describe('changing a clinic’s patient ID format', () => {
+  function change(body: Record<string, unknown> = {}, cookie = platformCookie) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/api/v1/platform/clinics/${fx.main.id}/uhid-format`,
+      headers: { cookie },
+      payload: {
+        uhidPrefix: 'DRVIV-',
+        uhidPadding: 4,
+        reason: 'Dr Vivek asked on the phone',
+        ...body,
+      },
+    });
+  }
+
+  async function issued(): Promise<number> {
+    const [row] = await ownerQuery<{ n: number }>(
+      fx.main.id,
+      'SELECT uhid_counter::int AS n FROM tenant WHERE id = $1',
+      [fx.main.id],
+    );
+    return row!.n;
+  }
+
+  afterEach(async () => {
+    // Back to the fixture format, and the record of having changed it gone, so
+    // no later file inherits a clinic numbered differently from its fixtures.
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE tenant SET uhid_prefix = 'T', uhid_padding = 6 WHERE id = $1`,
+      [fx.main.id],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `DELETE FROM audit_event WHERE action = 'tenant.uhid_format_change'`,
+    );
+  });
+
+  it('shows each clinic’s format and how many IDs it has issued', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/platform/clinics',
+      headers: { cookie: platformCookie },
+    });
+
+    const main = (res.json().clinics as Array<Record<string, unknown>>).find(
+      (c) => c.slug === fx.main.slug,
+    );
+    expect(main).toMatchObject({ uhidPrefix: 'T', uhidPadding: 6, uhidIssued: await issued() });
+  });
+
+  it('changes the format for new patients and carries the numbering on', async () => {
+    const before = await issued();
+
+    const res = await change();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      uhidPrefix: 'DRVIV-',
+      uhidPadding: 4,
+      uhidIssued: before,
+      nextUhid: `DRVIV-${String(before + 1).padStart(4, '0')}`,
+    });
+
+    // Not restarted — restarting would issue a second patient whose ID differs
+    // from an existing one only by prefix.
+    expect(await issued()).toBe(before);
+
+    // And the patient already holding a card keeps it.
+    const [kept] = await ownerQuery<{ n: number }>(
+      fx.main.id,
+      `SELECT count(*)::int AS n FROM patient WHERE uhid = 'T000001'`,
+    );
+    expect(kept?.n).toBe(1);
+  });
+
+  it('records who changed it, why, and from what to what', async () => {
+    expect((await change()).statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{
+      actor_label: string;
+      actor_user_id: string | null;
+      reason: string;
+      changed_fields: string[];
+    }>(
+      fx.main.id,
+      `SELECT actor_label, actor_user_id, reason, changed_fields
+         FROM audit_event WHERE action = 'tenant.uhid_format_change'`,
+    );
+
+    // Decision D9: the clinic's own audit trail, no new table.
+    expect(row?.actor_label).toBe(`platform: ${PLATFORM_EMAIL}`);
+    // A platform user is not a clinic user, so there is no id to claim here.
+    expect(row?.actor_user_id).toBeNull();
+    expect(row?.changed_fields).toEqual(['uhidPrefix', 'uhidPadding']);
+    expect(row?.reason).toContain('Dr Vivek asked on the phone');
+    expect(row?.reason).toContain('was T · 6 digits (T000001)');
+    expect(row?.reason).toContain('now DRVIV- · 4 digits (DRVIV-0001)');
+  });
+
+  it('refuses a prefix that could re-issue an ID, and changes nothing', async () => {
+    const res = await change({ uhidPrefix: 'DRV1' });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain('cannot end in a digit');
+
+    const [row] = await ownerQuery<{ uhid_prefix: string }>(
+      fx.main.id,
+      'SELECT uhid_prefix FROM tenant WHERE id = $1',
+      [fx.main.id],
+    );
+    expect(row?.uhid_prefix).toBe('T');
+  });
+
+  it('refuses a change that changes nothing, rather than recording one', async () => {
+    const res = await change({ uhidPrefix: 't', uhidPadding: 6 });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('FORMAT_UNCHANGED');
+
+    const rows = await ownerQuery(
+      fx.main.id,
+      `SELECT id FROM audit_event WHERE action = 'tenant.uhid_format_change'`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it('requires a reason, and both halves of the format', async () => {
+    expect((await change({ reason: '' })).statusCode).toBe(400);
+
+    const noPrefix = await change({ uhidPrefix: undefined });
+    expect(noPrefix.statusCode).toBe(400);
+    expect(JSON.stringify(noPrefix.json())).toContain('Give the patient IDs a prefix');
+
+    const noWidth = await change({ uhidPadding: undefined });
+    expect(noWidth.statusCode).toBe(400);
+    expect(JSON.stringify(noWidth.json())).toContain('Choose how many digits');
+
+    /**
+     * Why this test exists. A missing prefix once got past validation — an
+     * `@IsDefined` stacked on optional decorators is never reached — and
+     * arrived at the database as NULL, surfacing as a 500 from a NOT NULL
+     * constraint instead of a sentence. And nothing was changed along the way.
+     */
+    const [row] = await ownerQuery<{ uhid_prefix: string; uhid_padding: number }>(
+      fx.main.id,
+      'SELECT uhid_prefix, uhid_padding FROM tenant WHERE id = $1',
+      [fx.main.id],
+    );
+    expect(row).toEqual({ uhid_prefix: 'T', uhid_padding: 6 });
+  });
+
+  it('cannot be done from inside a clinic', async () => {
+    /**
+     * Decision D3: platform only. The route sits behind PlatformGuard, and a
+     * clinic session is a different realm with a different cookie — so a
+     * signed-in clinic user reaches it no further than somebody with no
+     * session at all. Nothing is changed either way.
+     */
+    const clinic = await login(app, fx.main.slug, 'frontdesk@main.test');
+
+    expect((await change({}, clinic.cookie)).statusCode).toBe(401);
+    expect((await change({}, '')).statusCode).toBe(401);
+    expect(await issued()).toBeGreaterThan(0);
+
+    const [row] = await ownerQuery<{ uhid_prefix: string }>(
+      fx.main.id,
+      'SELECT uhid_prefix FROM tenant WHERE id = $1',
+      [fx.main.id],
+    );
+    expect(row?.uhid_prefix).toBe('T');
+  });
+});
+
 describe('platform sets a clinic logo', () => {
   async function png(size = 120): Promise<Buffer> {
     const sharp = (await import('sharp')).default;

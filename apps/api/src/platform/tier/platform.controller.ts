@@ -32,6 +32,8 @@ import { OnboardingService } from './onboarding.service.js';
 import { PlatformGuard, type PlatformActor } from './platform.guard.js';
 import { BrandingService } from '../branding/branding.service.js';
 import { MAX_UPLOAD_BYTES } from '../branding/logo-image.js';
+import { IsUhidPrefix, IsUhidWidth } from './uhid-format.js';
+import { UhidFormatService } from './uhid-format.service.js';
 import {
   PLATFORM_REFRESH_COOKIE,
   clearPlatformCookies,
@@ -87,10 +89,16 @@ class OnboardDto {
   @MaxLength(64)
   timezone?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(8)
+  /**
+   * The letters in front of every patient ID (FR-UID-01). Optional: left out,
+   * the clinic gets three letters of its name, as it always has.
+   */
+  @IsUhidPrefix()
   uhidPrefix?: string;
+
+  /** Digits the patient number is padded to. Optional; 5 when left out. */
+  @IsUhidWidth()
+  uhidPadding?: number;
 
   @IsOptional()
   @IsEmail()
@@ -108,6 +116,28 @@ class OnboardDto {
   @ValidateNested()
   @Type(() => AdminDto)
   admin!: AdminDto;
+}
+
+/**
+ * A new patient ID format for a clinic that already has patients (FR-UID-03).
+ *
+ * Both fields required, unlike at onboarding — there is no default to fall
+ * back to when the point is to change it. Required through the decorators'
+ * own option rather than an IsDefined stacked on top, which class-validator
+ * never reaches once IsOptional has seen a missing value.
+ */
+class ChangeUhidFormatDto {
+  @IsUhidPrefix({ required: true })
+  uhidPrefix!: string;
+
+  @IsUhidWidth({ required: true })
+  uhidPadding!: number;
+
+  /** Why, and who asked. Written into the clinic's audit trail. */
+  @IsString()
+  @MinLength(3, { message: 'Say why the format is changing — who asked, and when.' })
+  @MaxLength(300)
+  reason!: string;
 }
 
 class SuspendDto {
@@ -150,6 +180,7 @@ export class PlatformController {
     private readonly auth: PlatformAuthService,
     private readonly onboarding: OnboardingService,
     private readonly branding: BrandingService,
+    private readonly uhidFormat: UhidFormatService,
   ) {}
 
   // --- signing in ----------------------------------------------------------
@@ -242,6 +273,7 @@ export class PlatformController {
         slug: dto.slug,
         ...(dto.timezone ? { timezone: dto.timezone } : {}),
         ...(dto.uhidPrefix ? { uhidPrefix: dto.uhidPrefix } : {}),
+        ...(dto.uhidPadding !== undefined ? { uhidPadding: dto.uhidPadding } : {}),
         ...(dto.contactEmail ? { contactEmail: dto.contactEmail } : {}),
         ...(dto.contactMobile ? { contactMobile: dto.contactMobile } : {}),
         ...(dto.seatLimits ? { seatLimits: dto.seatLimits } : {}),
@@ -270,6 +302,30 @@ export class PlatformController {
   @Patch('clinics/:id/seat-limits')
   async seatLimits(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: SeatLimitsDto) {
     return this.onboarding.setSeatLimits(id, dto.seatLimits);
+  }
+
+  /**
+   * Change a clinic's patient ID format (FR-UID-03).
+   *
+   * Platform only (decision D3): behind `PlatformGuard`, so a clinic session —
+   * even its administrator's — cannot reach it. Existing patients keep their
+   * IDs; only registrations from now on use the new format, and the counter
+   * carries on rather than restarting.
+   */
+  @Public()
+  @UseGuards(PlatformGuard)
+  @Patch('clinics/:id/uhid-format')
+  async changeUhidFormat(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ChangeUhidFormatDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.uhidFormat.change(
+      id,
+      { uhidPrefix: dto.uhidPrefix, uhidPadding: dto.uhidPadding, reason: dto.reason.trim() },
+      actor(req).platformUserId,
+      metaFrom(req),
+    );
   }
 
   /**

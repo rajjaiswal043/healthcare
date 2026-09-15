@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { BRANDING_STORE, type BrandingStore } from './branding.store.js';
 import { normaliseLogo } from './logo-image.js';
 import { logoVersionOf } from './logo-version.js';
+import { formatUhid } from '../tier/uhid-format.js';
 
 /**
  * What a clinic looks like, to somebody who has not signed in yet.
@@ -147,6 +148,56 @@ export class BrandingService {
     return {
       name: tenant.name,
       logoVersion: tenant.logoMimeType ? logoVersionOf(tenant.logoUpdatedAt) : null,
+    };
+  }
+
+  /**
+   * The clinic's patient ID format, for its own settings screen (FR-UID-02).
+   *
+   * Read-only by construction: this service has no method that writes the
+   * format, and the platform's `platform_set_uhid_format` is the only thing
+   * that can.
+   *
+   * `lastChanged` comes from the clinic's own audit trail, where a format change
+   * is recorded (decision D9). It is shown because a clinic renumbered a
+   * fortnight in has two formats on its cards, permanently — and this is the
+   * screen somebody opens to find out why.
+   *
+   * WHO changed it is said as "Platform support", not as the operator's email.
+   * Under white-label the clinic never sees the platform's staff by name; the
+   * email stays in the audit row, where anybody who needs it will look.
+   */
+  async patientIdFormat(tenantId: string) {
+    const tenant = await this.prisma.client.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { uhidPrefix: true, uhidPadding: true, uhidCounter: true },
+    });
+
+    const issued = Number(tenant.uhidCounter);
+
+    const change = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.auditEvent.findFirst({
+        where: { action: 'tenant.uhid_format_change' },
+        orderBy: { occurredAt: 'desc' },
+        select: { occurredAt: true, actorLabel: true, reason: true },
+      }),
+    );
+
+    return {
+      prefix: tenant.uhidPrefix,
+      width: tenant.uhidPadding,
+      issued,
+      example: formatUhid(tenant.uhidPrefix, tenant.uhidPadding, 1),
+      next: formatUhid(tenant.uhidPrefix, tenant.uhidPadding, issued + 1),
+      lastChanged: change
+        ? {
+            at: change.occurredAt,
+            by: change.actorLabel?.startsWith('platform:')
+              ? 'Platform support'
+              : (change.actorLabel ?? 'Unknown'),
+            reason: change.reason,
+          }
+        : null,
     };
   }
 

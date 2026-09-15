@@ -238,9 +238,14 @@ async function seedTenant(input: {
 
   // `tenant` is the table that DEFINES tenants, so it is not itself
   // tenant-scoped and needs no context.
+  // Width 6 stated explicitly rather than taken from the column default. The
+  // fixture patients below are written by hand as T000001…, six digits, and
+  // the default moved to 5 on 15 Sep 2026 — left implicit, every patient a
+  // test registers through the API would come out one digit shorter than the
+  // fixtures beside it, which is confusing to read even though it never clashes.
   await db.query(
-    `INSERT INTO tenant (id, slug, legal_name, name, uhid_prefix, timezone, updated_at)
-     VALUES ($1, $2, $3, $3, 'T', 'Asia/Kolkata', now())`,
+    `INSERT INTO tenant (id, slug, legal_name, name, uhid_prefix, uhid_padding, timezone, updated_at)
+     VALUES ($1, $2, $3, $3, 'T', 6, 'Asia/Kolkata', now())`,
     [input.id, input.slug, input.name],
   );
 

@@ -4,6 +4,8 @@ import { PlatformAuthService } from './platform-auth.service.js';
 import { OnboardingService } from './onboarding.service.js';
 import { PlatformGuard } from './platform.guard.js';
 import { BrandingModule } from '../branding/branding.module.js';
+import { AuditService } from '../audit/audit.service.js';
+import { UhidFormatService } from './uhid-format.service.js';
 
 /**
  * doctorsdesk.in's own tier.
@@ -18,6 +20,14 @@ import { BrandingModule } from '../branding/branding.module.js';
   // re-encode and the size cap on it.
   imports: [BrandingModule],
   controllers: [PlatformController],
-  providers: [PlatformAuthService, OnboardingService, PlatformGuard],
+  // AuditService because changing a clinic's patient ID format is written into
+  // THAT clinic's audit trail (decision D9) — the first platform action that is.
+  providers: [
+    PlatformAuthService,
+    OnboardingService,
+    UhidFormatService,
+    AuditService,
+    PlatformGuard,
+  ],
 })
 export class PlatformModule {}
