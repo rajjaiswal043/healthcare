@@ -1247,10 +1247,12 @@ export type AppointmentCreateNestedOneWithoutDiagnosticOrdersInput = {
   connect?: Prisma.AppointmentWhereUniqueInput
 }
 
-export type AppointmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput = {
+export type AppointmentUpdateOneWithoutDiagnosticOrdersNestedInput = {
   create?: Prisma.XOR<Prisma.AppointmentCreateWithoutDiagnosticOrdersInput, Prisma.AppointmentUncheckedCreateWithoutDiagnosticOrdersInput>
   connectOrCreate?: Prisma.AppointmentCreateOrConnectWithoutDiagnosticOrdersInput
   upsert?: Prisma.AppointmentUpsertWithoutDiagnosticOrdersInput
+  disconnect?: Prisma.AppointmentWhereInput | boolean
+  delete?: Prisma.AppointmentWhereInput | boolean
   connect?: Prisma.AppointmentWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.AppointmentUpdateToOneWithWhereWithoutDiagnosticOrdersInput, Prisma.AppointmentUpdateWithoutDiagnosticOrdersInput>, Prisma.AppointmentUncheckedUpdateWithoutDiagnosticOrdersInput>
 }

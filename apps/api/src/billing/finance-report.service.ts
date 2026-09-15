@@ -4,10 +4,19 @@ import { PrismaService } from '../platform/database/prisma.service.js';
 import { clinicToday, localToInstant } from '../scheduling/clinic-time.js';
 
 /**
- * Finance reporting — FR-FIN-03.
+ * Finance reporting — FR-FIN-03, as amended by FR-DIA-15.
  *
  * The finance desk owns the numbers, and the owner asks them — not the doctor —
  * where the day's money went.
+ *
+ * **FR-FIN-03 ORIGINALLY SAID "SPLIT BY DOCTOR", AND THAT IS NO LONGER ENOUGH.**
+ * A walk-in test patient never meets a doctor: they pay for a film, have it
+ * done and leave. A report anchored on the practitioner cannot see them at all,
+ * so all of that revenue would land in one nameless bucket and the department
+ * that earned it would look idle. Since 11 Sep 2026 the answer is by doctor AND
+ * by department — and, because they are three different businesses, by where
+ * the work came from as well. See `byDepartment` for why collection is NOT
+ * split department-wise, which is the part that surprises people.
  *
  * THE RULE THAT SHAPES EVERY FIGURE HERE: gross billed, discount given and net
  * collected are THREE SEPARATE NUMBERS, never one. A ₹600 consultation given
@@ -60,9 +69,19 @@ export class FinanceReportService {
       const start = localToInstant(from, '00:00', tz);
       const end = new Date(localToInstant(to, '00:00', tz).getTime() + 24 * 60 * 60 * 1000);
 
-      const [collections, byDoctor, discounts, outstanding, refunds] = await Promise.all([
+      const [
+        collections,
+        byDoctor,
+        byDepartment,
+        byReferralSource,
+        discounts,
+        outstanding,
+        refunds,
+      ] = await Promise.all([
         this.collections(tx, start, end),
         this.byDoctor(tx, start, end),
+        this.byDepartment(tx, start, end),
+        this.byReferralSource(tx, start, end),
         this.discounts(tx, start, end),
         this.outstanding(tx, start, end),
         this.refunds(tx, start, end),
@@ -74,6 +93,13 @@ export class FinanceReportService {
         timezone: tz,
         collections,
         byDoctor,
+        /**
+         * FR-DIA-15, and it changes FR-FIN-03 with it: that requirement says
+         * collections split by doctor, which cannot see a walk-in test patient
+         * at all — they never meet a doctor. By doctor AND by department.
+         */
+        byDepartment,
+        byReferralSource,
         discounts,
         outstanding,
         refundsAndReversals: refunds,
@@ -221,6 +247,216 @@ export class FinanceReportService {
         netCollectedPaise: r.netCollectedPaise,
       }))
       .sort((a, b) => b.grossPaise - a.grossPaise);
+  }
+
+  /**
+   * What each department billed, and what the clinic collected (FR-DIA-15).
+   *
+   * **TWO NUMBERS, AND THEY DO NOT RECONCILE. That is the honest answer.**
+   *
+   * Billing happens on a LINE — an X-ray belongs to radiology, a consultation
+   * to the doctor who gave it — so "what did radiology bill" has an exact
+   * answer and it is here, per department.
+   *
+   * Payment happens on an INVOICE. A patient handing over ₹800 for a bill
+   * carrying a consultation and a blood test has not paid ₹500 to one
+   * department and ₹300 to another; they have paid one bill. Splitting that
+   * back out means inventing an allocation rule, and every rule available is
+   * wrong in a way somebody will eventually have to defend:
+   *
+   *   - in proportion to line value invents a fact nobody agreed to, and a
+   *     part payment then reports money to a department that has seen none;
+   *   - counting only fully-paid invoices drops today's half-paid money
+   *     entirely, which is most of it at a busy desk.
+   *
+   * So collection is reported where it actually happened — at invoice level,
+   * for the clinic — and `totalBilledPaise` sits beside it so the gap between
+   * asked-for and received is visible rather than smoothed away. A reader who
+   * wants "radiology's revenue" gets radiology's BILLING, correctly labelled.
+   * Decision 10, 11 Sep 2026.
+   *
+   * A line with no service, or a service with no department, buckets as
+   * unassigned rather than being dropped: a free-text charge is still money,
+   * and a gap in the price list is an administrator's problem to see.
+   */
+  private async byDepartment(tx: TenantClient, start: Date, end: Date) {
+    const invoices = await tx.invoice.findMany({
+      where: { issuedAt: { gte: start, lt: end }, status: { not: 'CANCELLED' } },
+      select: {
+        patientId: true,
+        lines: {
+          select: {
+            quantity: true,
+            unitPricePaise: true,
+            discountPaise: true,
+            // The join FR-DIA-15 needs, and the reason this is its own query
+            // rather than a widening of `byDoctor`.
+            service: {
+              select: { departmentId: true, department: { select: { name: true } } },
+            },
+          },
+        },
+        payments: { select: { direction: true, amountPaise: true } },
+      },
+    });
+
+    interface Row {
+      departmentId: string | null;
+      name: string;
+      patients: Set<string>;
+      items: number;
+      grossPaise: number;
+      discountPaise: number;
+    }
+
+    const byId = new Map<string, Row>();
+    let collectedPaise = 0;
+
+    for (const invoice of invoices) {
+      for (const payment of invoice.payments) {
+        collectedPaise += payment.direction === 'IN' ? payment.amountPaise : -payment.amountPaise;
+      }
+
+      for (const line of invoice.lines) {
+        const departmentId = line.service?.departmentId ?? null;
+        const key = departmentId ?? '__unassigned__';
+
+        const row = byId.get(key) ?? {
+          departmentId,
+          name: line.service?.department?.name ?? 'Not assigned to a department',
+          patients: new Set<string>(),
+          items: 0,
+          grossPaise: 0,
+          discountPaise: 0,
+        };
+
+        row.patients.add(invoice.patientId);
+        row.items += 1;
+        row.grossPaise += line.quantity * line.unitPricePaise;
+        row.discountPaise += line.discountPaise;
+
+        byId.set(key, row);
+      }
+    }
+
+    const rows = [...byId.values()]
+      .map((r) => ({
+        departmentId: r.departmentId,
+        name: r.name,
+        /**
+         * Throughput, which FR-DIA-15 asks for separately because it is not the
+         * same question as revenue: a department can be busy and cheap.
+         */
+        patientsSeen: r.patients.size,
+        items: r.items,
+        grossPaise: r.grossPaise,
+        discountPaise: r.discountPaise,
+        netBilledPaise: r.grossPaise - r.discountPaise,
+      }))
+      .sort((a, b) => b.netBilledPaise - a.netBilledPaise);
+
+    return {
+      rows,
+      totalBilledPaise: rows.reduce((n, r) => n + r.netBilledPaise, 0),
+      /**
+       * At invoice level, for the clinic. See the note above on why it is not
+       * split by department.
+       *
+       * Counted against THESE invoices — the ones issued in the range, whose
+       * billing the rows above describe — so the two figures answer the same
+       * question about the same work. That is deliberately NOT the same basis
+       * as `collections`, which counts money that ARRIVED in the range on any
+       * invoice, including yesterday's. Both are right; they are different
+       * questions, and a reader comparing billed against collected wants this
+       * one.
+       */
+      collectedPaise,
+    };
+  }
+
+  /**
+   * Where the diagnostic work came from (FR-DIA-15).
+   *
+   * Three different businesses wearing one uniform: tests our own doctors
+   * generated, tests sent in by doctors elsewhere, and people who walked in and
+   * asked. The owner's question — which outside doctors send the most work —
+   * only has an answer because `referral_source` is STORED rather than inferred
+   * from a null consultation.
+   *
+   * Counted on when the test was ORDERED, not when its bill was issued. The
+   * question is how much work each source generated in the period, and a test
+   * ordered on the last day of the month does not belong to the next one
+   * because the money landed late.
+   *
+   * Value comes off the order's own invoice line, so a declined test — whose
+   * line is gone — contributes a test and no money, which is exactly true.
+   */
+  private async byReferralSource(tx: TenantClient, start: Date, end: Date) {
+    const orders = await tx.diagnosticOrder.findMany({
+      where: { createdAt: { gte: start, lt: end }, status: { not: 'CANCELLED' } },
+      select: {
+        patientId: true,
+        referralSource: true,
+        referrerName: true,
+        invoiceLine: {
+          select: { quantity: true, unitPricePaise: true, discountPaise: true },
+        },
+      },
+    });
+
+    interface Row {
+      patients: Set<string>;
+      tests: number;
+      netBilledPaise: number;
+      referrers: Map<string, { tests: number; netBilledPaise: number }>;
+    }
+
+    const blank = (): Row => ({
+      patients: new Set<string>(),
+      tests: 0,
+      netBilledPaise: 0,
+      referrers: new Map(),
+    });
+
+    const bySource = new Map<string, Row>([
+      ['INTERNAL', blank()],
+      ['EXTERNAL_DOCTOR', blank()],
+      ['SELF', blank()],
+    ]);
+
+    for (const order of orders) {
+      const row = bySource.get(order.referralSource) ?? blank();
+      const line = order.invoiceLine;
+      const value = line ? line.quantity * line.unitPricePaise - line.discountPaise : 0;
+
+      row.patients.add(order.patientId);
+      row.tests += 1;
+      row.netBilledPaise += value;
+
+      if (order.referralSource === 'EXTERNAL_DOCTOR' && order.referrerName) {
+        const entry = row.referrers.get(order.referrerName) ?? { tests: 0, netBilledPaise: 0 };
+        entry.tests += 1;
+        entry.netBilledPaise += value;
+        row.referrers.set(order.referrerName, entry);
+      }
+
+      bySource.set(order.referralSource, row);
+    }
+
+    return [...bySource.entries()].map(([source, r]) => ({
+      source,
+      patients: r.patients.size,
+      tests: r.tests,
+      netBilledPaise: r.netBilledPaise,
+      /**
+       * Who sent it, for the external bucket only. Free text, so two spellings
+       * of one doctor are two rows — the cost of not maintaining a list, and
+       * the signal that tells the clinic when a list is worth maintaining.
+       */
+      referrers: [...r.referrers.entries()]
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.tests - a.tests),
+    }));
   }
 
   /**

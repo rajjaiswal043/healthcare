@@ -93,6 +93,15 @@ const SECTIONS: NavSection[] = [
         permission: 'payment:collect',
       },
       {
+        key: 'finance-report',
+        label: 'Finance report',
+        href: '/reports/finance',
+        icon: <IconReceipt size={16} />,
+        // Same permission as the collections page, and the same reason: this
+        // is the screen that says what the clinic earned.
+        permission: 'report:revenue',
+      },
+      {
         key: 'collections',
         label: 'Collections',
         href: '/reports/collections',

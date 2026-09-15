@@ -138,6 +138,11 @@ export const PERMISSION_CATALOGUE: Record<Permission, PermissionInfo> = {
     description: 'Request a test during a consultation',
     category: 'Diagnostics',
   },
+  [PERMISSIONS.DIAGNOSTIC_ORDER_WALKIN]: {
+    name: PERMISSIONS.DIAGNOSTIC_ORDER_WALKIN,
+    description: 'Price and request a walk-in test, with no consultation',
+    category: 'Diagnostics',
+  },
   [PERMISSIONS.DIAGNOSTIC_RESULT]: {
     name: PERMISSIONS.DIAGNOSTIC_RESULT,
     description: 'Attach a result and mark a test done',

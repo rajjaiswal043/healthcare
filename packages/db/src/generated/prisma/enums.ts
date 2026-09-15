@@ -187,6 +187,15 @@ export const PaymentDirection = {
 export type PaymentDirection = (typeof PaymentDirection)[keyof typeof PaymentDirection]
 
 
+export const DiagnosticReferralSource = {
+  INTERNAL: 'INTERNAL',
+  EXTERNAL_DOCTOR: 'EXTERNAL_DOCTOR',
+  SELF: 'SELF'
+} as const
+
+export type DiagnosticReferralSource = (typeof DiagnosticReferralSource)[keyof typeof DiagnosticReferralSource]
+
+
 export const DiagnosticOrderStatus = {
   PENDING: 'PENDING',
   COMPLETED: 'COMPLETED',

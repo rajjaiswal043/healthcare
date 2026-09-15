@@ -367,6 +367,153 @@ describe('by doctor', () => {
   });
 });
 
+describe('by department, and where the work came from', () => {
+  /**
+   * A radiology department with one priced test, and a walk-in that buys it.
+   *
+   * Built inside this describe rather than in the shared fixture so the money
+   * above it stays exactly as the other sections assert it — adding a test
+   * sale to the day totals would have rewritten half this file.
+   */
+  let xrayDepartmentId: string;
+  let xrayId: string;
+  let walkInBillPaise: number;
+
+  beforeAll(async () => {
+    const dept = await app.inject({
+      method: 'POST',
+      url: '/api/v1/departments',
+      headers: { cookie: admin.cookie },
+      payload: { name: 'Radiology', isDiagnostic: true },
+    });
+    expect(dept.statusCode).toBe(201);
+    xrayDepartmentId = dept.json<{ id: string }>().id;
+
+    const service = await app.inject({
+      method: 'POST',
+      url: '/api/v1/setup/services',
+      headers: { cookie: admin.cookie },
+      payload: {
+        code: 'XR-CHEST',
+        name: 'X-ray Chest',
+        category: 'DIAGNOSTIC',
+        pricePaise: 45000,
+        departmentId: xrayDepartmentId,
+      },
+    });
+    expect([200, 201]).toContain(service.statusCode);
+    xrayId = service.json<{ id: string }>().id;
+    walkInBillPaise = 45000;
+  });
+
+  /**
+   * The walk-in itself is rebuilt per test, not per suite.
+   *
+   * The file-level `beforeEach` truncates invoices — and cascades into
+   * diagnostic orders through the charge they point at — so anything raised
+   * once in `beforeAll` is gone before the first assertion. The department and
+   * its priced test survive, because neither is in that truncate.
+   */
+  beforeEach(async () => {
+    const raised = await app.inject({
+      method: 'POST',
+      url: '/api/v1/diagnostics/walk-in-orders',
+      headers: { cookie: admin.cookie },
+      payload: {
+        patientId: fx.main.patientIds[0],
+        serviceIds: [xrayId],
+        referralSource: 'EXTERNAL_DOCTOR',
+        referrerName: 'Dr S Kulkarni',
+      },
+    });
+    if (raised.statusCode !== 201) {
+      throw new Error(`Could not raise the walk-in: ${raised.statusCode} ${raised.payload}`);
+    }
+  });
+
+  it('gives the department its own billing line, which by-doctor cannot', async () => {
+    const body = (await report(`?from=${TODAY}&to=${TODAY}`)).json();
+
+    const radiology = body.byDepartment.rows.find(
+      (r: { departmentId: string }) => r.departmentId === xrayDepartmentId,
+    );
+
+    /**
+     * The point of FR-DIA-15. This patient never met a doctor, so `byDoctor`
+     * files their money under "Not attributed to a doctor" and radiology looks
+     * idle. Here it is named.
+     */
+    expect(radiology.netBilledPaise).toBe(walkInBillPaise);
+    expect(radiology.items).toBe(1);
+    // Throughput is its own question: a department can be busy and cheap.
+    expect(radiology.patientsSeen).toBe(1);
+  });
+
+  it('buckets a charge with no department rather than dropping it', async () => {
+    const body = (await report(`?from=${TODAY}&to=${TODAY}`)).json();
+
+    // Consultations are priced without a department, deliberately — a
+    // consultation belongs to the doctor who gave it. The money is still money.
+    const unassigned = body.byDepartment.rows.find(
+      (r: { departmentId: string | null }) => r.departmentId === null,
+    );
+    expect(unassigned.netBilledPaise).toBeGreaterThan(0);
+  });
+
+  it('reports collection at invoice level, and does not pretend it splits', async () => {
+    const body = (await report(`?from=${TODAY}&to=${TODAY}`)).json();
+
+    // Two numbers that do not reconcile, on purpose (decision 10). Billing
+    // happens on a line and splits exactly; payment happens on an invoice and
+    // does not. The gap between them is the day's unpaid work, and smoothing
+    // it away would mean inventing an allocation nobody agreed to.
+    expect(body.byDepartment.totalBilledPaise).toBeGreaterThan(body.byDepartment.collectedPaise);
+
+    // Counted against the invoices these rows describe, which is what makes
+    // billed and collected comparable. `collections` answers a different
+    // question — money that ARRIVED today, on any invoice — and the two are
+    // equal here only because nothing older was paid today.
+    expect(body.byDepartment.collectedPaise).toBe(body.collections.netPaise);
+
+    // And no row carries a collected figure of its own to be misread.
+    for (const row of body.byDepartment.rows) {
+      expect(row).not.toHaveProperty('collectedPaise');
+    }
+  });
+
+  it('splits the work three ways, and names the outside doctor', async () => {
+    const body = (await report(`?from=${TODAY}&to=${TODAY}`)).json();
+
+    const external = body.byReferralSource.find(
+      (r: { source: string }) => r.source === 'EXTERNAL_DOCTOR',
+    );
+    expect(external.tests).toBe(1);
+    expect(external.netBilledPaise).toBe(walkInBillPaise);
+    expect(external.referrers[0]).toMatchObject({ name: 'Dr S Kulkarni', tests: 1 });
+
+    // All three buckets are always present, including the empty ones — a
+    // missing row reads as "no data" and zero reads as "none of this work".
+    expect(body.byReferralSource.map((r: { source: string }) => r.source).sort()).toEqual([
+      'EXTERNAL_DOCTOR',
+      'INTERNAL',
+      'SELF',
+    ]);
+  });
+
+  it("never shows one clinic another's departments", async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/reports/finance?from=${TODAY}&to=${TODAY}`,
+      headers: { cookie: otherFinance.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(
+      res.json().byDepartment.rows.map((r: { departmentId: string | null }) => r.departmentId),
+    ).not.toContain(xrayDepartmentId);
+  });
+});
+
 describe('discounts', () => {
   it('counts only discounts that were actually given', async () => {
     const body = (await report(`?from=${TODAY}&to=${TODAY}`)).json();

@@ -3,7 +3,7 @@ import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
 import { verifyAccessToken } from './tokens.js';
-import { PUBLIC_KEY, PERMISSIONS_KEY } from './decorators.js';
+import { PUBLIC_KEY, PERMISSIONS_KEY, ANY_PERMISSIONS_KEY } from './decorators.js';
 import { loadEnv } from '../../config/env.js';
 import { ACCESS_COOKIE } from './cookies.js';
 
@@ -61,6 +61,20 @@ export class AuthGuard implements CanActivate {
         // saves a support round trip.
         throw new ForbiddenException(`Missing permission: ${missing.join(', ')}`);
       }
+    }
+
+    /**
+     * ANY of these, rather than all. See `RequireAnyPermission` for when that
+     * is the honest requirement — the two are read independently, so a route
+     * may carry both and mean "all of these, and at least one of those".
+     */
+    const anyOf = this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (anyOf && anyOf.length > 0 && !anyOf.some((p) => claims.perms.includes(p))) {
+      throw new ForbiddenException(`Missing permission: one of ${anyOf.join(', ')}`);
     }
 
     return true;

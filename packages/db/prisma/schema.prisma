@@ -497,6 +497,7 @@ model User {
   patientCorrections PatientCorrection[]
   diagnosticOrdersRaised    DiagnosticOrder[] @relation("DiagnosticOrdersRaised")
   diagnosticOrdersCompleted DiagnosticOrder[] @relation("DiagnosticOrdersCompleted")
+  diagnosticOrdersHandedOver DiagnosticOrder[] @relation("DiagnosticOrdersHandedOver")
   promotionsCreated    Promotion[]            @relation("PromotionsCreated")
   promotionsApplied    PromotionApplication[] @relation("PromotionsApplied")
   promotionsAuthorised PromotionApplication[] @relation("PromotionsAuthorised")
@@ -1610,6 +1611,18 @@ model ClinicalDocument {
   @@map("clinical_document")
 }
 
+/// Who decided a diagnostic test was needed. See `DiagnosticOrder.referralSource`.
+enum DiagnosticReferralSource {
+  /// This clinic's own doctor, during a consultation. The only kind with a visit.
+  INTERNAL
+  /// A doctor at another hospital. Their name is required, and printed.
+  EXTERNAL_DOCTOR
+  /// The patient walked in and asked for it. Nobody prescribed it.
+  SELF
+
+  @@map("diagnostic_referral_source")
+}
+
 enum DiagnosticOrderStatus {
   PENDING
   COMPLETED
@@ -1640,10 +1653,38 @@ model DiagnosticOrder {
   id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
   tenantId String @map("tenant_id") @db.Uuid
 
-  appointmentId   String @map("appointment_id") @db.Uuid
-  patientId       String @map("patient_id") @db.Uuid
-  departmentId    String @map("department_id") @db.Uuid
-  orderedByUserId String @map("ordered_by_user_id") @db.Uuid
+  /// The consultation this came out of. Null for a walk-in (FR-DIA-10).
+  ///
+  /// Tied to `referralSource` by a biconditional CHECK: exactly the INTERNAL
+  /// orders have a visit. A SELF-referred order attached to a consultation
+  /// would contradict itself, so the database refuses it.
+  appointmentId   String? @map("appointment_id") @db.Uuid
+  patientId       String  @map("patient_id") @db.Uuid
+  departmentId    String  @map("department_id") @db.Uuid
+
+  /// The STAFF USER who keyed this order in. Never null.
+  ///
+  /// Not the same question as `referralSource`, and the two get confused: this
+  /// is the finance person at the desk or the doctor in the room, which always
+  /// exists. Who decided the test was needed is the other column.
+  orderedByUserId String  @map("ordered_by_user_id") @db.Uuid
+
+  /// Who decided the test was needed (FR-DIA-10).
+  ///
+  /// Stored rather than inferred from a null appointment. Inferring works until
+  /// a fourth case appears, and FR-DIA-15 reports on this distinction rather
+  /// than deducing it.
+  referralSource DiagnosticReferralSource @default(INTERNAL) @map("referral_source")
+
+  /// The outside doctor who sent them, free text (FR-DIA-14).
+  ///
+  /// A managed list of referrers is the obvious next step and deliberately not
+  /// built until somebody asks for it. `referrerName` is required by CHECK when
+  /// the source is EXTERNAL_DOCTOR — a referral with no name is a blank on a
+  /// form, and this name is printed on the report and counted in a report.
+  referrerName   String? @map("referrer_name") @db.VarChar(160)
+  referrerClinic String? @map("referrer_clinic") @db.VarChar(160)
+  referrerPhone  String? @map("referrer_phone") @db.VarChar(32)
 
   /// The priced catalogue test this order names, when it names one.
   ///
@@ -1677,23 +1718,37 @@ model DiagnosticOrder {
   completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
   completedByUserId String?   @map("completed_by_user_id") @db.Uuid
 
+  /// Handed to the patient at the counter (FR-DIA-13).
+  ///
+  /// A doctor-ordered result ends up in a consultation, where the system can
+  /// see it arrive. A walk-in result ends as a sheet of paper given to a
+  /// person, which it cannot — so it is recorded. All three move together,
+  /// enforced by CHECK: a handover with nobody named is the exact claim a
+  /// later complaint disputes.
+  handedOverAt       DateTime? @map("handed_over_at") @db.Timestamptz(6)
+  handedOverByUserId String?   @map("handed_over_by_user_id") @db.Uuid
+  handedOverTo       String?   @map("handed_over_to") @db.VarChar(160)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "diagnostic_order_tenant_fkey")
-  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_appointment_fkey")
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_appointment_fkey")
   patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "diagnostic_order_patient_fkey")
   department  Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_department_fkey")
   service     Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull, map: "diagnostic_order_service_fkey")
   invoiceLine InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict, map: "diagnostic_order_invoice_line_fkey")
   orderedBy   User        @relation("DiagnosticOrdersRaised", fields: [orderedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_ordered_by_fkey")
   completedBy User?       @relation("DiagnosticOrdersCompleted", fields: [completedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_completed_by_fkey")
+  handedOverBy User?      @relation("DiagnosticOrdersHandedOver", fields: [handedOverByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_handover_fkey")
 
   documents ClinicalDocument[]
 
   @@index([tenantId, departmentId, status, createdAt], map: "diagnostic_order_worklist_idx")
   @@index([tenantId, appointmentId], map: "diagnostic_order_visit_idx")
   @@index([tenantId, serviceId], map: "diagnostic_order_service_idx")
+  @@index([tenantId, referralSource, createdAt], map: "diagnostic_order_referral_idx")
+  @@index([tenantId, patientId, createdAt], map: "diagnostic_order_patient_day_idx")
   @@unique([invoiceLineId], map: "diagnostic_order_invoice_line_key")
   @@map("diagnostic_order")
 }
