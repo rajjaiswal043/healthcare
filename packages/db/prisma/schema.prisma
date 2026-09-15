@@ -50,9 +50,16 @@ model Tenant {
 
   /// UHID configuration (FR-P36-01: "auto-generate a configurable UHID per tenant").
   /// Prefix is cosmetic but matters to clinics — it appears on every card and bill.
+  ///
+  /// CHECK `tenant_uhid_prefix_format`: A-Z, 0-9, '-' and '/'; starts with a
+  /// letter; never ends with a digit. The last rule is what stops a later
+  /// format change from re-issuing an existing ID (DRV1+05 = DRV+105 = DRV105).
   uhidPrefix String @default("P") @map("uhid_prefix") @db.VarChar(8)
-  /// Zero-padded width of the numeric part, e.g. 6 -> SNC000123.
-  uhidPadding Int   @default(6) @map("uhid_padding")
+  /// Zero-padded width of the numeric part, e.g. 5 -> SNC00123. 3–8, by CHECK.
+  ///
+  /// A MINIMUM, not a maximum: `next_uhid()` writes a longer number in full
+  /// (DRVIV-9999 then DRVIV-10000) rather than truncating it into a clash.
+  uhidPadding Int   @default(5) @map("uhid_padding")
   /// Last issued number. Incremented atomically via UPDATE ... RETURNING so two
   /// concurrent registrations can never be handed the same UHID.
   uhidCounter BigInt @default(0) @map("uhid_counter")

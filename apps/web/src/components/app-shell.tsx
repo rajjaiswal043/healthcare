@@ -180,6 +180,16 @@ const SECTIONS: NavSection[] = [
         permission: 'display:manage',
       },
       {
+        key: 'patient-ids',
+        label: 'Patient IDs',
+        href: '/settings/patient-ids',
+        icon: <IconIdCard size={16} />,
+        // FR-UID-02. Read-only here: changing the format is the platform's job
+        // (decision D3), so this answers "what do our patient numbers look
+        // like?" without offering a control the clinic cannot use.
+        permission: 'tenant:configure',
+      },
+      {
         key: 'branding',
         label: 'Branding',
         href: '/settings/branding',
@@ -203,6 +213,7 @@ const BREADCRUMBS: Record<string, string> = {
   '/settings/roles': 'Roles and permissions',
   '/settings/doctors': 'Doctors and hours',
   '/settings/branding': 'Branding',
+  '/settings/patient-ids': 'Patient IDs',
   '/diagnostics': 'Tests to do',
   '/change-password': 'Choose a password',
 };

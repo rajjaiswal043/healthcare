@@ -136,6 +136,20 @@ export class BrandingController {
   }
 
   /**
+   * The clinic's patient ID format, read-only (FR-UID-02).
+   *
+   * So an administrator can answer "what do our patient numbers look like?"
+   * without asking us. There is deliberately no write beside it: changing the
+   * format is the platform's job (decision D3), and a setting that looks
+   * harmless and has no undo should not be one click away.
+   */
+  @Get('settings/patient-ids')
+  @RequirePermissions(PERMISSIONS.TENANT_CONFIGURE)
+  async patientIdFormat(@CurrentTenant() tenantId: string) {
+    return this.branding.patientIdFormat(tenantId);
+  }
+
+  /**
    * Rename the clinic for display.
    *
    * Written as PATCH on the branding resource rather than a general

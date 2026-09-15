@@ -604,6 +604,27 @@ export interface Department {
   isDiagnostic?: boolean;
 }
 
+/**
+ * The clinic's patient ID format, as the clinic sees it (FR-UID-02).
+ *
+ * Read-only: the platform sets it at onboarding and changes it on request.
+ */
+export interface PatientIdFormat {
+  prefix: string;
+  width: number;
+  /** How many patient IDs this clinic has issued. */
+  issued: number;
+  /** What the very first ID in this format looks like. */
+  example: string;
+  /** The ID the next registration will receive. */
+  next: string;
+  /**
+   * The most recent format change, when there has been one — which is also
+   * why some older cards may carry a different format.
+   */
+  lastChanged: { at: string; by: string; reason: string | null } | null;
+}
+
 export interface Practitioner {
   id: string;
   fullName: string;
@@ -1091,6 +1112,9 @@ export const api = {
 
   /** Setup's view — includes diagnostic departments, which booking hides. */
   setupDepartments: () => request<{ departments: Department[] }>('/setup/departments'),
+
+  /** The clinic's patient ID format. Read-only — changing it is the platform's job. */
+  patientIdFormat: () => request<PatientIdFormat>('/settings/patient-ids'),
 
   /**
    * Correct a patient registered earlier — FR-P36-20.

@@ -507,6 +507,105 @@ describe('the display board carries branding', () => {
   });
 });
 
+describe('the clinic’s patient ID format', () => {
+  function read(session: Session) {
+    return app.inject({
+      method: 'GET',
+      url: '/api/v1/settings/patient-ids',
+      headers: { cookie: session.cookie },
+    });
+  }
+
+  async function issued(tenantId: string): Promise<number> {
+    const [row] = await ownerQuery<{ n: number }>(
+      tenantId,
+      'SELECT uhid_counter::int AS n FROM tenant WHERE id = $1',
+      [tenantId],
+    );
+    return row!.n;
+  }
+
+  it('shows the format, an example, how many are issued and the next ID', async () => {
+    const n = await issued(fx.main.id);
+
+    const res = await read(admin);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      prefix: 'T',
+      width: 6,
+      issued: n,
+      example: 'T000001',
+      next: `T${String(n + 1).padStart(6, '0')}`,
+      lastChanged: null,
+    });
+  });
+
+  it('says when it was last changed, as platform support rather than a person', async () => {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO audit_event (tenant_id, action, resource_type, resource_id, changed_fields, reason, actor_label)
+       VALUES ($1::uuid, 'tenant.uhid_format_change', 'Tenant', $1::text,
+               ARRAY['uhidPrefix', 'uhidPadding'], $2, $3)`,
+      [fx.main.id, 'Clinic asked for DRVIV-', 'platform: ops@doctorsdesk.test'],
+    );
+
+    try {
+      const body = (await read(admin)).json();
+
+      expect(body.lastChanged).toMatchObject({
+        by: 'Platform support',
+        reason: 'Clinic asked for DRVIV-',
+      });
+      expect(body.lastChanged.at).toBeTruthy();
+      // Under white-label the clinic never sees the platform's staff by name.
+      // The email stays in the audit row for whoever needs it.
+      expect(JSON.stringify(body)).not.toContain('doctorsdesk');
+    } finally {
+      await ownerQuery(
+        fx.main.id,
+        `DELETE FROM audit_event WHERE action = 'tenant.uhid_format_change'`,
+      );
+    }
+  });
+
+  it('shows each clinic only its own format', async () => {
+    await ownerQuery(fx.other.id, `UPDATE tenant SET uhid_prefix = 'OTH' WHERE id = $1`, [
+      fx.other.id,
+    ]);
+
+    try {
+      expect((await read(admin)).json().prefix).toBe('T');
+      expect((await read(otherAdmin)).json().prefix).toBe('OTH');
+    } finally {
+      await ownerQuery(fx.other.id, `UPDATE tenant SET uhid_prefix = 'T' WHERE id = $1`, [
+        fx.other.id,
+      ]);
+    }
+  });
+
+  it('is refused to somebody who does not configure the clinic', async () => {
+    expect((await read(frontDesk)).statusCode).toBe(403);
+  });
+
+  it('offers no way to change it from inside the clinic', async () => {
+    /**
+     * Decision D3. There is no write route here at all — not a guarded one.
+     * The format is changed by the platform, through a different realm.
+     */
+    for (const method of ['PATCH', 'PUT', 'POST'] as const) {
+      const res = await app.inject({
+        method,
+        url: '/api/v1/settings/patient-ids',
+        headers: { cookie: admin.cookie },
+        payload: { prefix: 'HACK-', width: 4 },
+      });
+      expect(res.statusCode).toBe(404);
+    }
+    expect((await read(admin)).json().prefix).toBe('T');
+  });
+});
+
 describe('renaming the clinic', () => {
   it('changes the name everywhere it is read from', async () => {
     const res = await app.inject({

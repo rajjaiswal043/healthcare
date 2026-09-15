@@ -81,10 +81,15 @@ export interface Clinic {
   activeUsers: number;
   patients: number;
   lastSignInAt: string | null;
+  /** The patient ID format new registrations get. */
+  uhidPrefix: string;
+  uhidPadding: number;
+  /** How many patient IDs have been issued — the next one is this plus one. */
+  uhidIssued: number;
 }
 
 export interface OnboardResult {
-  clinic: { id: string; slug: string; name: string; uhidPrefix: string };
+  clinic: { id: string; slug: string; name: string; uhidPrefix: string; uhidPadding: number };
   admin: { email: string; temporaryPassword: string };
 }
 
@@ -111,6 +116,8 @@ export const platformApi = {
     name: string;
     slug: string;
     uhidPrefix?: string;
+    /** Digits the patient number is padded to, 3–8. The server defaults to 5. */
+    uhidPadding?: number;
     contactEmail?: string;
     contactMobile?: string;
     seatLimits?: Record<string, number>;
@@ -130,6 +137,19 @@ export const platformApi = {
       method: 'PATCH',
       body: JSON.stringify({ seatLimits }),
     }),
+
+  /**
+   * Change a clinic's patient ID format (FR-UID-03). Existing patients keep
+   * their IDs; the counter carries on. Recorded in the clinic's audit trail.
+   */
+  changeUhidFormat: (
+    id: string,
+    input: { uhidPrefix: string; uhidPadding: number; reason: string },
+  ) =>
+    request<{ uhidPrefix: string; uhidPadding: number; uhidIssued: number; nextUhid: string }>(
+      `/clinics/${id}/uhid-format`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+    ),
 };
 
 /** Suggest a sign-in address from a clinic name. Mirrors the server's rule. */

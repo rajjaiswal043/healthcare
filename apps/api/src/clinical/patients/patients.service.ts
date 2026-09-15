@@ -394,25 +394,54 @@ export class PatientsService {
         throw new Error('UHID allocation returned no result — is the patient migration applied?');
       }
 
-      const patient = await tx.patient.create({
-        data: {
-          tenantId,
-          uhid,
-          name: dto.name,
-          gender: dto.gender,
-          birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
-          ageYears: dto.ageYears ?? null,
-          mobile: dto.mobile,
-          email: dto.email ?? null,
-          addressLine: dto.addressLine ?? null,
-          city: dto.city ?? null,
-          state: dto.state ?? null,
-          postalCode: dto.postalCode ?? null,
-          bloodGroup: dto.bloodGroup ?? 'UNKNOWN',
-          emergencyContactName: dto.emergencyContactName ?? null,
-          emergencyContactMobile: dto.emergencyContactMobile ?? null,
-        },
-      });
+      /**
+       * The UHID clash, explained rather than raised raw.
+       *
+       * It should not happen: since 15 Sep 2026 `next_uhid()` never truncates a
+       * long number, and no prefix may end in a digit, which together make it
+       * impossible for the allocator to reissue an existing ID. This is the
+       * belt behind those braces.
+       *
+       * And it matters that it says something, because of what a clash DOES
+       * here: allocation and insert share this transaction, so the failure
+       * rolls the counter back with it, and the next registration is handed the
+       * same number and fails the same way. A raw 500 would repeat on every
+       * attempt with nothing on screen to say why. `(tenant_id, uhid)` is the
+       * only unique constraint on `patient`, so a P2002 from this insert can
+       * only be that.
+       */
+      const patient = await tx.patient
+        .create({
+          data: {
+            tenantId,
+            uhid,
+            name: dto.name,
+            gender: dto.gender,
+            birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+            ageYears: dto.ageYears ?? null,
+            mobile: dto.mobile,
+            email: dto.email ?? null,
+            addressLine: dto.addressLine ?? null,
+            city: dto.city ?? null,
+            state: dto.state ?? null,
+            postalCode: dto.postalCode ?? null,
+            bloodGroup: dto.bloodGroup ?? 'UNKNOWN',
+            emergencyContactName: dto.emergencyContactName ?? null,
+            emergencyContactMobile: dto.emergencyContactMobile ?? null,
+          },
+        })
+        .catch((err: unknown) => {
+          if ((err as { code?: string } | null)?.code === 'P2002') {
+            throw new ConflictException({
+              code: 'UHID_CLASH',
+              message:
+                `The next patient ID for this clinic, ${uhid}, is already in use, so nobody can be ` +
+                'registered until the ID format is corrected. This needs the platform team — ' +
+                'please report it with this message.',
+            });
+          }
+          throw err;
+        });
 
       await this.recordConsents(tx, tenantId, patient.id, dto);
 

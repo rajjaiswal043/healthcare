@@ -381,7 +381,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   <input
                     id="followUpDate"
                     type="date"
-                    className="field-input mt-1.5 max-w-[200px] text-[13.5px]"
+                    className="field-input mt-1.5 block max-w-[200px] text-[13.5px]"
                     value={narrative.followUpDate ?? ''}
                     onChange={(e) => setNarrative({ ...narrative, followUpDate: e.target.value })}
                     onBlur={(e) => void saveField('followUpDate', e.target.value)}
