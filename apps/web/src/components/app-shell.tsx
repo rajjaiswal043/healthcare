@@ -448,10 +448,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   visible one and the jump survived in the other direction. One
                   line in both states is what actually makes the two identical. */}
               <p
-                className={[
-                  'mono-label truncate px-2.5 pb-1',
-                  railOpen ? '' : 'invisible',
-                ].join(' ')}
+                className={['mono-label truncate px-2.5 pb-1', railOpen ? '' : 'invisible'].join(
+                  ' ',
+                )}
               >
                 {section.title}
               </p>
@@ -588,7 +587,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <IconMenu size={18} />
           </button>
-
 
           {/* The clinic's name gets the space it needs, and the crumb after it
               yields first.
