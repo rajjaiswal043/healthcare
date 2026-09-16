@@ -224,6 +224,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   const [collapsed, setCollapsed] = useState(false);
+  /**
+   * Collapsed rail, temporarily opened because the pointer (or keyboard focus)
+   * is inside it. Only ever true while `collapsed` is — expanding the rail for
+   * real clears it, so the two can never disagree about what the user sees.
+   */
+  const [peeking, setPeeking] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -286,6 +292,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     visible.flatMap((s) => s.items.map((i) => i.href)),
   );
 
+  /**
+   * The rail's VISUAL state, as against `collapsed`, which is the user's
+   * setting. Everything inside the rail asks this one — labels, section
+   * headings, the Collapse button's own text — so a peek looks exactly like an
+   * expanded rail rather than a third, half-dressed state.
+   *
+   * What does NOT ask this is anything that reserves space: the footprint in
+   * the flex row and the header's offset both follow `collapsed`, which is why
+   * a peek flies out OVER the page instead of shoving it 204px sideways.
+   */
+  const railOpen = !collapsed || peeking;
+
   const initials = initialsOf(session.fullName);
   const crumb = BREADCRUMBS[pathname] ?? session.tenant.name;
 
@@ -310,33 +328,84 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      {/* The rail's FOOTPRINT, and nothing else — no background, no content.
+          The rail proper is `fixed`, so without this the flex row would not
+          know it is there and the page would run underneath it.
+
+          Splitting the footprint from the rail is what makes the hover peek
+          possible: this follows `collapsed`, the rail follows `railOpen`, and
+          the 204px difference between them is the flyout. Were the rail itself
+          holding the column, every peek would shove the page sideways. */}
+      <div
+        aria-hidden="true"
+        className={[
+          'hidden shrink-0 transition-[width] duration-200 lg:block',
+          collapsed ? 'lg:w-[76px]' : 'lg:w-[280px]',
+        ].join(' ')}
+      />
+
       {/* The rail is where the persona lives: white at the top fading into the
           role's palest tint, so the colour is present without the nav becoming a
-          block of it. */}
+          block of it.
+
+          Three parts, each `shrink-0` except the middle: the mark, the nav, and
+          the Collapse button. Only the nav scrolls — which is the whole point,
+          because a scroll container that also holds the mark and the button
+          cannot pin either of them. */}
       <aside
+        onMouseEnter={() => collapsed && setPeeking(true)}
+        onMouseLeave={() => setPeeking(false)}
+        // The keyboard half. Tabbing into a collapsed rail opens it for the
+        // same reason hovering does — otherwise the labels are unreachable to
+        // anyone not using a pointer. `relatedTarget` is where focus is GOING;
+        // if that is still inside the rail the peek must survive.
+        onFocus={() => collapsed && setPeeking(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPeeking(false);
+        }}
         className={[
-          'fixed inset-y-0 left-0 z-50 flex flex-col gap-5 border-r border-ink/8 bg-gradient-to-b from-white to-[var(--role-tint)] px-3 py-4 shadow-rail transition-[width,transform] duration-200 lg:static lg:translate-x-0',
-          collapsed ? 'lg:w-[76px]' : 'lg:w-[236px]',
+          // No padding and no `overflow` here: each of the three parts owns its
+          // own padding, and scrolling belongs to the nav alone.
+          'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-ink/8 bg-gradient-to-b from-white to-[var(--role-tint)] shadow-rail transition-[width,transform] duration-200 lg:translate-x-0',
+          // Below lg the rail is a drawer over the page; on lg it is pinned to
+          // the viewport. `fixed` rather than the `sticky` this used to be,
+          // because sticky only works for an element that holds its own column
+          // — and the whole flyout depends on the rail NOT holding one. The
+          // spacer above does that instead.
+          'lg:top-0 lg:h-screen',
+          // `railOpen`, not `collapsed`: this is the only width in the file
+          // that reflects a peek, and the difference between it and the
+          // spacer's width is what overhangs the page.
+          railOpen ? 'lg:w-[280px]' : 'lg:w-[76px]',
+          // Mobile keeps 236: the drawer sits OVER the page, so its width is
+          // bounded by the phone rather than by how much room the labels want.
           mobileOpen ? 'w-[236px] translate-x-0' : 'w-[236px] -translate-x-full',
         ].join(' ')}
       >
-        {/* Centred, and the close button taken out of the flow to keep it
-            that way — with `justify-between` the mark sat wherever the button's
-            presence left it, which meant it moved between the mobile drawer and
-            the desktop rail. Absolute positioning is what makes "centred" mean
-            centred in the rail rather than centred in whatever is left. */}
-        <div className="relative flex items-center justify-center px-1.5">
+        {/* Part 1 of 3: the mark. `shrink-0` and outside the scroll container,
+            so it holds the top of the rail however far the nav is scrolled —
+            the same arrangement as the Collapse button at the other end.
+
+            Centred, and the close button taken out of the flow to keep it that
+            way: with `justify-between` the mark sat wherever the button's
+            presence left it, which moved it between the mobile drawer and the
+            desktop rail. Absolute positioning is what makes "centred" mean
+            centred in the rail rather than centred in whatever is left.
+
+            `border-b` is the separator between the pinned mark and the
+            scrolling list, matching the one above Collapse. Between them they
+            say which part of the rail moves. */}
+        <div className="relative flex shrink-0 items-center justify-center border-b border-ink/8 px-3 py-4">
           <Link href="/" className="flex items-center" aria-label="Home">
             {/* The mark only. The name is written once, in the header, where
-                there is room for it — this rail is 236px and a real hospital
-                name ("Dr Vivek Swarnkar Ortho Clinic") truncates here no matter
-                what. Both carried it briefly after white-labelling and the
-                repetition read as a bug rather than as branding. */}
+                there is room for it — a real hospital name ("Dr Vivek Swarnkar
+                Ortho Clinic") truncates in a 280px rail no matter what, and at
+                76px there is no rail to write it in at all. */}
             <ClinicLogo clinic={session.tenant} size={32} alt={session.tenant.name} />
           </Link>
           <button
             type="button"
-            className="btn-ghost absolute right-0 !px-1.5 !py-1.5 lg:hidden"
+            className="btn-ghost absolute right-3 !px-1.5 !py-1.5 lg:hidden"
             aria-label="Close menu"
             onClick={() => setMobileOpen(false)}
           >
@@ -344,25 +413,82 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex flex-col gap-5" aria-label="Main">
+        {/* The only scrolling part of the rail.
+            `min-h-0` is not decoration — a flex child defaults to
+            `min-height: auto`, which means it refuses to shrink below its
+            content. Without it this nav would grow to its natural height, push
+            the Collapse footer off the bottom of the rail, and never scroll.
+            `flex-1` then takes exactly the space the two fixed rows leave. */}
+        <nav
+          // `overflow-x-hidden` is explicit because it would not otherwise be
+          // what it looks like: a box with `overflow-y: auto` and `overflow-x:
+          // visible` computes the visible axis to `auto` as well, so the nav
+          // would quietly gain a horizontal scrollbar the moment a nowrap
+          // label overhung the collapsed rail.
+          //
+          // `overscroll-contain` stops the wheel from chaining to the page when
+          // the list hits either end — which is what made scrolling over the
+          // rail feel like it picked a target at random.
+          className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-quiet px-3 py-4"
+          aria-label="Main"
+        >
           {visible.map((section) => (
             <div key={section.title} className="flex flex-col gap-1">
-              {!collapsed && <p className="mono-label px-2.5 pb-1">{section.title}</p>}
+              {/* Always rendered, and only ever made invisible.
+                  Dropping it from the tree when collapsed took its height with
+                  it, so every section below moved the instant the rail
+                  collapsed and moved back on expand — items jumped under the
+                  cursor. `invisible` is `visibility: hidden`: it keeps the box,
+                  and takes the text out of the accessibility tree too, which is
+                  right when the rail is showing no labels.
+
+                  `truncate` is the other half, and keeping the box was not
+                  enough without it: at 76px "Waiting-room screens" wrapped to
+                  two lines, so the invisible heading was 16px TALLER than the
+                  visible one and the jump survived in the other direction. One
+                  line in both states is what actually makes the two identical. */}
+              <p
+                className={[
+                  'mono-label truncate px-2.5 pb-1',
+                  railOpen ? '' : 'invisible',
+                ].join(' ')}
+              >
+                {section.title}
+              </p>
               {section.items.map((item) => {
                 const active = item.href === activeHref;
                 return (
                   <Link
                     key={item.key}
                     href={item.href}
-                    title={collapsed ? item.label : undefined}
+                    // Only while the label is genuinely absent. During a peek
+                    // the label is right there, and a tooltip repeating it is
+                    // what made the hover state look doubled up.
+                    title={railOpen ? undefined : item.label}
                     className={[
                       'group relative flex items-center gap-2.5 rounded-panel border px-2.5 py-2 transition-all',
-                      active
-                        ? 'border-[color-mix(in_srgb,var(--role)_20%,transparent)] bg-[var(--role-soft)] text-[var(--role-text)]'
-                        : 'border-transparent text-ink-60 hover:border-ink/10 hover:bg-white',
+                      // Closed, the row IS the icon: a 51px-wide tinted box
+                      // drawn around a 32px tinted tile is a box inside a box,
+                      // and the 3px marker has nowhere to sit but on top of the
+                      // tile's own corner. With a label beside it there is a row
+                      // to fill and the tint reads as one; without one there is
+                      // nothing for it to fill.
+                      //
+                      // The same is true of hover, and that is the other half of
+                      // this: `hover:bg-white` drew a white card around the tile
+                      // and the tile's own `group-hover` tint drew a second
+                      // shape inside it, so a hover on a closed rail rendered as
+                      // two mismatched rectangles. Closed, the tile alone does
+                      // both jobs; open, the row does.
+                      !railOpen
+                        ? 'border-transparent ' +
+                          (active ? 'text-[var(--role-text)]' : 'text-ink-60')
+                        : active
+                          ? 'border-[color-mix(in_srgb,var(--role)_20%,transparent)] bg-[var(--role-soft)] text-[var(--role-text)]'
+                          : 'border-transparent text-ink-60 hover:border-ink/10 hover:bg-white',
                     ].join(' ')}
                   >
-                    {active && (
+                    {active && railOpen && (
                       <span
                         aria-hidden="true"
                         className="absolute left-0 top-1/2 h-[55%] w-[3px] -translate-y-1/2 rounded-pill bg-[var(--role)]"
@@ -378,8 +504,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     >
                       {item.icon}
                     </span>
-                    {!collapsed && (
-                      <span className="text-[13.5px] font-semibold">{item.label}</span>
+                    {railOpen && (
+                      <span className="whitespace-nowrap text-[13.5px] font-semibold">
+                        {item.label}
+                      </span>
                     )}
                   </Link>
                 );
@@ -388,27 +516,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="mt-auto hidden lg:block">
+        {/* Outside the scroll container, so it holds the bottom of the rail
+            whatever the nav is doing. `border-t` is the second of the two
+            separators: it marks where scrolling content ends and the fixed
+            control begins, which is the only cue that the list above can move
+            at all once the scrollbar has faded out. `mt-auto` is gone — the nav
+            above is `flex-1` and already takes the slack. */}
+        <div className="hidden shrink-0 border-t border-ink/8 px-3 py-3 lg:block">
           <button
             type="button"
             className="btn-ghost w-full !justify-start !px-2.5 text-[12.5px]"
-            onClick={() => setCollapsed((c) => !c)}
+            onClick={() => {
+              setCollapsed((c) => !c);
+              setPeeking(false);
+            }}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={railOpen ? undefined : 'Expand sidebar'}
           >
             <IconPanelLeft size={16} />
-            {!collapsed && 'Collapse'}
+            {railOpen && <span className="whitespace-nowrap">Collapse</span>}
           </button>
         </div>
       </aside>
 
       {/* ── Main ────────────────────────────────────────────────────────── */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* `pt-[61px]` is the 3px role strip plus the 58px header, both `fixed`
+          and therefore out of the flow. It is the padding that keeps the first
+          line of every page below the header instead of behind it. */}
+      <div className="flex min-w-0 flex-1 flex-col pt-[61px]">
         {/* The peripheral signal. Three pixels, full width, directly above the
             content — the thing you register from across a desk without reading
             anything on the screen. */}
         <div
           aria-hidden="true"
-          className="no-print sticky top-0 z-30 h-[3px] shrink-0 bg-[var(--role)]"
+          className={[
+            'no-print fixed inset-x-0 top-0 z-30 h-[3px] bg-[var(--role)] transition-[left] duration-200',
+            // Follows `collapsed`, never `railOpen`: the chrome holds still
+            // while the rail peeks out over it, which is what makes a peek read
+            // as a flyout rather than as the whole layout twitching.
+            collapsed ? 'lg:left-[76px]' : 'lg:left-[280px]',
+          ].join(' ')}
         />
 
         {/* `data-app-shell` is what the print stylesheet hides. It cannot key
@@ -419,7 +566,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             account menu printed at the top of every prescription. */}
         <header
           data-app-shell
-          className="sticky top-[3px] z-30 flex h-[58px] items-center gap-3 border-b border-ink/8 bg-white/85 px-4 backdrop-blur-md sm:px-6"
+          className={[
+            /* Fixed, not sticky: the header holds the viewport's top edge for
+               the life of the page rather than only once the page has scrolled
+               to it. `top-[3px]` sits it directly under the role strip.
+
+               z-30 is deliberate and sits BELOW the mobile drawer's backdrop
+               (z-40) and the rail itself (z-50), so opening the menu on a phone
+               dims the header instead of leaving it lit above the scrim — and
+               on a desktop peek, the rail flies out OVER the header's left
+               edge rather than under it. Dialogs are z-[60] and clear all. */
+            'fixed inset-x-0 top-[3px] z-30 flex h-[58px] items-center gap-3 border-b border-ink/8 bg-white/85 px-4 backdrop-blur-md transition-[left] duration-200 sm:px-6',
+            collapsed ? 'lg:left-[76px]' : 'lg:left-[280px]',
+          ].join(' ')}
         >
           <button
             type="button"
@@ -429,6 +588,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <IconMenu size={18} />
           </button>
+
 
           {/* The clinic's name gets the space it needs, and the crumb after it
               yields first.
@@ -444,7 +604,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Set in the display face at 17px extrabold — the weight the nav
               rail's wordmark used to carry. As a 10.5px mono label it was
               technically present and practically invisible, which is not what
-              a clinic's own name should be on their own console. */}
+              a clinic's own name should be on their own console.
+
+              The mark sits in its own cell over the rail, not against this, so
+              this line's position is unchanged from before the logo moved. */}
           <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 sm:flex">
             <Link
               href="/"
