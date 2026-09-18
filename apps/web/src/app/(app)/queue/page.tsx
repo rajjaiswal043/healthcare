@@ -56,9 +56,18 @@ export default function QueuePage() {
    * This is what stops the console offering a choice the API would then reject,
    * which is a worse experience than not offering it. An administrator who also
    * consults keeps the full list; see `assertMayReadQueue` on the API side.
+   *
+   * The `consultation:write` half is the fix for an unlinked doctor. This used
+   * to confine on `practitionerId !== null` alone, so a doctor whose account
+   * had never been joined to a practitioner row fell through to the ELSE — the
+   * full list of every consultant in the clinic, each of whose queues the API
+   * then happily served. Confining on "is meant to be a doctor" instead means
+   * the filter below matches nothing for them and they are offered an empty
+   * list, which is the honest answer: they have no queue yet.
    */
   const ownPractitionerId = session?.practitionerId ?? null;
-  const confinedToSelf = ownPractitionerId !== null && !can('user:manage');
+  const confinedToSelf =
+    !can('user:manage') && (ownPractitionerId !== null || can('consultation:write'));
 
   useEffect(() => {
     void (async () => {
@@ -184,12 +193,24 @@ export default function QueuePage() {
           {confinedToSelf ? (
             <div>
               <p className="field-label">Doctor</p>
-              <p className="rounded-panel border border-ink/10 bg-bg-soft px-3.5 py-2.5 text-[15px] font-semibold text-ink">
-                {doctors[0]?.fullName ?? 'You'}
-                {doctors[0]?.specialty ? (
-                  <span className="font-normal text-ink-40"> · {doctors[0].specialty}</span>
-                ) : null}
-              </p>
+              {/* Confined, with nothing to be confined TO: a doctor whose
+                  account has no practitioner record. They used to be shown
+                  every consultant in the clinic here; an empty queue with no
+                  explanation would be the opposite mistake, so say which of the
+                  two it is and who can fix it. */}
+              {doctors.length === 0 ? (
+                <p className="max-w-[320px] rounded-panel border border-amber/30 bg-amber/8 px-3.5 py-2.5 text-[13.5px] text-amber-text">
+                  Your account is not linked to a doctor record yet, so you have no queue. An
+                  administrator can link it under Doctors and hours.
+                </p>
+              ) : (
+                <p className="rounded-panel border border-ink/10 bg-bg-soft px-3.5 py-2.5 text-[15px] font-semibold text-ink">
+                  {doctors[0]?.fullName}
+                  {doctors[0]?.specialty ? (
+                    <span className="font-normal text-ink-40"> · {doctors[0].specialty}</span>
+                  ) : null}
+                </p>
+              )}
             </div>
           ) : (
             <div>

@@ -14,6 +14,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   clinicDate,
   closeTestApp,
+  createDoctor,
   createTestApp,
   login,
   ownerQuery,
@@ -805,6 +806,271 @@ describe('who may do what', () => {
 
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]?.actor_user_id).toBeTruthy();
+  });
+});
+
+// --- ownership --------------------------------------------------------------
+
+/**
+ * A consultation belongs to the doctor the patient is booked with.
+ *
+ * This was the gap: `consultation:write` said what KIND of work someone does
+ * and nothing about whose patient it is, so any doctor in the clinic could open,
+ * write and sign any colleague's note. The only ownership tests that existed
+ * were across TENANTS, where row-level security refuses the request long before
+ * this code runs — so they passed throughout, and proved nothing about the rule.
+ *
+ * Everything here is deliberately WITHIN one tenant, which is the only place the
+ * check can be observed at all.
+ */
+describe('whose consultation you may touch', () => {
+  let colleague: Session;
+
+  beforeAll(async () => {
+    colleague = (
+      await createDoctor(app, fx.main, {
+        email: 'colleague@main.test',
+        fullName: 'Dr Other Consultant',
+        linked: true,
+      })
+    ).session;
+  });
+
+  it('refuses another doctor opening the appointment', async () => {
+    const appointmentId = await bookAndArrive();
+
+    const res = await open(appointmentId, colleague);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toMatch(/belongs to another doctor/i);
+  });
+
+  /**
+   * Opening is not a read — it calls the patient in. So a refused open must
+   * also leave the appointment where it was, or the colleague has moved
+   * somebody else's patient into a room by failing.
+   */
+  it('does not call the patient in when it refuses', async () => {
+    const appointmentId = await bookAndArrive();
+
+    await open(appointmentId, colleague);
+
+    const [row] = await ownerQuery<{ status: string; called_at: Date | null }>(
+      fx.main.id,
+      'SELECT status, called_at FROM appointment WHERE id = $1',
+      [appointmentId],
+    );
+    expect(row?.status).toBe('ARRIVED');
+    expect(row?.called_at).toBeNull();
+  });
+
+  it('refuses another doctor writing the note, diagnoses or prescriptions', async () => {
+    const { encounter } = await openConsultation();
+
+    const narrative = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: colleague.cookie },
+      payload: { chiefComplaint: 'Not mine to write' },
+    });
+    expect(narrative.statusCode).toBe(403);
+
+    const diagnoses = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/diagnoses`,
+      headers: { cookie: colleague.cookie },
+      payload: { diagnoses: [{ code: 'R50.9', display: 'Fever', isPrimary: true }] },
+    });
+    expect(diagnoses.statusCode).toBe(403);
+
+    const prescriptions = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/encounters/${encounter.id}/prescriptions`,
+      headers: { cookie: colleague.cookie },
+      payload: {
+        prescriptions: [
+          { drugName: 'Dolo 650', dose: '1 tablet', frequency: '1-0-1', durationDays: 3 },
+        ],
+      },
+    });
+    expect(prescriptions.statusCode).toBe(403);
+  });
+
+  it('refuses another doctor signing the note', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fever for three days' },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: colleague.cookie },
+    });
+
+    expect(res.statusCode).toBe(403);
+
+    const [row] = await ownerQuery<{ status: string }>(
+      fx.main.id,
+      'SELECT status FROM encounter WHERE id = $1',
+      [encounter.id],
+    );
+    // The draft status is IN_PROGRESS; SIGNED is what must not have happened.
+    expect(row?.status).toBe('IN_PROGRESS');
+  });
+
+  /**
+   * An addendum is a correction to a signed record, in the signer's name. It
+   * takes a different path from every other write — signed notes never reach
+   * `loadDraft` — so it gets its own assertion rather than being assumed.
+   */
+  it('refuses another doctor adding an addendum', async () => {
+    const { encounter } = await openConsultation();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fever for three days' },
+    });
+    const signed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+    expect(signed.statusCode).toBe(201);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/addenda`,
+      headers: { cookie: colleague.cookie },
+      payload: { text: 'Not my note to correct.' },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  /**
+   * A doctor account with no `practitioner` row is nobody, not everybody. This
+   * is the account state the bug report arrived from: a doctor created in the
+   * console whose Doctors-and-hours setup had not been done.
+   */
+  it('refuses a doctor whose account is not linked to a practitioner', async () => {
+    const appointmentId = await bookAndArrive();
+    const unlinked = (
+      await createDoctor(app, fx.main, {
+        email: 'unlinked-consult@main.test',
+        fullName: 'Dr Not Linked Yet',
+        linked: false,
+      })
+    ).session;
+
+    const res = await open(appointmentId, unlinked);
+    expect(res.statusCode).toBe(403);
+  });
+
+  // --- and the regressions, which matter as much ----------------------------
+
+  it('lets the booked doctor open, write and sign as before', async () => {
+    const { encounter } = await openConsultation();
+
+    const narrative = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: 'Fever for three days' },
+    });
+    expect(narrative.statusCode).toBe(200);
+
+    const signed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/sign`,
+      headers: { cookie: doctor.cookie },
+    });
+    expect(signed.statusCode).toBe(201);
+
+    const addendum = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/addenda`,
+      headers: { cookie: doctor.cookie },
+      payload: { text: 'Patient called back; advised rest.' },
+    });
+    expect(addendum.statusCode).toBe(201);
+  });
+
+  /**
+   * The workflow the strict rule most easily breaks, and must not: vitals are
+   * the NURSE's, on whoever's patient is in the room. A nurse is not a
+   * practitioner and never will be, so a rule written as "only the treating
+   * doctor may write to an encounter" would have taken this with it.
+   */
+  it('still lets a nurse record vitals on another’s encounter', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/encounters/${encounter.id}/vitals`,
+      headers: { cookie: nurse.cookie },
+      payload: { pulseBpm: 78 },
+    });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  /**
+   * Same patient, two doctors, one day — confirmed intended behaviour. Each
+   * doctor owns their OWN visit; ownership is per appointment, not per patient,
+   * and a rule keyed on the patient would have made the second consultation
+   * impossible.
+   */
+  it('lets two doctors each hold their own visit for the same patient', async () => {
+    const mine = await openConsultation(1, 0);
+
+    const colleaguePractitionerId = (
+      await ownerQuery<{ id: string }>(
+        fx.main.id,
+        `SELECT p.id FROM practitioner p
+           JOIN app_user u ON u.id = p.user_id
+          WHERE p.tenant_id = $1 AND u.email = 'colleague@main.test'`,
+        [fx.main.id],
+      )
+    )[0]!.id;
+
+    // The colleague's own appointment for the SAME patient, the same day.
+    const day = await app.inject({
+      method: 'GET',
+      url: `/api/v1/availability?practitionerId=${colleaguePractitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    const booked = await app.inject({
+      method: 'POST',
+      url: '/api/v1/appointments',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        patientId: fx.main.patientIds[1],
+        practitionerId: colleaguePractitionerId,
+        locationId: fx.main.locationId,
+        startAt: day.json().slots[0].startAt,
+      },
+    });
+    expect(booked.statusCode).toBe(201);
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${booked.json().id}/check-in`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const theirs = await open(booked.json().id, colleague);
+    expect(theirs.statusCode).toBe(201);
+    expect(theirs.json().id).not.toBe(mine.encounter.id);
+
+    // And neither can reach into the other's.
+    expect((await open(mine.appointmentId, colleague)).statusCode).toBe(403);
+    expect((await open(booked.json().id, doctor)).statusCode).toBe(403);
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -36,6 +37,55 @@ export interface RequestMeta {
  * grants the application only SELECT and INSERT on that table, so even a bug
  * here cannot rewrite one.
  */
+/**
+ * Who is asking for a draft encounter.
+ *
+ * Two standings, because two jobs meet on the same row.
+ *
+ * `treating-doctor` is the note: the complaint, the diagnoses, the
+ * prescriptions, the signature. Those are the clinical judgement of the doctor
+ * the patient is booked with, and another doctor holding `consultation:write`
+ * is not a reason to let them write it — a permission says what KIND of work
+ * someone does, never whose patient it is.
+ *
+ * `clinical-support` is vitals: height, weight, BP, recorded by whichever nurse
+ * is free. Gating those on the practitioner link would break the nurse, who is
+ * not a practitioner at all and never will be.
+ */
+type DraftAccess =
+  { as: 'treating-doctor'; userId: string | undefined } | { as: 'clinical-support' };
+
+/**
+ * Only the doctor this visit is booked with.
+ *
+ * The same shape as the gate on a patient's test history, and deliberately so:
+ * resolve the caller to a `practitioner` row, and compare it to the one on the
+ * record. Absence fails — a user account never linked to a practitioner is not
+ * "unrestricted", it is nobody, and treating it as unrestricted is what let a
+ * doctor whose Doctors-and-hours setup was never done open any colleague's
+ * consultation in the clinic.
+ *
+ * `user:manage` buys no exemption. An administrator who also consults has a
+ * practitioner row and their own patients like any other doctor; one who does
+ * not has no clinical business inside somebody's note, and holding every
+ * permission in the tenant is exactly the situation this refuses.
+ */
+async function assertIsTreatingDoctor(
+  tx: TenantClient,
+  encounterPractitionerId: string,
+  userId: string | undefined,
+): Promise<void> {
+  const self = userId
+    ? await tx.practitioner.findFirst({ where: { userId }, select: { id: true } })
+    : null;
+
+  if (!self || self.id !== encounterPractitionerId) {
+    throw new ForbiddenException(
+      'This consultation belongs to another doctor. Only the doctor the patient is booked with can open, write or sign it.',
+    );
+  }
+}
+
 @Injectable()
 export class ConsultationsService {
   constructor(
@@ -62,6 +112,19 @@ export class ConsultationsService {
         select: { id: true, status: true, patientId: true, practitionerId: true },
       });
       if (!appointment) throw new NotFoundException('Appointment not found');
+
+      /**
+       * Before anything else, including before reporting whether the visit is
+       * consultable: a doctor who may not open this note has no business
+       * learning its state either.
+       *
+       * `open` does not go through `loadDraft` — it runs BEFORE an encounter
+       * exists — so the check is written here rather than inherited. This is
+       * the door the bug report came through: opening also calls the patient
+       * in, so a doctor opening a colleague's appointment moved a real patient
+       * into a room they were not booked for.
+       */
+      await assertIsTreatingDoctor(tx, appointment.practitionerId, meta.actorUserId);
 
       if (appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') {
         throw new ConflictException({
@@ -158,7 +221,10 @@ export class ConsultationsService {
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const draft = await this.loadDraft(tx, id);
+      const draft = await this.loadDraft(tx, id, {
+        as: 'treating-doctor',
+        userId: meta.actorUserId,
+      });
 
       const data = {
         ...defined('chiefComplaint', input.chiefComplaint),
@@ -189,7 +255,9 @@ export class ConsultationsService {
 
   async recordVitals(tenantId: string, id: string, input: RecordVitalsDto, meta: RequestMeta) {
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const draft = await this.loadDraft(tx, id);
+      // Vitals, not the note. A nurse is not a practitioner, so this one
+      // cannot ask for the treating doctor — see DraftAccess.
+      const draft = await this.loadDraft(tx, id, { as: 'clinical-support' });
 
       const values = Object.entries(input).filter(([, v]) => v !== undefined && v !== '');
       if (values.length === 0) {
@@ -233,7 +301,10 @@ export class ConsultationsService {
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const draft = await this.loadDraft(tx, id);
+      const draft = await this.loadDraft(tx, id, {
+        as: 'treating-doctor',
+        userId: meta.actorUserId,
+      });
 
       /**
        * Exactly one primary: the first entry explicitly marked, or entry zero if
@@ -290,7 +361,10 @@ export class ConsultationsService {
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const draft = await this.loadDraft(tx, id);
+      const draft = await this.loadDraft(tx, id, {
+        as: 'treating-doctor',
+        userId: meta.actorUserId,
+      });
 
       const rows = [];
       for (const [index, p] of prescriptions.entries()) {
@@ -353,7 +427,10 @@ export class ConsultationsService {
     }
 
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const draft = await this.loadDraft(tx, id);
+      const draft = await this.loadDraft(tx, id, {
+        as: 'treating-doctor',
+        userId: meta.actorUserId,
+      });
 
       const diagnosisCount = await tx.diagnosis.count({ where: { encounterId: id } });
 
@@ -418,9 +495,15 @@ export class ConsultationsService {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const encounter = await tx.encounter.findUnique({
         where: { id },
-        select: { id: true, status: true, patientId: true },
+        select: { id: true, status: true, patientId: true, practitionerId: true },
       });
       if (!encounter) throw new NotFoundException('Consultation not found');
+
+      // A signed note never passes through `loadDraft`, so this path needs the
+      // check spelled out. An addendum is a correction to somebody's clinical
+      // record, signed in their name — if anything it is MORE theirs than the
+      // draft was.
+      await assertIsTreatingDoctor(tx, encounter.practitionerId, meta.actorUserId);
 
       if (encounter.status !== 'SIGNED') {
         throw new ConflictException({
@@ -599,25 +682,38 @@ export class ConsultationsService {
   // --- internals -----------------------------------------------------------
 
   /**
-   * Load an encounter that may still be edited.
+   * Load an encounter that may still be edited, as somebody in particular.
    *
    * Every mutating method starts here. Centralising it means adding a new write
    * endpoint cannot accidentally omit the check — the only way to get the row is
    * through the function that refuses signed ones.
+   *
+   * `as` is REQUIRED, and has no default, for the same reason. The note and the
+   * vitals on one encounter belong to two different people: the note is the
+   * treating doctor's and nobody else's, while vitals are the nurse's job on
+   * whoever's patient is in front of them. A single check here would have been
+   * wrong for one of them whichever way it was written, and an optional
+   * parameter would have let a new endpoint pick the lax one by saying nothing.
+   * Naming the caller's standing is now part of asking for the row.
    */
-  private async loadDraft(tx: TenantClient, id: string) {
+  private async loadDraft(tx: TenantClient, id: string, as: DraftAccess) {
     const encounter = await tx.encounter.findUnique({
       where: { id },
       select: {
         id: true,
         status: true,
         patientId: true,
+        practitionerId: true,
         appointmentId: true,
         chiefComplaint: true,
       },
     });
 
     if (!encounter) throw new NotFoundException('Consultation not found');
+
+    if (as.as === 'treating-doctor') {
+      await assertIsTreatingDoctor(tx, encounter.practitionerId, as.userId);
+    }
 
     if (encounter.status === 'SIGNED') {
       throw new ConflictException({
