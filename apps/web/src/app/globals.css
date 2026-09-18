@@ -237,6 +237,65 @@
   .auth-blob-slow {
     animation: auth-drift-rev 22s ease-in-out infinite;
   }
+
+  /* ---- Quiet scrollbar --------------------------------------------------- */
+
+  /**
+   * Scrolls, but only ADMITS to it while you are in there.
+   *
+   * The nav rail is taller than the viewport on a laptop once a role can see
+   * every section, so it has to scroll. A permanent scrollbar down the rail is
+   * a piece of furniture nobody asked for, and on a machine set to "always show
+   * scroll bars" it sat there all day beside the clinic's branding.
+   *
+   * It is deliberately faint even at its strongest: the bar is a hint that the
+   * list moves, not a control anyone aims at — the wheel and the keyboard do
+   * the actual scrolling.
+   *
+   * The track keeps its width at all times and only the THUMB changes colour,
+   * which is what makes this safe: the gutter is reserved whether or not the
+   * thumb is visible, so nothing reflows when it appears. Hiding the bar
+   * outright and restoring it on hover would shift every nav label sideways.
+   *
+   * `focus-within` is not decoration — it is the keyboard half. Tabbing down the
+   * rail scrolls it with no pointer anywhere near, and without this the thumb
+   * would stay invisible for exactly the person who most needs to see where
+   * they are.
+   */
+  .scrollbar-quiet {
+    scrollbar-width: thin;
+    /* thumb track */
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-quiet:hover,
+  .scrollbar-quiet:focus-within {
+    scrollbar-color: theme('colors.ink.20 / 30%') transparent;
+  }
+
+  .scrollbar-quiet::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scrollbar-quiet::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-quiet::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    /* A transparent border plus padding-box clipping insets the thumb from the
+       rail's edge without a second element to do the insetting. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    background-color: transparent;
+    transition: background-color 150ms ease;
+  }
+  .scrollbar-quiet:hover::-webkit-scrollbar-thumb,
+  .scrollbar-quiet:focus-within::-webkit-scrollbar-thumb {
+    background-color: theme('colors.ink.20 / 30%');
+  }
+  /* Only when the pointer is on the bar itself — the one moment it is being
+     aimed at rather than merely present. Still well short of solid. */
+  .scrollbar-quiet::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.ink.20 / 55%');
+  }
 }
 
 @keyframes auth-drift {

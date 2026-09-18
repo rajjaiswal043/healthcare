@@ -133,7 +133,7 @@ export function PatientCorrectionDialog({
       role="dialog"
       aria-modal="true"
       aria-label={`Correct ${patient.name}`}
-      className="fixed inset-0 z-50 !m-0 grid place-items-center bg-ink/40 p-4"
+      className="fixed inset-0 z-[60] !m-0 grid place-items-center bg-ink/40 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

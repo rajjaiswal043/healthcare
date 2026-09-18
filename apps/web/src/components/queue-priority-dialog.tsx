@@ -82,7 +82,7 @@ export function QueuePriorityDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 !m-0 grid place-items-center bg-ink/30 p-4">
+    <div className="fixed inset-0 z-[60] !m-0 grid place-items-center bg-ink/30 p-4">
       <div
         ref={panelRef}
         tabIndex={-1}
