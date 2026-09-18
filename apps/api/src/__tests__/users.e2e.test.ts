@@ -27,6 +27,7 @@ let frontDesk: Session;
 let finance: Session;
 let doctor: Session;
 let otherFinance: Session;
+let otherAdmin: Session;
 
 beforeAll(async () => {
   fx = await seedFixtures();
@@ -37,6 +38,7 @@ beforeAll(async () => {
   doctor = await login(app, fx.main.slug, 'doctor@main.test');
   otherFinance = await login(app, fx.other.slug, 'finance@other.test');
   admin = await loginWithMfa(app, fx.main.slug, 'admin@main.test');
+  otherAdmin = await loginWithMfa(app, fx.other.slug, 'admin@other.test');
 });
 
 afterAll(async () => {
@@ -66,6 +68,15 @@ function createUser(body: Record<string, unknown>, session: Session = admin) {
     url: '/api/v1/users',
     headers: { cookie: session.cookie },
     payload: { email: 'made-one@main.test', fullName: 'Made One', roleKeys: ['nurse'], ...body },
+  });
+}
+
+function updateUser(id: string, body: Record<string, unknown>, session: Session = admin) {
+  return app.inject({
+    method: 'PATCH',
+    url: `/api/v1/users/${id}`,
+    headers: { cookie: session.cookie },
+    payload: body,
   });
 }
 
@@ -181,6 +192,178 @@ describe('adding somebody', () => {
 
   it('is refused to everyone but an administrator', async () => {
     expect((await createUser({}, frontDesk)).statusCode).toBe(403);
+  });
+});
+
+// --- editing --------------------------------------------------------------
+
+/**
+ * Correcting who somebody is.
+ *
+ * `PATCH /users/:id` has existed since the module was written and had no test
+ * of any kind — the staff screen offered no way to reach it, so nothing ever
+ * called it. It is now the endpoint behind the Edit button, which makes what it
+ * accepts and what it refuses worth stating.
+ *
+ * The refusals carry as much of this as the successes. The email is the login
+ * identifier and is not in the shape at all, so the global
+ * `forbidNonWhitelisted` rejects a request carrying one rather than quietly
+ * dropping it — "the UI does not show the field" and "the server will not take
+ * it" are different guarantees, and only the second one holds.
+ */
+describe('editing somebody', () => {
+  async function madeUser(): Promise<string> {
+    const res = await createUser({ email: 'made-edit@main.test', mobile: '9811111111' });
+    expect(res.statusCode).toBe(201);
+    return res.json<{ id: string }>().id;
+  }
+
+  it('changes the name and the mobile', async () => {
+    const id = await madeUser();
+
+    const res = await updateUser(id, { fullName: 'Renamed Properly', mobile: '9822222222' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ fullName: string; mobile: string }>()).toMatchObject({
+      fullName: 'Renamed Properly',
+      mobile: '9822222222',
+    });
+
+    const [row] = await ownerQuery<{ full_name: string; mobile: string | null }>(
+      fx.main.id,
+      'SELECT full_name, mobile FROM app_user WHERE id = $1',
+      [id],
+    );
+    expect(row).toMatchObject({ full_name: 'Renamed Properly', mobile: '9822222222' });
+  });
+
+  it('trims the name rather than storing the spaces', async () => {
+    const id = await madeUser();
+
+    await updateUser(id, { fullName: '  Padded Name  ' });
+
+    const [row] = await ownerQuery<{ full_name: string }>(
+      fx.main.id,
+      'SELECT full_name FROM app_user WHERE id = $1',
+      [id],
+    );
+    expect(row?.full_name).toBe('Padded Name');
+  });
+
+  /**
+   * The way back to "we do not have a number".
+   *
+   * An empty string is what a cleared text input sends, and it has to mean
+   * removal — otherwise a wrong number can only ever be swapped for another
+   * number, never taken off the record.
+   */
+  it('clears the mobile when it is sent empty', async () => {
+    const id = await madeUser();
+
+    const res = await updateUser(id, { mobile: '' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ mobile: string | null }>().mobile).toBeNull();
+
+    const [row] = await ownerQuery<{ mobile: string | null }>(
+      fx.main.id,
+      'SELECT mobile FROM app_user WHERE id = $1',
+      [id],
+    );
+    expect(row?.mobile).toBeNull();
+  });
+
+  it('clears the mobile when it is sent as null', async () => {
+    const id = await madeUser();
+
+    expect((await updateUser(id, { mobile: null })).statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ mobile: string | null }>(
+      fx.main.id,
+      'SELECT mobile FROM app_user WHERE id = $1',
+      [id],
+    );
+    expect(row?.mobile).toBeNull();
+  });
+
+  it('still refuses a mobile that is not a mobile', async () => {
+    const id = await madeUser();
+
+    expect((await updateUser(id, { mobile: '12345' })).statusCode).toBe(400);
+    expect((await updateUser(id, { mobile: '1234567890' })).statusCode).toBe(400);
+  });
+
+  it('refuses a name too short to be one', async () => {
+    const id = await madeUser();
+    expect((await updateUser(id, { fullName: 'A' })).statusCode).toBe(400);
+  });
+
+  /**
+   * The login identifier, and the reason this screen shows it read-only. Not a
+   * UI courtesy: the field is absent from the shape, so the request is refused
+   * outright.
+   */
+  it('refuses an email, rather than ignoring it', async () => {
+    const id = await madeUser();
+
+    const res = await updateUser(id, { email: 'renamed@main.test' });
+
+    expect(res.statusCode).toBe(400);
+
+    const [row] = await ownerQuery<{ email: string }>(
+      fx.main.id,
+      'SELECT email FROM app_user WHERE id = $1',
+      [id],
+    );
+    expect(row?.email).toBe('made-edit@main.test');
+  });
+
+  /**
+   * The Edit form sends no `roleKeys`, and this is what that is worth: an edit
+   * that omits them must leave what somebody may do exactly as it was. Deciding
+   * that is a different screen and a more careful job.
+   */
+  it('leaves the roles alone when none are sent', async () => {
+    const id = await madeUser();
+
+    await updateUser(id, { fullName: 'Still A Nurse' });
+
+    const rows = await ownerQuery<{ key: string }>(
+      fx.main.id,
+      `SELECT r.key FROM user_role ur JOIN role r ON r.id = ur.role_id WHERE ur.user_id = $1`,
+      [id],
+    );
+    expect(rows.map((r) => r.key)).toEqual(['nurse']);
+  });
+
+  it('is refused to everyone but an administrator', async () => {
+    const id = await madeUser();
+
+    for (const session of [frontDesk, doctor, finance]) {
+      expect((await updateUser(id, { fullName: 'Not Yours' }, session)).statusCode).toBe(403);
+    }
+  });
+
+  it('cannot reach a user at another clinic', async () => {
+    const id = await madeUser();
+
+    const res = await updateUser(id, { fullName: 'Wrong Clinic' }, otherAdmin);
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('records the edit in the audit trail', async () => {
+    const id = await madeUser();
+
+    await updateUser(id, { fullName: 'Audited Name' });
+
+    const rows = await ownerQuery<{ action: string; resource_id: string }>(
+      fx.main.id,
+      `SELECT action, resource_id FROM audit_event
+        WHERE tenant_id = $1 AND action = 'user.update' AND resource_id = $2`,
+      [fx.main.id, id],
+    );
+    expect(rows.length).toBeGreaterThan(0);
   });
 });
 

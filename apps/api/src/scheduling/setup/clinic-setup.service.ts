@@ -243,26 +243,65 @@ export class ClinicSetupService {
     });
   }
 
+  /**
+   * Change a doctor's profile.
+   *
+   * The signature IS the rule. This took `Record<string, unknown>` and handed it
+   * to Prisma as `data: input as never` — a cast that turns off the only
+   * check that would have noticed the shape growing a column it should not
+   * write. Whatever the DTO happened to allow went to the database, which is how
+   * `departmentId` was editable without anybody choosing that.
+   *
+   * Now the fields are named here as well as in the DTO. Two lists is a cost;
+   * it buys a compiler error rather than a silent write if either one moves,
+   * and `departmentId` is not spellable in either.
+   */
   async updatePractitioner(
     tenantId: string,
     id: string,
-    input: Record<string, unknown>,
+    input: {
+      fullName?: string;
+      prefix?: string;
+      registrationNumber?: string;
+      qualification?: string;
+      specialty?: string;
+      consultationFeePaise?: number | null;
+      followUpFeePaise?: number | null;
+      isActive?: boolean;
+    },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const existing = await tx.practitioner.findUnique({
         where: { id },
-        select: { id: true, userId: true },
+        select: { id: true },
       });
       if (!existing) throw new NotFoundException('Doctor not found');
 
-      if (typeof input.userId === 'string' && input.userId !== existing.userId) {
-        await this.assertUserFree(tx, input.userId);
-      }
+      // Built key by key, and only from keys the caller actually sent: an
+      // absent field must leave the stored value alone, while an explicit
+      // `null` fee must clear it. Spreading `input` wholesale would write
+      // `undefined` over columns nobody mentioned.
+      const data = {
+        ...(input.fullName === undefined ? {} : { fullName: input.fullName.trim() }),
+        ...(input.prefix === undefined ? {} : { prefix: input.prefix }),
+        ...(input.registrationNumber === undefined
+          ? {}
+          : { registrationNumber: input.registrationNumber }),
+        ...(input.qualification === undefined ? {} : { qualification: input.qualification }),
+        ...(input.specialty === undefined ? {} : { specialty: input.specialty }),
+        ...(input.consultationFeePaise === undefined
+          ? {}
+          : { consultationFeePaise: input.consultationFeePaise }),
+        ...(input.followUpFeePaise === undefined
+          ? {}
+          : { followUpFeePaise: input.followUpFeePaise }),
+        ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
+      };
 
       const updated = await tx.practitioner.update({
         where: { id },
-        data: input as never,
+        data,
         select: { id: true, fullName: true, isActive: true },
       });
 
@@ -270,7 +309,7 @@ export class ClinicSetupService {
         action: 'practitioner.update',
         resourceType: 'Practitioner',
         resourceId: id,
-        changedFields: Object.keys(input),
+        changedFields: Object.keys(data),
         ...meta,
       });
 

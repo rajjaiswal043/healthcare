@@ -27,6 +27,17 @@ export default function StaffPage() {
   const [roleKeys, setRoleKeys] = useState<string[]>([]);
 
   /** The one moment a plaintext password exists outside the person it belongs to. */
+  /**
+   * The row being edited, and the values in its form.
+   *
+   * One at a time: an "edit" that opened several rows at once would let an
+   * administrator lose unsaved changes by clicking another row, and there is no
+   * reason to edit two people simultaneously.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editMobile, setEditMobile] = useState('');
+
   const [issued, setIssued] = useState<{ who: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -71,14 +82,56 @@ export default function StaffPage() {
     }
   }
 
-  async function act(id: string, fn: () => Promise<unknown>) {
+  function startEdit(user: StaffUser) {
+    setEditingId(user.id);
+    setEditName(user.fullName);
+    setEditMobile(user.mobile ?? '');
+    setError(null);
+  }
+
+  /**
+   * Save the name and the number, and nothing else.
+   *
+   * `mobile` is sent even when empty — that is how a wrong number is removed,
+   * and skipping the field when blank would make clearing it impossible. The
+   * server reads '' as null.
+   *
+   * `roleKeys` is deliberately absent. The endpoint would accept it; what
+   * somebody may do is a different question from what they are called, and it
+   * gets its own screen rather than riding along with a typo fix.
+   */
+  async function saveEdit(user: StaffUser) {
+    const name = editName.trim();
+    if (name.length < 2) {
+      setError('A name needs at least two characters.');
+      return;
+    }
+
+    const saved = await act(user.id, () =>
+      api.updateStaff(user.id, { fullName: name, mobile: editMobile.trim() }),
+    );
+    if (saved) setEditingId(null);
+  }
+
+  /**
+   * Returns whether it worked, which the edit form needs.
+   *
+   * It used to return nothing, and every caller was fire-and-forget — fine for
+   * a button that either switches somebody off or reports why not. A form is
+   * different: closing it on a failure throws away what the administrator
+   * typed, and they would have to retype it to find out the server still says
+   * no. So failures leave the form open, with the message above it.
+   */
+  async function act(id: string, fn: () => Promise<unknown>): Promise<boolean> {
     setBusyId(id);
     setError(null);
     try {
       await fn();
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'That did not work.');
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -328,8 +381,15 @@ export default function StaffPage() {
                     )}
                     {u.lockedUntil && <span className="badge-coral">locked out</span>}
                   </p>
+                  {/* The mobile sits between the two identifiers on purpose:
+                      it is now editable, and a field that can be changed but
+                      not seen gives an administrator no way to tell whether the
+                      change they just made is the one they meant. Omitted
+                      entirely when there is none, rather than shown as a blank
+                      or a dash — the row already carries enough. */}
                   <p className="truncate text-[12.5px] text-ink-40">
                     {u.email}
+                    {u.mobile ? ` · ${u.mobile}` : ''}
                     {' · '}
                     {u.roles.map((r) => r.name).join(', ')}
                     {' · '}
@@ -340,6 +400,14 @@ export default function StaffPage() {
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-1.5">
+                  <button
+                    type="button"
+                    className="btn-secondary !px-2.5 !py-1.5 text-[12.5px]"
+                    disabled={busyId === u.id}
+                    onClick={() => (editingId === u.id ? setEditingId(null) : startEdit(u))}
+                  >
+                    {editingId === u.id ? 'Cancel' : 'Edit'}
+                  </button>
                   {u.isActive && (
                     <button
                       type="button"
@@ -367,6 +435,72 @@ export default function StaffPage() {
                     </button>
                   )}
                 </div>
+
+                {/* Inside the row, not a dialog: the thing being edited stays
+                    on screen above the fields, so there is never a question of
+                    whose name is in the box. `basis-full` makes it a second
+                    line of the same flex row. */}
+                {editingId === u.id && (
+                  <div className="basis-full rounded-panel border border-ink/10 bg-bg-soft p-3.5">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="block">
+                        <span className="field-label">Full name</span>
+                        <input
+                          className="field-input mt-1"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          maxLength={200}
+                          autoFocus
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="field-label">Mobile</span>
+                        <input
+                          className="field-input mt-1"
+                          inputMode="numeric"
+                          value={editMobile}
+                          onChange={(e) =>
+                            setEditMobile(e.target.value.replace(/\D/g, '').slice(0, 10))
+                          }
+                          placeholder="9876543210"
+                        />
+                        <span className="field-hint">Clear it to remove the number.</span>
+                      </label>
+                      {/* Shown, and not editable. The email is the login
+                          identifier — changing it changes who the account IS,
+                          which is a different act from correcting a name, and
+                          the server refuses it outright. It is here so the
+                          administrator can see which account these fields
+                          belong to. */}
+                      <div>
+                        <span className="field-label">Email</span>
+                        <p className="mt-1 truncate rounded-panel border border-ink/10 bg-ink/5 px-3.5 py-2.5 text-[15px] text-ink-40">
+                          {u.email}
+                        </p>
+                        <span className="field-hint">Cannot be changed.</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3.5 flex gap-2">
+                      <button
+                        type="button"
+                        className="btn-primary !px-3 !py-1.5 text-[13px]"
+                        disabled={busyId === u.id}
+                        onClick={() => void saveEdit(u)}
+                      >
+                        {busyId === u.id ? 'Saving…' : 'Save changes'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary !px-3 !py-1.5 text-[13px]"
+                        disabled={busyId === u.id}
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             );
           })}

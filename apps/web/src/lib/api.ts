@@ -1687,6 +1687,24 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  /**
+   * Who somebody is — their name and their number, and nothing else.
+   *
+   * No `email`: it is the login identifier, and the server does not merely
+   * ignore an email sent here, it rejects the whole request. No `roleKeys`
+   * either. The endpoint accepts them, and deciding what somebody may do is a
+   * heavier question than fixing a typo in their name — it belongs to its own
+   * screen, not to this form.
+   *
+   * `mobile: null` clears a stored number. The form sends '' for that and the
+   * server maps it; see `UpdateUserDto`.
+   */
+  updateStaff: (id: string, input: { fullName?: string; mobile?: string | null }) =>
+    request<StaffUser>(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
   setStaffActive: (id: string, isActive: boolean) =>
     request<StaffUser>(`/users/${id}/active`, {
       method: 'PATCH',
@@ -1722,8 +1740,33 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  updatePractitioner: (id: string, input: Record<string, unknown>) =>
-    request<{ id: string }>(`/setup/practitioners/${id}`, {
+  /**
+   * A doctor's profile — and the type is the point.
+   *
+   * This was `Record<string, unknown>`, which accepts anything and warns about
+   * nothing. `departmentId` is not on this shape because the server refuses it
+   * with a 400: a doctor's department anchors the finance report's revenue
+   * split and walk-in diagnostics, and moving it would change what past reports
+   * mean rather than re-file them. `userId` is off it too — linking a login is
+   * a real feature, just not this form.
+   *
+   * A `null` fee clears the override and puts the doctor back on the service
+   * catalogue's price. Zero is a different answer and stays available.
+   */
+  updatePractitioner: (
+    id: string,
+    input: {
+      fullName?: string;
+      prefix?: string;
+      registrationNumber?: string;
+      qualification?: string;
+      specialty?: string;
+      consultationFeePaise?: number | null;
+      followUpFeePaise?: number | null;
+      isActive?: boolean;
+    },
+  ) =>
+    request<{ id: string; fullName: string; isActive: boolean }>(`/setup/practitioners/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
