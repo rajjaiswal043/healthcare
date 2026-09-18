@@ -1,6 +1,6 @@
 import {
   IsEmail,
-  IsIn,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -10,6 +10,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { BloodGroupDto, GenderDto } from './dto/register-patient.dto.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -37,9 +38,17 @@ export class CorrectPatientDto {
   @MaxLength(200)
   name?: string;
 
+  /**
+   * Imported for the same reason blood group is, and while it still agrees.
+   *
+   * This list happens to be right today. So did the blood-group one, once — a
+   * hand-written copy of an enum is only ever correct until someone edits the
+   * original, and nothing tells them there is a second copy to edit. The value
+   * here is not that a bug was found, it is that this one can no longer start.
+   */
   @IsOptional()
-  @IsIn(['MALE', 'FEMALE', 'OTHER', 'UNKNOWN'])
-  gender?: string;
+  @IsEnum(GenderDto)
+  gender?: GenderDto;
 
   @IsOptional()
   @Matches(DATE_RE, { message: 'birthDate must be YYYY-MM-DD' })
@@ -88,9 +97,23 @@ export class CorrectPatientDto {
   @MaxLength(12)
   postalCode?: string;
 
+  /**
+   * The SAME enum registration validates against, imported rather than copied.
+   *
+   * This was a hand-written `@IsIn(['A_POS', 'A_NEG', …])` whose values existed
+   * nowhere else — not in `BloodGroup` in the schema, not in the registration
+   * DTO, not in the database. A copy cannot be checked against its original by
+   * the compiler, so the two drifted and stayed drifted: the list agreed with
+   * the correction dialog, which was wrong in exactly the same way, and every
+   * blood-group correction sailed through validation only to be rejected by
+   * Prisma as an unhandled 500.
+   *
+   * Importing the enum is what makes that irreproducible. There is now one
+   * spelling of these values on the server, and `@IsEnum` reads it.
+   */
   @IsOptional()
-  @IsIn(['A_POS', 'A_NEG', 'B_POS', 'B_NEG', 'AB_POS', 'AB_NEG', 'O_POS', 'O_NEG', 'UNKNOWN'])
-  bloodGroup?: string;
+  @IsEnum(BloodGroupDto)
+  bloodGroup?: BloodGroupDto;
 
   @IsOptional()
   @IsString()

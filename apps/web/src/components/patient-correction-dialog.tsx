@@ -11,16 +11,36 @@ import {
 import { IconAlert, IconCheck } from '@/components/icons';
 
 const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNKNOWN'] as const;
+/**
+ * The database's own spelling, paired with what a clinic reads.
+ *
+ * This list said `A_POS`, and so did the server DTO that validated it — the two
+ * agreed with each other and with nothing else. `BloodGroup` in the schema has
+ * always been `A_POSITIVE`, so every correction that touched this field passed
+ * validation, reached Prisma, and died there as an unhandled 500: "Something
+ * went wrong. Quote the correlation id." Registration was never affected,
+ * because its own list was right.
+ *
+ * It broke the read path too, quietly. The dialog prefills from
+ * `patient.bloodGroup`, which is `A_POSITIVE`; with no option of that value a
+ * `<select>` has selectedIndex -1 and renders BLANK, so a patient with a
+ * recorded blood group looked like a patient without one.
+ *
+ * Pairs rather than a bare list, matching the registration screen: deriving the
+ * label by string surgery on the value is what made a wrong value display
+ * plausibly ("A_POS".replace('_POS','+') is a tidy "A+") and hid the mismatch
+ * from anyone reading the UI.
+ */
 const BLOOD_GROUPS = [
-  'UNKNOWN',
-  'A_POS',
-  'A_NEG',
-  'B_POS',
-  'B_NEG',
-  'AB_POS',
-  'AB_NEG',
-  'O_POS',
-  'O_NEG',
+  ['UNKNOWN', 'Unknown'],
+  ['O_POSITIVE', 'O+'],
+  ['O_NEGATIVE', 'O−'],
+  ['A_POSITIVE', 'A+'],
+  ['A_NEGATIVE', 'A−'],
+  ['B_POSITIVE', 'B+'],
+  ['B_NEGATIVE', 'B−'],
+  ['AB_POSITIVE', 'AB+'],
+  ['AB_NEGATIVE', 'AB−'],
 ] as const;
 
 /**
@@ -250,9 +270,9 @@ export function PatientCorrectionDialog({
               value={form.bloodGroup}
               onChange={(e) => set('bloodGroup', e.target.value)}
             >
-              {BLOOD_GROUPS.map((b) => (
-                <option key={b} value={b}>
-                  {b === 'UNKNOWN' ? 'Unknown' : b.replace('_POS', '+').replace('_NEG', '−')}
+              {BLOOD_GROUPS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
                 </option>
               ))}
             </select>

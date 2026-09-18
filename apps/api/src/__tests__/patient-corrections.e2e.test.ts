@@ -216,6 +216,83 @@ describe('correcting a patient', () => {
     expect(res.json<{ patient: { mobile: string } }>().patient.mobile).toBe(twinMobile);
   });
 
+  /**
+   * The regression this pair exists for.
+   *
+   * The correction DTO validated blood group against a hand-written list —
+   * `A_POS`, `A_NEG`, … — that matched nothing in the schema, where the enum
+   * has always been `A_POSITIVE`. The correction dialog sent the same wrong
+   * spelling, so the two agreed with each other, validation passed, and Prisma
+   * rejected the write as an unhandled 500. Blood group could be set at
+   * registration and never corrected afterwards, for eighteen days, because
+   * nothing here exercised this field.
+   *
+   * The write is asserted against the COLUMN rather than the response: the
+   * correction response carries a patient summary, and `bloodGroup` is not on
+   * it, so a test that only read the reply would have passed throughout.
+   */
+  it('stores a corrected blood group in the schema spelling', async () => {
+    const res = await correct(frontDesk, patientId, { bloodGroup: 'A_POSITIVE' });
+
+    expect(res.statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ blood_group: string }>(
+      fx.main.id,
+      'SELECT blood_group FROM patient WHERE id = $1',
+      [patientId],
+    );
+    expect(row?.blood_group).toBe('A_POSITIVE');
+
+    const [entry] = await ownerQuery<{ field: string; old_value: string; new_value: string }>(
+      fx.main.id,
+      `SELECT field, old_value, new_value FROM patient_correction WHERE field = 'bloodGroup'`,
+    );
+    expect(entry).toMatchObject({
+      field: 'bloodGroup',
+      old_value: 'UNKNOWN',
+      new_value: 'A_POSITIVE',
+    });
+  });
+
+  /**
+   * And the value that used to be accepted must now be refused BY VALIDATION.
+   *
+   * 400 rather than 500 is the whole point: the old spelling did not fail at the
+   * door, it failed at the database, which is why the front desk saw "Something
+   * went wrong. Quote the correlation id" instead of a message about a field.
+   */
+  it('refuses the old A_POS spelling at the door, not at the database', async () => {
+    const res = await correct(frontDesk, patientId, { bloodGroup: 'A_POS' });
+
+    expect(res.statusCode).toBe(400);
+
+    const [row] = await ownerQuery<{ blood_group: string }>(
+      fx.main.id,
+      'SELECT blood_group FROM patient WHERE id = $1',
+      [patientId],
+    );
+    expect(row?.blood_group).toBe('UNKNOWN');
+  });
+
+  /**
+   * The read half of the same bug. The dialog prefills its `<select>` from this
+   * endpoint, so the value it returns has to be one the option list contains —
+   * otherwise the field renders blank and a patient with a recorded blood group
+   * looks like a patient without one.
+   */
+  it('reads the corrected blood group back in the same spelling', async () => {
+    await correct(frontDesk, patientId, { bloodGroup: 'O_NEGATIVE' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/patients/${patientId}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ bloodGroup: string }>().bloodGroup).toBe('O_NEGATIVE');
+  });
+
   it('refuses a caller without patient:write', async () => {
     const res = await correct(nurse, patientId, { name: 'Nurse Renamed This' });
     expect(res.statusCode).toBe(403);
