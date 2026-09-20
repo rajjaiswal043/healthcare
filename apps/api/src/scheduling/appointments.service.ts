@@ -8,6 +8,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
+import { PERMISSIONS } from '../platform/auth/permissions.js';
 import { BillingService } from '../billing/billing.service.js';
 import { AvailabilityService } from './availability.service.js';
 import {
@@ -766,6 +767,20 @@ export class AppointmentsService {
    *
    * Enforced HERE and not only in the console. The web app hides the doctor
    * selector, which is a courtesy; this is the part that means something.
+   *
+   * **An unlinked doctor gets nothing, not everything.** "Is this user a
+   * practitioner" has three answers, not two, and the third one used to fail
+   * open: a user with a doctor's permissions whose account was never joined to
+   * a `practitioner` row looked exactly like the front desk, so they were let
+   * through to ANY doctor's queue in the clinic. That is the state every new
+   * doctor is in between being created and having their Doctors-and-hours
+   * setup done, which is to say the state they are in on their first day.
+   *
+   * `consultation:write` is what separates the third case from the first. Only
+   * the doctor role carries it — the front desk, nurses, finance and
+   * diagnostics do not — so it reads as "this account is meant to belong to a
+   * practitioner", and an account that is meant to have a queue and has no link
+   * is misconfigured rather than unrestricted.
    */
   async assertMayReadQueue(
     tenantId: string,
@@ -778,7 +793,17 @@ export class AppointmentsService {
       tx.practitioner.findFirst({ where: { userId: user.userId }, select: { id: true } }),
     );
 
-    if (!self) return;
+    if (!self) {
+      if (user.permissions.includes(PERMISSIONS.CONSULTATION_WRITE)) {
+        throw new ForbiddenException(
+          'Your account is not linked to a doctor record yet, so you do not have a queue. ' +
+            'An administrator can link it under Doctors and hours.',
+        );
+      }
+      // Front desk, nurses, finance: never had a queue of their own, and the
+      // whole clinic's list is their job.
+      return;
+    }
 
     if (self.id !== requestedPractitionerId) {
       throw new ForbiddenException('You can only view your own queue.');

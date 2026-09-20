@@ -21,6 +21,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   clinicDate,
+  createDoctor,
   closeTestApp,
   createTestApp,
   login,
@@ -1051,10 +1052,44 @@ describe('whose queue you may read', () => {
   });
 
   /**
+   * The third case, which used to fail OPEN.
+   *
+   * A doctor account that was never joined to a `practitioner` row — the state
+   * every new doctor is in until somebody does their Doctors-and-hours setup —
+   * looked identical to the front desk: not a practitioner, therefore not
+   * confined, therefore handed any consultant's waiting list in the clinic.
+   *
+   * The account here is deliberately built the way the console builds one: a
+   * user with the doctor role and no practitioner record. Linking it is the
+   * step being skipped, and skipping it must now cost access rather than grant
+   * it.
+   */
+  it('refuses a doctor whose account is not linked to a practitioner', async () => {
+    const unlinked = await createDoctor(app, fx.main, {
+      email: 'unlinked@main.test',
+      fullName: 'Dr Not Linked Yet',
+      linked: false,
+    });
+    const other = await secondPractitioner();
+
+    for (const id of [fx.main.practitionerId, other]) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/queue?practitionerId=${id}`,
+        headers: { cookie: unlinked.session.cookie },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.payload).toMatch(/not linked to a doctor record/i);
+    }
+  });
+
+  /**
    * The front desk runs the waiting room and the nurse works across it. Neither
    * is a practitioner, so neither is confined — and this is what stops the rule
    * being written as "anybody with appointment:read sees only themselves",
-   * which would have broken the desk.
+   * which would have broken the desk. It is also why the rule above keys on
+   * `consultation:write` rather than on "has no practitioner row".
    */
   it('lets the front desk read any doctor', async () => {
     const other = await secondPractitioner();

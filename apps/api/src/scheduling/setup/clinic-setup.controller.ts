@@ -126,13 +126,88 @@ class PractitionerDto {
   followUpFeePaise?: number;
 }
 
-class UpdatePractitionerDto extends PractitionerDto {
+/**
+ * Editing a doctor already on the books — and note what is NOT here.
+ *
+ * This used to `extends PractitionerDto`, which meant it silently accepted
+ * everything creation accepts. Inheritance is the wrong tool for a shape whose
+ * whole point is that it is NARROWER than the one it resembles: a field added
+ * to creation would have appeared here too, editable, without anybody deciding
+ * it should be. Written out in full instead, so the list of what an edit may
+ * touch is a list somebody has to change on purpose.
+ *
+ * **`departmentId` is absent, and that is the enforcement.** A doctor's
+ * department is the anchor two things already treat as permanent: walk-in
+ * diagnostics, and the department-wise revenue split in the finance report.
+ * Moving a doctor between departments would not re-file the money they earned
+ * last quarter — it would silently change what last quarter's report MEANS, and
+ * a report whose meaning depends on a setting somebody edited since is not a
+ * report. Same principle the patient-ID format follows: history is not rewritten
+ * to match a new setting.
+ *
+ * Absent rather than validated-and-rejected because the global ValidationPipe
+ * runs with `forbidNonWhitelisted` — a request carrying `departmentId` is
+ * refused with a 400 naming the field, rather than quietly ignored. Quiet
+ * ignoring is worse: the caller is told it worked.
+ *
+ * **`userId` is absent too**, for a different reason — linking a doctor to a
+ * login is a real feature, it simply is not this form, and it needs its own
+ * decisions about what happens to an existing link. When it gets a screen it
+ * gets a field here; until then an edit cannot move it by accident.
+ */
+class UpdatePractitionerDto {
   @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(200)
-  declare fullName: string;
+  fullName?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  prefix?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  registrationNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  qualification?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  specialty?: string;
+
+  /**
+   * Settable, correctable, and removable — three states, like a staff mobile.
+   *
+   * `undefined` leaves the stored fee alone; a number replaces it; `null` drops
+   * it, which puts the doctor back on the service catalogue's price rather than
+   * on a fee of zero. Without the third state a fee typed in by mistake could
+   * only be swapped for another number: there was no way back to "this doctor
+   * has no override", which is the default every doctor starts in.
+   *
+   * Zero is a real and different answer — a doctor who genuinely does not
+   * charge — so it cannot be the way to clear one. Hence null, and hence
+   * `@Min(0)` staying.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000_000)
+  consultationFeePaise?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000_000)
+  followUpFeePaise?: number | null;
+
+  /** Functional, not cosmetic: availability refuses an inactive doctor. */
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;

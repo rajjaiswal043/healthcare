@@ -11,6 +11,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import type { FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
@@ -50,9 +51,26 @@ class UpdateUserDto {
   @MaxLength(200)
   fullName?: string;
 
+  /**
+   * Settable, correctable, and REMOVABLE.
+   *
+   * Three states, not two. `undefined` is "not part of this edit" and leaves
+   * whatever is stored alone; a 10-digit number replaces it; `null` clears it.
+   * Without the third an administrator who found a wrong number on a record
+   * could only swap it for another wrong number — there was no way back to "we
+   * do not have one", which is the honest state and often the true one.
+   *
+   * The form sends an empty string for that, because a cleared text input is
+   * `''` and asking the UI to translate emptiness into `null` is how the two
+   * ends drift. It is mapped here instead, once, next to the rule it serves.
+   * `@IsOptional()` then skips the format check for null — that is its defined
+   * behaviour for both null and undefined — so only a non-empty value is ever
+   * matched against the pattern.
+   */
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? null : value))
   @Matches(/^[6-9]\d{9}$/, { message: 'mobile must be a 10-digit Indian mobile number' })
-  mobile?: string;
+  mobile?: string | null;
 
   @IsOptional()
   @IsArray()

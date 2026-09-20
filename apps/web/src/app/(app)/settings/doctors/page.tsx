@@ -18,6 +18,15 @@ const rupees = (paise: number | null) => (paise === null ? '' : String(Math.roun
 const paise = (rupees: string) => (rupees.trim() === '' ? undefined : Number(rupees) * 100);
 
 /**
+ * Empty means CLEAR, not "unchanged" — the difference between adding a doctor
+ * and editing one. `paise()` above returns undefined for an empty box, which is
+ * right on creation (omit the field) and wrong on an edit (it would leave a
+ * wrong fee in place with no way to remove it).
+ */
+const feeOrNull = (value: string): number | null =>
+  value.trim() === '' ? null : Number(value) * 100;
+
+/**
  * Doctors and their hours.
  *
  * The screen that was missing between "a clinic exists with staff" and "a clinic
@@ -72,14 +81,21 @@ export default function DoctorsPage() {
     void load();
   }, [load]);
 
-  async function run(key: string, fn: () => Promise<unknown>) {
+  /**
+   * Returns whether it worked, which the profile form needs: closing it on a
+   * failure throws away what the administrator typed, and they would have to
+   * retype it to discover the server still says no.
+   */
+  async function run(key: string, fn: () => Promise<unknown>): Promise<boolean> {
     setBusy(key);
     setError(null);
     try {
       await fn();
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'That did not work.');
+      return false;
     } finally {
       setBusy(null);
     }
@@ -333,7 +349,7 @@ function DoctorCard({
   doctor: SetupPractitioner;
   locations: ClinicLocation[];
   busy: string | null;
-  onRun: (key: string, fn: () => Promise<unknown>) => Promise<void>;
+  onRun: (key: string, fn: () => Promise<unknown>) => Promise<boolean>;
 }) {
   const [session, setSession] = useState({
     dayOfWeek: '1',
@@ -341,6 +357,50 @@ function DoctorCard({
     endTime: '13:00',
     slotMinutes: '15',
   });
+
+  const [editing, setEditing] = useState(false);
+  const [profile, setProfile] = useState({
+    registrationNumber: '',
+    specialty: '',
+    qualification: '',
+    consultationFee: '',
+    followUpFee: '',
+  });
+
+  function startEdit() {
+    setProfile({
+      registrationNumber: d.registrationNumber ?? '',
+      specialty: d.specialty ?? '',
+      qualification: d.qualification ?? '',
+      consultationFee: rupees(d.consultationFeePaise),
+      followUpFee: rupees(d.followUpFeePaise),
+    });
+    setEditing(true);
+  }
+
+  /**
+   * Save the profile.
+   *
+   * Fees go as `null` when the box is empty — that is how an override is
+   * removed, putting the doctor back on the catalogue price. An empty box
+   * cannot mean "leave it alone", or a fee typed in by mistake could never be
+   * taken off. Zero stays a real, different answer.
+   *
+   * `departmentId` is not sent and cannot be: it is not on the client's type,
+   * and the server would refuse the request if it were.
+   */
+  async function saveProfile() {
+    const saved = await onRun(`edit-${d.id}`, () =>
+      api.updatePractitioner(d.id, {
+        registrationNumber: profile.registrationNumber.trim(),
+        specialty: profile.specialty.trim(),
+        qualification: profile.qualification.trim(),
+        consultationFeePaise: feeOrNull(profile.consultationFee),
+        followUpFeePaise: feeOrNull(profile.followUpFee),
+      }),
+    );
+    if (saved) setEditing(false);
+  }
 
   const locationId = locations[0]?.id ?? '';
 
@@ -373,7 +433,127 @@ function DoctorCard({
             no registration number
           </span>
         )}
+
+        <button
+          type="button"
+          className="btn-secondary !px-2.5 !py-1.5 text-[12.5px]"
+          disabled={busy === `edit-${d.id}`}
+          onClick={() => (editing ? setEditing(false) : startEdit())}
+        >
+          {editing ? 'Cancel' : 'Edit'}
+        </button>
       </header>
+
+      {editing && (
+        <div className="border-b border-ink/8 bg-bg-soft px-5 py-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block">
+              <span className="field-label">Registration number</span>
+              <input
+                className="field-input mt-1"
+                value={profile.registrationNumber}
+                onChange={(e) => setProfile((f) => ({ ...f, registrationNumber: e.target.value }))}
+                maxLength={64}
+                placeholder="MH-12345"
+              />
+              <span className="field-hint">Printed on every prescription.</span>
+            </label>
+
+            <label className="block">
+              <span className="field-label">Specialty</span>
+              <input
+                className="field-input mt-1"
+                value={profile.specialty}
+                onChange={(e) => setProfile((f) => ({ ...f, specialty: e.target.value }))}
+                maxLength={120}
+                placeholder="Orthopaedics"
+              />
+            </label>
+
+            <label className="block">
+              <span className="field-label">Qualification</span>
+              <input
+                className="field-input mt-1"
+                value={profile.qualification}
+                onChange={(e) => setProfile((f) => ({ ...f, qualification: e.target.value }))}
+                maxLength={200}
+                placeholder="MBBS, MS (Ortho)"
+              />
+            </label>
+
+            <label className="block">
+              <span className="field-label">Consultation fee (₹)</span>
+              <input
+                className="field-input mt-1"
+                inputMode="numeric"
+                value={profile.consultationFee}
+                onChange={(e) =>
+                  setProfile((f) => ({ ...f, consultationFee: e.target.value.replace(/\D/g, '') }))
+                }
+                placeholder="500"
+              />
+              <span className="field-hint">Empty uses the price list.</span>
+            </label>
+
+            <label className="block">
+              <span className="field-label">Follow-up fee (₹)</span>
+              <input
+                className="field-input mt-1"
+                inputMode="numeric"
+                value={profile.followUpFee}
+                onChange={(e) =>
+                  setProfile((f) => ({ ...f, followUpFee: e.target.value.replace(/\D/g, '') }))
+                }
+                placeholder="300"
+              />
+              <span className="field-hint">Empty uses the price list.</span>
+            </label>
+
+            {/* Shown, and not editable. The department is what the finance
+                report splits revenue by and what walk-in diagnostics file
+                against — both treat it as permanent. Moving a doctor would not
+                re-file the money they earned last quarter, it would change what
+                last quarter's report MEANS, which is the one thing a report
+                must not do. The server refuses it outright, not just this form. */}
+            <div>
+              <span className="field-label">Department</span>
+              <p className="mt-1 truncate rounded-panel border border-ink/10 bg-ink/5 px-3.5 py-2.5 text-[15px] text-ink-40">
+                {d.department?.name ?? 'None'}
+              </p>
+              <span className="field-hint">Locked once set — past reports are split by it.</span>
+            </div>
+          </div>
+
+          {/* Changing a fee is not retrospective: bills already raised keep the
+              fee they were raised at, because the amount is written onto the
+              invoice line rather than looked up from here. Said out loud
+              because an administrator about to change a price is entitled to
+              know which way it cuts. */}
+          <p className="mt-3 text-[12.5px] text-ink-40">
+            A new fee applies to bills raised from now on. Bills already raised keep what they were
+            charged at.
+          </p>
+
+          <div className="mt-3.5 flex gap-2">
+            <button
+              type="button"
+              className="btn-primary !px-3 !py-1.5 text-[13px]"
+              disabled={busy === `edit-${d.id}`}
+              onClick={() => void saveProfile()}
+            >
+              {busy === `edit-${d.id}` ? 'Saving…' : 'Save changes'}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary !px-3 !py-1.5 text-[13px]"
+              disabled={busy === `edit-${d.id}`}
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4 p-5">
         <div>

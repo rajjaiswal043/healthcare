@@ -527,6 +527,86 @@ export async function loginWithMfa(
  * how every scheduling test written before this module continues to pass
  * unchanged. Calling this is what switches the tenant to pay-first.
  */
+/**
+ * A second doctor at a tenant, built the way the console builds one.
+ *
+ * Two doctors are needed to express "somebody else's patient" at all, and the
+ * shared fixture seeds exactly one — so every ownership rule in the clinic was
+ * previously testable only across TENANTS, where row-level security refuses the
+ * request before any of this code runs. A test that passes because of RLS says
+ * nothing about whether the ownership check exists.
+ *
+ * `linked: false` reproduces the account state that a new doctor is in before
+ * anybody does their Doctors-and-hours setup: the role, the permissions, and no
+ * `practitioner` row. That is not a hypothetical — it is the default, and it is
+ * where the fail-open lived.
+ *
+ * The password hash is copied from the tenant's own seeded doctor rather than
+ * recomputed, so this stays in step with `TEST_PASSWORD` by construction.
+ */
+export async function createDoctor(
+  app: NestFastifyApplication,
+  tenant: SeededTenant,
+  options: { email: string; fullName: string; linked: boolean },
+): Promise<{ session: Session; practitionerId: string | null }> {
+  const [user] = await ownerQuery<{ id: string }>(
+    tenant.id,
+    `INSERT INTO app_user (tenant_id, email, full_name, password_hash, updated_at)
+     SELECT tenant_id, $2, $3, password_hash, now()
+       FROM app_user
+      WHERE tenant_id = $1 AND full_name <> '' 
+      LIMIT 1
+     RETURNING id`,
+    [tenant.id, options.email, options.fullName],
+  );
+  if (!user) throw new Error('Could not create the doctor account.');
+
+  await ownerQuery(
+    tenant.id,
+    `INSERT INTO user_role (tenant_id, user_id, role_id)
+     SELECT $1, $2, id FROM role WHERE tenant_id = $1 AND key = 'doctor'`,
+    [tenant.id, user.id],
+  );
+
+  let practitionerId: string | null = null;
+  if (options.linked) {
+    const [row] = await ownerQuery<{ id: string }>(
+      tenant.id,
+      `INSERT INTO practitioner
+         (tenant_id, user_id, full_name, registration_number, specialty, department_id,
+          overbook_per_session, updated_at)
+       VALUES ($1, $2, $3, $4, 'General Medicine', $5, 0, now())
+       RETURNING id`,
+      [
+        tenant.id,
+        user.id,
+        options.fullName,
+        `TEST-${options.email.slice(0, 8)}`,
+        tenant.departmentId,
+      ],
+    );
+    practitionerId = row?.id ?? null;
+
+    // Same hours as the seeded doctor. A practitioner without a schedule has no
+    // availability, so nothing can be booked with them — which would make every
+    // ownership test here fail on the fixture rather than on the rule.
+    for (let day = 0; day <= 6; day++) {
+      await ownerQuery(
+        tenant.id,
+        `INSERT INTO practitioner_schedule
+           (tenant_id, practitioner_id, location_id, day_of_week, start_time, end_time,
+            slot_minutes, capacity_per_slot, visit_types, valid_from, updated_at)
+         VALUES ($1, $2, $3, $4, '09:00', '12:00', 15, 1, '{}',
+                 current_date - interval '30 days', now())`,
+        [tenant.id, practitionerId, tenant.locationId, day],
+      );
+    }
+  }
+
+  const session = await login(app, tenant.slug, options.email);
+  return { session, practitionerId };
+}
+
 export async function seedBilling(
   tenantId: string,
   options: { consultationFeePaise?: number; followUpFeePaise?: number } = {},
