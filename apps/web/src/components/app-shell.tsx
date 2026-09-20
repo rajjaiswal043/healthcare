@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './auth-provider';
 import { ClinicLogo } from './clinic-logo';
 import { initialsOf } from '@/lib/role-signature';
+import { breadcrumbFor } from '@/lib/breadcrumbs';
 import {
   IconCalendar,
   IconChevronRight,
@@ -202,22 +203,6 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
-const BREADCRUMBS: Record<string, string> = {
-  '/': 'Home',
-  '/patients': 'Patients',
-  '/patients/register': 'Register a patient',
-  '/queue': "Today's queue",
-  '/appointments/new': 'Book an appointment',
-  '/settings/displays': 'Waiting-room screens',
-  '/settings/users': 'Staff',
-  '/settings/roles': 'Roles and permissions',
-  '/settings/doctors': 'Doctors and hours',
-  '/settings/branding': 'Branding',
-  '/settings/patient-ids': 'Patient IDs',
-  '/diagnostics': 'Tests to do',
-  '/change-password': 'Choose a password',
-};
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { session, loading, can, signOut, signature } = useAuth();
   const pathname = usePathname();
@@ -305,7 +290,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const railOpen = !collapsed || peeking;
 
   const initials = initialsOf(session.fullName);
-  const crumb = BREADCRUMBS[pathname] ?? session.tenant.name;
+  /**
+   * The clinic's name is the last resort, and `breadcrumbs.spec.ts` is what
+   * makes sure it is never reached: every route folder must have an entry. It
+   * used to be reached by five screens, which read as "Ram Hospital › Ram
+   * Hospital" and looked deliberate enough that nobody reported it for months.
+   */
+  const crumb = breadcrumbFor(pathname) ?? session.tenant.name;
 
   return (
     /**
