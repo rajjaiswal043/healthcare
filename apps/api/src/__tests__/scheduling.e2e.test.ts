@@ -949,7 +949,7 @@ describe('one clinic cannot reach another', () => {
     // empty board rather than an error. What matters is that no row crosses.
     expect(res.statusCode).toBe(200);
     expect(res.json().waiting).toHaveLength(0);
-    expect(res.json().stats.total).toBe(0);
+    expect(res.json().stats.inQueue).toBe(0);
   });
 
   it('lists only its own doctors and departments', async () => {
@@ -1005,6 +1005,91 @@ function transition(appointmentId: string, action: string, session: Session) {
     headers: { cookie: session.cookie },
   });
 }
+
+/**
+ * "In the queue" — who the clinic still has to deal with today.
+ *
+ * This counted every appointment of the day in any state, so it only ever went
+ * up: a finished visit, a cancellation and a no-show all stayed "in the queue"
+ * until midnight. Each status is asserted on its own, because the bug was
+ * exactly that three of them were counted when they should not have been.
+ */
+describe('the in-the-queue count', () => {
+  const QUEUE_DAY = clinicDate(7);
+
+  /** One appointment in `status`, the `index`-th of the day, written directly. */
+  async function appointmentIn(status: string, index = 0) {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, status, visit_type, updated_at)
+       VALUES ($1, $2, $3, $4,
+               ($5::date + time '10:00' + $6 * interval '15 minutes') AT TIME ZONE 'Asia/Kolkata',
+               ($5::date + time '10:15' + $6 * interval '15 minutes') AT TIME ZONE 'Asia/Kolkata',
+               $7::appointment_status, 'NEW', now())`,
+      [
+        fx.main.id,
+        fx.main.patientIds[index % fx.main.patientIds.length],
+        fx.main.practitionerId,
+        fx.main.locationId,
+        QUEUE_DAY,
+        index,
+        status,
+      ],
+    );
+  }
+
+  async function stats() {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${QUEUE_DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json<{ stats: { inQueue: number } & Record<string, unknown> }>().stats;
+  }
+
+  const COUNTED = ['BOOKED', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_TESTS'];
+  const NOT_COUNTED = ['FULFILLED', 'CANCELLED', 'NO_SHOW'];
+
+  for (const status of COUNTED) {
+    it(`counts a visit that is ${status}`, async () => {
+      await appointmentIn(status);
+      expect((await stats()).inQueue).toBe(1);
+    });
+  }
+
+  for (const status of NOT_COUNTED) {
+    it(`does not count a visit that is ${status}`, async () => {
+      await appointmentIn(status);
+      expect((await stats()).inQueue).toBe(0);
+    });
+  }
+
+  it('counts only the visits not over yet, out of a full day', async () => {
+    const all = [...COUNTED, ...NOT_COUNTED];
+    for (const [i, status] of all.entries()) await appointmentIn(status, i);
+
+    // Seven appointments on the day; four of them are still to be dealt with.
+    expect((await stats()).inQueue).toBe(COUNTED.length);
+  });
+
+  /** The reported case, measured on the development data: 1 booked + 1 finished. */
+  it('is 1, not 2, for one patient yet to arrive and one already seen', async () => {
+    await appointmentIn('BOOKED', 0);
+    await appointmentIn('FULFILLED', 1);
+
+    expect((await stats()).inQueue).toBe(1);
+  });
+
+  /**
+   * The every-appointment count was only ever read by the "In the queue" tile,
+   * so it was replaced rather than kept under another name.
+   */
+  it('no longer reports the old every-appointment total', async () => {
+    expect(await stats()).not.toHaveProperty('total');
+  });
+});
 
 /**
  * A doctor's queue is their own.

@@ -725,7 +725,11 @@ export interface QueueView {
   completed: Appointment[];
   cancelled: Appointment[];
   stats: {
-    total: number;
+    /**
+     * Visits not over yet: yet to arrive, waiting, in the room, out for tests.
+     * Finished, cancelled and no-show visits are not counted.
+     */
+    inQueue: number;
     waiting: number;
     awayForTests: number;
     completed: number;

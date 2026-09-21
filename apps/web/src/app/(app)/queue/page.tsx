@@ -256,7 +256,7 @@ export default function QueuePage() {
       {queue && (
         <>
           <div className="grid gap-3 sm:grid-cols-5">
-            <Stat label="In the queue" value={String(queue.stats.total)} />
+            <Stat label="In the queue" value={String(queue.stats.inQueue)} />
             <Stat label="Waiting" value={String(queue.stats.waiting)} tone="amber" />
             <Stat label="Away for tests" value={String(queue.stats.awayForTests)} />
             <Stat label="Seen today" value={String(queue.stats.completed)} tone="green" />
