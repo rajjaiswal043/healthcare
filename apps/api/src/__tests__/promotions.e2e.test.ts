@@ -747,6 +747,341 @@ describe('the money', () => {
   });
 });
 
+// --- custom: the amount is typed at the desk ---------------------------------
+
+/**
+ * CUSTOM, the third type.
+ *
+ * PERCENTAGE and FLAT both answer "how much is this worth" before any bill
+ * exists. CUSTOM exists for the discount a clinic cannot decide in advance, so
+ * the amount arrives with the application and is frozen onto the application row
+ * like every other discount — which is what makes it flow into the finance
+ * report with no reporting work at all.
+ *
+ * Most of this file is refusals, and so is most of this block. A type whose
+ * amount is typed by a person needs its boundaries enforced where the person is,
+ * not discovered by a CHECK constraint three layers down.
+ */
+describe('a custom promotion', () => {
+  function createCustom(body: Record<string, unknown> = {}) {
+    return createPromotion({ code: 'CUSTOM1', type: 'CUSTOM', value: undefined, ...body });
+  }
+
+  async function customOnABill(customDiscountPaise?: number) {
+    expect((await createCustom()).statusCode).toBe(201);
+    const { invoice } = await bookedVisit();
+    const res = await applyPromotion(invoice.id, {
+      code: 'CUSTOM1',
+      ...(customDiscountPaise === undefined ? {} : { customDiscountPaise }),
+    });
+    return { invoice, res };
+  }
+
+  // --- creating ------------------------------------------------------------
+
+  it('is created with no value and no cap', async () => {
+    const res = await createCustom();
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ type: string; value: number | null }>()).toMatchObject({
+      type: 'CUSTOM',
+      value: null,
+    });
+
+    const [row] = await ownerQuery<{ value: number | null; max_discount_paise: number | null }>(
+      fx.main.id,
+      `SELECT value, max_discount_paise FROM promotion WHERE code = 'CUSTOM1'`,
+    );
+    expect(row?.value).toBeNull();
+    expect(row?.max_discount_paise).toBeNull();
+  });
+
+  it('refuses a value, rather than storing one nothing will read', async () => {
+    expect((await createCustom({ value: 50 })).statusCode).toBe(400);
+  });
+
+  /**
+   * Decision (d). The database CHECK refuses this too, but arriving there means
+   * the desk gets a 500 with a constraint name in it.
+   */
+  it('refuses a maximum discount', async () => {
+    const res = await createCustom({ maxDiscountPaise: 20000 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.payload).toMatch(/maximum/i);
+  });
+
+  /**
+   * Decision (d), asserted BELOW the API.
+   *
+   * The DTO refuses a cap on a CUSTOM promotion, and that refusal is the one a
+   * person meets. This writes straight to the table to prove the rule also
+   * exists where it cannot be forgotten — a future endpoint, a seed script or a
+   * migration that inserts promotions is not covered by a class-validator
+   * decorator, and "the form hides it" was explicitly not enough.
+   */
+  it('cannot be written with a value or a cap even below the API', async () => {
+    const insert = (columns: string, values: string) =>
+      ownerQuery(
+        fx.main.id,
+        `INSERT INTO promotion (tenant_id, code, name, type, ${columns},
+                                valid_from, created_by_user_id, updated_at)
+         VALUES ($1, 'RAW1', 'Written directly', 'CUSTOM', ${values},
+                 current_date, $2, now())`,
+        [fx.main.id, adminUserId],
+      );
+
+    await expect(insert('value', '50')).rejects.toThrow(/promotion_value_within_bounds/);
+    await expect(insert('value, max_discount_paise', 'NULL, 20000')).rejects.toThrow(
+      /promotion_value_within_bounds/,
+    );
+
+    // And the shape the constraint does allow.
+    await expect(insert('value, max_discount_paise', 'NULL, NULL')).resolves.toBeDefined();
+  });
+
+  it('cannot be given a value by editing it later', async () => {
+    expect((await createCustom()).statusCode).toBe(201);
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM promotion WHERE code = 'CUSTOM1'`,
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/promotions/${row!.id}`,
+      headers: { cookie: admin.cookie },
+      payload: { value: 5000 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('CUSTOM_HAS_NO_VALUE');
+  });
+
+  // --- applying ------------------------------------------------------------
+
+  it('discounts the bill by exactly what was typed', async () => {
+    const { invoice, res } = await customOnABill(17500); // ₹175.00, an odd figure on purpose
+
+    expect(res.statusCode).toBe(201);
+
+    const after = (await readInvoice(invoice.id)).json();
+    expect(after.discountPaise).toBe(17500);
+    expect(after.subtotalPaise).toBe(CONSULT_FEE);
+    expect(after.totalPaise).toBe(CONSULT_FEE - 17500);
+
+    // Frozen on the application row — this is what the finance report reads,
+    // and why CUSTOM needs no reporting work of its own.
+    const [row] = await ownerQuery<{ discount_paise: number }>(
+      fx.main.id,
+      'SELECT discount_paise FROM promotion_application WHERE invoice_id = $1',
+      [invoice.id],
+    );
+    expect(row?.discount_paise).toBe(17500);
+  });
+
+  it('takes the whole bill when that is what was typed', async () => {
+    const { invoice, res } = await customOnABill(CONSULT_FEE);
+
+    expect(res.statusCode).toBe(201);
+    expect((await readInvoice(invoice.id)).json().totalPaise).toBe(0);
+  });
+
+  /**
+   * Decision (c): REFUSED, not clamped.
+   *
+   * The arithmetic would happily floor this at the bill and produce a correct
+   * invoice. That is the wrong behaviour for a number a person just typed —
+   * they entered ₹700 against a ₹600 bill because one of the two is not what
+   * they think it is, and silently charging ₹0 tells them neither.
+   */
+  it('refuses an amount larger than the bill, naming both figures', async () => {
+    const { invoice, res } = await customOnABill(CONSULT_FEE + 10000);
+
+    expect(res.statusCode).toBe(400);
+    expect(domainCode(res)).toBe('CUSTOM_AMOUNT_ABOVE_TOTAL');
+    expect(res.payload).toContain('600');
+    expect(res.payload).toContain('700');
+
+    // And nothing was written: no discount, no application row.
+    const after = (await readInvoice(invoice.id)).json();
+    expect(after.discountPaise).toBe(0);
+    expect(after.totalPaise).toBe(CONSULT_FEE);
+    expect(
+      await ownerQuery(fx.main.id, 'SELECT id FROM promotion_application WHERE invoice_id = $1', [
+        invoice.id,
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it('refuses zero, which is a record of a discount nobody gave', async () => {
+    const { res } = await customOnABill(0);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses a negative amount', async () => {
+    const { res } = await customOnABill(-100);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses being applied with no amount at all', async () => {
+    const { res } = await customOnABill(undefined);
+
+    expect(res.statusCode).toBe(400);
+    expect(domainCode(res)).toBe('CUSTOM_AMOUNT_REQUIRED');
+  });
+
+  /**
+   * The other direction. An amount sent for a promotion that carries its own is
+   * refused rather than ignored — quietly dropping a figure somebody typed is
+   * how a bill ends up disagreeing with the screen it was entered on.
+   */
+  it('refuses an amount sent for a percentage promotion', async () => {
+    expect((await createPromotion()).statusCode).toBe(201);
+    const { invoice } = await bookedVisit();
+
+    const res = await applyPromotion(invoice.id, { customDiscountPaise: 10000 });
+
+    expect(res.statusCode).toBe(400);
+    expect(domainCode(res)).toBe('CUSTOM_AMOUNT_NOT_ALLOWED');
+  });
+
+  // --- the record ----------------------------------------------------------
+
+  /**
+   * Decision (e): an owner reading the day's discounts must be able to tell a
+   * judgement made at the desk from an administrator's policy being executed.
+   */
+  it('records that the amount was entered by hand', async () => {
+    const { invoice } = await customOnABill(17500);
+
+    const [row] = await ownerQuery<{ reason: string }>(
+      fx.main.id,
+      `SELECT reason FROM audit_event
+        WHERE action = 'promotion.apply' AND resource_id = $1`,
+      [invoice.id],
+    );
+    expect(row?.reason).toContain('entered by hand');
+    expect(row?.reason).toContain('175');
+  });
+
+  it('records a percentage discount as calculated, not entered', async () => {
+    expect((await createPromotion()).statusCode).toBe(201);
+    const { invoice } = await bookedVisit();
+    expect((await applyPromotion(invoice.id)).statusCode).toBe(201);
+
+    const [row] = await ownerQuery<{ reason: string }>(
+      fx.main.id,
+      `SELECT reason FROM audit_event
+        WHERE action = 'promotion.apply' AND resource_id = $1`,
+      [invoice.id],
+    );
+    expect(row?.reason).toContain('calculated from the promotion');
+  });
+
+  // --- and it is the same feature on a test bill ---------------------------
+
+  /**
+   * Consultation and diagnostics bills are two invoices, and the finance desk
+   * renders ONE `PromotionPanel` against whichever is open — so a discount that
+   * worked on one and not the other would be a server-side difference, not a UI
+   * one. Asserted here because that is where such a difference would live.
+   */
+  it('works the same on a diagnostic test bill', async () => {
+    expect((await createCustom()).statusCode).toBe(201);
+
+    // A diagnostic department and one priced test, because `seedBilling` prices
+    // consultations only — the test bill is a different invoice built from
+    // different rows, which is exactly why it is worth asserting separately.
+    const department = await app.inject({
+      method: 'POST',
+      url: '/api/v1/departments',
+      headers: { cookie: admin.cookie },
+      payload: { name: 'X-ray', isDiagnostic: true },
+    });
+    expect(department.statusCode).toBe(201);
+
+    const service = await app.inject({
+      method: 'POST',
+      url: '/api/v1/setup/services',
+      headers: { cookie: admin.cookie },
+      payload: {
+        category: 'DIAGNOSTIC',
+        code: 'XR-KNEE',
+        name: 'Knee X-ray',
+        pricePaise: 40000,
+        departmentId: department.json<{ id: string }>().id,
+      },
+    });
+    expect(service.statusCode).toBe(201);
+
+    const raised = await app.inject({
+      method: 'POST',
+      url: '/api/v1/diagnostics/walk-in-orders',
+      headers: { cookie: finance.cookie },
+      payload: {
+        patientId: fx.main.patientIds[1],
+        serviceIds: [service.json<{ id: string }>().id],
+        referralSource: 'SELF',
+      },
+    });
+    if (raised.statusCode !== 201) {
+      throw new Error(`Could not raise the test bill: ${raised.statusCode} ${raised.payload}`);
+    }
+
+    const invoiceId = raised.json<{ invoiceId: string }>().invoiceId;
+    expect((await readInvoice(invoiceId)).json().subtotalPaise).toBe(40000);
+
+    const res = await applyPromotion(invoiceId, { code: 'CUSTOM1', customDiscountPaise: 15000 });
+
+    expect(res.statusCode).toBe(201);
+    const after = (await readInvoice(invoiceId)).json();
+    expect(after.discountPaise).toBe(15000);
+    expect(after.totalPaise).toBe(25000);
+  });
+
+  it('refuses an over-the-bill amount on a test bill too', async () => {
+    expect((await createCustom()).statusCode).toBe(201);
+
+    const department = await app.inject({
+      method: 'POST',
+      url: '/api/v1/departments',
+      headers: { cookie: admin.cookie },
+      payload: { name: 'Pathology', isDiagnostic: true },
+    });
+    const service = await app.inject({
+      method: 'POST',
+      url: '/api/v1/setup/services',
+      headers: { cookie: admin.cookie },
+      payload: {
+        category: 'DIAGNOSTIC',
+        code: 'PATH-CBC',
+        name: 'Blood count',
+        pricePaise: 30000,
+        departmentId: department.json<{ id: string }>().id,
+      },
+    });
+
+    const raised = await app.inject({
+      method: 'POST',
+      url: '/api/v1/diagnostics/walk-in-orders',
+      headers: { cookie: finance.cookie },
+      payload: {
+        patientId: fx.main.patientIds[2],
+        serviceIds: [service.json<{ id: string }>().id],
+        referralSource: 'SELF',
+      },
+    });
+    const invoiceId = raised.json<{ invoiceId: string }>().invoiceId;
+
+    const res = await applyPromotion(invoiceId, { code: 'CUSTOM1', customDiscountPaise: 30001 });
+
+    expect(res.statusCode).toBe(400);
+    expect(domainCode(res)).toBe('CUSTOM_AMOUNT_ABOVE_TOTAL');
+    expect((await readInvoice(invoiceId)).json().discountPaise).toBe(0);
+  });
+});
+
 // --- the pay-first gate reads the discounted balance -------------------------
 
 describe('the queue gate sees the discount', () => {

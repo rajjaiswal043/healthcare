@@ -48,7 +48,12 @@ function draftFrom(p: Promotion): Draft {
   return {
     name: p.name,
     description: p.description ?? '',
-    value: p.type === 'PERCENTAGE' ? String(p.value) : (p.value / 100).toFixed(2),
+    value:
+      p.type === 'CUSTOM'
+        ? ''
+        : p.type === 'PERCENTAGE'
+          ? String(p.value)
+          : ((p.value ?? 0) / 100).toFixed(2),
     capRupees: p.maxDiscountPaise === null ? '' : (p.maxDiscountPaise / 100).toFixed(2),
     validFrom: p.validFrom,
     validTo: p.validTo ?? '',
@@ -57,7 +62,17 @@ function draftFrom(p: Promotion): Draft {
 
 /** What a promotion is worth, in words, for the list row. */
 function worth(p: Promotion): string {
-  const base = p.type === 'PERCENTAGE' ? `${p.value}% off` : `${formatPaise(p.value)} off`;
+  /**
+   * CUSTOM is worth nothing in particular, and saying so is the honest row.
+   *
+   * Formatting it like the other two produced "₹0.00 off", which is not a
+   * shorthand — it is a false statement about a promotion that will in fact
+   * discount whatever the desk types. A row nobody can act on is better than a
+   * row that reads correctly and is wrong.
+   */
+  if (p.type === 'CUSTOM') return 'Amount set at billing';
+
+  const base = p.type === 'PERCENTAGE' ? `${p.value}% off` : `${formatPaise(p.value ?? 0)} off`;
   return p.maxDiscountPaise === null
     ? base
     : `${base}, capped at ${formatPaise(p.maxDiscountPaise)}`;
@@ -92,7 +107,7 @@ export default function PromotionsPage() {
     code: '',
     name: '',
     description: '',
-    type: 'PERCENTAGE' as 'PERCENTAGE' | 'FLAT',
+    type: 'PERCENTAGE' as 'PERCENTAGE' | 'FLAT' | 'CUSTOM',
     value: '',
     capRupees: '',
     validFrom: TODAY(),
@@ -150,8 +165,19 @@ export default function PromotionsPage() {
     }
   }
 
-  /** Percent or rupees → what the API wants. Returns null when unparseable. */
-  function valueFor(type: 'PERCENTAGE' | 'FLAT', text: string): number | null {
+  /**
+   * Percent or rupees → what the API wants.
+   *
+   * Three returns, not two. `undefined` means "this type has no value" and is
+   * what CUSTOM sends; `null` still means "the text is not a number" and is an
+   * error. Collapsing the two would make an unparseable percentage look like a
+   * custom promotion.
+   */
+  function valueFor(
+    type: 'PERCENTAGE' | 'FLAT' | 'CUSTOM',
+    text: string,
+  ): number | null | undefined {
+    if (type === 'CUSTOM') return undefined;
     if (type === 'FLAT') return parseRupeesToPaise(text);
 
     const percent = Number(text.trim());
@@ -160,6 +186,7 @@ export default function PromotionsPage() {
   }
 
   async function create() {
+    const isCustom = newRow.type === 'CUSTOM';
     const value = valueFor(newRow.type, newRow.value);
     if (value === null) {
       setError(
@@ -170,8 +197,11 @@ export default function PromotionsPage() {
       return;
     }
 
+    // A cap is meaningless on CUSTOM and refused by the server and the database
+    // alike, so the form does not carry one even if something was typed before
+    // the type was switched.
     let cap: number | undefined;
-    if (newRow.capRupees.trim() !== '') {
+    if (!isCustom && newRow.capRupees.trim() !== '') {
       const parsed = parseRupeesToPaise(newRow.capRupees);
       if (parsed === null || parsed < 1) {
         setError('A cap is an amount in rupees. Leave it blank for no cap.');
@@ -193,7 +223,7 @@ export default function PromotionsPage() {
           name: newRow.name.trim(),
           ...(newRow.description.trim() ? { description: newRow.description.trim() } : {}),
           type: newRow.type,
-          value,
+          ...(value === undefined ? {} : { value }),
           ...(cap === undefined ? {} : { maxDiscountPaise: cap }),
           validFrom: newRow.validFrom,
           ...(newRow.validTo ? { validTo: newRow.validTo } : {}),
@@ -228,7 +258,7 @@ export default function PromotionsPage() {
     }
 
     let cap: number | undefined;
-    if (draft.capRupees.trim() !== '') {
+    if (promotion.type !== 'CUSTOM' && draft.capRupees.trim() !== '') {
       const parsed = parseRupeesToPaise(draft.capRupees);
       if (parsed === null || parsed < 1) {
         setError('A cap is an amount in rupees. Leave it blank for no cap.');
@@ -250,7 +280,7 @@ export default function PromotionsPage() {
         await api.updatePromotion(promotion.id, {
           name: draft.name.trim(),
           description: draft.description.trim(),
-          value,
+          ...(value === undefined ? {} : { value }),
           ...(cap === undefined ? {} : { maxDiscountPaise: cap }),
           validFrom: draft.validFrom,
           ...(draft.validTo ? { validTo: draft.validTo } : {}),
@@ -332,19 +362,31 @@ export default function PromotionsPage() {
                 onChange={(e) =>
                   setNewRow({
                     ...newRow,
-                    type: e.target.value as 'PERCENTAGE' | 'FLAT',
+                    type: e.target.value as 'PERCENTAGE' | 'FLAT' | 'CUSTOM',
                     // Percent and rupees are different units, so a half-typed
-                    // value must not carry across.
+                    // value must not carry across. The cap is cleared for the
+                    // same reason and one more: CUSTOM may not have one at all,
+                    // and a figure left in a hidden field would be sent.
                     value: '',
+                    capRupees: '',
                   })
                 }
               >
                 <option value="PERCENTAGE">Percentage off</option>
                 <option value="FLAT">Flat amount off</option>
+                <option value="CUSTOM">Custom</option>
               </select>
+              {newRow.type === 'CUSTOM' && (
+                <span className="field-hint">
+                  The amount is typed on the bill, each time. For the discount a clinic cannot
+                  decide in advance.
+                </span>
+              )}
             </label>
 
-            <label>
+            {/* Both hidden for CUSTOM: neither is a question that has an answer
+                before there is a bill, and the server refuses either if sent. */}
+            <label className={newRow.type === 'CUSTOM' ? 'hidden' : undefined}>
               <span className="field-label">
                 {newRow.type === 'PERCENTAGE' ? 'Percent off' : 'Rupees off'}
               </span>
@@ -362,7 +404,7 @@ export default function PromotionsPage() {
               </span>
             </label>
 
-            <label>
+            <label className={newRow.type === 'CUSTOM' ? 'hidden' : undefined}>
               <span className="field-label">Maximum discount</span>
               <input
                 className="field-input font-mono"

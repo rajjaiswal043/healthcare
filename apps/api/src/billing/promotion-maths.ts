@@ -29,6 +29,20 @@
 /** One crore in paise, matching MAX_PAISE in the billing DTOs. */
 const MAX_PAISE = 100_000_000;
 
+/**
+ * What the arithmetic needs to know about a promotion.
+ *
+ * `value` is nullable because CUSTOM has none. The `?? 0` guards below are for
+ * the compiler rather than for reality — a PERCENTAGE or FLAT row with a null
+ * value cannot exist, the CHECK constraint refuses it — and 0 is the safe way to
+ * be wrong: a discount of nothing, never a discount of everything.
+ */
+export interface DiscountablePromotion {
+  type: 'PERCENTAGE' | 'FLAT' | 'CUSTOM';
+  value: number | null;
+  maxDiscountPaise: number | null;
+}
+
 export interface DiscountableLine {
   id: string;
   quantity: number;
@@ -68,15 +82,31 @@ function grossOf(line: DiscountableLine): number {
  * individually and inconsistent together.
  */
 export function discountValueFor(
-  promotion: { type: 'PERCENTAGE' | 'FLAT'; value: number; maxDiscountPaise: number | null },
+  promotion: DiscountablePromotion,
   subtotalPaise: number,
+  overridePaise?: number,
 ): number {
   if (subtotalPaise <= 0) return 0;
 
+  /**
+   * CUSTOM carries no stored value — the amount arrives with the application.
+   *
+   * Returned before the cap, because a CUSTOM promotion has none: the migration
+   * requires `max_discount_paise IS NULL` for this type, so there is nothing to
+   * apply and pretending otherwise would only invite one to be added later.
+   *
+   * Still floored at the bill by the shared rule below, which is the backstop
+   * rather than the contract — the service refuses an override larger than the
+   * bill outright, so a clamp here should never be what saves the arithmetic.
+   * Silently clamping a number somebody typed is the one behaviour this feature
+   * must not have.
+   */
   const raw =
-    promotion.type === 'PERCENTAGE'
-      ? Math.round((subtotalPaise * (promotion.value * 100)) / 10000)
-      : promotion.value;
+    promotion.type === 'CUSTOM'
+      ? (overridePaise ?? 0)
+      : promotion.type === 'PERCENTAGE'
+        ? Math.round((subtotalPaise * ((promotion.value ?? 0) * 100)) / 10000)
+        : (promotion.value ?? 0);
 
   // The cap, so "50% off" cannot become ₹4,000 (FR-PRO-01).
   const capped =
@@ -171,11 +201,12 @@ export function distribute(lines: DiscountableLine[], totalDiscountPaise: number
 
 /** The whole calculation: what to take off, and how it lands on each line. */
 export function planDiscount(
-  promotion: { type: 'PERCENTAGE' | 'FLAT'; value: number; maxDiscountPaise: number | null },
+  promotion: DiscountablePromotion,
   lines: DiscountableLine[],
+  overridePaise?: number,
 ): DiscountPlan {
   const subtotalPaise = lines.reduce((n, l) => n + grossOf(l), 0);
-  const totalDiscountPaise = discountValueFor(promotion, subtotalPaise);
+  const totalDiscountPaise = discountValueFor(promotion, subtotalPaise, overridePaise);
 
   return {
     totalDiscountPaise,

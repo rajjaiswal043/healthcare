@@ -1814,6 +1814,10 @@ enum PromotionType {
   PERCENTAGE
   /// `value` is an amount in paise.
   FLAT
+  /// `value` is NULL: the amount is typed at the desk, per bill, and frozen onto
+  /// the application row like any other discount. For the discount a clinic
+  /// cannot decide in advance.
+  CUSTOM
 
   @@map("promotion_type")
 }
@@ -1842,11 +1846,16 @@ model Promotion {
   name        String  @db.VarChar(120)
   description String? @db.VarChar(500)
 
-  type  PromotionType
-  /// 1–100 for PERCENTAGE, paise for FLAT. Constrained per type in the migration.
-  value Int
+  type PromotionType
 
-  /// Optional cap, so "50% off" cannot become ₹4,000. Null means uncapped.
+  /// 1–100 for PERCENTAGE, paise for FLAT, **NULL for CUSTOM** — whose amount is
+  /// not knowable until there is a bill. Constrained per type in the migration,
+  /// which is what keeps it mandatory for the two types that need it.
+  value Int?
+
+  /// Optional cap, so "50% off" cannot become ₹4,000. Null means uncapped, and
+  /// for CUSTOM the migration requires null: a cap the person typing the amount
+  /// cannot see would silently shrink what they entered.
   maxDiscountPaise Int? @map("max_discount_paise")
 
   /// A camp offer stops working when the camp ends. Dates, not instants: a
