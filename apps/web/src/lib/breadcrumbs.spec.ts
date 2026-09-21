@@ -119,6 +119,9 @@ describe('resolving a pathname', () => {
    */
   it('prefers the literal route over a dynamic one of the same shape', () => {
     expect(breadcrumbFor('/patients/register')).toBe('Register a patient');
+    // The newest literal under /patients — also exactly the shape of
+    // /patients/[id], and must not be read as a patient record.
+    expect(breadcrumbFor('/patients/all')).toBe('All patients');
   });
 
   it('does not match across a different number of segments', () => {

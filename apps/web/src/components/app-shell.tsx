@@ -7,6 +7,7 @@ import { useAuth } from './auth-provider';
 import { ClinicLogo } from './clinic-logo';
 import { initialsOf } from '@/lib/role-signature';
 import { breadcrumbFor } from '@/lib/breadcrumbs';
+import { recordNavigation } from '@/lib/navigation-history';
 import {
   IconCalendar,
   IconChevronRight,
@@ -69,6 +70,15 @@ const SECTIONS: NavSection[] = [
         label: 'Find a patient',
         href: '/patients',
         icon: <IconUsers size={16} />,
+        permission: 'patient:read',
+      },
+      {
+        key: 'all-patients',
+        label: 'All patients',
+        href: '/patients/all',
+        icon: <IconClock size={16} />,
+        // Same permission as search: both are reads of the patient list, and a
+        // role that may search it may page through it.
         permission: 'patient:read',
       },
       {
@@ -248,6 +258,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [menuOpen]);
 
   useEffect(() => setMobileOpen(false), [pathname]);
+
+  // Every route the shell renders, so a Back button can tell "there is an
+  // in-app page behind this one" from "this tab was opened here directly".
+  // See navigation-history.ts.
+  useEffect(() => recordNavigation(pathname), [pathname]);
 
   // The auth provider redirects to /login; render nothing rather than a flash of
   // empty chrome.

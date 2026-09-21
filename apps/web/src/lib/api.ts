@@ -280,6 +280,14 @@ export interface PatientSummary {
   createdAt: string;
 }
 
+/** One page of `GET /patients/all`. */
+export interface PatientPage {
+  patients: PatientSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 /**
  * The whole record, from `GET /patients/:id`.
  *
@@ -1839,6 +1847,17 @@ export const api = {
 
   searchPatients: (q: string) =>
     request<{ patients: PatientSummary[] }>(`/patients?q=${encodeURIComponent(q)}`),
+
+  /**
+   * One page of every active patient, newest registration first.
+   *
+   * `pageSize` and `total` come back with the rows, so the screen can say
+   * "showing 31–60 of 242" and draw its page numbers without holding its own
+   * copy of either. A page past the last one is not an error: it comes back
+   * empty, with the real total, so the screen can point at the last page.
+   */
+  allPatients: (page: number) =>
+    request<PatientPage>(`/patients/all?page=${encodeURIComponent(String(page))}`),
 
   getPatient: (id: string) => request<PatientDetail>(`/patients/${id}`),
 
