@@ -107,6 +107,9 @@ const NAME_SIMILARITY_STRONG = 0.72;
 /** Ages within this many years are consistent with being the same person. */
 const AGE_TOLERANCE_YEARS = 3;
 
+/** Patients per page of the all-patients list. Sent to the screen with the rows. */
+const PATIENT_PAGE_SIZE = 30;
+
 @Injectable()
 export class PatientsService {
   constructor(
@@ -522,6 +525,116 @@ export class PatientsService {
         abhaNumber: r.abha_number,
         createdAt: r.created_at,
       }));
+    });
+  }
+
+  /**
+   * Every active patient, newest registration first, one page of thirty at a
+   * time — with the total, so the screen can draw its page numbers.
+   *
+   * Offset pagination (decision, 21 Sep 2026). Its known weakness is accepted:
+   * a patient registered while somebody is paging moves every later row down by
+   * one, so the next page repeats the last row of the one before. At a clinic's
+   * rate of registration that is rare and harmless, and a page number in the URL
+   * is worth more to the desk than cursor stability.
+   *
+   * **Ordered by `created_at` and then `id`, and the second key is what makes
+   * offset paging correct at all.** Patients seeded or imported in one
+   * transaction share one `created_at` — Postgres gives every row in a
+   * transaction the same `now()` — and on the development data 240 of one
+   * clinic's 242 patients did. With `created_at` alone the order among them is
+   * the planner's choice and can differ between the request for page 1 and the
+   * request for page 2, so a patient could appear on both or on neither. `id` is
+   * a uuidv7, time-ordered, measured to agree with `created_at` wherever the two
+   * differ, so it fixes the order without disturbing it.
+   *
+   * NOT by UHID. A UHID is a prefix and a zero-padded counter, and both can be
+   * changed by the platform — one clinic's data already carries three prefixes,
+   * and sorted as text its IDs are out of registration order in two places.
+   *
+   * **The page and the total are ONE statement.** They have to agree — "showing
+   * 31–60 of 242" is wrong if 242 was counted after a registration the page
+   * never saw — and two statements in one transaction do NOT guarantee that
+   * here. `forTenant` runs at Postgres's default READ COMMITTED, where every
+   * statement takes a fresh snapshot, so a registration committing between a
+   * `count()` and a `findMany()` is seen by one and not the other. A single
+   * statement sees one snapshot whatever the isolation level. `total` is joined
+   * from the left so it comes back even when the page itself is empty, which is
+   * the answer for a page past the end.
+   *
+   * Audited on every page, with the page number: page 4 shows different
+   * patients from page 1, so it is a different read. Deciding "this is the same
+   * browsing session" would need the client to say so, and an audit trail that
+   * takes the client's word is not one.
+   */
+  async all(
+    tenantId: string,
+    page: number,
+    meta: RequestMeta = {},
+  ): Promise<{ patients: PatientSummary[]; page: number; pageSize: number; total: number }> {
+    const offset = (page - 1) * PATIENT_PAGE_SIZE;
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const rows = await tx.$queryRaw<
+        Array<{
+          total: number;
+          id: string | null;
+          uhid: string | null;
+          name: string | null;
+          mobile: string | null;
+          gender: string | null;
+          age_years: number | null;
+          birth_date: Date | null;
+          city: string | null;
+          abha_number: string | null;
+          created_at: Date | null;
+        }>
+      >`
+        WITH active AS (
+          SELECT id, uhid, name, mobile, gender::text AS gender,
+                 age_years, birth_date, city, abha_number, created_at
+            FROM patient
+           WHERE is_active = true
+        ),
+        total AS (
+          SELECT count(*)::int AS n FROM active
+        ),
+        page AS (
+          SELECT * FROM active
+           ORDER BY created_at DESC, id DESC
+           LIMIT ${PATIENT_PAGE_SIZE} OFFSET ${offset}
+        )
+        SELECT total.n AS total, page.*
+          FROM total
+          LEFT JOIN page ON true
+         ORDER BY page.created_at DESC NULLS LAST, page.id DESC NULLS LAST
+      `;
+
+      await this.audit.record(tx, tenantId, {
+        action: 'patient.list',
+        resourceType: 'Patient',
+        changedFields: [],
+        reason: `page ${page}`,
+        ...meta,
+      });
+
+      const total = rows[0]?.total ?? 0;
+      const patients = rows
+        .filter((r) => r.id !== null)
+        .map((r) => ({
+          id: r.id as string,
+          uhid: r.uhid as string,
+          name: r.name as string,
+          mobile: r.mobile as string,
+          gender: r.gender as string,
+          ageYears: r.age_years,
+          birthDate: r.birth_date,
+          city: r.city,
+          abhaNumber: r.abha_number,
+          createdAt: r.created_at as Date,
+        }));
+
+      return { patients, page, pageSize: PATIENT_PAGE_SIZE, total };
     });
   }
 

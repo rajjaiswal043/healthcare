@@ -1,9 +1,15 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
 import { clinicToday } from '../scheduling/clinic-time.js';
 import { planDiscount } from './promotion-maths.js';
+import { formatPaise } from './billing.service.js';
 
 export interface RequestMeta {
   correlationId?: string;
@@ -52,8 +58,9 @@ export class PromotionsService {
       code: string;
       name: string;
       description?: string;
-      type: 'PERCENTAGE' | 'FLAT';
-      value: number;
+      type: 'PERCENTAGE' | 'FLAT' | 'CUSTOM';
+      /** Absent for CUSTOM, whose amount is not known until there is a bill. */
+      value?: number;
       maxDiscountPaise?: number;
       validFrom: string;
       validTo?: string;
@@ -87,7 +94,10 @@ export class PromotionsService {
           name: input.name.trim(),
           ...(input.description ? { description: input.description.trim() } : {}),
           type: input.type,
-          value: input.value,
+          // `null`, not `undefined`: CUSTOM stores no value, and the CHECK
+          // constraint requires the column to be actually null rather than
+          // defaulted. Same for the cap, which CUSTOM may not carry at all.
+          value: input.value ?? null,
           maxDiscountPaise: input.maxDiscountPaise ?? null,
           validFrom: toDateOnly(input.validFrom),
           validTo: input.validTo ? toDateOnly(input.validTo) : null,
@@ -140,6 +150,24 @@ export class PromotionsService {
           message:
             `${promotion.code} has been applied to ${used} bill${used === 1 ? '' : 's'} and ` +
             'can no longer be edited. Switch it off and create a new one.',
+        });
+      }
+
+      /**
+       * A CUSTOM promotion has no value and no cap, and editing cannot give it
+       * either — `type` is not editable, so the row would still be CUSTOM and
+       * the CHECK constraint would refuse the write. Caught here so the answer
+       * is a sentence rather than a 500 with a constraint name in it.
+       */
+      if (
+        promotion.type === 'CUSTOM' &&
+        (input.value !== undefined || input.maxDiscountPaise !== undefined)
+      ) {
+        throw new ConflictException({
+          code: 'CUSTOM_HAS_NO_VALUE',
+          message:
+            `${promotion.code} is a custom promotion — its amount is typed when it is applied, ` +
+            'so it has no value and no maximum to edit.',
         });
       }
 
@@ -270,7 +298,12 @@ export class PromotionsService {
   async apply(
     tenantId: string,
     invoiceId: string,
-    input: { code?: string; promotionId?: string; authorisedByUserId: string },
+    input: {
+      code?: string;
+      promotionId?: string;
+      authorisedByUserId: string;
+      customDiscountPaise?: number;
+    },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
@@ -394,6 +427,55 @@ export class PromotionsService {
         });
       }
 
+      /**
+       * CUSTOM: the amount comes with the request, and both directions are
+       * refusals rather than corrections.
+       *
+       * A CUSTOM promotion without an amount is not "zero off" — it is a desk
+       * that has not finished the form, and applying it would write a record
+       * saying a discount was authorised for nothing.
+       *
+       * An amount sent for PERCENTAGE or FLAT is refused rather than ignored.
+       * Those two carry a figure an administrator set; letting the desk send a
+       * different one would be overruling that quietly, from a screen whose job
+       * is to apply discounts rather than to define them.
+       */
+      const isCustom = promotion.type === 'CUSTOM';
+
+      if (isCustom && input.customDiscountPaise === undefined) {
+        throw new BadRequestException({
+          code: 'CUSTOM_AMOUNT_REQUIRED',
+          message: `${promotion.code} needs an amount — type what this bill should be discounted by.`,
+        });
+      }
+
+      if (!isCustom && input.customDiscountPaise !== undefined) {
+        throw new BadRequestException({
+          code: 'CUSTOM_AMOUNT_NOT_ALLOWED',
+          message: `${promotion.code} already has its own value. An amount cannot be set for it here.`,
+        });
+      }
+
+      /**
+       * Refused, not clamped — decision (c).
+       *
+       * `discountValueFor` floors every discount at the bill, so a clamp would
+       * "work": the invoice would be correct and the desk would be told nothing.
+       * That is exactly wrong for a number a person just typed. They entered
+       * ₹500 against a ₹400 bill because one of the two is not what they think
+       * it is, and the bill quietly becoming ₹0 tells them neither.
+       */
+      const subtotalPaise = lines.reduce((n, l) => n + l.quantity * l.unitPricePaise, 0);
+
+      if (isCustom && (input.customDiscountPaise as number) > subtotalPaise) {
+        throw new BadRequestException({
+          code: 'CUSTOM_AMOUNT_ABOVE_TOTAL',
+          message:
+            `That discount is more than the bill. This bill is ${formatPaise(subtotalPaise)}, ` +
+            `and the amount entered was ${formatPaise(input.customDiscountPaise as number)}.`,
+        });
+      }
+
       const plan = planDiscount(
         {
           type: promotion.type,
@@ -401,6 +483,7 @@ export class PromotionsService {
           maxDiscountPaise: promotion.maxDiscountPaise,
         },
         lines,
+        input.customDiscountPaise,
       );
 
       for (const line of plan.lines) {
@@ -445,7 +528,21 @@ export class PromotionsService {
         resourceId: invoiceId,
         patientId: invoice.patientId,
         changedFields: ['discountPaise', 'totalPaise'],
-        reason: `${promotion.code} authorised by ${approver.fullName}`,
+        /**
+         * Which kind of number this was — decision (e).
+         *
+         * "Entered by hand" and "worked out from a stored rule" are different
+         * acts by different people, and an owner reading the day's discounts
+         * needs to tell them apart: one was a judgement somebody made at the
+         * desk, the other was an administrator's policy being executed. The
+         * amount alone cannot say which, and `audit_event` has no field for it
+         * — so it goes in the reason, which is the column built to carry the
+         * part the schema does not model.
+         */
+        reason:
+          `${promotion.code} authorised by ${approver.fullName} ` +
+          `(${formatPaise(plan.totalDiscountPaise)}, ` +
+          `${isCustom ? 'entered by hand' : 'calculated from the promotion'})`,
         ...meta,
       });
 
@@ -646,7 +743,7 @@ function shape(p: {
   name: string;
   description: string | null;
   type: string;
-  value: number;
+  value: number | null;
   maxDiscountPaise: number | null;
   validFrom: Date;
   validTo: Date | null;

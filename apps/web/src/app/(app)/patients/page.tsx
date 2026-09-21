@@ -4,8 +4,8 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api, ApiRequestError, type PatientSummary } from '@/lib/api';
-import { formatAge, genderInitial } from '@/lib/format';
 import { useAuth } from '@/components/auth-provider';
+import { PatientTable, PatientTableSkeleton } from '@/components/patient-table';
 import { IconSearch, IconUserPlus, IconUsers } from '@/components/icons';
 
 export default function PatientSearchPage() {
@@ -101,7 +101,7 @@ function PatientSearch() {
         </p>
       </div>
 
-      {state === 'searching' && results.length === 0 && <SkeletonTable />}
+      {state === 'searching' && results.length === 0 && <PatientTableSkeleton />}
 
       {state === 'done' && results.length === 0 && (
         <div className="card flex flex-col items-center px-6 py-12 text-center">
@@ -122,86 +122,7 @@ function PatientSearch() {
         </div>
       )}
 
-      {results.length > 0 && (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13.5px]">
-              <thead>
-                <tr className="border-b border-ink/8 bg-bg-soft text-left">
-                  <Th>UHID</Th>
-                  <Th>Name</Th>
-                  <Th>Age / Sex</Th>
-                  <Th>Mobile</Th>
-                  <Th>City</Th>
-                  <Th>ABHA</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-ink/6 transition-colors last:border-0 hover:bg-clinical-tint/60"
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-[12px] text-ink-60">
-                      {p.uhid}
-                    </td>
-                    <td className="px-4 py-3">
-                      {/* The name is the link. A separate "view" column would
-                          add a click target for the thing the whole row already
-                          means. */}
-                      <Link
-                        href={`/patients/${p.id}`}
-                        className="font-semibold text-ink underline-offset-2 hover:text-clinical-text hover:underline"
-                      >
-                        {p.name}
-                      </Link>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-ink-60">
-                      {formatAge(p)} · {genderInitial(p.gender)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-[12px] text-ink-60">
-                      {p.mobile}
-                    </td>
-                    <td className="px-4 py-3 text-ink-60">{p.city ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      {p.abhaNumber ? (
-                        <span className="badge-clinical">linked</span>
-                      ) : (
-                        <span className="badge-neutral">not linked</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th scope="col" className="mono-label px-4 py-2.5">
-      {children}
-    </th>
-  );
-}
-
-function SkeletonTable() {
-  return (
-    <div className="card overflow-hidden p-4">
-      <div className="space-y-3">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-4">
-            <div className="skeleton h-4 w-20" />
-            <div className="skeleton h-4 flex-1" />
-            <div className="skeleton h-4 w-16" />
-            <div className="skeleton h-4 w-24" />
-          </div>
-        ))}
-      </div>
+      {results.length > 0 && <PatientTable patients={results} />}
     </div>
   );
 }

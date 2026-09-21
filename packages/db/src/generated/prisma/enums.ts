@@ -216,7 +216,8 @@ export type PaymentCorrectionKind = (typeof PaymentCorrectionKind)[keyof typeof 
 
 export const PromotionType = {
   PERCENTAGE: 'PERCENTAGE',
-  FLAT: 'FLAT'
+  FLAT: 'FLAT',
+  CUSTOM: 'CUSTOM'
 } as const
 
 export type PromotionType = (typeof PromotionType)[keyof typeof PromotionType]

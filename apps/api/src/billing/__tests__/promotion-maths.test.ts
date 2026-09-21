@@ -84,6 +84,59 @@ describe('what a promotion is worth', () => {
   });
 });
 
+describe('a custom amount', () => {
+  const custom = { type: 'CUSTOM' as const, value: null, maxDiscountPaise: null };
+
+  it('is worth exactly what the caller passed', () => {
+    // Nothing is derived: ₹175.00 was typed, ₹175.00 comes back.
+    expect(discountValueFor(custom, 60000, 17500)).toBe(17500);
+  });
+
+  it('is worth nothing when no amount came with it', () => {
+    // The service refuses this case outright; the arithmetic still has to have
+    // an answer, and 0 is the safe one — a discount of nothing, never of
+    // everything.
+    expect(discountValueFor(custom, 60000)).toBe(0);
+  });
+
+  it('ignores a stored value it does not have', () => {
+    // A CUSTOM row cannot hold a value — the CHECK constraint refuses it — but
+    // if one ever appeared, the typed amount is still what counts.
+    expect(discountValueFor({ ...custom, value: 99999 }, 60000, 5000)).toBe(5000);
+  });
+
+  /**
+   * The floor still applies, and is a backstop rather than the contract: the
+   * service refuses an over-the-bill amount with a message naming both figures,
+   * precisely so this clamp is never what the desk experiences.
+   */
+  it('is still floored at the bill', () => {
+    expect(discountValueFor(custom, 40000, 50000)).toBe(40000);
+  });
+
+  it('takes the whole bill when that is the amount', () => {
+    expect(discountValueFor(custom, 60000, 60000)).toBe(60000);
+  });
+
+  it('spreads across lines exactly like any other discount', () => {
+    // Two lines, ₹600.00 and ₹200.00, and ₹200.00 typed.
+    // Line 1: 20000 * 60000 / 80000 = 15000. Line 2 takes the remainder, 5000.
+    const plan = planDiscount(
+      custom,
+      [
+        { id: 'l1', quantity: 1, unitPricePaise: 60000, taxPaise: 0 },
+        { id: 'l2', quantity: 1, unitPricePaise: 20000, taxPaise: 0 },
+      ],
+      20000,
+    );
+
+    expect(plan.totalDiscountPaise).toBe(20000);
+    expect(plan.lines.map((l) => l.discountPaise)).toEqual([15000, 5000]);
+    // The parts sum to the whole, which is the property this file exists for.
+    expect(plan.lines.reduce((n, l) => n + l.discountPaise, 0)).toBe(20000);
+  });
+});
+
 describe('spreading it across lines', () => {
   it('puts the whole discount on a single line', () => {
     const [line] = distribute([consultation], 30000);

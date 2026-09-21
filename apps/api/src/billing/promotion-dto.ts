@@ -21,6 +21,8 @@ import { MAX_PAISE } from './promotion-maths.js';
 export enum PromotionTypeDto {
   PERCENTAGE = 'PERCENTAGE',
   FLAT = 'FLAT',
+  /** No stored value: the amount is typed at the desk, per bill. */
+  CUSTOM = 'CUSTOM',
 }
 
 /**
@@ -42,19 +44,68 @@ function IsPromotionValue(options?: ValidationOptions) {
       options: options ?? {},
       validator: {
         validate(value: unknown, args: ValidationArguments): boolean {
-          if (!Number.isInteger(value)) return false;
-
-          const amount = value as number;
           const type = (args.object as { type?: string }).type;
+
+          // CUSTOM has no value to bound — it must be ABSENT, which is what the
+          // database CHECK requires too. Sending one is refused rather than
+          // ignored: a figure stored against a type that never reads it is a
+          // number waiting to be believed by something later.
+          if (type === PromotionTypeDto.CUSTOM) return value === undefined || value === null;
+
+          if (!Number.isInteger(value)) return false;
+          const amount = value as number;
 
           return type === PromotionTypeDto.PERCENTAGE
             ? amount >= 1 && amount <= 100
             : amount >= 1 && amount <= MAX_PAISE;
         },
         defaultMessage(args: ValidationArguments): string {
-          return (args.object as { type?: string }).type === PromotionTypeDto.PERCENTAGE
+          const type = (args.object as { type?: string }).type;
+          if (type === PromotionTypeDto.CUSTOM) {
+            return 'A custom promotion takes no value — the amount is entered when it is applied.';
+          }
+          return type === PromotionTypeDto.PERCENTAGE
             ? 'A percentage promotion is a whole number between 1 and 100.'
             : 'A flat promotion is an amount in paise between 1 and one crore.';
+        },
+      },
+    });
+  };
+}
+
+/**
+ * A cap belongs to the two types that have a value, and to no other.
+ *
+ * Written as its own validator rather than `@ValidateIf`, which was the first
+ * attempt and does the OPPOSITE of what it reads like: `@ValidateIf(o => o.type
+ * !== CUSTOM)` SKIPS every rule on the property for a CUSTOM promotion, so a cap
+ * sent with one sailed through the pipe and was caught by the database CHECK —
+ * arriving at the client as a 500 with a constraint name in it. The integration
+ * test for that case is what found it, the same way it found the `value` bug
+ * this file already documents.
+ */
+function IsPromotionCap(options?: ValidationOptions) {
+  return function (object: object, propertyName: string): void {
+    registerDecorator({
+      name: 'isPromotionCap',
+      target: object.constructor,
+      propertyName,
+      options: options ?? {},
+      validator: {
+        validate(value: unknown, args: ValidationArguments): boolean {
+          if (value === undefined || value === null) return true;
+
+          const type = (args.object as { type?: string }).type;
+          if (type === PromotionTypeDto.CUSTOM) return false;
+
+          return (
+            Number.isInteger(value) && (value as number) >= 1 && (value as number) <= MAX_PAISE
+          );
+        },
+        defaultMessage(args: ValidationArguments): string {
+          return (args.object as { type?: string }).type === PromotionTypeDto.CUSTOM
+            ? 'A custom promotion cannot have a maximum discount — its amount is typed in full each time.'
+            : 'An uncapped promotion leaves this out — a cap of zero discounts nothing.';
         },
       },
     });
@@ -102,13 +153,17 @@ export class CreatePromotionDto {
    * table is how the two drift.
    */
   @IsPromotionValue()
-  value!: number;
+  value?: number;
 
-  /** In paise. Null or absent means uncapped. */
-  @IsOptional()
-  @IsInt()
-  @Min(1, { message: 'An uncapped promotion leaves this out — a cap of zero discounts nothing.' })
-  @Max(MAX_PAISE)
+  /**
+   * In paise. Null or absent means uncapped, and CUSTOM must leave it out.
+   *
+   * The refusal is the database's as well — `promotion_value_within_bounds`
+   * requires `max_discount_paise IS NULL` for CUSTOM — but arriving at a CHECK
+   * constraint means the client gets a 500 with a constraint name in it. This
+   * is the same rule, said early and in words.
+   */
+  @IsPromotionCap()
   maxDiscountPaise?: number;
 
   /** `YYYY-MM-DD`, read in the clinic's own timezone. */
@@ -208,6 +263,29 @@ export class ApplyPromotionDto {
    */
   @IsUUID()
   authorisedByUserId!: string;
+
+  /**
+   * The amount, for a CUSTOM promotion and for no other kind.
+   *
+   * PERCENTAGE and FLAT carry their own answer; sending one of those a figure
+   * would be asking the desk to overrule a discount an administrator defined,
+   * which is a different feature with different approvals. The service refuses
+   * it rather than ignoring it — silently dropping a number somebody typed is
+   * how a bill ends up not matching what the person at the desk saw.
+   *
+   * `@Min(1)` is one paisa: zero is refused for the same reason the other two
+   * types refuse a value of zero. A discount worth nothing is not a discount, it
+   * is a record claiming one was given.
+   *
+   * The upper bound HERE is only the absolute ceiling shared with every other
+   * money field. The real limit is the bill itself, which this shape cannot see
+   * — that check lives in the service, where the invoice is.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(MAX_PAISE)
+  customDiscountPaise?: number;
 }
 
 export enum PromotionReversalKindDto {

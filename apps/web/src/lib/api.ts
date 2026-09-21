@@ -280,6 +280,14 @@ export interface PatientSummary {
   createdAt: string;
 }
 
+/** One page of `GET /patients/all`. */
+export interface PatientPage {
+  patients: PatientSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 /**
  * The whole record, from `GET /patients/:id`.
  *
@@ -717,7 +725,11 @@ export interface QueueView {
   completed: Appointment[];
   cancelled: Appointment[];
   stats: {
-    total: number;
+    /**
+     * Visits not over yet: yet to arrive, waiting, in the room, out for tests.
+     * Finished, cancelled and no-show visits are not counted.
+     */
+    inQueue: number;
     waiting: number;
     awayForTests: number;
     completed: number;
@@ -952,18 +964,21 @@ export interface Invoice {
 /**
  * A discount the administrator has set up (FR-PRO-01).
  *
- * `value` means two different things — 1–100 for PERCENTAGE, paise for FLAT —
- * which is why the type travels with it and nothing here does the arithmetic.
- * What a promotion is actually worth against a given bill is worked out on the
- * server, so the screen never shows a figure the invoice will disagree with.
+ * `value` means three different things — 1–100 for PERCENTAGE, paise for FLAT,
+ * and nothing at all for CUSTOM — which is why the type travels with it and
+ * nothing here does the arithmetic. What a promotion is actually worth against a
+ * given bill is worked out on the server, so the screen never shows a figure the
+ * invoice will disagree with. A CUSTOM promotion has no worth until somebody
+ * types one, which is the whole point of it.
  */
 export interface Promotion {
   id: string;
   code: string;
   name: string;
   description: string | null;
-  type: 'PERCENTAGE' | 'FLAT';
-  value: number;
+  type: 'PERCENTAGE' | 'FLAT' | 'CUSTOM';
+  /** Null for CUSTOM — the amount is entered when the discount is applied. */
+  value: number | null;
   maxDiscountPaise: number | null;
   validFrom: string;
   validTo: string | null;
@@ -1438,9 +1453,10 @@ export const api = {
     code: string;
     name: string;
     description?: string;
-    type: 'PERCENTAGE' | 'FLAT';
-    /** 1-100 for a percentage, paise for a flat amount. */
-    value: number;
+    type: 'PERCENTAGE' | 'FLAT' | 'CUSTOM';
+    /** 1-100 for a percentage, paise for a flat amount. Omitted for CUSTOM. */
+    value?: number;
+    /** Not allowed on CUSTOM — the server and the CHECK constraint both refuse it. */
     maxDiscountPaise?: number;
     validFrom: string;
     validTo?: string;
@@ -1473,9 +1489,23 @@ export const api = {
       body: JSON.stringify({ isActive }),
     }),
 
+  /**
+   * `customDiscountPaise` belongs to CUSTOM promotions and to no other kind.
+   *
+   * The server refuses it on a PERCENTAGE or FLAT rather than ignoring it, and
+   * refuses a CUSTOM without it — so this is not a field the caller may send
+   * "just in case". It is also refused when larger than the bill, which is the
+   * check the client cannot make authoritatively: the bill can change between
+   * the screen rendering and the request arriving.
+   */
   applyPromotion: (
     invoiceId: string,
-    input: { code?: string; promotionId?: string; authorisedByUserId: string },
+    input: {
+      code?: string;
+      promotionId?: string;
+      authorisedByUserId: string;
+      customDiscountPaise?: number;
+    },
   ) =>
     request<AppliedPromotion>(`/invoices/${invoiceId}/promotion`, {
       method: 'POST',
@@ -1821,6 +1851,17 @@ export const api = {
 
   searchPatients: (q: string) =>
     request<{ patients: PatientSummary[] }>(`/patients?q=${encodeURIComponent(q)}`),
+
+  /**
+   * One page of every active patient, newest registration first.
+   *
+   * `pageSize` and `total` come back with the rows, so the screen can say
+   * "showing 31–60 of 242" and draw its page numbers without holding its own
+   * copy of either. A page past the last one is not an error: it comes back
+   * empty, with the real total, so the screen can point at the last page.
+   */
+  allPatients: (page: number) =>
+    request<PatientPage>(`/patients/all?page=${encodeURIComponent(String(page))}`),
 
   getPatient: (id: string) => request<PatientDetail>(`/patients/${id}`),
 

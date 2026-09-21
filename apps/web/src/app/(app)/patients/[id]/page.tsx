@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { BackButton } from '@/components/back-button';
 import {
   api,
   ApiRequestError,
@@ -111,13 +112,12 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">
-          <Link
-            href="/patients"
-            className="btn-ghost mt-1 !px-2 !py-2"
-            aria-label="Back to patients"
-          >
-            <IconArrowLeft size={16} />
-          </Link>
+          {/* Back to wherever this record was opened from — search, or the
+              recent list, or a consultation. It used to be a link hard-coded to
+              search, which sent everybody arriving from the recent list to the
+              wrong screen. Search stays the fallback for a record opened
+              directly, with nothing behind it to go back to. */}
+          <BackButton fallback="/patients" className="btn-ghost mt-1 !px-2 !py-2" />
 
           <div>
             <div className="flex flex-wrap items-center gap-2">

@@ -60,6 +60,21 @@ export interface AppointmentView {
 
 const LIVE_STATUSES = ['BOOKED', 'ARRIVED', 'IN_PROGRESS'] as const;
 
+/**
+ * The visits the "In the queue" tile counts: every one whose day is not over —
+ * yet to arrive, waiting, in the room, out for tests.
+ *
+ * Listed state by state rather than as "everything except FULFILLED, CANCELLED
+ * and NO_SHOW", so a status added to the enum later is left out until somebody
+ * decides it belongs here, instead of being counted by default.
+ */
+const IN_QUEUE: ReadonlySet<string> = new Set([
+  'BOOKED',
+  'ARRIVED',
+  'IN_PROGRESS',
+  'AWAITING_TESTS',
+]);
+
 @Injectable()
 export class AppointmentsService {
   constructor(
@@ -850,6 +865,9 @@ export class AppointmentsService {
 
       const views = rows.map((r) => toView(r, tz));
 
+      const yetToArrive = views
+        .filter((v) => v.status === 'BOOKED')
+        .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
       const waiting = views.filter((v) => v.status === 'ARRIVED');
       const inProgress = views.find((v) => v.status === 'IN_PROGRESS') ?? null;
       const completed = views.filter((v) => v.status === 'FULFILLED');
@@ -867,13 +885,30 @@ export class AppointmentsService {
         awayForTests,
         // Nobody here is in the queue yet, so serving order says nothing about
         // them. The front desk reads this list as a diary — by time.
-        yetToArrive: views
-          .filter((v) => v.status === 'BOOKED')
-          .sort((a, b) => a.startAt.getTime() - b.startAt.getTime()),
+        yetToArrive,
         completed,
         cancelled: views.filter((v) => v.status === 'CANCELLED' || v.status === 'NO_SHOW'),
         stats: {
-          total: views.length,
+          /**
+           * Everybody the clinic still has to deal with today: yet to arrive,
+           * waiting, in the room, and out for tests.
+           *
+           * This was `total: views.length` under the label "In the queue", and
+           * `views` is every appointment of the day in any state — a finished
+           * visit, a cancellation and a no-show all counted. So the number only
+           * ever went up, and it could include a patient shown nowhere on the
+           * screen: finished visits appear under "Seen today", and cancelled
+           * ones are not drawn at all. Measured on the development data: 1
+           * booked + 1 finished read "In the queue: 2" beside an empty waiting
+           * list.
+           *
+           * Counted by status rather than by adding up the lists, for one
+           * reason: `nowServing` shows a single patient, and if the data ever
+           * held two visits in progress for one doctor, a sum of the lists
+           * would silently drop the second. The status set is the definition;
+           * the lists are how the screen happens to draw it.
+           */
+          inQueue: views.filter((v) => IN_QUEUE.has(v.status)).length,
           waiting: waiting.length,
           awayForTests: awayForTests.length,
           completed: completed.length,

@@ -19,6 +19,7 @@ import {
 import { PERMISSIONS } from '../../platform/auth/permissions.js';
 import { PatientsService, type RequestMeta } from './patients.service.js';
 import { RegisterPatientDto } from './dto/register-patient.dto.js';
+import { ListPatientsQueryDto } from './dto/list-patients.dto.js';
 import { CheckDuplicatesDto } from './dto/check-duplicates.dto.js';
 import { CorrectPatientDto } from './correct-patient.dto.js';
 
@@ -43,6 +44,25 @@ export class PatientsController {
     @Req() req: FastifyRequest,
   ) {
     return this.patients.register(tenantId, dto, metaFrom(req, user));
+  }
+
+  /**
+   * Every active patient, newest first, thirty to a page.
+   *
+   * Declared before `@Get(':id')` on purpose. Fastify's router prefers a
+   * static segment, so the order does not decide the match today — but a
+   * later handler reading this controller top to bottom should not have to
+   * know that to see why `/patients/all` is not treated as a patient id.
+   */
+  @Get('all')
+  @RequirePermissions(PERMISSIONS.PATIENT_READ)
+  async all(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListPatientsQueryDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.patients.all(tenantId, query.page ?? 1, metaFrom(req, user));
   }
 
   @Get()
