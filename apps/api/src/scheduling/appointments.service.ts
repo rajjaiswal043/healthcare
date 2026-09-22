@@ -114,6 +114,9 @@ export class AppointmentsService {
     meta: RequestMeta,
   ): Promise<AppointmentView> {
     return this.prisma.forTenant(tenantId, async (tx) => {
+      // First, and in the transaction that inserts: see lockBookablePractitioner.
+      await lockBookablePractitioner(tx, input.practitionerId);
+
       const tz = await this.timezone(tx, tenantId);
       const startAt = new Date(input.startAt);
 
@@ -244,6 +247,10 @@ export class AppointmentsService {
     meta: RequestMeta,
   ): Promise<AppointmentView> {
     return this.prisma.forTenant(tenantId, async (tx) => {
+      // A walk-in has no slot, so the availability engine never sees it — this
+      // is the only thing between a switched-off doctor and a new patient.
+      await lockBookablePractitioner(tx, input.practitionerId);
+
       const tz = await this.timezone(tx, tenantId);
       const now = new Date();
       const date = instantToLocalDate(now, tz);
@@ -1077,3 +1084,41 @@ function averageWait(views: AppointmentView[]): number | null {
 }
 
 export type { AppointmentWithRelations };
+
+/**
+ * Hold the doctor still for the rest of this transaction, and refuse one who
+ * has been switched off.
+ *
+ * Every path that creates an appointment calls this first — booking, walk-in,
+ * and rescheduling (which books). The availability engine refuses a switched-off
+ * doctor too, but it reads in a transaction of its own, so on its own it left a
+ * window: a booking that had seen the doctor active could save after the
+ * switch-off committed.
+ *
+ * `FOR SHARE` closes it against the `FOR UPDATE` that switching off takes
+ * (`ClinicSetupService.updatePractitioner`):
+ *
+ *   - a booking holding this lock makes the switch-off wait until the booking
+ *     commits; the switch-off then counts the new appointment and refuses
+ *     with its 409;
+ *   - a switch-off holding its lock makes this wait until it commits; this
+ *     then reads the committed `is_active = false` and refuses.
+ *
+ * Bookings for the same doctor do not wait for each other — shared locks are
+ * compatible — so this costs the busy front desk nothing.
+ *
+ * The refusal is the one booking already gives for a switched-off doctor, so
+ * all three paths answer alike.
+ */
+async function lockBookablePractitioner(tx: TenantClient, practitionerId: string): Promise<void> {
+  const [row] = await tx.$queryRaw<Array<{ is_active: boolean }>>`
+    SELECT is_active FROM practitioner WHERE id = ${practitionerId}::uuid FOR SHARE
+  `;
+  if (!row) throw new NotFoundException('Doctor not found');
+  if (!row.is_active) {
+    throw new ConflictException({
+      code: 'SLOT_NOT_AVAILABLE',
+      message: 'This doctor is no longer active.',
+    });
+  }
+}

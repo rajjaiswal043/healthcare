@@ -10,6 +10,7 @@ import {
   type SetupPractitioner,
 } from '@/lib/api';
 import { IconAlert, IconCalendar, IconUserPlus } from '@/components/icons';
+import { useAuth } from '@/components/auth-provider';
 
 /** 0 = Sunday, matching the schedule rows and JavaScript's getDay(). */
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -38,6 +39,7 @@ const feeOrNull = (value: string): number | null =>
  *     computed from the template rather than stored.
  */
 export default function DoctorsPage() {
+  const { can } = useAuth();
   const [doctors, setDoctors] = useState<SetupPractitioner[]>([]);
   const [linkable, setLinkable] = useState<LinkableUser[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -276,7 +278,16 @@ export default function DoctorsPage() {
       )}
 
       {doctors.map((d) => (
-        <DoctorCard key={d.id} doctor={d} locations={locations} busy={busy} onRun={run} />
+        <DoctorCard
+          key={d.id}
+          doctor={d}
+          locations={locations}
+          linkable={linkable}
+          canManageLogins={can('user:manage')}
+          canSwitch={can('schedule:manage')}
+          busy={busy}
+          onRun={run}
+        />
       ))}
 
       <section className="card p-5">
@@ -343,11 +354,19 @@ export default function DoctorsPage() {
 function DoctorCard({
   doctor: d,
   locations,
+  linkable,
+  canManageLogins,
+  canSwitch,
   busy,
   onRun,
 }: {
   doctor: SetupPractitioner;
   locations: ClinicLocation[];
+  linkable: LinkableUser[];
+  /** `user:manage` — the administrator. Linking is theirs alone; the server says so too. */
+  canManageLogins: boolean;
+  /** `schedule:manage` — the administrator, the same as Edit and Delete. */
+  canSwitch: boolean;
   busy: string | null;
   onRun: (key: string, fn: () => Promise<unknown>) => Promise<boolean>;
 }) {
@@ -366,6 +385,42 @@ function DoctorCard({
     consultationFee: '',
     followUpFee: '',
   });
+
+  const [loginPanel, setLoginPanel] = useState<'link' | 'unlink' | null>(null);
+  const [loginChoice, setLoginChoice] = useState('');
+  const [loginReason, setLoginReason] = useState('');
+
+  function openLoginPanel(kind: 'link' | 'unlink') {
+    setLoginChoice('');
+    setLoginReason('');
+    setLoginPanel(loginPanel === kind ? null : kind);
+  }
+
+  /**
+   * Who the picker may offer. An entry with consultations takes back only the
+   * login that was unlinked from it — anyone else would become the owner of
+   * notes they did not write — so the server's rule is mirrored here rather
+   * than discovered as a 409 after choosing.
+   */
+  const offer =
+    d.relinkOnly === undefined ? linkable : linkable.filter((u) => u.id === d.relinkOnly?.id);
+  const consultations = `${d.history.encounters} consultation${d.history.encounters === 1 ? '' : 's'}`;
+  const noOfferReason =
+    d.relinkOnly === undefined
+      ? 'No doctor logins are free to link. A login needs the doctor role and must not be linked to another entry.'
+      : d.relinkOnly === null
+        ? `${d.fullName} has ${consultations} and no login was ever unlinked from them here, so no login can be linked — it would become the owner of those notes.`
+        : `${d.fullName} has ${consultations}, so only ${d.relinkOnly.fullName} (${d.relinkOnly.email}), who was linked before, can be linked back — and that login is not eligible now: it is switched off, lacks the doctor role, or is linked to another entry.`;
+
+  async function submitLogin() {
+    const reason = loginReason.trim();
+    const done = await onRun(`login-${d.id}`, () =>
+      loginPanel === 'unlink'
+        ? api.unlinkLogin(d.id, reason)
+        : api.linkLogin(d.id, loginChoice, reason),
+    );
+    if (done) setLoginPanel(null);
+  }
 
   function startEdit() {
     setProfile({
@@ -434,6 +489,44 @@ function DoctorCard({
           </span>
         )}
 
+        {canManageLogins && (
+          <button
+            type="button"
+            className="btn-ghost !px-2.5 !py-1.5 text-[12.5px]"
+            onClick={() => openLoginPanel(d.userId ? 'unlink' : 'link')}
+          >
+            {loginPanel ? 'Cancel' : d.userId ? 'Unlink login' : 'Link login'}
+          </button>
+        )}
+
+        {/* Switching off is refused by the server while patients are still
+            booked with this doctor, and the 409 names how many — that message
+            is what appears here, so the button is not hidden for it. Switching
+            back on is always allowed. */}
+        {canSwitch && (
+          <button
+            type="button"
+            className="btn-ghost !px-2.5 !py-1.5 text-[12.5px]"
+            disabled={busy === `switch-${d.id}`}
+            onClick={() => {
+              const off = d.isActive;
+              if (
+                !window.confirm(
+                  off
+                    ? `Switch ${d.fullName} off? They stop appearing on the booking screen. ` +
+                        `Their history stays, and they can be switched back on at any time.`
+                    : `Switch ${d.fullName} back on? They appear on the booking screen again.`,
+                )
+              ) {
+                return;
+              }
+              void onRun(`switch-${d.id}`, () => api.updatePractitioner(d.id, { isActive: !off }));
+            }}
+          >
+            {d.isActive ? 'Switch off' : 'Switch on'}
+          </button>
+        )}
+
         <button
           type="button"
           className="btn-secondary !px-2.5 !py-1.5 text-[12.5px]"
@@ -442,7 +535,101 @@ function DoctorCard({
         >
           {editing ? 'Cancel' : 'Edit'}
         </button>
+
+        {/* Only for a doctor with no history at all — the only one the server
+            will delete. Anyone with an appointment (cancelled ones included) or
+            a consultation stays, and is switched off instead. The server checks
+            again regardless; this only keeps the button off the cards where it
+            could never work. */}
+        {d.history.appointments === 0 && d.history.encounters === 0 && (
+          <button
+            type="button"
+            className="btn-ghost !px-2.5 !py-1.5 text-[12.5px] !text-coral-text"
+            disabled={busy === `delete-${d.id}`}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Delete ${d.fullName}? This removes the doctor and their weekly hours for good. ` +
+                    `It is only possible because nobody has been booked with them yet.`,
+                )
+              ) {
+                return;
+              }
+              void onRun(`delete-${d.id}`, () => api.deletePractitioner(d.id));
+            }}
+          >
+            Delete
+          </button>
+        )}
       </header>
+
+      {loginPanel && (
+        <div className="border-b border-ink/8 bg-bg-soft px-5 py-4">
+          {loginPanel === 'unlink' ? (
+            <p className="max-w-[70ch] text-[13.5px] text-ink-60">
+              Unlink{' '}
+              <strong className="text-ink">
+                {d.login ? `${d.login.fullName} (${d.login.email})` : 'the login'}
+              </strong>{' '}
+              from {d.fullName}? The doctor entry, its hours, appointments and consultations stay
+              exactly as they are. The login stops seeing this doctor&apos;s queue and consultations
+              straight away.
+            </p>
+          ) : offer.length === 0 ? (
+            <p className="max-w-[70ch] text-[13.5px] text-ink-60">{noOfferReason}</p>
+          ) : (
+            <label className="block max-w-[420px]">
+              <span className="field-label">Login to link to {d.fullName}</span>
+              <select
+                className="field-input mt-1"
+                value={loginChoice}
+                onChange={(e) => setLoginChoice(e.target.value)}
+              >
+                <option value="">Choose a login…</option>
+                {offer.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.fullName} — {u.email}
+                  </option>
+                ))}
+              </select>
+              {d.relinkOnly && (
+                <span className="mt-1 block text-[12.5px] text-ink-40">
+                  Only the login linked before can be linked back: {d.fullName} has {consultations}.
+                </span>
+              )}
+            </label>
+          )}
+
+          {(loginPanel === 'unlink' || offer.length > 0) && (
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              <label className="block min-w-[260px] flex-1">
+                <span className="field-label">Reason (required)</span>
+                <input
+                  className="field-input mt-1"
+                  value={loginReason}
+                  onChange={(e) => setLoginReason(e.target.value)}
+                  maxLength={300}
+                  placeholder={
+                    loginPanel === 'unlink' ? 'Linked to the wrong doctor' : 'Their own login'
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={
+                  busy === `login-${d.id}` ||
+                  loginReason.trim().length < 3 ||
+                  (loginPanel === 'link' && !loginChoice)
+                }
+                onClick={() => void submitLogin()}
+              >
+                {loginPanel === 'unlink' ? 'Unlink login' : 'Link login'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {editing && (
         <div className="border-b border-ink/8 bg-bg-soft px-5 py-4">

@@ -1,0 +1,21 @@
+-- The login a doctor entry was last unlinked from.
+--
+-- Set only by "Unlink login", in the same transaction that clears `user_id`,
+-- and never cleared by a later link. It answers one question as data: an entry
+-- that holds consultations may be linked again only to this login, because any
+-- other would become the owner of notes it did not write.
+--
+-- It used to be read out of the unlink audit event's reason text. That text is
+-- for people: its format is not a contract, and the application role can
+-- UPDATE and DELETE audit rows. The audit event is still written, unchanged; it
+-- is no longer what the rule reads.
+--
+-- NULL for every existing row, on purpose — no backfill. An entry with
+-- consultations and no recorded unlink was never linked through the screen, and
+-- nobody may be linked to it.
+--
+-- No foreign key, the same as `user_id` beside it: logins are switched off,
+-- never deleted. Row-level security needs nothing new: `tenant_isolation` on
+-- `practitioner` covers the whole row, and the application's grant is on the
+-- table, not per column.
+ALTER TABLE "practitioner" ADD COLUMN "previous_user_id" UUID;

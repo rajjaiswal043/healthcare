@@ -698,6 +698,11 @@ model Practitioner {
   /// separate mapping table. Null for doctors who never use the software.
   userId String? @unique @map("user_id") @db.Uuid
 
+  /// The login this entry was last unlinked from. An entry holding
+  /// consultations may be linked again only to this login — see
+  /// 20260922100000_practitioner_previous_user.
+  previousUserId String? @map("previous_user_id") @db.Uuid
+
   /// Per-doctor overbooking allowance (FR-APT-10). 0 = strict capacity.
   overbookPerSession Int @default(0) @map("overbook_per_session")
 

@@ -3567,6 +3567,7 @@ export const PractitionerScalarFieldEnum = {
   specialty: 'specialty',
   departmentId: 'departmentId',
   userId: 'userId',
+  previousUserId: 'previousUserId',
   overbookPerSession: 'overbookPerSession',
   consultationFeePaise: 'consultationFeePaise',
   followUpFeePaise: 'followUpFeePaise',

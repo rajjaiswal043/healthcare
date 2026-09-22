@@ -237,6 +237,20 @@ export interface SetupPractitioner {
   isActive: boolean;
   department: { id: string; name: string } | null;
   schedules: WeeklySession[];
+  /**
+   * What decides whether this doctor can be deleted: any appointment, of any
+   * status, or any consultation means switch off instead. Counts rather than a
+   * flag so the screen can say why.
+   */
+  history: { appointments: number; encounters: number };
+  /** The login linked to this entry, if any. */
+  login: LinkableUser | null;
+  /**
+   * Present only for an entry with no login and at least one consultation: the
+   * one login that may be linked back (the one last unlinked from it), or null
+   * when none may. Absent means any eligible login can be linked.
+   */
+  relinkOnly?: LinkableUser | null;
 }
 
 /** A doctor login not yet attached to a bookable practitioner. */
@@ -1815,6 +1829,27 @@ export const api = {
     request<{ id: string }>(`/setup/practitioners/${practitionerId}/schedules`, {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+
+  /**
+   * Delete a doctor added by mistake. The server refuses with a 409 and the
+   * counts if the doctor has any appointment or consultation.
+   */
+  deletePractitioner: (id: string) =>
+    request<{ id: string; deleted: true }>(`/setup/practitioners/${id}`, { method: 'DELETE' }),
+
+  /** Administrator only. The entry and its history stay; only the link goes. */
+  unlinkLogin: (id: string, reason: string) =>
+    request<{ id: string; userId: null }>(`/setup/practitioners/${id}/unlink-login`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  /** Administrator only, to an entry with no login. */
+  linkLogin: (id: string, userId: string, reason: string) =>
+    request<{ id: string; userId: string }>(`/setup/practitioners/${id}/link-login`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, reason }),
     }),
 
   removeSchedule: (id: string) =>

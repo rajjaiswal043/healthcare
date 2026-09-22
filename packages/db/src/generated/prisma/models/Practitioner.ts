@@ -54,6 +54,7 @@ export type PractitionerMinAggregateOutputType = {
   specialty: string | null
   departmentId: string | null
   userId: string | null
+  previousUserId: string | null
   overbookPerSession: number | null
   consultationFeePaise: number | null
   followUpFeePaise: number | null
@@ -73,6 +74,7 @@ export type PractitionerMaxAggregateOutputType = {
   specialty: string | null
   departmentId: string | null
   userId: string | null
+  previousUserId: string | null
   overbookPerSession: number | null
   consultationFeePaise: number | null
   followUpFeePaise: number | null
@@ -92,6 +94,7 @@ export type PractitionerCountAggregateOutputType = {
   specialty: number
   departmentId: number
   userId: number
+  previousUserId: number
   overbookPerSession: number
   consultationFeePaise: number
   followUpFeePaise: number
@@ -125,6 +128,7 @@ export type PractitionerMinAggregateInputType = {
   specialty?: true
   departmentId?: true
   userId?: true
+  previousUserId?: true
   overbookPerSession?: true
   consultationFeePaise?: true
   followUpFeePaise?: true
@@ -144,6 +148,7 @@ export type PractitionerMaxAggregateInputType = {
   specialty?: true
   departmentId?: true
   userId?: true
+  previousUserId?: true
   overbookPerSession?: true
   consultationFeePaise?: true
   followUpFeePaise?: true
@@ -163,6 +168,7 @@ export type PractitionerCountAggregateInputType = {
   specialty?: true
   departmentId?: true
   userId?: true
+  previousUserId?: true
   overbookPerSession?: true
   consultationFeePaise?: true
   followUpFeePaise?: true
@@ -269,6 +275,7 @@ export type PractitionerGroupByOutputType = {
   specialty: string | null
   departmentId: string | null
   userId: string | null
+  previousUserId: string | null
   overbookPerSession: number
   consultationFeePaise: number | null
   followUpFeePaise: number | null
@@ -311,6 +318,7 @@ export type PractitionerWhereInput = {
   specialty?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   departmentId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   userId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
+  previousUserId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   overbookPerSession?: Prisma.IntFilter<"Practitioner"> | number
   consultationFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
   followUpFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
@@ -335,6 +343,7 @@ export type PractitionerOrderByWithRelationInput = {
   specialty?: Prisma.SortOrderInput | Prisma.SortOrder
   departmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
+  previousUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
   consultationFeePaise?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpFeePaise?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -362,6 +371,7 @@ export type PractitionerWhereUniqueInput = Prisma.AtLeast<{
   qualification?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   specialty?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   departmentId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
+  previousUserId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   overbookPerSession?: Prisma.IntFilter<"Practitioner"> | number
   consultationFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
   followUpFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
@@ -386,6 +396,7 @@ export type PractitionerOrderByWithAggregationInput = {
   specialty?: Prisma.SortOrderInput | Prisma.SortOrder
   departmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
+  previousUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
   consultationFeePaise?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpFeePaise?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -413,6 +424,7 @@ export type PractitionerScalarWhereWithAggregatesInput = {
   specialty?: Prisma.StringNullableWithAggregatesFilter<"Practitioner"> | string | null
   departmentId?: Prisma.UuidNullableWithAggregatesFilter<"Practitioner"> | string | null
   userId?: Prisma.UuidNullableWithAggregatesFilter<"Practitioner"> | string | null
+  previousUserId?: Prisma.UuidNullableWithAggregatesFilter<"Practitioner"> | string | null
   overbookPerSession?: Prisma.IntWithAggregatesFilter<"Practitioner"> | number
   consultationFeePaise?: Prisma.IntNullableWithAggregatesFilter<"Practitioner"> | number | null
   followUpFeePaise?: Prisma.IntNullableWithAggregatesFilter<"Practitioner"> | number | null
@@ -431,6 +443,7 @@ export type PractitionerCreateInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -455,6 +468,7 @@ export type PractitionerUncheckedCreateInput = {
   specialty?: string | null
   departmentId?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -477,6 +491,7 @@ export type PractitionerUpdateInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -501,6 +516,7 @@ export type PractitionerUncheckedUpdateInput = {
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -524,6 +540,7 @@ export type PractitionerCreateManyInput = {
   specialty?: string | null
   departmentId?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -542,6 +559,7 @@ export type PractitionerUpdateManyMutationInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -561,6 +579,7 @@ export type PractitionerUncheckedUpdateManyInput = {
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -590,6 +609,7 @@ export type PractitionerCountOrderByAggregateInput = {
   specialty?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  previousUserId?: Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
   consultationFeePaise?: Prisma.SortOrder
   followUpFeePaise?: Prisma.SortOrder
@@ -615,6 +635,7 @@ export type PractitionerMaxOrderByAggregateInput = {
   specialty?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  previousUserId?: Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
   consultationFeePaise?: Prisma.SortOrder
   followUpFeePaise?: Prisma.SortOrder
@@ -634,6 +655,7 @@ export type PractitionerMinOrderByAggregateInput = {
   specialty?: Prisma.SortOrder
   departmentId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  previousUserId?: Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
   consultationFeePaise?: Prisma.SortOrder
   followUpFeePaise?: Prisma.SortOrder
@@ -761,6 +783,7 @@ export type PractitionerCreateWithoutDepartmentInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -783,6 +806,7 @@ export type PractitionerUncheckedCreateWithoutDepartmentInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -835,6 +859,7 @@ export type PractitionerScalarWhereInput = {
   specialty?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   departmentId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   userId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
+  previousUserId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   overbookPerSession?: Prisma.IntFilter<"Practitioner"> | number
   consultationFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
   followUpFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
@@ -853,6 +878,7 @@ export type PractitionerCreateWithoutSchedulesInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -876,6 +902,7 @@ export type PractitionerUncheckedCreateWithoutSchedulesInput = {
   specialty?: string | null
   departmentId?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -913,6 +940,7 @@ export type PractitionerUpdateWithoutSchedulesInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -936,6 +964,7 @@ export type PractitionerUncheckedUpdateWithoutSchedulesInput = {
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -957,6 +986,7 @@ export type PractitionerCreateWithoutExceptionsInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -980,6 +1010,7 @@ export type PractitionerUncheckedCreateWithoutExceptionsInput = {
   specialty?: string | null
   departmentId?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -1017,6 +1048,7 @@ export type PractitionerUpdateWithoutExceptionsInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1040,6 +1072,7 @@ export type PractitionerUncheckedUpdateWithoutExceptionsInput = {
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1061,6 +1094,7 @@ export type PractitionerCreateWithoutAppointmentsInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -1084,6 +1118,7 @@ export type PractitionerUncheckedCreateWithoutAppointmentsInput = {
   specialty?: string | null
   departmentId?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -1121,6 +1156,7 @@ export type PractitionerUpdateWithoutAppointmentsInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1144,6 +1180,7 @@ export type PractitionerUncheckedUpdateWithoutAppointmentsInput = {
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1165,6 +1202,7 @@ export type PractitionerCreateWithoutEncountersInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -1188,6 +1226,7 @@ export type PractitionerUncheckedCreateWithoutEncountersInput = {
   specialty?: string | null
   departmentId?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -1225,6 +1264,7 @@ export type PractitionerUpdateWithoutEncountersInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1248,6 +1288,7 @@ export type PractitionerUncheckedUpdateWithoutEncountersInput = {
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1269,6 +1310,7 @@ export type PractitionerCreateManyDepartmentInput = {
   qualification?: string | null
   specialty?: string | null
   userId?: string | null
+  previousUserId?: string | null
   overbookPerSession?: number
   consultationFeePaise?: number | null
   followUpFeePaise?: number | null
@@ -1287,6 +1329,7 @@ export type PractitionerUpdateWithoutDepartmentInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1309,6 +1352,7 @@ export type PractitionerUncheckedUpdateWithoutDepartmentInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1331,6 +1375,7 @@ export type PractitionerUncheckedUpdateManyWithoutDepartmentInput = {
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
   consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1408,6 +1453,7 @@ export type PractitionerSelect<ExtArgs extends runtime.Types.Extensions.Internal
   specialty?: boolean
   departmentId?: boolean
   userId?: boolean
+  previousUserId?: boolean
   overbookPerSession?: boolean
   consultationFeePaise?: boolean
   followUpFeePaise?: boolean
@@ -1433,6 +1479,7 @@ export type PractitionerSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   specialty?: boolean
   departmentId?: boolean
   userId?: boolean
+  previousUserId?: boolean
   overbookPerSession?: boolean
   consultationFeePaise?: boolean
   followUpFeePaise?: boolean
@@ -1453,6 +1500,7 @@ export type PractitionerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   specialty?: boolean
   departmentId?: boolean
   userId?: boolean
+  previousUserId?: boolean
   overbookPerSession?: boolean
   consultationFeePaise?: boolean
   followUpFeePaise?: boolean
@@ -1473,6 +1521,7 @@ export type PractitionerSelectScalar = {
   specialty?: boolean
   departmentId?: boolean
   userId?: boolean
+  previousUserId?: boolean
   overbookPerSession?: boolean
   consultationFeePaise?: boolean
   followUpFeePaise?: boolean
@@ -1481,7 +1530,7 @@ export type PractitionerSelectScalar = {
   updatedAt?: boolean
 }
 
-export type PractitionerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "fullName" | "prefix" | "registrationNumber" | "hprId" | "qualification" | "specialty" | "departmentId" | "userId" | "overbookPerSession" | "consultationFeePaise" | "followUpFeePaise" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["practitioner"]>
+export type PractitionerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "fullName" | "prefix" | "registrationNumber" | "hprId" | "qualification" | "specialty" | "departmentId" | "userId" | "previousUserId" | "overbookPerSession" | "consultationFeePaise" | "followUpFeePaise" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["practitioner"]>
 export type PractitionerInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   department?: boolean | Prisma.Practitioner$departmentArgs<ExtArgs>
   schedules?: boolean | Prisma.Practitioner$schedulesArgs<ExtArgs>
@@ -1531,6 +1580,12 @@ export type $PractitionerPayload<ExtArgs extends runtime.Types.Extensions.Intern
      * separate mapping table. Null for doctors who never use the software.
      */
     userId: string | null
+    /**
+     * The login this entry was last unlinked from. An entry holding
+     * consultations may be linked again only to this login — see
+     * 20260922100000_practitioner_previous_user.
+     */
+    previousUserId: string | null
     /**
      * Per-doctor overbooking allowance (FR-APT-10). 0 = strict capacity.
      */
@@ -1984,6 +2039,7 @@ export interface PractitionerFieldRefs {
   readonly specialty: Prisma.FieldRef<"Practitioner", 'String'>
   readonly departmentId: Prisma.FieldRef<"Practitioner", 'String'>
   readonly userId: Prisma.FieldRef<"Practitioner", 'String'>
+  readonly previousUserId: Prisma.FieldRef<"Practitioner", 'String'>
   readonly overbookPerSession: Prisma.FieldRef<"Practitioner", 'Int'>
   readonly consultationFeePaise: Prisma.FieldRef<"Practitioner", 'Int'>
   readonly followUpFeePaise: Prisma.FieldRef<"Practitioner", 'Int'>
