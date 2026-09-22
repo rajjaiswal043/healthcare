@@ -170,8 +170,9 @@ const SECTIONS: NavSection[] = [
         label: 'Promotions',
         href: '/settings/promotions',
         icon: <IconReceipt size={16} />,
-        // The administrator DEFINES a discount; the finance desk APPLIES one.
-        // Gated on the defining half, so finance never sees this screen.
+        // The administrator DEFINES a discount; the finance desk and the front
+        // desk APPLY one. Gated on the defining half, so neither desk sees
+        // this screen.
         permission: 'promotion:manage',
       },
       {

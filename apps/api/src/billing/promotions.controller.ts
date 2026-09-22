@@ -108,8 +108,8 @@ export class PromotionsController {
   /**
    * Apply a promotion to a bill (FR-PRO-02).
    *
-   * `promotion:apply`, which the finance desk holds and nobody else except the
-   * administrator. Applying is not defining: this endpoint can only reach a
+   * `promotion:apply`, which the finance desk, the front desk and the
+   * administrator hold. Applying is not defining: this endpoint can only reach a
    * promotion somebody with `promotion:manage` already created.
    */
   @Post('invoices/:id/promotion')

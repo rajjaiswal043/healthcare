@@ -120,8 +120,8 @@ export const PERMISSIONS = {
    * Promotions — the clinic's discounts, set up in advance.
    *
    * Two permissions, not one, and the split is the control. The administrator
-   * DEFINES what a discount may be; the finance desk APPLIES one that already
-   * exists. A single `promotion:manage` would have let the person taking the
+   * DEFINES what a discount may be; the finance desk and the front desk APPLY
+   * one that already exists. A single `promotion:manage` would have let the person taking the
    * money invent the discount they were about to give, which is the failure mode
    * this whole feature is meant to replace — a verbal instruction and a
    * hand-written note.
@@ -190,6 +190,11 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.INVOICE_READ,
       PERMISSIONS.INVOICE_WRITE,
       PERMISSIONS.PAYMENT_COLLECT,
+      // Applies a discount the administrator already defined, CUSTOM included,
+      // from the queue's payment dialog — where this desk takes the fee.
+      // Decision of 22 Sep 2026; existing clinics get it from migration
+      // 20260922110000. Cannot define one, and must name who authorised it.
+      PERMISSIONS.PROMOTION_APPLY,
       // Fields "are my X-ray results back yet". Reads; never attaches.
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_READ,

@@ -2518,3 +2518,98 @@ describe('completing an order', () => {
     expect(url.statusCode).toBe(200);
   });
 });
+
+// --- a test ordered while its bill is being discounted ---------------------------
+
+/**
+ * The doctor orders a second test at the moment the desk discounts the visit's
+ * open test bill. A discounted bill takes no more lines — the discount was
+ * spread over what was on it, and the discount report reads that figure — so
+ * the new test must go on a NEW bill. Forced with a trigger that holds the
+ * discount mid-write while the order is placed.
+ */
+describe('a test ordered while its bill is being discounted', () => {
+  it('goes on a new bill, never onto the one being discounted', async () => {
+    const [visit] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, status, visit_type, updated_at)
+       VALUES ($1, $2, $3, $4, now(), now() + interval '15 minutes', 'IN_PROGRESS', 'NEW', now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[2], fx.main.practitionerId, fx.main.locationId],
+    );
+
+    const first = await order(doctor, {
+      appointmentId: visit!.id,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(first.statusCode).toBe(201);
+    const [bill] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT invoice_id AS id FROM invoice_line WHERE id =
+         (SELECT invoice_line_id FROM diagnostic_order WHERE id = $1)`,
+      [first.json<{ id: string }>().id],
+    );
+
+    const promo = await app.inject({
+      method: 'POST',
+      url: '/api/v1/promotions',
+      headers: { cookie: admin.cookie },
+      payload: {
+        code: 'RACE50',
+        name: 'Race test',
+        type: 'PERCENTAGE',
+        value: 50,
+        validFrom: '2020-01-01',
+      },
+    });
+    expect(promo.statusCode).toBe(201);
+
+    await ownerQuery(
+      fx.main.id,
+      `CREATE FUNCTION test_slow_promotion() RETURNS trigger LANGUAGE plpgsql AS $fn$
+       BEGIN PERFORM pg_sleep(1.5); RETURN NEW; END $fn$`,
+    );
+    await ownerQuery(
+      fx.main.id,
+      `CREATE TRIGGER test_slow_promotion BEFORE INSERT ON promotion_application
+         FOR EACH ROW EXECUTE FUNCTION test_slow_promotion()`,
+    );
+
+    try {
+      const discounting = app.inject({
+        method: 'POST',
+        url: `/api/v1/invoices/${bill!.id}/promotion`,
+        headers: { cookie: admin.cookie },
+        payload: { code: 'RACE50', authorisedByUserId: adminUserId },
+      });
+      await new Promise((r) => setTimeout(r, 400));
+      const ordering = order(doctor, {
+        appointmentId: visit!.id,
+        departmentId: pathologyDepartmentId,
+        serviceId: bloodCountId,
+      });
+      const [discounted, ordered] = await Promise.all([discounting, ordering]);
+
+      expect(discounted.statusCode).toBe(201);
+      expect(ordered.statusCode, ordered.payload).toBe(201);
+
+      const lines = await ownerQuery<{ invoice_id: string }>(
+        fx.main.id,
+        `SELECT l.invoice_id FROM diagnostic_order o JOIN invoice_line l ON l.id = o.invoice_line_id
+          WHERE o.appointment_id = $1 ORDER BY o.created_at`,
+        [visit!.id],
+      );
+      expect(lines).toHaveLength(2);
+      expect(lines[0]!.invoice_id).toBe(bill!.id);
+      expect(lines[1]!.invoice_id).not.toBe(bill!.id);
+    } finally {
+      await ownerQuery(
+        fx.main.id,
+        `DROP TRIGGER IF EXISTS test_slow_promotion ON promotion_application`,
+      );
+      await ownerQuery(fx.main.id, `DROP FUNCTION IF EXISTS test_slow_promotion()`);
+    }
+  });
+});

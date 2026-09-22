@@ -58,6 +58,17 @@ export interface AppointmentView {
   practitioner: { id: string; fullName: string; prefix: string | null; specialty: string | null };
 }
 
+/** What a booking needs — from the front desk, or from a reschedule. */
+type BookInput = {
+  patientId: string;
+  practitionerId: string;
+  locationId: string;
+  departmentId?: string;
+  startAt: string;
+  visitType?: string;
+  reasonForVisit?: string;
+};
+
 const LIVE_STATUSES = ['BOOKED', 'ARRIVED', 'IN_PROGRESS'] as const;
 
 /**
@@ -100,132 +111,132 @@ export class AppointmentsService {
    * the partial unique index in the migration: "check then insert" is not atomic,
    * and two receptionists taking the last 10:15 slot would both pass the check.
    */
-  async book(
+  async book(tenantId: string, input: BookInput, meta: RequestMeta): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, (tx) => this.bookIn(tx, tenantId, input, meta));
+  }
+
+  /**
+   * The booking itself, in a transaction the caller holds — so a reschedule
+   * can cancel and book as one act, and every check below (the doctor's lock,
+   * the slot, the duplicate) runs where the insert does.
+   */
+  private async bookIn(
+    tx: TenantClient,
     tenantId: string,
-    input: {
-      patientId: string;
-      practitionerId: string;
-      locationId: string;
-      departmentId?: string;
-      startAt: string;
-      visitType?: string;
-      reasonForVisit?: string;
-    },
+    input: BookInput,
     meta: RequestMeta,
   ): Promise<AppointmentView> {
-    return this.prisma.forTenant(tenantId, async (tx) => {
-      // First, and in the transaction that inserts: see lockBookablePractitioner.
-      await lockBookablePractitioner(tx, input.practitionerId);
+    // First, and in the transaction that inserts: see lockBookablePractitioner.
+    await lockBookablePractitioner(tx, input.practitionerId);
 
-      const tz = await this.timezone(tx, tenantId);
-      const startAt = new Date(input.startAt);
+    const tz = await this.timezone(tx, tenantId);
+    const startAt = new Date(input.startAt);
 
-      if (Number.isNaN(startAt.getTime())) {
-        throw new BadRequestException('startAt is not a valid date-time');
-      }
+    if (Number.isNaN(startAt.getTime())) {
+      throw new BadRequestException('startAt is not a valid date-time');
+    }
 
-      const date = instantToLocalDate(startAt, tz);
-      const time = instantToLocalTime(startAt, tz);
+    const date = instantToLocalDate(startAt, tz);
+    const time = instantToLocalTime(startAt, tz);
 
-      // Ask the availability engine rather than re-deriving the rules here —
-      // one source of truth for what "bookable" means.
-      const day = await this.availability.forDay(tenantId, {
-        practitionerId: input.practitionerId,
-        date,
-      });
-
-      const slot = day.slots.find((s) => s.time === time);
-      if (!slot) {
-        throw new ConflictException({
-          code: 'SLOT_NOT_AVAILABLE',
-          message:
-            day.unavailableReason ?? 'That time is not part of the doctor’s schedule for this day.',
-        });
-      }
-      if (slot.available <= 0) {
-        throw new ConflictException({ code: 'SLOT_FULL', message: 'That slot is fully booked.' });
-      }
-
-      const patient = await tx.patient.findUnique({
-        where: { id: input.patientId },
-        select: { id: true },
-      });
-      if (!patient) throw new NotFoundException('Patient not found');
-
-      // Same patient, same doctor, same day, still live — almost always a
-      // double-click or a second receptionist, not a genuine second visit.
-      const dayStart = localToInstant(date, '00:00', tz);
-      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-
-      const duplicate = await tx.appointment.findFirst({
-        where: {
-          patientId: input.patientId,
-          practitionerId: input.practitionerId,
-          startAt: { gte: dayStart, lt: dayEnd },
-          status: { in: [...LIVE_STATUSES] },
-        },
-        select: { id: true, startAt: true },
-      });
-
-      if (duplicate) {
-        throw new ConflictException({
-          code: 'ALREADY_BOOKED',
-          message: `This patient already has an appointment with this doctor at ${instantToLocalTime(duplicate.startAt, tz)} today.`,
-          existingAppointmentId: duplicate.id,
-        });
-      }
-
-      /**
-       * The token is issued here, at booking — not at check-in.
-       *
-       * Allocated after the capacity and duplicate checks so a refused booking
-       * does not consume a number, and before the INSERT so the row is never
-       * briefly tokenless. A cancellation still leaves a gap in the series, and
-       * that is fine: a token is an identifier, not a receipt number. Renumbering
-       * to close a gap would move a token out from under a patient already
-       * holding a slip with it printed.
-       */
-      const token = await this.allocateToken(tx, tenantId, input.practitionerId, date);
-
-      const created = await tx.appointment.create({
-        data: {
-          tenantId,
-          patientId: input.patientId,
-          practitionerId: input.practitionerId,
-          locationId: input.locationId,
-          departmentId: input.departmentId ?? null,
-          startAt: slot.startAt,
-          endAt: slot.endAt,
-          status: 'BOOKED',
-          visitType: (input.visitType ?? 'NEW') as never,
-          source: 'FRONT_DESK',
-          reasonForVisit: input.reasonForVisit ?? null,
-          bookedByUserId: meta.actorUserId ?? null,
-          tokenNumber: token,
-          // The token belongs to the day of the visit, in clinic time — not to
-          // the day the booking was taken, which may be weeks earlier.
-          queueDate: new Date(`${date}T00:00:00Z`),
-        },
-        include: APPOINTMENT_INCLUDE,
-      });
-
-      // The bill comes into existence with the visit, in the same transaction.
-      // Raising it later would leave a window in which an appointment exists
-      // with nothing to pay against it — which, under a pay-first rule, is a
-      // patient the front desk cannot admit.
-      await this.billing.ensureInvoiceForAppointment(tx, tenantId, created.id, meta);
-
-      await this.audit.record(tx, tenantId, {
-        action: 'appointment.book',
-        resourceType: 'Appointment',
-        resourceId: created.id,
-        patientId: created.patientId,
-        changedFields: ['practitionerId', 'startAt', 'visitType', 'tokenNumber'],
-        ...meta,
-      });
-
-      return toView(created, tz);
+    // Ask the availability engine rather than re-deriving the rules here —
+    // one source of truth for what "bookable" means.
+    const day = await this.availability.forDayIn(tx, tenantId, {
+      practitionerId: input.practitionerId,
+      date,
     });
+
+    const slot = day.slots.find((s) => s.time === time);
+    if (!slot) {
+      throw new ConflictException({
+        code: 'SLOT_NOT_AVAILABLE',
+        message:
+          day.unavailableReason ?? 'That time is not part of the doctor’s schedule for this day.',
+      });
+    }
+    if (slot.available <= 0) {
+      throw new ConflictException({ code: 'SLOT_FULL', message: 'That slot is fully booked.' });
+    }
+
+    const patient = await tx.patient.findUnique({
+      where: { id: input.patientId },
+      select: { id: true },
+    });
+    if (!patient) throw new NotFoundException('Patient not found');
+
+    // Same patient, same doctor, same day, still live — almost always a
+    // double-click or a second receptionist, not a genuine second visit.
+    const dayStart = localToInstant(date, '00:00', tz);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+    const duplicate = await tx.appointment.findFirst({
+      where: {
+        patientId: input.patientId,
+        practitionerId: input.practitionerId,
+        startAt: { gte: dayStart, lt: dayEnd },
+        status: { in: [...LIVE_STATUSES] },
+      },
+      select: { id: true, startAt: true },
+    });
+
+    if (duplicate) {
+      throw new ConflictException({
+        code: 'ALREADY_BOOKED',
+        message: `This patient already has an appointment with this doctor at ${instantToLocalTime(duplicate.startAt, tz)} today.`,
+        existingAppointmentId: duplicate.id,
+      });
+    }
+
+    /**
+     * The token is issued here, at booking — not at check-in.
+     *
+     * Allocated after the capacity and duplicate checks so a refused booking
+     * does not consume a number, and before the INSERT so the row is never
+     * briefly tokenless. A cancellation still leaves a gap in the series, and
+     * that is fine: a token is an identifier, not a receipt number. Renumbering
+     * to close a gap would move a token out from under a patient already
+     * holding a slip with it printed.
+     */
+    const token = await this.allocateToken(tx, tenantId, input.practitionerId, date);
+
+    const created = await tx.appointment.create({
+      data: {
+        tenantId,
+        patientId: input.patientId,
+        practitionerId: input.practitionerId,
+        locationId: input.locationId,
+        departmentId: input.departmentId ?? null,
+        startAt: slot.startAt,
+        endAt: slot.endAt,
+        status: 'BOOKED',
+        visitType: (input.visitType ?? 'NEW') as never,
+        source: 'FRONT_DESK',
+        reasonForVisit: input.reasonForVisit ?? null,
+        bookedByUserId: meta.actorUserId ?? null,
+        tokenNumber: token,
+        // The token belongs to the day of the visit, in clinic time — not to
+        // the day the booking was taken, which may be weeks earlier.
+        queueDate: new Date(`${date}T00:00:00Z`),
+      },
+      include: APPOINTMENT_INCLUDE,
+    });
+
+    // The bill comes into existence with the visit, in the same transaction.
+    // Raising it later would leave a window in which an appointment exists
+    // with nothing to pay against it — which, under a pay-first rule, is a
+    // patient the front desk cannot admit.
+    await this.billing.ensureInvoiceForAppointment(tx, tenantId, created.id, meta);
+
+    await this.audit.record(tx, tenantId, {
+      action: 'appointment.book',
+      resourceType: 'Appointment',
+      resourceId: created.id,
+      patientId: created.patientId,
+      changedFields: ['practitionerId', 'startAt', 'visitType', 'tokenNumber'],
+      ...meta,
+    });
+
+    return toView(created, tz);
   }
 
   /**
@@ -672,41 +683,49 @@ export class AppointmentsService {
     reason: string,
     meta: RequestMeta,
   ): Promise<AppointmentView> {
-    return this.prisma.forTenant(tenantId, async (tx) => {
-      const tz = await this.timezone(tx, tenantId);
-      const appt = await tx.appointment.findUnique({ where: { id } });
-      if (!appt) throw new NotFoundException('Appointment not found');
+    return this.prisma.forTenant(tenantId, (tx) => this.cancelIn(tx, tenantId, id, reason, meta));
+  }
 
-      if (appt.status === 'FULFILLED') {
-        throw new ConflictException({
-          code: 'ALREADY_COMPLETED',
-          message: 'A completed visit cannot be cancelled.',
-        });
-      }
+  private async cancelIn(
+    tx: TenantClient,
+    tenantId: string,
+    id: string,
+    reason: string,
+    meta: RequestMeta,
+  ): Promise<AppointmentView> {
+    const tz = await this.timezone(tx, tenantId);
+    const appt = await tx.appointment.findUnique({ where: { id } });
+    if (!appt) throw new NotFoundException('Appointment not found');
 
-      const updated = await tx.appointment.update({
-        where: { id },
-        data: {
-          status: 'CANCELLED',
-          cancelledAt: new Date(),
-          cancelReason: reason,
-          cancelledByUserId: meta.actorUserId ?? null,
-        },
-        include: APPOINTMENT_INCLUDE,
+    if (appt.status === 'FULFILLED') {
+      throw new ConflictException({
+        code: 'ALREADY_COMPLETED',
+        message: 'A completed visit cannot be cancelled.',
       });
+    }
 
-      await this.audit.record(tx, tenantId, {
-        action: 'appointment.cancel',
-        resourceType: 'Appointment',
-        resourceId: id,
-        patientId: updated.patientId,
-        changedFields: ['status', 'cancelReason'],
-        reason,
-        ...meta,
-      });
-
-      return toView(updated, tz);
+    const updated = await tx.appointment.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        cancelReason: reason,
+        cancelledByUserId: meta.actorUserId ?? null,
+      },
+      include: APPOINTMENT_INCLUDE,
     });
+
+    await this.audit.record(tx, tenantId, {
+      action: 'appointment.cancel',
+      resourceType: 'Appointment',
+      resourceId: id,
+      patientId: updated.patientId,
+      changedFields: ['status', 'cancelReason'],
+      reason,
+      ...meta,
+    });
+
+    return toView(updated, tz);
   }
 
   /** Did not turn up (FR-APT-09). */
@@ -727,33 +746,47 @@ export class AppointmentsService {
     input: { startAt: string; reason: string },
     meta: RequestMeta,
   ): Promise<AppointmentView> {
-    const existing = await this.prisma.forTenant(tenantId, (tx) =>
-      tx.appointment.findUnique({ where: { id } }),
-    );
-    if (!existing) throw new NotFoundException('Appointment not found');
+    /**
+     * One transaction, cancel and book together. They used to be two, and a
+     * booking refused AFTER the cancel had committed — a full slot, a doctor
+     * switched off — left the patient with no appointment at all and an audit
+     * trail saying the front desk cancelled it. Now a refusal anywhere rolls
+     * the whole thing back: the original is untouched and no event is written.
+     *
+     * Locks, in the order taken: this appointment (FOR UPDATE, so two
+     * reschedules of it cannot both pass the BOOKED check), then the doctor
+     * (FOR SHARE, inside `bookIn`). Switching a doctor off takes only the
+     * doctor's row, so no lock here waits on anything that waits on it.
+     */
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM appointment WHERE id = ${id}::uuid FOR UPDATE`;
+      const existing = await tx.appointment.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException('Appointment not found');
 
-    if (existing.status !== 'BOOKED') {
-      throw new ConflictException({
-        code: 'NOT_RESCHEDULABLE',
-        message: 'Only a booked appointment that has not yet arrived can be moved.',
-      });
-    }
+      if (existing.status !== 'BOOKED') {
+        throw new ConflictException({
+          code: 'NOT_RESCHEDULABLE',
+          message: 'Only a booked appointment that has not yet arrived can be moved.',
+        });
+      }
 
-    await this.cancel(tenantId, id, `Rescheduled: ${input.reason}`, meta);
+      await this.cancelIn(tx, tenantId, id, `Rescheduled: ${input.reason}`, meta);
 
-    return this.book(
-      tenantId,
-      {
-        patientId: existing.patientId,
-        practitionerId: existing.practitionerId,
-        locationId: existing.locationId,
-        ...(existing.departmentId ? { departmentId: existing.departmentId } : {}),
-        startAt: input.startAt,
-        visitType: existing.visitType,
-        ...(existing.reasonForVisit ? { reasonForVisit: existing.reasonForVisit } : {}),
-      },
-      meta,
-    );
+      return this.bookIn(
+        tx,
+        tenantId,
+        {
+          patientId: existing.patientId,
+          practitionerId: existing.practitionerId,
+          locationId: existing.locationId,
+          ...(existing.departmentId ? { departmentId: existing.departmentId } : {}),
+          startAt: input.startAt,
+          visitType: existing.visitType,
+          ...(existing.reasonForVisit ? { reasonForVisit: existing.reasonForVisit } : {}),
+        },
+        meta,
+      );
+    });
   }
 
   /**
