@@ -65,3 +65,6 @@ Desktop.ini
 *.key
 *.p12
 *.pfx
+
+.postman/
+postman/

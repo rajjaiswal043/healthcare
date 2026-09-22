@@ -7,6 +7,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
+import { lockInvoice } from './invoice-lock.js';
 import { clinicToday } from '../scheduling/clinic-time.js';
 import { planDiscount } from './promotion-maths.js';
 import { formatPaise } from './billing.service.js';
@@ -307,6 +308,10 @@ export class PromotionsService {
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
+      // Before reading anything: see lockInvoice. A second discount or a payment
+      // racing this one waits here, and what is read below is what it left.
+      await lockInvoice(tx, invoiceId);
+
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
         select: {
@@ -577,6 +582,10 @@ export class PromotionsService {
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
+      // A payment of the discounted balance may be in flight; it must land
+      // before this decides whether money has been taken. See lockInvoice.
+      await lockInvoice(tx, invoiceId);
+
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
         select: {

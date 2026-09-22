@@ -106,8 +106,8 @@ export class UsersController {
    * the narrow `select` is the actual control.
    *
    * Gated on `promotion:apply` rather than `user:manage`, which is the whole
-   * point: the finance desk has to name an approver and must not be given the
-   * power to create accounts in order to do it. The administrator reaches it
+   * point: the finance desk and the front desk have to name an approver and must
+   * not be given the power to create accounts in order to do it. The administrator reaches it
    * too, by holding every permission.
    *
    * Declared BEFORE the `:id` routes. Nest matches in declaration order, and a

@@ -17,11 +17,12 @@
  * file.
  */
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   clinicDate,
   closeTestApp,
+  createDoctor,
   createTestApp,
   login,
   loginWithMfa,
@@ -481,11 +482,68 @@ describe('applying a promotion to a bill', () => {
     expect(res.statusCode).toBe(201);
   });
 
-  it('refuses the front desk, which does not hold promotion:apply', async () => {
+  /**
+   * Inverted on 22 Sep 2026. The front desk takes the consultation fee from the
+   * queue and now holds `promotion:apply` — every promotion, CUSTOM included —
+   * so the discount is given where the money is taken. The approver rule is the
+   * same for this desk as for finance.
+   */
+  it('lets the front desk apply a promotion that carries its own value', async () => {
     await createPromotion();
     const { invoice } = await bookedVisit();
 
-    expect((await applyPromotion(invoice.id, {}, frontDesk)).statusCode).toBe(403);
+    const res = await applyPromotion(invoice.id, {}, frontDesk);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().discountPaise).toBe(30000);
+  });
+
+  it('lets the front desk apply a CUSTOM promotion, with the amount it types', async () => {
+    await createPromotion({ code: 'CUSTOM1', type: 'CUSTOM', value: undefined });
+    const { invoice } = await bookedVisit();
+
+    const res = await applyPromotion(
+      invoice.id,
+      { code: 'CUSTOM1', customDiscountPaise: 12500 },
+      frontDesk,
+    );
+
+    expect(res.statusCode).toBe(201);
+    expect((await readInvoice(invoice.id, frontDesk)).json().totalPaise).toBe(CONSULT_FEE - 12500);
+  });
+
+  it('lets the front desk take a discount back off', async () => {
+    await createPromotion();
+    const { invoice } = await bookedVisit();
+    await applyPromotion(invoice.id, {}, frontDesk);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${invoice.id}/promotion`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { reversalKind: 'APPLIED_IN_ERROR' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((await readInvoice(invoice.id, frontDesk)).json().totalPaise).toBe(CONSULT_FEE);
+  });
+
+  it('lets the front desk load the list of people who can authorise one', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/users/approvers',
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().approvers.map((u: { id: string }) => u.id)).toContain(adminUserId);
+  });
+
+  it('still refuses the doctor, who does not take money', async () => {
+    await createPromotion();
+    const { invoice } = await bookedVisit();
+
+    expect((await applyPromotion(invoice.id, {}, doctor)).statusCode).toBe(403);
   });
 });
 
@@ -1320,12 +1378,14 @@ describe('undoing a discount', () => {
     expect(domainCode(res)).toBe('NO_PROMOTION_APPLIED');
   });
 
-  it('refuses the front desk, which does not hold promotion:apply', async () => {
+  // The front desk holds promotion:apply since 22 Sep 2026 and may undo — see
+  // 'lets the front desk take a discount back off'. The doctor still may not.
+  it('refuses the doctor, who does not hold promotion:apply', async () => {
     await createPromotion();
     const { invoice } = await bookedVisit();
     await applyPromotion(invoice.id);
 
-    expect((await undo(invoice.id, undefined, frontDesk)).statusCode).toBe(403);
+    expect((await undo(invoice.id, undefined, doctor)).statusCode).toBe(403);
   });
 
   it('reopens the pay-first gate at the undiscounted amount', async () => {
@@ -1547,5 +1607,422 @@ describe('changing the charges while a discount is applied', () => {
 
     const after = (await readInvoice(bill.id)).json();
     expect(after.discountPaise).toBe(30000);
+  });
+});
+
+// --- two desks at once ----------------------------------------------------------
+
+/**
+ * The same bill reached from two places at the same moment — the Finance Desk
+ * and the queue's payment dialog, or two tabs. Each race is FORCED: a trigger
+ * holds the first request's transaction open mid-write, and the second is sent
+ * while it waits. Without the invoice lock, the second reads the bill as it was
+ * before the first committed and both go through.
+ */
+describe('two desks on the same bill at once', () => {
+  afterEach(async () => {
+    for (const [name, table] of [
+      ['test_slow_promotion', 'promotion_application'],
+      ['test_slow_payment', 'payment'],
+      ['test_slow_line_delete', 'invoice_line'],
+    ] as const) {
+      await ownerQuery(fx.main.id, `DROP TRIGGER IF EXISTS ${name} ON ${table}`);
+      await ownerQuery(fx.main.id, `DROP FUNCTION IF EXISTS ${name}()`);
+    }
+  });
+
+  /** Hold every insert into `table` for 1.5 s, inside its transaction. */
+  async function slowInserts(name: string, table: string) {
+    await ownerQuery(
+      fx.main.id,
+      `CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $fn$
+       BEGIN PERFORM pg_sleep(1.5); RETURN NEW; END $fn$`,
+    );
+    await ownerQuery(
+      fx.main.id,
+      `CREATE TRIGGER ${name} BEFORE INSERT ON ${table}
+         FOR EACH ROW EXECUTE FUNCTION ${name}()`,
+    );
+  }
+
+  const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  function pay(invoiceId: string, amountPaise: number, session: Session = finance) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/payments`,
+      headers: { cookie: session.cookie },
+      payload: { mode: 'CASH', amountPaise },
+    });
+  }
+
+  function undo(invoiceId: string, session: Session = finance) {
+    return app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${invoiceId}/promotion`,
+      headers: { cookie: session.cookie },
+      payload: { reversalKind: 'APPLIED_IN_ERROR' },
+    });
+  }
+
+  /** What the bill and its discount history say, straight from the tables. */
+  async function state(invoiceId: string) {
+    const [row] = await ownerQuery<{
+      total: number;
+      paid: number;
+      live: number;
+      active: string | null;
+    }>(
+      fx.main.id,
+      `SELECT i.total_paise AS total,
+              COALESCE((SELECT sum(amount_paise)::int FROM payment
+                         WHERE invoice_id = i.id AND direction = 'IN'), 0) AS paid,
+              (SELECT count(*)::int FROM promotion_application a
+                WHERE a.invoice_id = i.id AND a.reversal_kind IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM promotion_application r
+                                   WHERE r.reverses_application_id = a.id)) AS live,
+              i.active_promotion_application_id AS active
+         FROM invoice i WHERE i.id = $1`,
+      [invoiceId],
+    );
+    return row!;
+  }
+
+  it('lets one of two simultaneous discounts through, and refuses the other', async () => {
+    await createPromotion();
+    await createPromotion({ code: 'STAFF25', value: 25 });
+    const { invoice } = await bookedVisit();
+    await slowInserts('test_slow_promotion', 'promotion_application');
+
+    const first = applyPromotion(invoice.id);
+    await pause(400);
+    const second = applyPromotion(invoice.id, { code: 'STAFF25' });
+    const results = await Promise.all([first, second]);
+
+    expect(results.map((r) => r.statusCode)).toEqual([201, 409]);
+    expect(domainCode(results[1]!)).toBe('PROMOTION_ALREADY_APPLIED');
+    // One discount on record, and it is the one on the bill — no orphan that
+    // the discount report would count as money given away.
+    const after = await state(invoice.id);
+    expect(after.live).toBe(1);
+    expect(after.active).not.toBeNull();
+    expect(after.total).toBe(30000);
+  });
+
+  /**
+   * Discount first. The payment was typed against the old total, so it is
+   * refused as more than is owed — and the new balance is then collected.
+   */
+  it('makes a payment typed against the old total wait for the discount, then refuses it', async () => {
+    await createPromotion();
+    const { invoice } = await bookedVisit();
+    await slowInserts('test_slow_promotion', 'promotion_application');
+
+    const discounting = applyPromotion(invoice.id);
+    await pause(400);
+    const paying = pay(invoice.id, CONSULT_FEE);
+    const [applied, paid] = await Promise.all([discounting, paying]);
+
+    expect(applied.statusCode).toBe(201);
+    expect(paid.statusCode).toBe(409);
+    expect(domainCode(paid)).toBe('OVERPAYMENT');
+
+    expect((await pay(invoice.id, 30000)).statusCode).toBe(201);
+    const after = await state(invoice.id);
+    expect(after).toMatchObject({ total: 30000, paid: 30000, live: 1 });
+  });
+
+  /** Payment first. The discount waits for it, then finds money taken. */
+  it('refuses a discount that arrives while a payment is being taken', async () => {
+    await createPromotion();
+    const { invoice } = await bookedVisit();
+    await slowInserts('test_slow_payment', 'payment');
+
+    const paying = pay(invoice.id, CONSULT_FEE);
+    await pause(400);
+    const discounting = applyPromotion(invoice.id);
+    const [paid, applied] = await Promise.all([paying, discounting]);
+
+    expect(paid.statusCode).toBe(201);
+    expect(applied.statusCode).toBe(409);
+    expect(domainCode(applied)).toBe('PAYMENT_ALREADY_TAKEN');
+    const after = await state(invoice.id);
+    expect(after).toMatchObject({ total: CONSULT_FEE, paid: CONSULT_FEE, live: 0, active: null });
+  });
+
+  /**
+   * The lock order. Removing a charge used to lock the LINE and then the
+   * invoice; a discount locks the invoice and then the lines. Run together,
+   * each held what the other wanted — a deadlock, which Postgres breaks by
+   * killing one of them, and the desk sees "Something went wrong". Both now take
+   * the invoice first, so one simply waits for the other.
+   */
+  it('lets a charge be removed and a discount applied at once without a deadlock', async () => {
+    await createPromotion();
+    const { invoice } = await bookedVisit();
+    const added = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/lines`,
+      headers: { cookie: finance.cookie },
+      payload: { description: 'Dressing', unitPricePaise: 20000 },
+    });
+    expect(added.statusCode).toBe(201);
+    const extra = added
+      .json()
+      .lines.find((l: { description: string }) => l.description === 'Dressing');
+
+    await ownerQuery(
+      fx.main.id,
+      `CREATE FUNCTION test_slow_line_delete() RETURNS trigger LANGUAGE plpgsql AS $fn$
+       BEGIN PERFORM pg_sleep(1.5); RETURN OLD; END $fn$`,
+    );
+    await ownerQuery(
+      fx.main.id,
+      `CREATE TRIGGER test_slow_line_delete AFTER DELETE ON invoice_line
+         FOR EACH ROW EXECUTE FUNCTION test_slow_line_delete()`,
+    );
+
+    const removing = app.inject({
+      method: 'DELETE',
+      url: `/api/v1/invoices/${invoice.id}/lines/${extra.id}`,
+      headers: { cookie: finance.cookie },
+    });
+    await pause(400);
+    const discounting = applyPromotion(invoice.id);
+    const [removed, applied] = await Promise.all([removing, discounting]);
+
+    expect(removed.statusCode).toBe(200);
+    expect(applied.statusCode).toBe(201);
+    // Half of what was left once the dressing came off — the discount saw the
+    // bill after the removal, not before it.
+    expect(await state(invoice.id)).toMatchObject({ total: CONSULT_FEE / 2, live: 1 });
+  });
+
+  // --- the administrator's exceptions --------------------------------------------
+
+  function refund(invoiceId: string, amountPaise: number) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/refunds`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        mode: 'CASH',
+        amountPaise,
+        reason: 'Patient left before being seen',
+        kind: 'PATIENT_REFUND',
+      },
+    });
+  }
+
+  function exception(invoiceId: string, kind: 'waive' | 'defer') {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/${kind}`,
+      headers: { cookie: admin.cookie },
+      payload: {
+        reason: kind === 'waive' ? 'Staff or staff family' : 'Corporate or company account',
+      },
+    });
+  }
+
+  const refunded = async (invoiceId: string) =>
+    (
+      await ownerQuery<{ n: number }>(
+        fx.main.id,
+        `SELECT COALESCE(sum(amount_paise), 0)::int AS n FROM payment
+          WHERE invoice_id = $1 AND direction = 'REFUND'`,
+        [invoiceId],
+      )
+    )[0]!.n;
+
+  const statusOf = async (invoiceId: string) =>
+    (
+      await ownerQuery<{ status: string }>(fx.main.id, 'SELECT status FROM invoice WHERE id = $1', [
+        invoiceId,
+      ])
+    )[0]!.status;
+
+  /** Two refunds that each fit on their own, and together would not. */
+  it('never refunds more than was paid, however many refunds arrive at once', async () => {
+    const { invoice } = await bookedVisit();
+    expect((await pay(invoice.id, CONSULT_FEE)).statusCode).toBe(201);
+    await slowInserts('test_slow_payment', 'payment');
+
+    const first = refund(invoice.id, 40000);
+    await pause(400);
+    const second = refund(invoice.id, 40000);
+    const results = await Promise.all([first, second]);
+
+    expect(results.map((r) => r.statusCode)).toEqual([201, 409]);
+    expect(domainCode(results[1]!)).toBe('REFUND_EXCEEDS_PAYMENTS');
+    expect(await refunded(invoice.id)).toBe(40000);
+  });
+
+  /**
+   * Money is being taken when the administrator waives the bill. The waiver
+   * waits, finds the money, and is refused — the clinic never holds cash
+   * against a bill it wrote off.
+   */
+  it('refuses to waive a bill while it is being paid', async () => {
+    const { invoice } = await bookedVisit();
+    await slowInserts('test_slow_payment', 'payment');
+
+    const paying = pay(invoice.id, CONSULT_FEE);
+    await pause(400);
+    const waiving = exception(invoice.id, 'waive');
+    const [paid, waived] = await Promise.all([paying, waiving]);
+
+    expect(paid.statusCode).toBe(201);
+    expect(waived.statusCode).toBe(409);
+    expect(domainCode(waived)).toBe('HAS_PAYMENTS');
+    expect(await statusOf(invoice.id)).toBe('PAID');
+  });
+
+  /**
+   * A part-payment is being taken when the rest is deferred. The deferral
+   * waits for it and lands on top — it is never quietly overwritten by the
+   * payment's own status update.
+   */
+  it('does not lose a deferral to a payment that was in flight', async () => {
+    const { invoice } = await bookedVisit();
+    await slowInserts('test_slow_payment', 'payment');
+
+    const paying = pay(invoice.id, 20000);
+    await pause(400);
+    const deferring = exception(invoice.id, 'defer');
+    const [paid, deferred] = await Promise.all([paying, deferring]);
+
+    expect(paid.statusCode).toBe(201);
+    expect(deferred.statusCode).toBe(201);
+    expect(await statusOf(invoice.id)).toBe('DEFERRED');
+  });
+
+  /**
+   * The discounted balance is being paid when somebody takes the discount off.
+   * The undo waits, finds the payment, and is refused — a bill is never paid
+   * at its discounted price and then charged the full one.
+   */
+  it('refuses to take a discount off while its discounted balance is being paid', async () => {
+    await createPromotion();
+    const { invoice } = await bookedVisit();
+    expect((await applyPromotion(invoice.id)).statusCode).toBe(201);
+    await slowInserts('test_slow_payment', 'payment');
+
+    const paying = pay(invoice.id, 30000);
+    await pause(400);
+    const undoing = undo(invoice.id);
+    const [paid, undone] = await Promise.all([paying, undoing]);
+
+    expect(paid.statusCode).toBe(201);
+    expect(undone.statusCode).toBe(409);
+    expect(domainCode(undone)).toBe('PAYMENT_ALREADY_TAKEN');
+    const after = await state(invoice.id);
+    expect(after).toMatchObject({ total: 30000, paid: 30000, live: 1 });
+  });
+});
+
+// --- the front desk, from the queue ----------------------------------------------
+
+/**
+ * The whole path the decision of 22 Sep 2026 opened: the front desk opens a
+ * visit's bill from the queue (the same `GET /appointments/:id/invoice` the
+ * queue's Bill button calls), discounts it, takes the discounted balance — and
+ * the finance report tells the truth about it afterwards: who gave the
+ * discount, and which doctor the visit belongs to.
+ *
+ * A second doctor's undiscounted visit sits beside it, so "the right doctor"
+ * is a comparison and not a report with one row in it.
+ */
+describe('the front desk, discounting from the queue', () => {
+  it('discounts, collects the new balance, and the report credits the right people', async () => {
+    const other = await createDoctor(app, fx.main, {
+      email: 'queue-other@main.test',
+      fullName: 'Dr Queue Other',
+      linked: true,
+    });
+
+    try {
+      await createPromotion();
+      const { appointmentId } = await bookedVisit();
+
+      // The queue's Bill button.
+      const bill = await app.inject({
+        method: 'GET',
+        url: `/api/v1/appointments/${appointmentId}/invoice`,
+        headers: { cookie: frontDesk.cookie },
+      });
+      expect(bill.statusCode).toBe(200);
+      const invoiceId = bill.json().id as string;
+
+      expect((await applyPromotion(invoiceId, {}, frontDesk)).statusCode).toBe(201);
+
+      const discounted = (await readInvoice(invoiceId, frontDesk)).json();
+      expect(discounted.balancePaise).toBe(30000);
+
+      const paid = await app.inject({
+        method: 'POST',
+        url: `/api/v1/invoices/${invoiceId}/payments`,
+        headers: { cookie: frontDesk.cookie },
+        payload: { mode: 'CASH', amountPaise: discounted.balancePaise },
+      });
+      expect(paid.statusCode).toBe(201);
+      expect(paid.json()).toMatchObject({ status: 'PAID', balancePaise: 0 });
+
+      // The other doctor's visit, full price, nothing discounted.
+      const walkIn = await app.inject({
+        method: 'POST',
+        url: '/api/v1/appointments/walk-in',
+        headers: { cookie: frontDesk.cookie },
+        payload: {
+          patientId: fx.main.patientIds[1],
+          practitionerId: other.practitionerId,
+          locationId: fx.main.locationId,
+        },
+      });
+      expect(walkIn.statusCode).toBe(201);
+
+      const report = await app.inject({
+        method: 'GET',
+        url: '/api/v1/reports/finance',
+        headers: { cookie: finance.cookie },
+      });
+      expect(report.statusCode).toBe(200);
+      const body = report.json();
+
+      const [desk] = await ownerQuery<{ full_name: string }>(
+        fx.main.id,
+        `SELECT full_name FROM app_user WHERE email = 'frontdesk@main.test'`,
+      );
+      expect(body.discounts.given).toHaveLength(1);
+      expect(body.discounts.given[0]).toMatchObject({
+        promotionCode: 'CAMP50',
+        discountPaise: 30000,
+        appliedBy: desk!.full_name,
+      });
+
+      type DoctorRow = {
+        practitionerId: string | null;
+        grossPaise: number;
+        discountPaise: number;
+        netCollectedPaise: number;
+      };
+      const row = (id: string | null) =>
+        (body.byDoctor as DoctorRow[]).find((r) => r.practitionerId === id);
+
+      expect(row(fx.main.practitionerId)).toMatchObject({
+        grossPaise: CONSULT_FEE,
+        discountPaise: 30000,
+        netCollectedPaise: 30000,
+      });
+      expect(row(other.practitionerId)).toMatchObject({
+        grossPaise: CONSULT_FEE,
+        discountPaise: 0,
+        netCollectedPaise: 0,
+      });
+    } finally {
+      await resetAppointments();
+      await ownerQuery(fx.main.id, `DELETE FROM practitioner WHERE full_name = 'Dr Queue Other'`);
+      await ownerQuery(fx.main.id, `DELETE FROM app_user WHERE email = 'queue-other@main.test'`);
+    }
   });
 });

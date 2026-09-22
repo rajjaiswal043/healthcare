@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -298,6 +299,24 @@ class ServiceDto {
   isActive?: boolean;
 }
 
+/** Every change to a doctor's login link says why — it moves whose notes are whose. */
+class UnlinkLoginDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  reason!: string;
+}
+
+class LinkLoginDto {
+  @IsUUID()
+  userId!: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  reason!: string;
+}
+
 class ServiceActiveDto {
   @IsBoolean()
   isActive!: boolean;
@@ -382,6 +401,55 @@ export class ClinicSetupController {
     @Req() req: FastifyRequest,
   ) {
     return this.setup.updatePractitioner(tenantId, id, { ...dto }, meta(req, user));
+  }
+
+  /**
+   * Delete a doctor added by mistake. Refused with a 409 and the counts once
+   * the doctor has any appointment or consultation — see the service.
+   */
+  @Delete('setup/practitioners/:id')
+  @RequirePermissions(PERMISSIONS.SCHEDULE_MANAGE)
+  async deletePractitioner(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.setup.deletePractitioner(tenantId, id, meta(req, user));
+  }
+
+  // --- the login link ------------------------------------------------------
+
+  /**
+   * Administrator only: `user:manage` on top of `schedule:manage`. Changing
+   * which login IS a doctor decides whose queue and whose consultations that
+   * login can open — a user-management act, not a scheduling one, and a custom
+   * role given the doctors' hours should not get it along with them.
+   */
+  @Post('setup/practitioners/:id/unlink-login')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.SCHEDULE_MANAGE, PERMISSIONS.USER_MANAGE)
+  async unlinkLogin(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UnlinkLoginDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.setup.unlinkLogin(tenantId, id, dto.reason, meta(req, user));
+  }
+
+  @Post('setup/practitioners/:id/link-login')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.SCHEDULE_MANAGE, PERMISSIONS.USER_MANAGE)
+  async linkLogin(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: LinkLoginDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.setup.linkLogin(tenantId, id, dto.userId, dto.reason, meta(req, user));
   }
 
   // --- weekly hours --------------------------------------------------------

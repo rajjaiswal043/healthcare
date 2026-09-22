@@ -7,6 +7,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
+import { lockInvoice } from './invoice-lock.js';
 import { clinicToday, localToInstant } from '../scheduling/clinic-time.js';
 
 export interface RequestMeta {
@@ -269,10 +270,26 @@ export class BillingService {
           status: 'UNPAID',
         },
         orderBy: { issuedAt: 'desc' },
-        select: { id: true, totalPaise: true, activePromotionApplicationId: true },
+        select: { id: true },
       });
 
-      if (open && (await this.acceptsMoreLines(tx, open))) return { id: open.id };
+      if (open) {
+        /**
+         * Locked, then read again. The lookup above could see this bill a
+         * moment before a discount or a payment on it commits; deciding from
+         * that copy put a new test onto a bill that had just been discounted.
+         * After the lock the bill is read as it now is — and a discounted or
+         * paid bill sends the test to a new one below. See lockInvoice.
+         */
+        await lockInvoice(tx, open.id);
+        const current = await tx.invoice.findUnique({
+          where: { id: open.id },
+          select: { id: true, status: true, totalPaise: true, activePromotionApplicationId: true },
+        });
+        if (current?.status === 'UNPAID' && (await this.acceptsMoreLines(tx, current))) {
+          return { id: current.id };
+        }
+      }
     }
 
     const number = await this.nextNumber(tx, tenantId);
@@ -711,6 +728,10 @@ export class BillingService {
     if (!collectedByUserId) throw new BadRequestException('A payment needs a collector.');
 
     return this.prisma.forTenant(tenantId, async (tx) => {
+      // The balance below must be the one after any discount being applied or
+      // taken off right now, not the one before it. See lockInvoice.
+      await lockInvoice(tx, id);
+
       const invoice = await tx.invoice.findUnique({
         where: { id },
         select: { id: true, status: true, totalPaise: true, patientId: true, number: true },
@@ -822,6 +843,10 @@ export class BillingService {
     if (!collectedByUserId) throw new BadRequestException('A refund needs an author.');
 
     return this.prisma.forTenant(tenantId, async (tx) => {
+      // Two refunds at once must both see each other: the ceiling below is
+      // what came in minus what has ALREADY gone out. See lockInvoice.
+      await lockInvoice(tx, id);
+
       const invoice = await tx.invoice.findUnique({
         where: { id },
         select: { id: true, totalPaise: true, patientId: true },
@@ -881,6 +906,11 @@ export class BillingService {
     if (!authorisedByUserId) throw new BadRequestException('An exception needs an authoriser.');
 
     return this.prisma.forTenant(tenantId, async (tx) => {
+      // A payment in flight lands first, so "has money been taken?" below is
+      // answered with it counted, and its status update can no longer write
+      // over this one. See lockInvoice.
+      await lockInvoice(tx, id);
+
       const invoice = await tx.invoice.findUnique({
         where: { id },
         select: { id: true, status: true, totalPaise: true, patientId: true },
@@ -1126,6 +1156,18 @@ export class BillingService {
    * bill lives here rather than being remembered twice.
    */
   private async loadEditable(tx: TenantClient, id: string) {
+    /**
+     * Locked first, like a discount and a payment, and for the ORDER as much as
+     * the check. Every path that changes a bill's lines comes through here
+     * before touching a line, so all of them take the invoice before its lines
+     * — the order applying and removing a discount use. Without it, removing a
+     * charge locked the line first and the invoice second while a discount did
+     * the reverse, and the two deadlocked. It also means the promotion and
+     * payment checks below cannot be passed by a discount or a payment that
+     * commits a moment later.
+     */
+    await lockInvoice(tx, id);
+
     const invoice = await tx.invoice.findUnique({
       where: { id },
       select: {

@@ -677,10 +677,20 @@ describe('the approver list', () => {
   });
 
   it('refuses a role without promotion:apply', async () => {
-    // The front desk takes money and still cannot read this: it holds
-    // payment:collect but not promotion:apply, and the gate is the second one.
-    expect((await approvers(frontDesk)).statusCode).toBe(403);
     expect((await approvers(doctor)).statusCode).toBe(403);
+  });
+
+  /**
+   * Inverted on 22 Sep 2026: the front desk applies discounts from the queue,
+   * so it holds promotion:apply and must be able to name an approver. Still two
+   * columns and nothing else — the gate moved, the narrow select did not.
+   */
+  it('answers the front desk, which applies discounts from the queue', async () => {
+    const res = await approvers(frontDesk);
+    expect(res.statusCode).toBe(200);
+    for (const person of res.json().approvers) {
+      expect(Object.keys(person).sort()).toEqual(['fullName', 'id']);
+    }
   });
 
   it('answers the administrator, who holds every permission', async () => {

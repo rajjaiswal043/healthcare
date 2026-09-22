@@ -790,6 +790,133 @@ describe('rescheduling', () => {
     expect(original?.cancel_reason).toContain('Rescheduled');
   });
 
+  // --- one act, or nothing -------------------------------------------------
+
+  function reschedule(id: string, startAt: unknown) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/reschedule`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { startAt, reason: 'Patient asked to move' },
+    });
+  }
+
+  /** Everything a failed reschedule must leave exactly as it was. */
+  async function snapshot(id: string) {
+    const [row] = await ownerQuery(
+      fx.main.id,
+      `SELECT status, start_at, end_at, cancelled_at, cancel_reason, cancelled_by_user_id, updated_at
+         FROM appointment WHERE id = $1`,
+      [id],
+    );
+    const [counts] = await ownerQuery<{ appts: number; cancels: number; books: number }>(
+      fx.main.id,
+      `SELECT (SELECT count(*)::int FROM appointment) AS appts,
+              (SELECT count(*)::int FROM audit_event
+                WHERE action = 'appointment.cancel' AND resource_id = $1) AS cancels,
+              (SELECT count(*)::int FROM audit_event WHERE action = 'appointment.book') AS books`,
+      [id],
+    );
+    if (!counts) throw new Error('no counts');
+    return { row, counts };
+  }
+
+  it('leaves the original untouched when the new slot is full', async () => {
+    const day = await availability(frontDesk);
+    const original = (await book(frontDesk, { slotIndex: 1, patientIndex: 0 })).json();
+    await book(frontDesk, { slotIndex: 9, patientIndex: 1 });
+    const before = await snapshot(original.id);
+
+    const res = await reschedule(original.id, day.slots[9]?.startAt);
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('SLOT_FULL');
+    expect(await snapshot(original.id)).toEqual(before);
+    expect(before.row?.status).toBe('BOOKED');
+  });
+
+  it('leaves the original untouched when the time is not a slot at all', async () => {
+    const original = (await book(frontDesk, { slotIndex: 1 })).json();
+    const before = await snapshot(original.id);
+
+    const res = await reschedule(original.id, `${DAY}T23:00:00+05:30`);
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('SLOT_NOT_AVAILABLE');
+    expect(await snapshot(original.id)).toEqual(before);
+  });
+
+  it('leaves the original untouched when the new time does not validate', async () => {
+    const original = (await book(frontDesk, { slotIndex: 1 })).json();
+    const before = await snapshot(original.id);
+
+    expect((await reschedule(original.id, 'next tuesday')).statusCode).toBe(400);
+    expect(await snapshot(original.id)).toEqual(before);
+  });
+
+  /**
+   * Switched off behind the front desk's back — straight in the database,
+   * because the setup screen would refuse while this appointment exists.
+   */
+  it('leaves the original untouched when the doctor has been switched off', async () => {
+    const day = await availability(frontDesk);
+    const original = (await book(frontDesk, { slotIndex: 1 })).json();
+    const before = await snapshot(original.id);
+    await ownerQuery(fx.main.id, `UPDATE practitioner SET is_active = false WHERE id = $1`, [
+      fx.main.practitionerId,
+    ]);
+
+    try {
+      const res = await reschedule(original.id, day.slots[9]?.startAt);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.message).toBe('This doctor is no longer active.');
+      expect(await snapshot(original.id)).toEqual(before);
+    } finally {
+      await ownerQuery(fx.main.id, `UPDATE practitioner SET is_active = true WHERE id = $1`, [
+        fx.main.practitionerId,
+      ]);
+    }
+  });
+
+  it('writes the cancel and the booking audit events only when it succeeds', async () => {
+    const day = await availability(frontDesk);
+    const original = (await book(frontDesk, { slotIndex: 1 })).json();
+    const before = await snapshot(original.id);
+
+    const res = await reschedule(original.id, day.slots[9]?.startAt);
+
+    expect(res.statusCode).toBe(200);
+    const after = await snapshot(original.id);
+    expect(after.row?.status).toBe('CANCELLED');
+    expect(after.counts).toEqual({
+      appts: before.counts.appts + 1,
+      cancels: before.counts.cancels + 1,
+      books: before.counts.books + 1,
+    });
+    const [created] = await ownerQuery<{ status: string }>(
+      fx.main.id,
+      `SELECT status FROM appointment WHERE id = $1`,
+      [res.json().id],
+    );
+    expect(created?.status).toBe('BOOKED');
+  });
+
+  /**
+   * Into the slot it is leaving. The availability check runs in the same
+   * transaction as the cancel, so it sees the original gone and the slot free —
+   * checked from a transaction of its own, it would still see it taken.
+   */
+  it('can move an appointment into the slot it frees', async () => {
+    const day = await availability(frontDesk);
+    const original = (await book(frontDesk, { slotIndex: 1 })).json();
+
+    const res = await reschedule(original.id, day.slots[1]?.startAt);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().id).not.toBe(original.id);
+  });
+
   it('refuses to move a patient who has already arrived', async () => {
     const day = await availability(frontDesk);
     const appt = (await book(frontDesk, { slotIndex: 0 })).json();

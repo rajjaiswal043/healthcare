@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type Invoice } from '@/lib/api';
+import { api, ApiRequestError, type Invoice, type Promotion } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { formatPaise, parseRupeesToPaise } from '@/lib/format';
 import { ReceiptButton } from './receipt-button';
+import { PromotionPanel } from './promotion-panel';
 import { IconAlert, IconCheck, IconX } from './icons';
 
 const MODES = [
@@ -22,6 +23,23 @@ const WAIVE_REASONS = [
   'Courtesy — clinic error',
   'Charitable case',
 ];
+
+/**
+ * Whether the discount panel belongs in this dialog.
+ *
+ * The same rule the Finance Desk uses — the permission, and no money taken yet
+ * (the server refuses a discount once any payment exists, refunded or not) —
+ * plus a bill that is still a bill: a waived or cancelled one cannot take a
+ * discount, and the server says so, so the panel is not offered there.
+ */
+export function showsPromotionPanel(mayDiscount: boolean, invoice: Invoice): boolean {
+  return (
+    mayDiscount &&
+    invoice.paidPaise === 0 &&
+    invoice.status !== 'WAIVED' &&
+    invoice.status !== 'CANCELLED'
+  );
+}
 
 const DEFER_REASONS = [
   'Emergency — no means to pay now',
@@ -48,6 +66,7 @@ export function PaymentDialog({
   onSettled: (invoice: Invoice) => void;
 }) {
   const { can } = useAuth();
+  const mayDiscount = can('promotion:apply');
 
   const [invoice, setInvoice] = useState(initial);
   const [mode, setMode] = useState('CASH');
@@ -71,6 +90,38 @@ export function PaymentDialog({
   const [error, setError] = useState<string | null>(null);
 
   const panelRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * What the discount panel offers — loaded only for someone who can use it,
+   * the same two calls the Finance Desk makes. A failure to load approvers is
+   * shown by the panel itself: a discount needs one named, so without the list
+   * it cannot be applied.
+   */
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [approvers, setApprovers] = useState<Array<{ id: string; fullName: string }>>([]);
+  const [approversBlocked, setApproversBlocked] = useState(false);
+
+  useEffect(() => {
+    if (!mayDiscount) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { promotions } = await api.promotions(true);
+        if (!cancelled) setPromotions(promotions);
+      } catch {
+        if (!cancelled) setPromotions([]);
+      }
+      try {
+        const { approvers } = await api.approvers();
+        if (!cancelled) setApprovers(approvers);
+      } catch {
+        if (!cancelled) setApproversBlocked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mayDiscount]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -142,6 +193,28 @@ export function PaymentDialog({
     }
   }
 
+  /**
+   * Apply or take off a discount, then read the bill back.
+   *
+   * Read back rather than patched locally: the server spreads a discount across
+   * the lines, and the dialog shows what it actually did. `apply` also resets
+   * the amount to collect to the NEW balance — left at the old one, the desk
+   * would be offered the undiscounted figure, which the server refuses as more
+   * than is owed.
+   */
+  async function changeDiscount(action: () => Promise<unknown>, fallback: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      apply(await api.invoice(invoice.id));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : fallback);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitCorrection() {
     if (!correcting || correctionReason.trim().length < 3) return;
 
@@ -191,13 +264,18 @@ export function PaymentDialog({
         if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
+      {/* The dialog box is the one thing here that scrolls — a long bill with
+          the discount panel open outgrows a laptop screen. `scrollbar-quiet`
+          is the sidebar's utility: the bar is invisible until the pointer is
+          over the dialog or focus is inside it, and scrolling itself (wheel,
+          touch, keyboard) is untouched because only the bar's colour changes. */}
       <div
         ref={panelRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-dialog-title"
-        className="max-h-full w-full max-w-lg overflow-y-auto rounded-t-card-lg border border-ink/10 bg-card shadow-lg outline-none sm:rounded-card-lg"
+        className="scrollbar-quiet max-h-full w-full max-w-lg overflow-y-auto rounded-t-card-lg border border-ink/10 bg-card shadow-lg outline-none sm:rounded-card-lg"
       >
         <header className="flex items-start justify-between gap-3 border-b border-ink/8 bg-bg-soft px-5 py-4">
           <div>
@@ -234,35 +312,30 @@ export function PaymentDialog({
             </div>
           )}
 
-          <section className="rounded-panel border border-ink/10 bg-white p-3">
-            <ul className="space-y-1">
-              {invoice.lines.map((l) => (
-                <li key={l.id} className="flex justify-between gap-3 text-[13px]">
-                  <span>
-                    {l.description}
-                    {l.quantity > 1 && <span className="text-ink-40"> × {l.quantity}</span>}
-                  </span>
-                  <span className="font-mono">{formatPaise(l.totalPaise)}</span>
-                </li>
-              ))}
-            </ul>
+          <BillSummary invoice={invoice} />
 
-            <div className="mt-2 space-y-1 border-t border-ink/8 pt-2 text-[13px]">
-              <Row label="Total" value={formatPaise(invoice.totalPaise)} bold />
-              {invoice.paidPaise > 0 && (
-                <Row label="Paid" value={`− ${formatPaise(invoice.paidPaise)}`} />
-              )}
-              {invoice.refundedPaise > 0 && (
-                <Row label="Refunded" value={`+ ${formatPaise(invoice.refundedPaise)}`} />
-              )}
-              <Row
-                label="Balance"
-                value={formatPaise(invoice.balancePaise)}
-                bold
-                tone={invoice.balancePaise > 0 ? 'coral' : 'green'}
-              />
-            </div>
-          </section>
+          {showsPromotionPanel(mayDiscount, invoice) && (
+            <PromotionPanel
+              layout="stacked"
+              invoice={invoice}
+              promotions={promotions}
+              approvers={approvers}
+              approversBlocked={approversBlocked}
+              busy={busy}
+              onApply={(input) =>
+                void changeDiscount(
+                  () => api.applyPromotion(invoice.id, input),
+                  'Could not apply the discount.',
+                )
+              }
+              onUndo={() =>
+                void changeDiscount(
+                  () => api.removePromotion(invoice.id, 'APPLIED_IN_ERROR'),
+                  'Could not take the discount off.',
+                )
+              }
+            />
+          )}
 
           {settled ? (
             <div className="flex items-start gap-2 rounded-panel border border-green/30 bg-green-soft/40 p-3 text-[13px]">
@@ -578,6 +651,57 @@ export function PaymentDialog({
         </footer>
       </div>
     </div>
+  );
+}
+
+/**
+ * The bill, as the desk needs to read it before taking money.
+ *
+ * Laid out the way the Finance Desk lays out the same bill: each line at its
+ * full price, then what was billed, any discount as a line of its own, any tax,
+ * and the total. A discount used to be visible here only as line amounts that
+ * were smaller than the fee — now it says what it is. With no discount and no
+ * tax the billed figure IS the total, so those rows are left out and the bill
+ * reads exactly as it always did.
+ */
+export function BillSummary({ invoice }: { invoice: Invoice }) {
+  const breakdown = invoice.discountPaise > 0 || invoice.taxPaise > 0;
+
+  return (
+    <section className="rounded-panel border border-ink/10 bg-white p-3">
+      <ul className="space-y-1">
+        {invoice.lines.map((l) => (
+          <li key={l.id} className="flex justify-between gap-3 text-[13px]">
+            <span>
+              {l.description}
+              {l.quantity > 1 && <span className="text-ink-40"> × {l.quantity}</span>}
+            </span>
+            <span className="font-mono">{formatPaise(l.quantity * l.unitPricePaise)}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-2 space-y-1 border-t border-ink/8 pt-2 text-[13px]">
+        {breakdown && <Row label="Billed" value={formatPaise(invoice.subtotalPaise)} />}
+        {invoice.discountPaise > 0 && (
+          <Row label="Discount" value={`− ${formatPaise(invoice.discountPaise)}`} tone="green" />
+        )}
+        {invoice.taxPaise > 0 && <Row label="Tax" value={formatPaise(invoice.taxPaise)} />}
+        <Row label="Total" value={formatPaise(invoice.totalPaise)} bold />
+        {invoice.paidPaise > 0 && (
+          <Row label="Paid" value={`− ${formatPaise(invoice.paidPaise)}`} />
+        )}
+        {invoice.refundedPaise > 0 && (
+          <Row label="Refunded" value={`+ ${formatPaise(invoice.refundedPaise)}`} />
+        )}
+        <Row
+          label="Balance"
+          value={formatPaise(invoice.balancePaise)}
+          bold
+          tone={invoice.balancePaise > 0 ? 'coral' : 'green'}
+        />
+      </div>
+    </section>
   );
 }
 
