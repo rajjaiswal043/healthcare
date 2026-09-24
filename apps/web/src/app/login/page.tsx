@@ -9,6 +9,14 @@ import type { ClinicBrand } from '@/components/auth-shell';
 import { ClinicLogo } from '@/components/clinic-logo';
 import { ConsoleMark } from '@/components/console-mark';
 import {
+  HANDMADE_CSS,
+  HandArrow,
+  HandNote,
+  Stamp,
+  TokenSlip,
+  Underlined,
+} from '@/components/handmade';
+import {
   IconAlert,
   IconArrowLeft,
   IconBuilding,
@@ -18,6 +26,7 @@ import {
   IconLock,
   IconMail,
   IconShield,
+  IconUsers,
 } from '@/components/icons';
 
 type Stage = 'credentials' | 'mfa-code' | 'mfa-enrol';
@@ -57,6 +66,33 @@ export default function LoginPage() {
   const [clinic, setClinic] = useState<ClinicBrand | null>(null);
 
   /**
+   * "Good morning", and today's date, in the desk's own time.
+   *
+   * Set after mount: the server renders in its own timezone, so computing this
+   * during render would greet a Pune front desk with a Frankfurt afternoon and
+   * then flicker. Until it lands the heading says "Welcome back", which is
+   * never wrong. Late evening and the small hours get their own line, because
+   * that is who is signing in then: the night nurse, the on-call doctor.
+   */
+  const [greeting, setGreeting] = useState<{ hello: string; date: string } | null>(null);
+
+  useEffect(() => {
+    const now = new Date();
+    const h = now.getHours();
+    setGreeting({
+      hello:
+        h < 5 || h >= 22
+          ? 'Night shift'
+          : h < 12
+            ? 'Good morning'
+            : h < 17
+              ? 'Good afternoon'
+              : 'Good evening',
+      date: now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }),
+    });
+  }, []);
+
+  /**
    * Restore the last clinic, once.
    *
    * In an effect rather than in `useState`'s initialiser because this component
@@ -67,7 +103,13 @@ export default function LoginPage() {
   useEffect(() => {
     try {
       const remembered = window.localStorage.getItem(LAST_CLINIC_KEY);
-      if (remembered) setTenantSlug(remembered);
+      if (remembered) {
+        setTenantSlug(remembered);
+        // The clinic is already filled in, so start the cursor where the
+        // person actually has to type. Saves a Tab on every sign-in, forty
+        // times a day at a busy desk.
+        requestAnimationFrame(() => document.getElementById('email')?.focus());
+      }
     } catch {
       // Private mode, or storage disabled. The page works without it.
     }
@@ -164,7 +206,7 @@ export default function LoginPage() {
    *
    * HEIGHT IS STILL A HARD CONSTRAINT (scripts/check-viewport-fit.mjs): the page
    * is exactly one viewport tall and never scrolls. The form column scrolls
-   * internally as a last resort, and anything decorative — the floating cards,
+   * internally as a last resort, and anything decorative — the token slip,
    * the help line — drops out on short screens before the form is squeezed.
    *
    * The brand panel keeps the white-label rule from auth-shell.tsx: once the
@@ -173,7 +215,7 @@ export default function LoginPage() {
    */
   return (
     <main className="relative flex h-[100dvh] w-full overflow-hidden bg-bg lg:gap-3 lg:p-3">
-      <style dangerouslySetInnerHTML={{ __html: LOGIN_CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: LOGIN_CSS + HANDMADE_CSS }} />
 
       {/* Soft colour behind the form, across the whole page so it has no edge */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -230,11 +272,24 @@ export default function LoginPage() {
               </span>
             )}
 
+            {onCredentials && (
+              <p className="mono-label mb-2 h-4">{greeting ? greeting.date : ' '}</p>
+            )}
             <h1 className="text-[clamp(28px,3.4vw,36px)] font-extrabold leading-[1.05] tracking-[-0.03em]">
               {onCredentials ? (
-                <>
-                  Welcome <span className="text-clinical">back</span>
-                </>
+                greeting ? (
+                  <>
+                    {greeting.hello.split(' ')[0]}{' '}
+                    <span className="pr-[0.06em] italic text-clinical">
+                      {greeting.hello.split(' ').slice(1).join(' ')}
+                    </span>
+                    .
+                  </>
+                ) : (
+                  <>
+                    Welcome <span className="text-clinical">back</span>
+                  </>
+                )
               ) : (
                 <>
                   One more <span className="text-clinical">step</span>
@@ -428,7 +483,17 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className="mt-6 text-center text-[13px] text-ink-40 [@media(max-height:700px)]:hidden">
+            {/* Most sign-ins happen at a desk PC that three people share. The
+                one habit that keeps patient records safe there is signing out,
+                so it is said here, once, where the session starts. */}
+            {onCredentials && (
+              <p className="mt-4 flex items-center justify-center gap-2 rounded-[10px] bg-amber-soft/60 px-3 py-2 text-[12.5px] text-amber-text">
+                <IconUsers size={14} />
+                Shared desk computer? Sign out whenever you step away.
+              </p>
+            )}
+
+            <p className="mt-4 text-center text-[13px] text-ink-40 [@media(max-height:760px)]:hidden">
               {onCredentials
                 ? 'Forgot your password or new to the clinic? Your administrator can set up or reset your account.'
                 : 'Lost access to your authenticator? Ask your clinic administrator to reset it.'}
@@ -586,46 +651,53 @@ function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
           Staff sign-in
         </p>
         <h2 className="mt-5 max-w-[460px] text-[clamp(30px,3vw,46px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
-          Every patient, every queue, <span className="text-[#7fe0d2]">one calm console.</span>
+          Every patient, every queue,{' '}
+          <Underlined color="#E8B23C" className="text-[#7fe0d2]">
+            one calm console.
+          </Underlined>
         </h2>
         <p className="mt-4 max-w-[400px] text-[15px] leading-relaxed text-white/65">
           Registration, consultations, prescriptions and billing, right where you left them.
         </p>
 
-        {/* Moments from a clinic day. Decorative, and first to go on short screens. */}
+        {/* The desk, as it looks today: a printed token slip, the OPD stamp,
+            and a note in the margin. Decorative, and first to go on short
+            screens. The slip wears the clinic's name once it is known —
+            before that it says only "OPD", per the white-label rule. */}
         <div
           aria-hidden="true"
-          className="relative mt-10 h-[176px] max-w-[440px] [@media(max-height:800px)]:hidden"
+          className="relative mt-9 h-[250px] max-w-[460px] [@media(max-height:860px)]:hidden"
         >
-          <GlassCard className="login-float left-0 top-0 w-[270px]">
-            <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#5fd6c6]/20 font-mono text-[13px] font-bold text-[#7fe0d2]">
-              19
-            </span>
-            <span className="min-w-0 leading-tight">
-              <span className="block text-[13.5px] font-semibold">Token 19 · In chamber</span>
-              <span className="block text-[11.5px] text-white/60">Dr. Kiran Rao · Room 2</span>
-            </span>
-          </GlassCard>
-          <GlassCard className="login-float right-0 top-[62px] w-[250px]" delay="-2.5s">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-green/40 text-white">
-              <IconCheck size={15} />
-            </span>
-            <span className="min-w-0 leading-tight">
-              <span className="block text-[13.5px] font-semibold">₹850 received</span>
-              <span className="block font-mono text-[11px] text-white/60">Receipt R-1042</span>
-            </span>
-          </GlassCard>
-          <GlassCard className="login-float bottom-0 left-8 w-[240px]" delay="-5s">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-[#e693bb]/25 text-[#f3b8d3]">
-              <PulseGlyph />
-            </span>
-            <span className="min-w-0 leading-tight">
-              <span className="block text-[13.5px] font-semibold">Vitals recorded</span>
-              <span className="block font-mono text-[11px] text-white/60">
-                BP 124/82 · SpO₂ 98%
-              </span>
-            </span>
-          </GlassCard>
+          <TokenSlip
+            className="absolute left-2 top-1"
+            heading={clinic ? clinic.name : 'OPD · Out-patient'}
+            token="19"
+            lines={[
+              ['Doctor', 'Dr. K. Rao'],
+              ['Room', '2'],
+              ['Issued', '09:04'],
+            ]}
+            footer="Please wait for your number"
+          />
+          <Stamp
+            className="absolute left-[222px] top-[122px]"
+            top="OUT-PATIENT DEPT"
+            middle="OPD OPEN"
+            bottom="WALK-INS WELCOME"
+            color="#F08A6E"
+            size={124}
+            rotate={-14}
+          />
+          <span className="absolute right-0 top-4 flex flex-col items-start text-[#F6D48A]">
+            <HandNote className="text-[25px]" rotate={-5}>
+              goodbye, token roll —
+              <br />
+              the numbers are on
+              <br />
+              the waiting-room TV now
+            </HandNote>
+            <HandArrow direction="down-left" className="ml-2 mt-1 h-12 w-16" color="#F6D48A" />
+          </span>
         </div>
       </div>
 
@@ -646,25 +718,6 @@ function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
         </p>
       </div>
     </aside>
-  );
-}
-
-function GlassCard({
-  children,
-  className = '',
-  delay,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: string;
-}) {
-  return (
-    <div
-      className={`absolute flex items-center gap-3 rounded-[16px] border border-white/15 bg-white/10 px-3.5 py-3 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.5)] backdrop-blur-md ${className}`}
-      style={delay ? { animationDelay: delay } : undefined}
-    >
-      {children}
-    </div>
   );
 }
 
@@ -701,24 +754,6 @@ function ArrowGlyph() {
       aria-hidden="true"
     >
       <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-function PulseGlyph() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.9}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3 12h4l2-5 4 10 2-5h6" />
     </svg>
   );
 }

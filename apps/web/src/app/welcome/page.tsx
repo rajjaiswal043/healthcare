@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ConsoleMark } from '@/components/console-mark';
+import { HANDMADE_CSS, HandArrow, HandNote, Underlined } from '@/components/handmade';
+import { ScrollScene, SectionRail } from '@/components/scroll-scene';
 import {
   IconBell,
   IconCalendar,
@@ -50,8 +52,6 @@ import {
 const CSS = `
 @keyframes wl-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .wl-rise{animation:wl-rise .9s cubic-bezier(.2,.7,.2,1) both}
-@keyframes wl-word{0%{opacity:0;transform:translateY(.3em);filter:blur(6px)}4%,21%{opacity:1;transform:none;filter:blur(0)}25%,100%{opacity:0;transform:translateY(-.3em);filter:blur(6px)}}
-.wl-word{opacity:0;animation:wl-word 11.2s cubic-bezier(.2,.7,.2,1) infinite both}
 @keyframes wl-marquee{to{transform:translateX(-50%)}}
 .wl-marquee{animation:wl-marquee 50s linear infinite}
 .wl-marquee-wrap:hover .wl-marquee{animation-play-state:paused}
@@ -60,11 +60,21 @@ const CSS = `
 @keyframes wl-blink{50%{opacity:0}}
 .wl-caret{animation:wl-blink 1s steps(1) infinite}
 @media (prefers-reduced-motion: reduce){
-  .wl-word{animation:none;opacity:0}
-  .wl-word:first-child{opacity:1}
   .wl-marquee,.wl-float,.wl-caret{animation:none}
 }
 `;
+
+/** Every section the side rail tracks, in page order. */
+const SECTIONS = [
+  { id: 'top', label: 'Overview' },
+  { id: 'paper', label: 'What it replaces' },
+  { id: 'features', label: 'Features' },
+  { id: 'roles', label: 'Roles' },
+  { id: 'workflow', label: 'How it works' },
+  { id: 'display', label: 'Waiting room' },
+  { id: 'security', label: 'Security' },
+  { id: 'faq', label: 'FAQ' },
+] as const;
 
 const NAV = [
   { href: '#features', label: 'Features' },
@@ -73,8 +83,6 @@ const NAV = [
   { href: '#security', label: 'Security' },
   { href: '#faq', label: 'FAQ' },
 ];
-
-const ROTATING = ['front desk.', 'consult room.', 'nursing station.', 'clinic owner.'];
 
 export default function WelcomePage() {
   const { session, loading } = useAuth();
@@ -95,8 +103,19 @@ export default function WelcomePage() {
     : { href: '/login', label: 'Staff sign-in', short: 'Sign in' };
 
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-bg">
-      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+    <div className="relative isolate min-h-screen overflow-x-clip">
+      <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS }} />
+      <ScrollScene />
+      <SectionRail sections={SECTIONS} />
+
+      {/* First Tab stop: jump past the header straight to the page. Invisible
+          until focused, for anyone driving the page from a keyboard. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-pill focus:bg-ink focus:px-5 focus:py-3 focus:text-[14px] focus:font-semibold focus:text-white"
+      >
+        Skip to content
+      </a>
 
       {/* ==== Header ======================================================= */}
       <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-4">
@@ -180,12 +199,12 @@ export default function WelcomePage() {
         )}
       </header>
 
-      <main>
+      <main id="main" tabIndex={-1} className="outline-none">
         {/* ==== Hero ======================================================= */}
-        <section className="relative isolate px-4 pb-20 pt-32 sm:px-6 sm:pt-40 lg:pb-28">
+        <section id="top" className="relative isolate px-4 pb-20 pt-32 sm:px-6 sm:pt-40 lg:pb-28">
           <HeroBackdrop />
 
-          <div className="mx-auto max-w-5xl text-center">
+          <div className="mx-auto max-w-6xl">
             <a
               href="#display"
               className="wl-rise group inline-flex items-center gap-2 rounded-pill border border-ink/10 bg-white/75 py-1 pl-1 pr-3 text-[12.5px] font-medium text-ink-60 shadow-sm backdrop-blur transition-colors hover:border-clinical/30 hover:text-ink"
@@ -200,26 +219,24 @@ export default function WelcomePage() {
             </a>
 
             <h1
-              className="wl-rise mx-auto mt-7 max-w-5xl text-[clamp(38px,6.6vw,76px)] font-extrabold leading-[1] tracking-[-0.035em]"
+              className="wl-rise mt-7 max-w-4xl text-[clamp(42px,7.4vw,92px)] font-extrabold leading-[0.96] tracking-[-0.045em]"
               style={{ animationDelay: '80ms' }}
             >
-              One calm console for the
-              <span className="sr-only"> front desk.</span>
-              <span aria-hidden="true" className="mt-1 grid justify-items-center">
-                {ROTATING.map((w, i) => (
-                  <span
-                    key={w}
-                    className="wl-word col-start-1 row-start-1 whitespace-nowrap bg-gradient-to-r from-clinical-deep via-clinical to-[#18a092] bg-clip-text pb-[0.12em] text-transparent"
-                    style={{ animationDelay: `${i * 2.8}s` }}
-                  >
-                    {w}
-                  </span>
-                ))}
-              </span>
+              {/* Static on purpose. It used to cycle through four roles, but a
+                  headline that changes while you read it is one more moving
+                  thing on a screen in a busy clinic, and screen readers only
+                  ever heard the first word anyway.
+
+                  One word in italic teal, and the rest as heavy as the face
+                  goes: simple, and loud where it counts. Bricolage has no true
+                  italic, so the browser slants it — which, at this weight,
+                  reads as a deliberate hand-set lean rather than a font. */}
+              One calm console for the{' '}
+              <Underlined className="pr-[0.08em] italic text-clinical">whole OPD.</Underlined>
             </h1>
 
             <p
-              className="wl-rise mx-auto mt-5 max-w-[620px] text-[clamp(15.5px,1.6vw,18px)] leading-relaxed text-ink-60"
+              className="wl-rise mt-6 max-w-[560px] text-[clamp(16px,1.6vw,18.5px)] leading-relaxed text-ink-60"
               style={{ animationDelay: '160ms' }}
             >
               Register patients in under two minutes, run a live queue, write prescriptions and
@@ -228,31 +245,28 @@ export default function WelcomePage() {
             </p>
 
             <div
-              className="wl-rise mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center"
+              className="wl-rise mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"
               style={{ animationDelay: '240ms' }}
             >
               <Link
                 href={primary.href}
-                className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep hover:shadow-[0_14px_36px_-10px_rgba(15,118,110,0.8)] active:translate-y-px"
+                className="group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px"
               >
                 {signedIn ? 'Open your console' : 'Sign in to your clinic'}
-                <span className="transition-transform group-hover:translate-x-0.5">
-                  <ArrowRight size={16} />
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                  <ArrowRight size={15} />
                 </span>
               </Link>
               <a
                 href="#workflow"
-                className="inline-flex h-12 items-center justify-center gap-2.5 rounded-pill border border-ink/12 bg-white/80 px-6 text-[15px] font-semibold text-ink backdrop-blur transition-colors hover:border-ink/25 hover:bg-white"
+                className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill border-2 border-ink px-6 text-[15.5px] font-bold text-ink transition-colors hover:bg-ink hover:text-white"
               >
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-clinical-tint text-clinical">
-                  <PlayGlyph />
-                </span>
                 See a visit, start to finish
               </a>
             </div>
 
             <ul
-              className="wl-rise mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2"
+              className="wl-rise mt-7 flex flex-wrap items-center gap-x-6 gap-y-2"
               style={{ animationDelay: '320ms' }}
             >
               {['Nothing to install', 'Your clinic’s own branding', 'DPDP-ready by design'].map(
@@ -266,12 +280,46 @@ export default function WelcomePage() {
                 ),
               )}
             </ul>
+
+            {/* The four beats of a visit, numbered along the foot of the hero. */}
+            <ol
+              className="wl-rise mt-14 grid gap-x-8 gap-y-6 border-t border-ink/12 pt-7 sm:grid-cols-2 lg:grid-cols-4"
+              style={{ animationDelay: '380ms' }}
+            >
+              {[
+                { t: 'Register', b: 'UHID issued the moment the form is saved.' },
+                { t: 'Queue', b: 'A token, a doctor, and the waiting-room TV updates itself.' },
+                { t: 'Consult', b: 'Vitals, notes and Rx on one panel, printed on the way out.' },
+                { t: 'Bill', b: 'Consultation and tests on one receipt. Record complete.' },
+              ].map((s, i) => (
+                <li key={s.t} className="flex gap-4">
+                  <span className="font-display text-[40px] font-light leading-[0.85] text-ink-20">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span>
+                    <span className="block font-mono text-[11.5px] font-semibold uppercase tracking-label text-ink">
+                      {s.t}
+                    </span>
+                    <span className="mt-1.5 block text-[13.5px] leading-snug text-ink-60">
+                      {s.b}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
 
           <div
-            className="wl-rise mx-auto mt-16 max-w-6xl sm:mt-20"
+            className="wl-rise relative mx-auto mt-16 max-w-6xl sm:mt-24"
             style={{ animationDelay: '420ms' }}
           >
+            {/* A margin note, as if someone had marked up a printout. */}
+            <span className="absolute -top-16 left-[3%] hidden items-end gap-1 text-coral-text lg:flex">
+              <HandNote className="text-[26px]" rotate={-4}>
+                what the front desk sees at 9:30 am
+              </HandNote>
+              <HandArrow className="-mb-8 h-12 w-16" color="#B23A22" />
+            </span>
             <ProductWindow />
           </div>
         </section>
@@ -279,11 +327,15 @@ export default function WelcomePage() {
         {/* ==== Module marquee ============================================= */}
         <ModuleMarquee />
 
+        {/* ==== The paper it replaces ====================================== */}
+        <PaperTrail />
+
         {/* ==== Features bento ============================================ */}
         <section id="features" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
+                index="03"
                 eyebrow="Features"
                 title={
                   <>
@@ -302,11 +354,12 @@ export default function WelcomePage() {
         {/* ==== Roles ====================================================== */}
         <section
           id="roles"
-          className="scroll-mt-24 border-y border-ink/8 bg-white/60 px-4 py-24 sm:px-6 lg:py-32"
+          className="scroll-mt-24 border-y border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
         >
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
+                index="04"
                 eyebrow="Built for every role"
                 title={
                   <>
@@ -326,6 +379,7 @@ export default function WelcomePage() {
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
+                index="05"
                 eyebrow="How it works"
                 title={
                   <>
@@ -349,6 +403,7 @@ export default function WelcomePage() {
             <Reveal>
               <SectionHead
                 align="left"
+                index="07"
                 eyebrow="Trust & compliance"
                 title={
                   <>
@@ -401,12 +456,13 @@ export default function WelcomePage() {
         {/* ==== FAQ ======================================================== */}
         <section
           id="faq"
-          className="scroll-mt-24 border-t border-ink/8 bg-white/60 px-4 py-24 sm:px-6 lg:py-32"
+          className="scroll-mt-24 border-t border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
         >
           <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
             <Reveal className="lg:sticky lg:top-28 lg:self-start">
               <SectionHead
                 align="left"
+                index="08"
                 eyebrow="FAQ"
                 title={
                   <>
@@ -566,32 +622,45 @@ function Reveal({
   );
 }
 
+/**
+ * A section's opening: a numbered label row ruled across the width, then a big
+ * heavy heading. 'wide' puts the body copy to the right of the heading on large
+ * screens; 'left' stacks them, for heads that sit in a two-column section.
+ * The heading's accent words (`text-clinical`) lean into italic.
+ */
 function SectionHead({
+  index,
   eyebrow,
   title,
   body,
-  align = 'center',
+  align = 'wide',
 }: {
+  index: string;
   eyebrow: string;
   title: ReactNode;
   body: string;
-  align?: 'center' | 'left';
+  align?: 'wide' | 'left';
 }) {
-  const centered = align === 'center';
+  const wide = align === 'wide';
   return (
-    <div className={centered ? 'mx-auto max-w-3xl text-center' : 'max-w-xl'}>
-      <p className="inline-flex items-center gap-2 rounded-pill border border-clinical/20 bg-clinical-tint px-3 py-1 font-mono text-[10.5px] font-medium uppercase tracking-label text-clinical-text">
-        <span className="h-1.5 w-1.5 rounded-full bg-clinical" />
-        {eyebrow}
+    <div>
+      <p className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-label">
+        <span className="font-semibold text-clinical">{index}</span>
+        <span className="text-ink-40">&mdash; {eyebrow}</span>
+        <span aria-hidden="true" className="h-px flex-1 bg-ink/12" />
       </p>
-      <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em]">
-        {title}
-      </h2>
-      <p
-        className={`mt-5 text-[16px] leading-relaxed text-ink-60 ${centered ? 'mx-auto max-w-xl' : ''}`}
+      <div
+        className={wide ? 'mt-7 grid items-end gap-6 lg:grid-cols-[1.25fr_1fr] lg:gap-16' : 'mt-7'}
       >
-        {body}
-      </p>
+        <h2 className="text-[clamp(32px,5vw,60px)] font-extrabold leading-[0.98] tracking-[-0.04em] [&_.text-clinical]:italic">
+          {title}
+        </h2>
+        <p
+          className={`text-[16.5px] leading-relaxed text-ink-60 ${wide ? 'max-w-md lg:pb-2' : 'mt-5 max-w-xl'}`}
+        >
+          {body}
+        </p>
+      </div>
     </div>
   );
 }
@@ -610,9 +679,6 @@ function HeroBackdrop() {
             'radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 100%)',
         }}
       />
-      <div className="auth-blob absolute -top-40 left-1/2 h-[620px] w-[900px] -translate-x-1/2 rounded-full bg-clinical-soft/80 blur-3xl" />
-      <div className="auth-blob-slow absolute -left-40 top-[38%] h-[460px] w-[460px] rounded-full bg-amber-soft/60 blur-3xl" />
-      <div className="auth-blob absolute -right-32 top-[30%] h-[420px] w-[420px] rounded-full bg-coral-soft/30 blur-3xl" />
     </div>
   );
 }
@@ -961,6 +1027,222 @@ function ProductWindow() {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  The paper it replaces                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Four things on every OPD desk in India, sketched in pen, each pointing at the
+ * part of the console that takes its job. Every "now" line names a feature that
+ * exists; nothing here is aspirational.
+ *
+ * The sketches are deliberately a little crooked — drawn, not rendered — and
+ * the cards sit at slightly different angles, like index cards pinned to a
+ * board.
+ */
+function PaperTrail() {
+  const items = [
+    {
+      sketch: <SketchTokenRoll />,
+      was: 'the token roll',
+      now: 'A live queue, and token numbers on the waiting-room TV.',
+      href: '#display',
+      tilt: -1.2,
+    },
+    {
+      sketch: <SketchRegister />,
+      was: 'the big register',
+      now: 'Find any patient by name, mobile, UHID or ABHA in one box.',
+      href: '#features',
+      tilt: 0.8,
+    },
+    {
+      sketch: <SketchReceiptBook />,
+      was: 'the carbon receipt book',
+      now: 'One bill for consultation and tests, and a receipt in a click.',
+      href: '#features',
+      tilt: -0.6,
+    },
+    {
+      sketch: <SketchRxPad />,
+      was: 'the Rx pad',
+      now: 'Prescriptions printed on your own letterhead.',
+      href: '#features',
+      tilt: 1.1,
+    },
+  ];
+
+  return (
+    <section
+      id="paper"
+      aria-label="What it replaces"
+      className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-28"
+    >
+      <div className="mx-auto max-w-6xl">
+        <Reveal>
+          <SectionHead
+            index="02"
+            eyebrow="What it replaces"
+            title={
+              <>
+                Retires the <Underlined>paper</Underlined>, not the people.
+              </>
+            }
+            body="Every OPD already runs on the same four things. The console keeps the habits your staff know and quietly takes the paper off the desk."
+          />
+        </Reveal>
+
+        <ul className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {items.map((it, i) => (
+            <li key={it.was}>
+              <Reveal delay={i * 90} className="h-full">
+                <a
+                  href={it.href}
+                  className="group flex h-full flex-col rounded-card border border-ink/10 bg-[#FFFDF8] p-5 shadow-sm transition-shadow duration-300 hover:border-clinical/30 hover:shadow-lg"
+                  style={{ transform: `rotate(${it.tilt}deg)` }}
+                >
+                  <div
+                    className="grid h-36 place-items-center rounded-[14px] text-ink-60"
+                    style={{
+                      backgroundImage:
+                        'repeating-linear-gradient(to bottom, transparent 0 23px, rgba(58,78,155,0.09) 23px 24px)',
+                    }}
+                  >
+                    {it.sketch}
+                  </div>
+                  <HandNote className="mt-4 text-[24px] text-ink-60" rotate={-2}>
+                    <span className="line-through decoration-coral decoration-2">{it.was}</span>
+                  </HandNote>
+                  <p className="mt-3 flex-1 text-[14.5px] font-medium leading-snug text-ink">
+                    {it.now}
+                  </p>
+                  <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-clinical-text">
+                    See how
+                    <span className="transition-transform group-hover:translate-x-0.5">
+                      <ArrowRight size={13} />
+                    </span>
+                  </span>
+                </a>
+              </Reveal>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** Shared pen settings for the sketches: one ink, one nib. */
+function Sketch({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 160 110"
+      className="h-28 w-40"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {children}
+    </svg>
+  );
+}
+
+function SketchTokenRoll() {
+  return (
+    <Sketch>
+      {/* A strip of tear-off tickets, the last one half torn and curling. */}
+      <path d="M14 34.6 106.4 32.8 107.2 77.4 14.8 79.2z" />
+      <path d="M45 34 45.6 78.6M76 33.4l.6 44.6" strokeDasharray="2.4 3.4" />
+      <path d="M107 33c9.6 1.8 18.4-1.2 27.6 3.4l8.4 40.2c-9-3.2-18.4-.6-35.6.8" />
+      <path d="M134.4 36.6c-2.4 2.8-2.2 5.8.4 8.6" />
+      <path d="M22 43.4c6.4-.2 13-.3 19.4-.2M53 42.9c6.4-.2 13-.3 19.4-.2M84 42.3c6.4-.2 13-.3 19.4-.1M114.6 43.2c5.8.2 11.2.8 16.6 1.8" />
+      {[
+        { x: 29.5, y: 68, n: '21' },
+        { x: 60.8, y: 67.4, n: '22' },
+        { x: 91.8, y: 66.8, n: '23' },
+      ].map((t) => (
+        <text
+          key={t.n}
+          x={t.x}
+          y={t.y}
+          textAnchor="middle"
+          fontFamily="var(--font-display), sans-serif"
+          fontSize="17"
+          fontWeight="800"
+          stroke="none"
+          fill="currentColor"
+        >
+          {t.n}
+        </text>
+      ))}
+      <text
+        x="125"
+        y="65"
+        textAnchor="middle"
+        fontFamily="var(--font-display), sans-serif"
+        fontSize="16"
+        fontWeight="800"
+        stroke="none"
+        fill="currentColor"
+        transform="rotate(8 125 65)"
+      >
+        24
+      </text>
+    </Sketch>
+  );
+}
+
+function SketchRegister() {
+  return (
+    <Sketch>
+      <path d="M80 22.5c-15-7.4-40-8.8-62-4.1l1.6 73.2c20.6-4.8 44.1-3.6 60.8 4.2" />
+      <path d="M80 22.5c15.2-7.2 40.4-8.2 62.4-3.3l-1.9 73c-20.1-4.6-44-3.8-60.9 4.1" />
+      <path d="M80 22.5 80.4 95.8" />
+      <path d="M28 34.5c13-1.6 26.5-1.6 42 .6M28.4 45.7c13.2-1.4 26.6-1.2 41.6.9M28.6 57c11.6-1.2 24.6-1 41.4.7M29 68.2c12-1 25-1 40.8.8M29.2 79.4c10-.8 20.6-.8 30.8.2" />
+      <path d="M90 35.1c14.8-2.4 28.6-2.6 42.2-1M90.2 46.4c14-2 27.8-2.1 41.6-.7M90.4 57.7c13.4-1.8 27-1.8 41.2-.5M90.6 68.9c11-1.5 22.4-1.6 33.4-.8" />
+      <path d="M42 28.2v58.4" strokeDasharray="2 4" />
+    </Sketch>
+  );
+}
+
+function SketchReceiptBook() {
+  return (
+    <Sketch>
+      <path d="M36 26.4 124.6 24.8 126 94.4 37.4 95.8z" />
+      <path d="M40.6 21.5 128.8 20.4 130 88.8" opacity="0.55" />
+      <path d="M36.2 38.4c29.4-1.2 59-1.8 88.6-1.5" strokeDasharray="4 3.2" />
+      <text
+        x="48"
+        y="33.5"
+        fontFamily="var(--font-mono), monospace"
+        fontSize="8"
+        stroke="none"
+        fill="currentColor"
+      >
+        No. 0417
+      </text>
+      <path d="M48 52.6c18-.8 36-.9 54-.4M48.2 63.4c14.8-.6 29.8-.6 44.6-.2M48.4 74.2c20.4-.7 41-.6 61.4 0" />
+      <path d="M106.5 52.4c2.2 0 4.4.1 6.6.3M98 63.2c5 0 10 .1 15 .3" />
+      <path d="M92 86.4c4-3.8 7.4-4.4 9.6-1.2 2.4 3.4 5.6 3.2 9.8-1.4" />
+    </Sketch>
+  );
+}
+
+function SketchRxPad() {
+  return (
+    <Sketch>
+      <path d="M44 14.6 118.2 15.8 116.4 99.4 42.4 98.2z" />
+      <path d="M52 9.8v9.4M64 9.8v9.4M76 9.9v9.4M88 10v9.4M100 10.1v9.4M112 10.2v9.4" />
+      <path d="M54.4 27.8c14.2-.5 28.2-.6 42.4-.2" />
+      <path d="M56 44.6V62.4M56 44.8h7.4c5.2 0 7.6 2.2 7.6 5s-2.6 4.8-7.4 4.8H56m7.6.2 9.6 11.2M73.2 57.4 64.8 66.8" />
+      <path d="M80 50.2c9.8-.4 19.8-.4 29.4-.1M80.4 60.4c8.2-.3 16.6-.3 25-.1M56.2 76.4c16-.6 32.4-.6 49 0M56.6 86.2c11.4-.4 23-.4 34.6-.1" />
+    </Sketch>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Marquee                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -981,7 +1263,10 @@ function ModuleMarquee() {
   ];
 
   return (
-    <section aria-label="Modules" className="border-y border-ink/8 bg-white/50 py-6">
+    <section
+      aria-label="Modules"
+      className="border-y border-ink/8 bg-white/30 py-6 backdrop-blur-sm"
+    >
       <p className="mono-label mb-5 text-center">Every corner of the OPD, in one place</p>
       <div
         className="wl-marquee-wrap relative overflow-hidden"
@@ -1264,7 +1549,7 @@ function Tile({
   children?: ReactNode;
 }) {
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-card-lg border border-ink/8 bg-card p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-clinical/25 hover:shadow sm:p-7">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-clinical/25 hover:shadow sm:p-7">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-clinical-soft/0 blur-2xl transition-colors duration-500 group-hover:bg-clinical-soft/70"
@@ -1479,7 +1764,7 @@ function RolesShowcase() {
         className="wl-rise mt-8 grid items-stretch gap-6 lg:grid-cols-2"
         style={{ animationDuration: '.5s' }}
       >
-        <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-card p-7 shadow-sm sm:p-9">
+        <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl p-7 shadow-sm sm:p-9">
           <p className="mono-label" style={{ color: role.text }}>
             {role.label}
           </p>
@@ -1632,7 +1917,7 @@ function Journey() {
               <span className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-clinical text-white shadow-[0_0_0_8px_#EFECE6,0_10px_24px_-8px_rgba(15,118,110,0.7)]">
                 {s.icon}
               </span>
-              <div className="flex-1 rounded-card border border-ink/8 bg-card p-5 shadow-sm lg:mt-6 lg:w-full">
+              <div className="flex-1 rounded-card border border-ink/8 bg-white/65 backdrop-blur-xl p-5 shadow-sm lg:mt-6 lg:w-full">
                 <p className="font-mono text-[11.5px] font-semibold text-clinical-text">{s.time}</p>
                 <h3 className="mt-1 text-[19px] font-bold">{s.title}</h3>
                 <p className="mt-2 text-[14px] leading-relaxed text-ink-60">{s.body}</p>
@@ -1660,7 +1945,7 @@ function DisplayShowcase() {
   return (
     <section
       id="display"
-      className="relative isolate scroll-mt-24 overflow-hidden bg-dark px-4 py-24 text-white sm:px-6 lg:py-32"
+      className="relative isolate scroll-mt-24 overflow-hidden bg-dark/[0.93] px-4 py-24 text-white sm:px-6 lg:py-32"
     >
       <div
         aria-hidden="true"
@@ -1681,12 +1966,13 @@ function DisplayShowcase() {
 
       <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.85fr_1.15fr]">
         <Reveal>
-          <p className="inline-flex items-center gap-2 rounded-pill border border-white/15 bg-white/5 px-3 py-1 font-mono text-[10.5px] font-medium uppercase tracking-label text-clinical-soft">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#34d3c0]" />
-            Waiting-room display
+          <p className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-label">
+            <span className="font-semibold text-[#5fd6c6]">06</span>
+            <span className="text-white/50">&mdash; Waiting-room display</span>
+            <span aria-hidden="true" className="h-px flex-1 bg-white/15" />
           </p>
           <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
-            A calmer waiting room, <span className="text-[#5fd6c6]">on any TV.</span>
+            A calmer waiting room, <span className="italic text-[#5fd6c6]">on any TV.</span>
           </h2>
           <p className="mt-5 max-w-md text-[16px] leading-relaxed text-white/65">
             Pair a screen with a key from settings. It shows who each doctor is seeing and who is
@@ -1816,7 +2102,7 @@ function AuditLog() {
         aria-hidden="true"
         className="absolute -inset-4 -z-10 rounded-[36px] bg-gradient-to-br from-clinical-soft/70 via-transparent to-amber-soft/60 blur-xl"
       />
-      <div className="overflow-hidden rounded-card-lg border border-ink/10 bg-card shadow-lg">
+      <div className="overflow-hidden rounded-card-lg border border-ink/10 bg-white/75 backdrop-blur-xl shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/8 px-5 py-4">
           <span>
             <span className="mono-label block">Audit trail</span>
@@ -1894,7 +2180,7 @@ const FAQ = [
 
 function FaqList() {
   return (
-    <div className="divide-y divide-ink/8 rounded-card-lg border border-ink/8 bg-card shadow-sm">
+    <div className="divide-y divide-ink/8 rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl shadow-sm">
       {FAQ.map((f, i) => (
         <details key={f.q} className="group px-6" open={i === 0}>
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-[15.5px] font-semibold [&::-webkit-details-marker]:hidden">
@@ -2008,10 +2294,4 @@ const KeyboardGlyph = ({ size }: { size?: number }) => (
     <rect x="2" y="6" width="20" height="12" rx="2" />
     <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
   </Glyph>
-);
-
-const PlayGlyph = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M7 4.5v15a1 1 0 001.5.86l12-7.5a1 1 0 000-1.72l-12-7.5A1 1 0 007 4.5z" />
-  </svg>
 );
