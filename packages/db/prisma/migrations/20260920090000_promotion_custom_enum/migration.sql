@@ -1,0 +1,13 @@
+-- Custom promotions: the amount is decided at the desk, not in advance.
+--
+-- PERCENTAGE and FLAT both answer "how much is this discount worth" before any
+-- bill exists. CUSTOM does not — it exists for the case a clinic cannot write
+-- down in advance, so the number arrives when the discount is applied and is
+-- frozen onto `promotion_application.discount_paise` like every other discount.
+--
+-- ALONE IN ITS OWN MIGRATION ON PURPOSE. Postgres will not let a new enum value
+-- be USED in the transaction that added it, and Prisma runs each migration file
+-- in one transaction. The constraint in the next migration references 'CUSTOM',
+-- so the two cannot share a file — split, they commit in order and the value
+-- exists by the time anything mentions it.
+ALTER TYPE "promotion_type" ADD VALUE IF NOT EXISTS 'CUSTOM';

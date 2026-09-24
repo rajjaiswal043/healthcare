@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.next/
+.next-build/
+.next-dev/
+.turbo/
+coverage/
+pnpm-lock.yaml
+
+# Machine-generated. Not ours to format, and reformatting it just creates noise
+# on every `prisma generate`.
+**/src/generated/

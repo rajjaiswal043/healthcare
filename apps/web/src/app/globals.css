@@ -1,0 +1,407 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* tailwind.config.ts carries the tokens. This file holds the base layer —
+   warm paper page, ink text, a visible focus ring on everything, and the
+   reduced-motion guarantee — plus the small set of component classes that would
+   otherwise be repeated across every screen. */
+
+@layer base {
+  html {
+    color-scheme: light;
+    height: 100%;
+  }
+
+  /* ---------------------------------------------------------------------------
+     ROLE SIGNATURES
+
+     One colour per persona, so anyone glancing at a shared clinic PC knows whose
+     session is open before they touch it. Applied to the nav rail, the active
+     nav item, the identity chip and a hairline under the header — and nowhere
+     else.
+
+     The rule these obey: a role colour is IDENTITY, never MEANING. Coral is
+     unpaid, amber is draft, green is paid and teal is "this is the action" on
+     every screen for every persona, so none of the five is a green, a red-orange
+     or a gold, and none is the clinical teal. A doctor themed green sitting
+     beside a green "Paid" badge is how a clinic learns to stop trusting colour.
+
+     Values are AA or better: white-on-solid runs 6.0–7.7, text-on-soft 6.7–8.6.
+     Five categories is more than colour can safely carry on its own — roughly
+     one man in twelve will not separate berry from clay — so the role NAME is
+     always written beside the avatar. The colour confirms the text; it is never
+     the only way to know.
+     --------------------------------------------------------------------------- */
+  :root {
+    /* No role, or a role we do not recognise: the house teal. */
+    --role: theme('colors.clinical.DEFAULT');
+    --role-soft: theme('colors.clinical.soft');
+    --role-tint: theme('colors.clinical.tint');
+    --role-text: theme('colors.clinical.text');
+  }
+
+  [data-role='front_desk'] {
+    --role: #3a4e9b;
+    --role-soft: #e2e6f6;
+    --role-tint: #f1f3fb;
+    --role-text: #2b3a75;
+  }
+
+  [data-role='doctor'] {
+    --role: #6b3fa0;
+    --role-soft: #ede2f7;
+    --role-tint: #f6f1fb;
+    --role-text: #52307b;
+  }
+
+  [data-role='nurse'] {
+    --role: #a83a6e;
+    --role-soft: #f7deeb;
+    --role-tint: #fbf1f6;
+    --role-text: #852c56;
+  }
+
+  [data-role='owner'] {
+    --role: #7a5230;
+    --role-soft: #efe1d3;
+    --role-tint: #f7f0e8;
+    --role-text: #5e3e22;
+  }
+
+  [data-role='administrator'] {
+    --role: #4c5563;
+    --role-soft: #e4e6ea;
+    --role-tint: #f2f3f5;
+    --role-text: #39414d;
+  }
+
+  /* There is deliberately no signature for doctorsdesk.in itself. The platform
+     console was given one — deep ink navy — so that somebody with it and a
+     clinic open in two tabs could not confuse them. Narveer wanted the platform
+     screens to match the clinic's on 25 Aug 2026, so the separation is now
+     carried by the wordmark and a line of text instead. */
+
+  body {
+    @apply bg-bg font-sans text-ink antialiased;
+    margin: 0;
+    min-height: 100%;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-display;
+    line-height: 1.08;
+  }
+
+  /* Non-negotiable: the front desk is keyboard-first (NFR-08). If you cannot
+     see where focus is, it is not keyboard-first. */
+  :focus-visible {
+    outline: 2.5px solid theme('colors.clinical.DEFAULT');
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: theme('colors.clinical.soft');
+  }
+
+  /* Numbers that sit in columns — UHIDs, mobiles, amounts — must line up. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* The signature micro-label: tiny, uppercase, mono. Used for field labels,
+     section eyebrows and table headers so they recede behind the data. */
+  .mono-label {
+    @apply font-mono text-[10.5px] font-medium uppercase tracking-label text-ink-40;
+  }
+
+  .eyebrow {
+    @apply mono-label flex items-center gap-2 text-clinical-text;
+  }
+  .eyebrow::before {
+    content: '';
+    @apply inline-block h-1.5 w-1.5 rounded-full bg-clinical;
+  }
+
+  /* Heading motif: wrap the last words in <em class="accent-words">. */
+  .accent-words {
+    @apply not-italic text-clinical-text;
+  }
+
+  /* ---- Fields ------------------------------------------------------------ */
+
+  .field-label {
+    @apply mono-label mb-1.5 block;
+  }
+
+  .field-input {
+    @apply w-full rounded-panel border-[1.5px] border-ink/12 bg-white px-3.5 py-2.5 text-[15px]
+           text-ink transition-colors placeholder:text-ink-20
+           focus:border-clinical/50 focus:outline-none focus:ring-4 focus:ring-clinical/10
+           disabled:bg-bg-soft disabled:text-ink-40;
+  }
+
+  /* Input with a leading icon. */
+  .field-input-icon {
+    @apply field-input pl-10;
+  }
+
+  .field-hint {
+    @apply mt-1 text-[12.5px] text-ink-40;
+  }
+
+  .field-error {
+    @apply mt-1 text-[12.5px] text-coral-text;
+  }
+
+  /* ---- Buttons ----------------------------------------------------------- */
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill px-5 py-2.5 text-[14px]
+           font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-55;
+  }
+
+  .btn-primary {
+    @apply btn bg-clinical text-white shadow-sm hover:bg-clinical-text hover:shadow
+           active:translate-y-px;
+  }
+
+  .btn-secondary {
+    @apply btn border-[1.5px] border-ink/12 bg-white text-ink hover:border-ink/25 hover:bg-bg-soft;
+  }
+
+  .btn-ghost {
+    @apply btn px-3 text-ink-60 hover:bg-ink/5 hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply btn border-[1.5px] border-coral/30 bg-white text-coral-text hover:bg-coral/5;
+  }
+
+  /* ---- Surfaces ---------------------------------------------------------- */
+
+  .card {
+    @apply rounded-card border border-ink/8 bg-card shadow-sm;
+  }
+
+  .card-flat {
+    @apply rounded-card border border-ink/8 bg-bg-soft;
+  }
+
+  /* ---- Badges ------------------------------------------------------------ */
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 font-mono text-[10.5px]
+           font-medium uppercase tracking-label;
+  }
+  .badge-clinical {
+    @apply badge bg-clinical-soft text-clinical-text;
+  }
+  .badge-amber {
+    @apply badge bg-amber-soft text-amber-text;
+  }
+  .badge-coral {
+    @apply badge bg-coral-soft text-coral-text;
+  }
+  .badge-green {
+    @apply badge bg-green-soft text-green-text;
+  }
+  .badge-neutral {
+    @apply badge bg-ink/6 text-ink-60;
+  }
+
+  /* ---- Auth stage -------------------------------------------------------- */
+
+  /* Slow drifting colour behind the sign-in card. Killed entirely by the
+     reduced-motion rule above. */
+  .auth-blob {
+    animation: auth-drift 16s ease-in-out infinite;
+  }
+  .auth-blob-slow {
+    animation: auth-drift-rev 22s ease-in-out infinite;
+  }
+
+  /* ---- Quiet scrollbar --------------------------------------------------- */
+
+  /**
+   * Scrolls, but only ADMITS to it while you are in there.
+   *
+   * The nav rail is taller than the viewport on a laptop once a role can see
+   * every section, so it has to scroll. A permanent scrollbar down the rail is
+   * a piece of furniture nobody asked for, and on a machine set to "always show
+   * scroll bars" it sat there all day beside the clinic's branding.
+   *
+   * It is deliberately faint even at its strongest: the bar is a hint that the
+   * list moves, not a control anyone aims at — the wheel and the keyboard do
+   * the actual scrolling.
+   *
+   * The track keeps its width at all times and only the THUMB changes colour,
+   * which is what makes this safe: the gutter is reserved whether or not the
+   * thumb is visible, so nothing reflows when it appears. Hiding the bar
+   * outright and restoring it on hover would shift every nav label sideways.
+   *
+   * `focus-within` is not decoration — it is the keyboard half. Tabbing down the
+   * rail scrolls it with no pointer anywhere near, and without this the thumb
+   * would stay invisible for exactly the person who most needs to see where
+   * they are.
+   */
+  .scrollbar-quiet {
+    scrollbar-width: thin;
+    /* thumb track */
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-quiet:hover,
+  .scrollbar-quiet:focus-within {
+    scrollbar-color: theme('colors.ink.20 / 30%') transparent;
+  }
+
+  .scrollbar-quiet::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scrollbar-quiet::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-quiet::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    /* A transparent border plus padding-box clipping insets the thumb from the
+       rail's edge without a second element to do the insetting. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    background-color: transparent;
+    transition: background-color 150ms ease;
+  }
+  .scrollbar-quiet:hover::-webkit-scrollbar-thumb,
+  .scrollbar-quiet:focus-within::-webkit-scrollbar-thumb {
+    background-color: theme('colors.ink.20 / 30%');
+  }
+  /* Only when the pointer is on the bar itself — the one moment it is being
+     aimed at rather than merely present. Still well short of solid. */
+  .scrollbar-quiet::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.ink.20 / 55%');
+  }
+}
+
+@keyframes auth-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(38px, -28px) scale(1.06);
+  }
+}
+
+@keyframes auth-drift-rev {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-34px, 26px) scale(1.04);
+  }
+}
+
+/* Skeleton shimmer for loading rows. */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  @apply relative overflow-hidden rounded bg-ink/6;
+}
+.skeleton::after {
+  content: '';
+  @apply absolute inset-0 -translate-x-full;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* =============================================================================
+   PRINT
+   =============================================================================
+   The prescription is printed from the consultation screen itself: the print
+   stylesheet hides the application and reveals the one hidden block that holds
+   the prescription markup.
+
+   The alternative was a popup window rendering a second copy of that markup.
+   Popups are blocked by default in most browsers, and a second copy is a second
+   thing to keep correct — on a document that carries a doctor's registration
+   number and gets dispensed against, that is not a trade worth making.
+
+   Nothing here is loaded on screen: `.print-only` stays `display: none` until
+   the print media query applies. */
+@media print {
+  /* Backgrounds and shadows waste toner and read badly on paper. */
+  * {
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #000 !important;
+  }
+
+  /**
+   * ONE RULE: everything that is not the document being printed is hidden.
+   *
+   * This used to be a list — nav, aside, header[data-app-shell], .no-print — and
+   * a list is wrong the moment a page renders something not on it. That is
+   * exactly what happened: a page's own content lives inside `<main>`, which was
+   * on no list, so the queue board printed straight through the receipt on the
+   * same sheet. The prescription escaped only because that one page wrapped its
+   * own markup in `.no-print`, which every future page would have had to
+   * remember to do.
+   *
+   * `PrintPortal` renders each printable document as a direct child of `<body>`,
+   * which is what lets this be a single structural rule with nothing to keep in
+   * step.
+   */
+  body > *:not([data-print-document]) {
+    display: none !important;
+  }
+
+  [data-print-document] {
+    display: block !important;
+  }
+
+  /**
+   * A `.print-only` block that was NOT portalled stays hidden, because its
+   * ancestor is. That is the safe direction to fail: a sheet that does not print
+   * is noticed immediately, one that prints underneath the app is not.
+   */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Still useful INSIDE a printable document, to keep something off the paper. */
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: A4;
+    /* Indian clinics commonly overprint onto letterhead; the top margin leaves
+       room for one rather than assuming a blank sheet. */
+    margin: 18mm 14mm 14mm;
+  }
+}

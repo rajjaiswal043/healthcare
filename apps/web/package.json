@@ -1,0 +1,30 @@
+{
+  "name": "@healthcloud/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/next-with-dist.mjs .next-dev dev --port 3000",
+    "build": "node scripts/next-with-dist.mjs .next-build build",
+    "start": "node scripts/next-with-dist.mjs .next-build start --port 3000",
+    "clean": "node -e \"for (const d of ['.next','.next-dev','.next-build']) require('fs').rmSync(d,{recursive:true,force:true}); console.log('cleared build directories')\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "next": "^15.5.25",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "autoprefixer": "^10.4.21",
+    "playwright": "^1.62.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

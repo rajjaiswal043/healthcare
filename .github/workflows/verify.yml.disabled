@@ -1,0 +1,83 @@
+# =============================================================================
+# DISABLED ON PURPOSE — see docs/adr/ADR-016-local-quality-gates.md
+#
+# Narveer owns git and deploys, so quality gates currently run locally via
+# `pnpm verify` on a pre-push hook rather than on a runner.
+#
+# This file exists so that switching to CI is a rename, not a rewrite. It runs
+# the identical `pnpm verify`, so there is no chance of the two drifting apart.
+#
+# To enable:
+#   1. rename this file to verify.yml
+#   2. on GitHub: Settings → Branches → protect `main`, require this check
+#
+# Enable it when any of these become true:
+#   - a second engineer joins
+#   - something red reaches main
+#   - you want the gates to run on Linux as well as Windows
+# =============================================================================
+
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Same two-role setup the local bootstrap creates, so RLS behaves
+      # identically here and on Narveer's machine.
+      - name: Bootstrap database roles
+        run: psql -f infra/local/bootstrap.sql
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+
+      - name: Create .env
+        run: cp .env.example .env
+
+      - run: pnpm verify

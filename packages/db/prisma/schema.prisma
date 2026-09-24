@@ -1,0 +1,2054 @@
+// HealthCloud — data model
+//
+// Two rules govern everything in this file:
+//
+// 1. TENANCY (ADR-005). Every tenant-scoped model carries `tenantId`, and every
+//    corresponding table gets row-level security in the migration. `pnpm
+//    rls:check` fails the build if a table has one without the other. The only
+//    tables allowed to skip this are listed explicitly in scripts/rls-check.mjs.
+//
+// 2. FHIR ALIGNMENT (ADR-013). Model and field names follow FHIR R4 concepts so
+//    ABDM record exchange later becomes a mapping exercise rather than a
+//    migration. Where FHIR and Indian clinic reality disagree, our model wins
+//    and the mapper absorbs it — but we start from FHIR's vocabulary.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+// Connection URLs live in prisma.config.ts as of Prisma 7 — `url` and
+// `directUrl` are no longer valid here.
+//
+// The two-role split (ADR-005) is preserved by WHERE each URL is read:
+//
+//   prisma.config.ts  → CLI only (migrate, introspect, studio) → OWNER role
+//   src/client.ts     → runtime application client            → APP role, RLS applies
+//
+// This is a sharper boundary than directUrl gave us: application code has no
+// path to the owning role at all.
+datasource db {
+  provider = "postgresql"
+}
+
+/// A customer: one hospital or clinic group. This is the root of tenancy.
+///
+/// Deliberately NOT tenant-scoped — it is the table that defines tenants, so it
+/// cannot be filtered by one. It is on the rls-check allowlist for that reason,
+/// and access to it is restricted at the application layer instead.
+///
+/// FHIR: maps to Organization.
+model Tenant {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// URL-safe identifier, e.g. "sunrise-clinic". Stable; used in subdomains later.
+  slug      String   @unique @db.VarChar(63)
+  legalName String   @map("legal_name") @db.VarChar(255)
+  /// Display name — what staff and patients actually see.
+  name      String   @db.VarChar(255)
+  status    TenantStatus @default(ACTIVE)
+
+  /// UHID configuration (FR-P36-01: "auto-generate a configurable UHID per tenant").
+  /// Prefix is cosmetic but matters to clinics — it appears on every card and bill.
+  ///
+  /// CHECK `tenant_uhid_prefix_format`: A-Z, 0-9, '-' and '/'; starts with a
+  /// letter; never ends with a digit. The last rule is what stops a later
+  /// format change from re-issuing an existing ID (DRV1+05 = DRV+105 = DRV105).
+  uhidPrefix String @default("P") @map("uhid_prefix") @db.VarChar(8)
+  /// Zero-padded width of the numeric part, e.g. 5 -> SNC00123. 3–8, by CHECK.
+  ///
+  /// A MINIMUM, not a maximum: `next_uhid()` writes a longer number in full
+  /// (DRVIV-9999 then DRVIV-10000) rather than truncating it into a clash.
+  uhidPadding Int   @default(5) @map("uhid_padding")
+  /// Last issued number. Incremented atomically via UPDATE ... RETURNING so two
+  /// concurrent registrations can never be handed the same UHID.
+  uhidCounter BigInt @default(0) @map("uhid_counter")
+
+  /// IANA timezone. Schedule templates store wall-clock times ("09:00") which
+  /// are meaningless without one — this is what converts them to the instants
+  /// stored on appointments. India is a single timezone, but hard-coding it
+  /// would be a bug waiting for the first customer who isn't.
+  timezone String @default("Asia/Kolkata") @db.VarChar(64)
+
+  /// Who to talk to at the clinic. Captured at onboarding, not by the clinic.
+  contactEmail  String? @map("contact_email") @db.VarChar(255)
+  contactMobile String? @map("contact_mobile") @db.VarChar(20)
+
+  /// The clinic's own logo, as bytes.
+  ///
+  /// In the database rather than an object store, deliberately: one row per
+  /// tenant, half a megabyte at most, written almost never and served from
+  /// cache almost always. That buys atomic backups and no second store to keep
+  /// in sync, at a phase with no bucket and no IAM role. `BrandingStore` in the
+  /// API is the seam to move it behind when patient documents force an object
+  /// store — see docs/07-white-label-branding-plan.md section 4.
+  ///
+  /// Always re-encoded to PNG before it lands here, which is what makes an
+  /// uploaded SVG harmless: this file is served to an UNAUTHENTICATED page from
+  /// our own origin, and an SVG is a document that can carry script.
+  logoBytes     Bytes?    @map("logo_bytes")
+  logoMimeType  String?   @map("logo_mime_type") @db.VarChar(64)
+  /// Drives the ETag and the cache-busting query parameter, so a replaced logo
+  /// produces a new URL rather than needing anything invalidated.
+  logoUpdatedAt DateTime? @map("logo_updated_at") @db.Timestamptz(6)
+
+  onboardedByPlatformUserId String? @map("onboarded_by_platform_user_id") @db.Uuid
+
+  /// SUSPENDED means read-only, not locked out — see docs/06, section 2.6. A
+  /// suspension without a date and a reason is refused by a CHECK constraint.
+  suspendedAt     DateTime? @map("suspended_at") @db.Timestamptz(6)
+  suspendedReason String?   @map("suspended_reason") @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  locations      Location[]
+  displayDevices DisplayDevice[]
+  clinicalDocuments ClinicalDocument[]
+  patientCorrections PatientCorrection[]
+  diagnosticOrders  DiagnosticOrder[]
+  promotions            Promotion[]
+  promotionApplications PromotionApplication[]
+  receiptCounter        ReceiptCounter?
+  receipts              Receipt[]
+  receiptPrints         ReceiptPrint[]
+  seatLimits     TenantSeatLimit[]
+
+  onboardedBy PlatformUser? @relation(fields: [onboardedByPlatformUserId], references: [id], onDelete: SetNull, map: "tenant_onboarded_by_fkey")
+
+  @@map("tenant")
+}
+
+/// doctorsdesk.in staff. Deliberately NOT a user of any clinic.
+///
+/// `app_user` is tenant-scoped and every policy in this database assumes a row
+/// there belongs to exactly one clinic. A super admin flag on one of those rows
+/// would mean weakening the policies or carrying an exception through all of
+/// them forever — so platform staff live here instead, sign in at their own
+/// endpoint, and hold their own kind of session.
+///
+/// What they can do is provision: create a clinic, set its seat limits, create
+/// its first administrator, suspend and reactivate. What they cannot do is open
+/// a patient, a queue, an invoice or a clinical note.
+model PlatformUser {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Unique across the platform, unlike app_user.email which is unique per clinic.
+  email    String @db.VarChar(255)
+  fullName String @map("full_name") @db.VarChar(200)
+
+  passwordHash String @map("password_hash") @db.VarChar(512)
+
+  /// Mandatory, with no role to make it conditional on and no dev escape hatch.
+  mfaSecret    String?   @map("mfa_secret") @db.VarChar(64)
+  mfaEnabledAt DateTime? @map("mfa_enabled_at") @db.Timestamptz(6)
+
+  isActive         Boolean   @default(true) @map("is_active")
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions  PlatformSession[]
+  onboarded Tenant[]
+
+  @@map("platform_user")
+}
+
+/// A platform sign-in. Separate from `Session` so a clinic refresh token can
+/// never be presented as a platform one, whatever a bug in either path does.
+model PlatformSession {
+  id             String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  platformUserId String @map("platform_user_id") @db.Uuid
+
+  refreshTokenHash String @unique @map("refresh_token_hash") @db.VarChar(64)
+  familyId         String @map("family_id") @db.Uuid
+
+  issuedAt  DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  ipAddress String? @map("ip_address") @db.VarChar(64)
+  userAgent String? @map("user_agent") @db.VarChar(500)
+
+  user PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([platformUserId, issuedAt])
+  @@map("platform_session")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+
+  @@map("tenant_status")
+}
+
+/// A physical site belonging to a tenant — a clinic, a branch, a hospital block.
+///
+/// This is the first tenant-scoped table, and it is what the cross-tenant
+/// isolation suite exercises. If RLS is wrong, these tests fail before any
+/// patient data model exists.
+///
+/// FHIR: maps to Location (and, for the facility itself, Organization).
+model Location {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  name      String   @db.VarChar(255)
+  /// Free-text for now; structured address arrives with the registration screen.
+  addressLine String? @map("address_line") @db.VarChar(500)
+  city      String?  @db.VarChar(120)
+  state     String?  @db.VarChar(120)
+  postalCode String? @map("postal_code") @db.VarChar(12)
+  /// Health Facility Registry ID. Null until the clinic registers with ABDM —
+  /// their task, not ours (BRD A-03), but the field exists from day one.
+  hfrId     String?  @map("hfr_id") @db.VarChar(64)
+  isActive  Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  displayDevices DisplayDevice[]
+
+  // tenant_id leads every index. RLS adds `tenant_id = ...` to every query, so a
+  // tenant-first composite index is what keeps those queries index-only rather
+  // than filtered-after-scan.
+  @@index([tenantId, isActive])
+  @@unique([tenantId, name])
+  @@map("location")
+}
+
+/// A screen on a waiting-room wall. See docs/05-token-queue-plan.md, phase C.
+///
+/// It authenticates with its own key rather than a user session: a television
+/// cannot sign in, and a permanent staff session on an unattended screen in a
+/// public room is not a thing to build on purpose. What it may read is narrow by
+/// construction — the display endpoint returns token numbers and doctor names,
+/// never a patient name.
+model DisplayDevice {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  name String @db.VarChar(120)
+  /// Null means every location — a single-site clinic never has to think about it.
+  locationId String? @map("location_id") @db.Uuid
+
+  /// Which doctors this screen shows. Empty means all of them at that location.
+  practitionerIds String[] @default([]) @map("practitioner_ids") @db.Uuid
+
+  /// SHA-256 of `<tenantId>.<32 random bytes>`, stored exactly as a session
+  /// refresh token is. The plaintext is shown once at pairing and never again.
+  accessKeyHash String @unique @map("access_key_hash") @db.VarChar(64)
+
+  /// So an administrator can tell a dead screen from an idle one.
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(6)
+
+  isActive        Boolean   @default(true) @map("is_active")
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, isActive])
+  @@map("display_device")
+}
+
+// =============================================================================
+// PATIENT 360 — Module 1
+// =============================================================================
+
+/// FHIR AdministrativeGender. Kept to the standard's value set rather than
+/// inventing our own, because this field crosses the ABDM boundary.
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+
+  @@map("gender")
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+  UNKNOWN
+
+  @@map("blood_group")
+}
+
+/// A person receiving care. FHIR: Patient.
+///
+/// Two India-specific choices worth explaining:
+///
+/// 1. `name` is a single field, mapping to FHIR HumanName.text. Splitting into
+///    given/family is wrong for much of India, where many people use a single
+///    name, and forcing a split at the front desk produces garbage data. The
+///    optional structured fields exist for when we exchange records and can
+///    populate them properly.
+///
+/// 2. `birthDate` is nullable and `ageYears` exists alongside it. A large share
+///    of Indian OPD patients do not know their date of birth. The alternative —
+///    a mandatory DOB — means receptionists typing 01/01/1980 for everyone,
+///    which is worse than an honest "approximately 45".
+model Patient {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Facility-local identifier, generated per tenant. Unique within a tenant,
+  /// deliberately not globally.
+  uhid String @db.VarChar(32)
+
+  name       String  @db.VarChar(200)
+  givenName  String? @map("given_name") @db.VarChar(100)
+  familyName String? @map("family_name") @db.VarChar(100)
+
+  gender    Gender
+  birthDate DateTime? @map("birth_date") @db.Date
+  ageYears  Int?      @map("age_years")
+
+  /// Indian mobile, stored as 10 digits without country code. Normalised on the
+  /// way in so that duplicate detection actually works — "+91 98765 43210" and
+  /// "9876543210" are the same person walking in twice.
+  mobile String  @db.VarChar(10)
+  email  String? @db.VarChar(255)
+
+  addressLine String? @map("address_line") @db.VarChar(500)
+  city        String? @db.VarChar(120)
+  state       String? @db.VarChar(120)
+  postalCode  String? @map("postal_code") @db.VarChar(12)
+
+  bloodGroup BloodGroup @default(UNKNOWN) @map("blood_group")
+
+  emergencyContactName   String? @map("emergency_contact_name") @db.VarChar(200)
+  emergencyContactMobile String? @map("emergency_contact_mobile") @db.VarChar(10)
+
+  /// ABHA identity (BRD FR-P36-10/11). Null until linked; ABDM work is Phase 4.
+  /// The columns exist from day one so linking later is an UPDATE, not a
+  /// migration on a table full of patient data.
+  /// The raw Aadhaar number is NEVER stored — see BRD section 7.5.
+  abhaNumber  String? @map("abha_number") @db.VarChar(17)
+  abhaAddress String? @map("abha_address") @db.VarChar(100)
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  consents     ConsentRecord[]
+  appointments Appointment[]
+  encounters   Encounter[]
+  documents    ClinicalDocument[]
+  diagnosticOrders DiagnosticOrder[]
+  corrections  PatientCorrection[]
+  invoices     Invoice[]
+
+  @@unique([tenantId, uhid])
+  @@index([tenantId, mobile])
+  @@index([tenantId, createdAt])
+  /// Trigram index backing fuzzy duplicate detection and name search. Declared
+  /// here as well as created in the migration so the datamodel and the database
+  /// agree — otherwise `migrate:check` reports permanent drift and the gate
+  /// becomes noise people learn to ignore.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "patient_name_trgm_idx")
+  @@map("patient")
+}
+
+/// DPDP purposes. Separate consent per purpose is a legal requirement, not a
+/// UX preference — BRD section 7.1 requires "purpose-wise consent notices".
+enum ConsentPurpose {
+  CARE_DELIVERY
+  COMMUNICATIONS
+  MARKETING
+  ABDM_LINKING
+  TELEHEALTH
+
+  @@map("consent_purpose")
+}
+
+/// A recorded consent decision. FHIR: Consent.
+///
+/// Append-only in spirit: withdrawal sets `withdrawnAt` rather than deleting the
+/// row, because proving what was consented to, when, and by whom is the entire
+/// point. A deleted consent record is indistinguishable from one that never
+/// existed, which is exactly the position you do not want to be in.
+model ConsentRecord {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  patientId String         @map("patient_id") @db.Uuid
+  purpose   ConsentPurpose
+  granted   Boolean
+
+  /// Version of the notice text shown at the time. Without this, "they
+  /// consented" is unprovable, because the wording changes.
+  noticeVersion String @map("notice_version") @db.VarChar(32)
+  noticeLocale  String @default("en-IN") @map("notice_locale") @db.VarChar(12)
+
+  grantedAt   DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  withdrawnAt DateTime? @map("withdrawn_at") @db.Timestamptz(6)
+
+  /// Who captured it. Nullable only until auth lands.
+  capturedByUserId String? @map("captured_by_user_id") @db.Uuid
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, patientId, purpose])
+  @@map("consent_record")
+}
+
+/// Every read and write of patient-identifiable data (BRD FR-P36-19, NFR-07).
+///
+/// Tenant-scoped and under RLS like everything else: one hospital must not read
+/// another's audit trail either.
+///
+/// NOTE ON PARTITIONING: the plan called for monthly partitions with a year
+/// retained online. This is a plain table for now — partitioning is worth doing
+/// before production volume, not before the first screen exists. The BRIN index
+/// on occurred_at keeps it cheap in the meantime. Tracked as a Phase 5 item.
+model AuditEvent {
+  id       BigInt @id @default(autoincrement())
+  tenantId String @map("tenant_id") @db.Uuid
+
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  /// Null for unauthenticated or system actions; populated once auth lands.
+  actorUserId String? @map("actor_user_id") @db.Uuid
+  actorLabel  String? @map("actor_label") @db.VarChar(200)
+
+  action       String  @db.VarChar(64)
+  resourceType String  @map("resource_type") @db.VarChar(64)
+  resourceId   String? @map("resource_id") @db.VarChar(64)
+
+  /// The patient whose data was touched, when there is one. Indexed because
+  /// "who looked at this patient's record" is the question that actually gets
+  /// asked, usually by a lawyer.
+  patientId String? @map("patient_id") @db.Uuid
+
+  /// Changed field names only — never values. An audit log full of patient data
+  /// is a second copy of the thing you are trying to protect.
+  changedFields String[] @map("changed_fields")
+
+  /// Required for break-glass access (FR-USR-04).
+  reason String? @db.VarChar(500)
+
+  ipAddress     String? @map("ip_address") @db.VarChar(45)
+  userAgent     String? @map("user_agent") @db.VarChar(500)
+  correlationId String? @map("correlation_id") @db.VarChar(64)
+
+  @@index([tenantId, patientId, occurredAt])
+  @@index([tenantId, occurredAt])
+  /// BRIN, not B-tree: audit rows are written in time order, so a block-range
+  /// index is a fraction of the size while still making time-window queries fast.
+  @@index([occurredAt], type: Brin, map: "audit_event_occurred_at_brin_idx")
+  @@map("audit_event")
+}
+
+// =============================================================================
+// IDENTITY, ACCESS AND SESSIONS — BRD 9.7.3
+// =============================================================================
+
+/// A staff member. Tenant-scoped: the same person working at two clinics has
+/// two user records, because their permissions, roles and audit trail are
+/// per-clinic. Sharing one identity across tenants would mean a session that
+/// spans a tenant boundary — the exact thing ADR-005 exists to prevent.
+model User {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Unique per tenant, not globally.
+  email    String @db.VarChar(255)
+  fullName String @map("full_name") @db.VarChar(200)
+  mobile   String? @db.VarChar(10)
+
+  /// scrypt, encoded as `scrypt$N$r$p$salt$hash`. Never a bare digest.
+  passwordHash String @map("password_hash") @db.VarChar(512)
+
+  /// Forces a password change at next login — used for invited and reset users.
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+
+  /// TOTP shared secret, base32. Null until enrolled.
+  /// Mandatory for roles that require it (FR-USR-02); enrolment is enforced at
+  /// login rather than at user creation, so an admin cannot be created without
+  /// eventually setting it up.
+  mfaSecret    String?   @map("mfa_secret") @db.VarChar(64)
+  mfaEnabledAt DateTime? @map("mfa_enabled_at") @db.Timestamptz(6)
+
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(6)
+
+  /// Consecutive failed attempts, and a lockout window. Throttling login at the
+  /// account level complements the IP-level rate limit: one stops a spray
+  /// against many accounts, the other a focused attack on one.
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  roles    UserRole[]
+  uploadedDocuments ClinicalDocument[]
+  patientCorrections PatientCorrection[]
+  diagnosticOrdersRaised    DiagnosticOrder[] @relation("DiagnosticOrdersRaised")
+  diagnosticOrdersCompleted DiagnosticOrder[] @relation("DiagnosticOrdersCompleted")
+  diagnosticOrdersHandedOver DiagnosticOrder[] @relation("DiagnosticOrdersHandedOver")
+  promotionsCreated    Promotion[]            @relation("PromotionsCreated")
+  promotionsApplied    PromotionApplication[] @relation("PromotionsApplied")
+  promotionsAuthorised PromotionApplication[] @relation("PromotionsAuthorised")
+  receiptsPrinted      ReceiptPrint[]         @relation("ReceiptsPrinted")
+  sessions Session[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, isActive])
+  @@map("app_user")
+}
+
+/// A named bundle of permissions. Seeded per tenant to match the BRD's personas,
+/// then editable — FR-USR-01 requires tenant-customisable permissions down to
+/// module and action.
+model Role {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  key         String  @db.VarChar(64)
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+
+  /// Permission strings, e.g. "patient:read". A string array rather than a join
+  /// table: permissions are a fixed vocabulary defined in code, not user data,
+  /// and the array keeps the common question — "what can this role do" — a
+  /// single row read.
+  permissions String[]
+
+  /// System roles are seeded and cannot be deleted, only edited.
+  isSystem Boolean @default(false) @map("is_system")
+
+  /// Whether holders of this role must have TOTP enrolled (FR-USR-02: mandatory
+  /// for admin roles, optional per tenant for others).
+  requiresMfa Boolean @default(false) @map("requires_mfa")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users      UserRole[]
+  seatLimits TenantSeatLimit[]
+
+  @@unique([tenantId, key])
+  @@map("role")
+}
+
+/// How many people a clinic may have holding a role. Absent means unlimited.
+///
+/// Checked against ACTIVE users only, which is what makes deactivate a distinct
+/// action from delete: a clinic that loses a doctor frees the seat by
+/// deactivating them, and the old user survives because their name is on signed
+/// consultations and issued receipts.
+///
+/// Read-only to the application role. A clinic that can raise its own seat limit
+/// does not have one — writes belong to the platform tier.
+model TenantSeatLimit {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// A role key from packages/db/src/permissions.ts.
+  roleKey  String @map("role_key") @db.VarChar(64)
+  maxUsers Int    @map("max_users")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // The constraint is named explicitly because the migration named it, and an
+  // applied migration is not worth editing to satisfy a default.
+  role Role @relation(fields: [tenantId, roleKey], references: [tenantId, key], onDelete: Cascade, map: "tenant_seat_limit_role_fkey")
+
+  @@unique([tenantId, roleKey])
+  @@map("tenant_seat_limit")
+}
+
+model UserRole {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([tenantId, userId])
+  @@map("user_role")
+}
+
+/// A refresh-token session (FR-USR-03: device list with remote sign-out).
+///
+/// The refresh token itself is never stored — only a SHA-256 hash of it, for the
+/// same reason passwords are not stored: a database dump must not yield working
+/// credentials.
+///
+/// Rotation with reuse detection: every refresh issues a new token and marks the
+/// old one used. Presenting an already-used token means it was captured, so ALL
+/// of that user's sessions are revoked. That converts a stolen refresh token
+/// from a silent long-lived compromise into a forced logout somebody notices.
+model Session {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+
+  refreshTokenHash String @map("refresh_token_hash") @db.VarChar(64)
+
+  /// Chains rotated tokens together, so reuse of any ancestor is detectable.
+  familyId String @map("family_id") @db.Uuid
+
+  issuedAt  DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedReason String? @map("revoked_reason") @db.VarChar(120)
+
+  ipAddress String? @map("ip_address") @db.VarChar(45)
+  userAgent String? @map("user_agent") @db.VarChar(500)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([refreshTokenHash])
+  @@index([tenantId, userId, revokedAt])
+  @@index([familyId])
+  @@map("session")
+}
+
+// =============================================================================
+// SCHEDULING AND THE OPD QUEUE â€” Module 2 (BRD 9.2.1)
+// =============================================================================
+
+/// A clinical department: General Medicine, Paediatrics, Orthopaedics.
+///
+/// The first step of booking is "which department", so this is not decoration â€”
+/// it is how a receptionist narrows a list of doctors when the patient says
+/// "something with my knee".
+///
+/// FHIR: HealthcareService.
+model Department {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  name String @db.VarChar(120)
+  /// X-ray, pathology. No appointment slots, absent from booking: nobody books
+  /// an appointment with radiology, a doctor sends them there mid-visit.
+  isDiagnostic Boolean @default(false) @map("is_diagnostic")
+  /// Sort order on the booking screen â€” clinics want their busiest first.
+  displayOrder Int     @default(0) @map("display_order")
+  isActive     Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  practitioners Practitioner[]
+  appointments  Appointment[]
+  diagnosticOrders DiagnosticOrder[]
+  services      Service[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive, displayOrder])
+  @@map("department")
+}
+
+/// A doctor. FHIR: Practitioner (+ PractitionerRole for the department link).
+///
+/// registrationNumber is not optional in spirit: the Telemedicine Guidelines and
+/// the Drugs rules both require a doctor's registration number on prescriptions
+/// (BRD 7.3, 7.5). It is nullable only because a clinic may add a doctor before
+/// someone finds the number.
+model Practitioner {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  fullName String  @map("full_name") @db.VarChar(200)
+  /// "Dr", "Prof" â€” shown on prescriptions and the day list.
+  prefix   String? @db.VarChar(16)
+
+  /// NMC / state medical council registration.
+  registrationNumber String? @map("registration_number") @db.VarChar(64)
+  /// Healthcare Professionals Registry ID. Null until ABDM work lands (Phase 4);
+  /// the column exists so linking later is an UPDATE, not a migration.
+  hprId              String? @map("hpr_id") @db.VarChar(64)
+
+  qualification String? @db.VarChar(200)
+  specialty     String? @db.VarChar(120)
+
+  departmentId String? @map("department_id") @db.Uuid
+
+  /// Set when the doctor also signs in â€” lets "my day list" resolve without a
+  /// separate mapping table. Null for doctors who never use the software.
+  userId String? @unique @map("user_id") @db.Uuid
+
+  /// The login this entry was last unlinked from. An entry holding
+  /// consultations may be linked again only to this login — see
+  /// 20260922100000_practitioner_previous_user.
+  previousUserId String? @map("previous_user_id") @db.Uuid
+
+  /// Per-doctor overbooking allowance (FR-APT-10). 0 = strict capacity.
+  overbookPerSession Int @default(0) @map("overbook_per_session")
+
+  /// What this doctor charges, in paise, overriding the service catalogue price.
+  /// Null means use the catalogue. Consultants in the same clinic routinely
+  /// charge different amounts, and a single clinic-wide fee is the first thing
+  /// that would need working around.
+  consultationFeePaise Int? @map("consultation_fee_paise")
+  followUpFeePaise     Int? @map("follow_up_fee_paise")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  schedules    PractitionerSchedule[]
+  exceptions   ScheduleException[]
+  appointments Appointment[]
+  encounters   Encounter[]
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, departmentId])
+  @@map("practitioner")
+}
+
+enum VisitType {
+  NEW
+  FOLLOW_UP
+  PROCEDURE
+
+  @@map("visit_type")
+}
+
+/// A recurring weekly session: "Dr Rao, Kothrud, Mondays 09:00-13:00, 15-minute
+/// slots". FHIR: Schedule.
+///
+/// SLOTS ARE NOT STORED. Availability is computed from this template minus
+/// exceptions minus existing appointments, at read time. Materialising slots
+/// would mean a generation job, a rebuild whenever a doctor changes their hours,
+/// and rows that can silently disagree with the template. See
+/// docs/01-appointments-opd-queue-plan.md section 2.
+model PractitionerSchedule {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  practitionerId String @map("practitioner_id") @db.Uuid
+  locationId     String @map("location_id") @db.Uuid
+
+  /// 0 = Sunday ... 6 = Saturday, matching JavaScript getDay().
+  dayOfWeek Int @map("day_of_week")
+
+  /// Wall-clock "HH:mm" in the tenant's timezone. Stored as text rather than a
+  /// time type because Prisma surfaces `time` as a DateTime pinned to
+  /// 1970-01-01, which reads as a bug every time someone logs it.
+  startTime String @map("start_time") @db.VarChar(5)
+  endTime   String @map("end_time") @db.VarChar(5)
+
+  slotMinutes     Int @default(15) @map("slot_minutes")
+  /// Some clinics run two chairs off one doctor; most are 1.
+  capacityPerSlot Int @default(1) @map("capacity_per_slot")
+
+  /// Which visit types may be booked into this session. Empty means all.
+  visitTypes VisitType[] @map("visit_types")
+
+  validFrom DateTime  @map("valid_from") @db.Date
+  validTo   DateTime? @map("valid_to") @db.Date
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, practitionerId, dayOfWeek])
+  @@index([tenantId, locationId, dayOfWeek])
+  @@map("practitioner_schedule")
+}
+
+enum ScheduleExceptionType {
+  /// Doctor unavailable â€” leave, conference, emergency.
+  LEAVE
+  /// Session blocked for another reason: theatre list, admin time.
+  BLOCK
+  /// Extra availability outside the weekly template.
+  EXTRA
+
+  @@map("schedule_exception_type")
+}
+
+/// Leave, blocks and one-off extra sessions (FR-APT-02).
+///
+/// A date RANGE rather than a single date, because "on leave 10-14 August" is
+/// how leave is actually taken, and five rows for one absence is how a clinic
+/// ends up with four deleted and one forgotten.
+model ScheduleException {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  practitionerId String  @map("practitioner_id") @db.Uuid
+  /// Null means every location.
+  locationId     String? @map("location_id") @db.Uuid
+
+  type ScheduleExceptionType
+
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+
+  /// Null start/end means the whole day. Present means a window within it.
+  startTime String? @map("start_time") @db.VarChar(5)
+  endTime   String? @map("end_time") @db.VarChar(5)
+
+  reason String? @db.VarChar(300)
+
+  createdByUserId String? @map("created_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, practitionerId, startDate, endDate])
+  @@map("schedule_exception")
+}
+
+/// FHIR Appointment.status, narrowed to the states this product uses.
+enum AppointmentStatus {
+  /// Booked and holding a token, but not yet in the waiting list. An unpaid
+  /// visit stays here — the pay-first gate is at check-in.
+  BOOKED
+  /// Patient has arrived, been admitted to the waiting list, and is waiting.
+  ARRIVED
+  /// Doctor has called them in.
+  IN_PROGRESS
+  /// Sent out mid-visit for an X-ray or a test. Still the same visit — same
+  /// token, same draft note, same bill — but out of the room and out of the
+  /// waiting list until they come back.
+  AWAITING_TESTS
+  FULFILLED
+  CANCELLED
+  NO_SHOW
+
+  @@map("appointment_status")
+}
+
+enum AppointmentSource {
+  FRONT_DESK
+  WALK_IN
+  /// Patient self-booking. Not reachable until the portal exists.
+  PORTAL
+
+  @@map("appointment_source")
+}
+
+/// Why a patient was moved to the front of the queue.
+///
+/// A code rather than free text, because this field is read by someone judging
+/// whether the jump was legitimate: free text produces "urgent", "urgent!!" and
+/// "dr said", none of which can be counted. Kept deliberately small — a sixth
+/// reason should be a conversation, not a typing decision.
+enum QueuePriorityReason {
+  /// Set automatically when a patient returns from an investigation.
+  BACK_FROM_TESTS
+  EMERGENCY
+  FRAIL_OR_DISTRESSED
+  DOCTOR_REQUESTED
+  /// We lost their turn. Owning it in the record is the point.
+  CLINIC_ERROR
+
+  @@map("queue_priority_reason")
+}
+
+/// A booked or walked-in visit. FHIR: Appointment.
+///
+/// Walk-ins are Appointments too, created at the moment of arrival with
+/// source = WALK_IN. One record type means one queue and one worklist query,
+/// rather than two code paths that drift apart.
+model Appointment {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  patientId      String  @map("patient_id") @db.Uuid
+  practitionerId String  @map("practitioner_id") @db.Uuid
+  locationId     String  @map("location_id") @db.Uuid
+  departmentId   String? @map("department_id") @db.Uuid
+
+  startAt DateTime @map("start_at") @db.Timestamptz(6)
+  endAt   DateTime @map("end_at") @db.Timestamptz(6)
+
+  status    AppointmentStatus @default(BOOKED)
+  visitType VisitType         @default(NEW) @map("visit_type")
+  source    AppointmentSource @default(FRONT_DESK)
+
+  reasonForVisit String? @map("reason_for_visit") @db.VarChar(300)
+
+  // --- queue -------------------------------------------------------------
+  /// The patient's identity for this visit, NOT their position in the queue.
+  ///
+  /// Issued at booking (or at walk-in registration) so the patient can be given
+  /// it on a slip and called by it. Position is `readyAt` — see
+  /// docs/05-token-queue-plan.md section 1 for why conflating the two broke as
+  /// soon as tokens moved earlier than arrival.
+  tokenNumber Int?      @map("token_number")
+  /// The clinic-local date the token belongs to. Tokens restart each day, so
+  /// uniqueness is per practitioner per day.
+  queueDate   DateTime? @map("queue_date") @db.Date
+
+  /// When the patient became ready to be seen — stamped at check-in, and
+  /// re-stamped when they come back from an investigation. This is what the
+  /// waiting list sorts on.
+  readyAt DateTime? @map("ready_at") @db.Timestamptz(6)
+
+  // --- seen next -----------------------------------------------------------
+  //
+  // A flag, not a rank. An emergency and a patient back from X-ray occupy the
+  // same place — in front — and differ only in why. Flagged patients are
+  // ordered among themselves by `prioritySetAt`: first flagged, first served,
+  // so a late emergency cannot displace someone already told "you are next".
+  /// Null means no flag, which is the ordinary case.
+  priorityReasonCode  QueuePriorityReason? @map("priority_reason_code")
+  /// Optional colour beside the code. The code is what is countable.
+  priorityNote        String?              @map("priority_note") @db.VarChar(200)
+  prioritySetAt       DateTime?            @map("priority_set_at") @db.Timestamptz(6)
+  /// Who authorised the jump. Not nullable when a code is set — CHECK
+  /// constraint appointment_priority_is_attributed.
+  prioritySetByUserId String?              @map("priority_set_by_user_id") @db.Uuid
+
+  // --- sent out for an investigation ---------------------------------------
+  //
+  // Overwritten if the doctor sends the same patient out twice in one visit —
+  // an X-ray and then bloods. The audit trail keeps every leg; these columns
+  // answer "where are they now", which is what the desk is looking at.
+  sentOutAt     DateTime? @map("sent_out_at") @db.Timestamptz(6)
+  sentOutReason String?   @map("sent_out_reason") @db.VarChar(200)
+  returnedAt    DateTime? @map("returned_at") @db.Timestamptz(6)
+
+  checkedInAt DateTime? @map("checked_in_at") @db.Timestamptz(6)
+  calledAt    DateTime? @map("called_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  // --- lifecycle ---------------------------------------------------------
+  cancelledAt       DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason      String?   @map("cancel_reason") @db.VarChar(300)
+  cancelledByUserId String?   @map("cancelled_by_user_id") @db.Uuid
+  noShowAt          DateTime? @map("no_show_at") @db.Timestamptz(6)
+
+  bookedByUserId String? @map("booked_by_user_id") @db.Uuid
+
+  /// Set once a reminder goes out. Unused until a WhatsApp/DLT channel exists
+  /// (BRD A-03 â€” a customer onboarding task), but present so enabling reminders
+  /// is wiring rather than a migration against live appointment data.
+  reminderSentAt DateTime? @map("reminder_sent_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  encounter    Encounter?
+  /// Tests the patient needs that this centre does not perform (decision (b)).
+  ///
+  /// Free text, printed on the slip and shown to the finance desk. Never an
+  /// order and never a charge: there is no department here to do it and no
+  /// price to put on it, so making it either would create work nobody can
+  /// clear and a gate over money that will never arrive.
+  ///
+  /// On the appointment rather than the encounter so it survives signing, and
+  /// so the finance desk — which holds `appointment:read` and not
+  /// `consultation:read` — can read it without being given the clinical record.
+  externalTestNote String? @map("external_test_note") @db.VarChar(1000)
+
+  invoice      Invoice?
+  /// Every bill this visit produced — the consultation's, and its test bills.
+  visitInvoices Invoice[] @relation("InvoiceVisit")
+
+  /// A token number is unique per doctor per day. Enforced here as well as in
+  /// the allocation function â€” the function makes collisions unlikely, the
+  /// constraint makes them impossible.
+  @@unique([tenantId, practitionerId, queueDate, tokenNumber])
+  @@index([tenantId, practitionerId, startAt])
+  @@index([tenantId, startAt])
+  @@index([tenantId, patientId, startAt])
+  @@index([tenantId, practitionerId, queueDate, status])
+  @@index([tenantId, practitionerId, queueDate, prioritySetAt, readyAt], map: "appointment_queue_order_idx")
+  diagnosticOrders DiagnosticOrder[]
+
+  @@map("appointment")
+}
+
+// =============================================================================
+// CONSULTATION AND PRESCRIPTION — Module 3 (BRD 9.3)
+//
+// See docs/02-consultation-plan.md. The decision that shapes everything below:
+// a SIGNED encounter is immutable. Corrections are addenda, never edits. A
+// clinical note that can be silently changed cannot answer the only question it
+// is ever really asked — what did the doctor know, and when.
+// =============================================================================
+
+enum EncounterStatus {
+  /// Draft. The doctor is in the room and the note is freely editable.
+  IN_PROGRESS
+  /// Signed off. Immutable from here; corrections go in an addendum.
+  SIGNED
+
+  @@map("encounter_status")
+}
+
+/// One visit's clinical record. FHIR: Encounter.
+///
+/// The narrative fields live here rather than in a separate note table. They are
+/// one-to-one with the encounter and are always read together, so a second table
+/// would buy a join and nothing else.
+model Encounter {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// One encounter per appointment. Unique, so opening the consultation twice
+  /// resumes the draft rather than starting a second parallel note — which is
+  /// what happens when a doctor double-clicks, and produces two half-written
+  /// records with no way to tell which is real.
+  appointmentId String @unique @map("appointment_id") @db.Uuid
+
+  patientId      String @map("patient_id") @db.Uuid
+  practitionerId String @map("practitioner_id") @db.Uuid
+
+  status EncounterStatus @default(IN_PROGRESS)
+
+  /// The narrative. FHIR maps these onto Composition sections; kept as columns
+  /// because that is how they are written and read.
+  chiefComplaint          String? @map("chief_complaint") @db.VarChar(500)
+  historyOfPresentIllness String? @map("history_of_present_illness") @db.Text
+  examinationFindings     String? @map("examination_findings") @db.Text
+  advice                  String? @db.Text
+  /// FR-CON-11. A second printed block, for what is NOT advice to the patient:
+  /// physiotherapy, precautions, a line to the pharmacy, a referral note. Kept
+  /// apart from `advice` because the two are addressed to different readers and
+  /// merging them cannot be undone once doctors have written into one box.
+  prescriptionNote        String? @map("prescription_note") @db.Text
+
+  followUpDate DateTime? @map("follow_up_date") @db.Date
+  followUpNote String?   @map("follow_up_note") @db.VarChar(300)
+
+  startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
+
+  /// Set together, exactly once. Enforced by a CHECK constraint in the
+  /// migration: a signed encounter without an author is unattributable, and an
+  /// author on an unsigned one is a lie.
+  signedAt       DateTime? @map("signed_at") @db.Timestamptz(6)
+  signedByUserId String?   @map("signed_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
+
+  vitals        VitalsObservation[]
+  diagnoses     Diagnosis[]
+  prescriptions Prescription[]
+  addenda       EncounterAddendum[]
+
+  @@index([tenantId, patientId, startedAt])
+  @@index([tenantId, practitionerId, startedAt])
+  @@map("encounter")
+}
+
+/// A set of readings taken at one moment. FHIR: Observation (vital-signs).
+///
+/// Its own table rather than columns on Encounter, because a nurse records these
+/// before the doctor sees the patient, they can be repeated within a visit, and
+/// the same shape will later carry readings taken outside a consultation.
+///
+/// BMI is absent deliberately. It is derived from height and weight at read
+/// time; storing it means two numbers that disagree the moment either is
+/// corrected.
+model VitalsObservation {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  encounterId String @map("encounter_id") @db.Uuid
+  /// Denormalised from the encounter so "this patient's vitals over time" does
+  /// not need a join through every visit.
+  patientId   String @map("patient_id") @db.Uuid
+
+  recordedAt       DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  recordedByUserId String?  @map("recorded_by_user_id") @db.Uuid
+
+  /// Every field nullable: a nurse who has a blood pressure but no height should
+  /// be able to save what they have. Plausible-range CHECK constraints live in
+  /// the migration — a weight of 700 kg is a typo, and a system that accepts one
+  /// will eventually chart it.
+  heightCm      Decimal? @map("height_cm") @db.Decimal(4, 1)
+  weightKg      Decimal? @map("weight_kg") @db.Decimal(5, 2)
+  systolicMmHg  Int?     @map("systolic_mm_hg")
+  diastolicMmHg Int?     @map("diastolic_mm_hg")
+  pulseBpm      Int?     @map("pulse_bpm")
+  temperatureC  Decimal? @map("temperature_c") @db.Decimal(3, 1)
+  spo2Percent   Int?     @map("spo2_percent")
+  respiratoryRate Int?   @map("respiratory_rate")
+
+  notes String? @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, encounterId])
+  @@index([tenantId, patientId, recordedAt])
+  @@map("vitals_observation")
+}
+
+/// What the doctor concluded. FHIR: Condition.
+///
+/// Coded AND free text, not one or the other. The code is what makes the data
+/// answerable later and exchangeable over ABDM; the free text is what the doctor
+/// actually meant, which no code set ever fully captures.
+model Diagnosis {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  encounterId String @map("encounter_id") @db.Uuid
+
+  /// ICD-10 today. SNOMED CT is what ABDM ultimately wants, so the system is a
+  /// column rather than an assumption.
+  codeSystem String  @default("ICD-10") @map("code_system") @db.VarChar(32)
+  code       String? @db.VarChar(16)
+  /// The label — the code's description, or whatever the doctor typed.
+  display    String  @db.VarChar(300)
+
+  /// Exactly one primary per encounter. A partial unique index in the migration
+  /// enforces it, because "the main problem" is the field every downstream
+  /// report groups by.
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  notes String? @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, encounterId])
+  @@index([tenantId, code])
+  @@map("diagnosis")
+}
+
+enum MedicationForm {
+  TABLET
+  CAPSULE
+  SYRUP
+  INJECTION
+  DROPS
+  OINTMENT
+  INHALER
+  SACHET
+  OTHER
+
+  @@map("medication_form")
+}
+
+enum MedicationRoute {
+  ORAL
+  TOPICAL
+  INTRAVENOUS
+  INTRAMUSCULAR
+  SUBCUTANEOUS
+  INHALED
+  OPHTHALMIC
+  OTIC
+  NASAL
+  RECTAL
+  OTHER
+
+  @@map("medication_route")
+}
+
+/// The clinic's drug list. FHIR: Medication.
+///
+/// Per-tenant and editable, because no seeded list survives contact with what a
+/// particular clinic actually stocks.
+model FormularyItem {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// As the doctor would write it — usually a brand in India.
+  name        String  @db.VarChar(200)
+  genericName String? @map("generic_name") @db.VarChar(200)
+  strength    String? @db.VarChar(60)
+  form        MedicationForm?
+
+  /// True for rows a doctor typed rather than picked, promoted into the list.
+  /// Lets a clinic see what it keeps prescribing that nobody has curated yet.
+  isCustom Boolean @default(false) @map("is_custom")
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  prescriptions Prescription[]
+
+  @@unique([tenantId, name, strength])
+  @@index([tenantId, isActive])
+  /// Trigram index for the autocomplete. Declared here as well as created in the
+  /// migration so migrate:check does not report permanent drift.
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "formulary_item_name_trgm_idx")
+  @@map("formulary_item")
+}
+
+/// One prescribed drug. FHIR: MedicationRequest.
+///
+/// Structured rather than a line of free text. A textarea would be faster to
+/// build and every clinic would accept it, but interaction checking, repeat
+/// prescriptions, ABDM exchange and "how much of this did we prescribe last
+/// month" all read these fields — and none of it can be recovered from prose
+/// afterwards. See docs/02-consultation-plan.md section 2.2.
+model Prescription {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  encounterId String @map("encounter_id") @db.Uuid
+
+  /// Null when the doctor typed a drug that is not in the formulary. Allowed on
+  /// purpose: a mandatory list makes the software unusable the first time a
+  /// clinic stocks something we did not seed, mid-consultation, patient waiting.
+  formularyItemId String? @map("formulary_item_id") @db.Uuid
+
+  /// Denormalised, and deliberately so. A prescription must read the same in ten
+  /// years even if the formulary row is renamed or retired — this is a record of
+  /// what was prescribed, not a pointer to what it is called now.
+  drugName String  @map("drug_name") @db.VarChar(200)
+  strength String? @db.VarChar(60)
+  form     MedicationForm?
+
+  /// "1 tablet", "5 ml", "2 puffs".
+  dose String @db.VarChar(60)
+  /// As written in India: "1-0-1", or "TDS", or "SOS".
+  frequency String @db.VarChar(60)
+  route     MedicationRoute @default(ORAL)
+
+  durationDays Int? @map("duration_days")
+  /// Total to dispense, when the clinic also hands out the drug.
+  quantity     Int?
+
+  /// "After food", "at bedtime".
+  instructions String? @db.VarChar(300)
+
+  /// Prescriptions are read as an ordered list; the order is the doctor's.
+  displayOrder Int @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  encounter     Encounter      @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  formularyItem FormularyItem? @relation(fields: [formularyItemId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, encounterId, displayOrder])
+  @@map("prescription")
+}
+
+/// A correction to a signed encounter. FHIR: the amendment half of Provenance.
+///
+/// This exists so the encounter itself never has to change. Append-only by
+/// construction — there is no update path in the service, and the migration
+/// grants none.
+model EncounterAddendum {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  encounterId String @map("encounter_id") @db.Uuid
+
+  text String @db.Text
+
+  authorUserId String @map("author_user_id") @db.Uuid
+  /// Captured at write time. The user's name may change; who signed this did not.
+  authorLabel  String @map("author_label") @db.VarChar(200)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, encounterId, createdAt])
+  @@map("encounter_addendum")
+}
+
+// =============================================================================
+// BILLING — Module 4 (BRD 9.4)
+//
+// See docs/04-billing-plan.md. Two rules govern everything below.
+//
+// 1. MONEY IS INTEGER PAISE. Never Float, never rupees. ₹350.00 is 35000.
+//    Floating point cannot represent ₹0.10 exactly, and a system that sums a few
+//    thousand fees a month will disagree with the cash drawer within a year with
+//    no way to tell which row is wrong.
+//
+// 2. PAYMENTS ARE ROWS. An invoice does not have "a payment" — part cash, part
+//    UPI is normal, and a refund is a third row. Balance and status are DERIVED
+//    from those rows, never stored beside them where they can drift.
+// =============================================================================
+
+/// Something the clinic charges for. FHIR: ChargeItemDefinition.
+model Service {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Short code the front desk recognises, e.g. "CONS-NEW".
+  code String @db.VarChar(32)
+  name String @db.VarChar(200)
+
+  /// Groups the day-end report and, later, the accounting export.
+  category ServiceCategory @default(CONSULTATION)
+
+  /// Which department performs it, where that applies (FR-PRC-01).
+  ///
+  /// Nullable on purpose. An X-ray belongs to radiology; a consultation belongs
+  /// to whichever doctor gave it, and a dressing may belong to nobody in
+  /// particular. Forcing a department would make the administrator invent one,
+  /// and an invented department is worse than an absent one — it shows up in
+  /// every report afterwards looking like a fact.
+  departmentId String? @map("department_id") @db.Uuid
+
+  /// Default price in paise. A practitioner may override it — see
+  /// `Practitioner.consultationFeePaise`.
+  pricePaise Int @map("price_paise")
+
+  /// Healthcare services by a clinical establishment are GST-exempt
+  /// (Notification 12/2017), so this is 0 for consultations. It exists anyway,
+  /// because the first strip of tablets a clinic sells is taxable and
+  /// back-filling tax onto historical invoices is not a conversation anyone
+  /// wants to have with an auditor.
+  taxRateBasisPoints Int @default(0) @map("tax_rate_basis_points")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "service_department_fkey")
+  lines InvoiceLine[]
+  diagnosticOrders DiagnosticOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, category])
+  @@index([tenantId, departmentId], map: "service_department_idx")
+  @@map("service")
+}
+
+enum ServiceCategory {
+  CONSULTATION
+  PROCEDURE
+  DIAGNOSTIC
+  CONSUMABLE
+  OTHER
+
+  @@map("service_category")
+}
+
+enum InvoiceStatus {
+  /// Raised, nothing collected.
+  UNPAID
+  /// Some money in, balance outstanding.
+  PARTIALLY_PAID
+  PAID
+  /// Charge written off, with a reason and by someone holding invoice:waive.
+  WAIVED
+  /// Seen now, paid later. A recorded exception, never a silent one.
+  DEFERRED
+  /// Voided. Never deleted — "we cancelled it" is a claim you must be able to prove.
+  CANCELLED
+
+  @@map("invoice_status")
+}
+
+/// A bill. FHIR: Invoice.
+model Invoice {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Serial per tenant. A receipt is a financial document; the number comes from
+  /// an atomic counter, because SELECT max + 1 hands two receptionists the same one.
+  number String @map("number") @db.VarChar(32)
+
+  patientId String @map("patient_id") @db.Uuid
+  /// One invoice per appointment. Standalone invoices (no visit) are allowed,
+  /// which is why this is nullable rather than the primary key.
+  appointmentId String? @unique @map("appointment_id") @db.Uuid
+
+  /// The visit this bill came out of.
+  ///
+  /// Not unique, and that is the whole point of its existing separately from
+  /// `appointmentId`. That column is unique and means "this IS the consultation
+  /// bill", so a test bill for the same visit cannot borrow it. This one means
+  /// the weaker thing — "this money came out of that visit" — which lets a
+  /// visit carry a consultation bill and its test bills, and lets reporting
+  /// attribute all of them to the doctor who was seeing the patient.
+  visitAppointmentId String? @map("visit_appointment_id") @db.Uuid
+
+  status InvoiceStatus @default(UNPAID)
+
+  /// Denormalised sums over the lines, in paise. Written in the same transaction
+  /// that writes the lines — unlike the payment total, which is genuinely derived
+  /// at read time because it changes independently of this row.
+  subtotalPaise Int @map("subtotal_paise")
+  discountPaise Int @default(0) @map("discount_paise")
+  taxPaise      Int @default(0) @map("tax_paise")
+  totalPaise    Int @map("total_paise")
+
+  /// Set together with a status of WAIVED, DEFERRED or CANCELLED. The reason is
+  /// required by the service in each case: an exception with no explanation is
+  /// indistinguishable from a mistake.
+  reason           String? @db.VarChar(300)
+  authorisedByUserId String? @map("authorised_by_user_id") @db.Uuid
+
+  issuedByUserId String?   @map("issued_by_user_id") @db.Uuid
+  issuedAt       DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  cancelledAt    DateTime? @map("cancelled_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  visitAppointment Appointment? @relation("InvoiceVisit", fields: [visitAppointmentId], references: [id], onDelete: Restrict, map: "invoice_visit_appointment_fkey")
+
+  lines    InvoiceLine[]
+  payments Payment[]
+  /// The one discount currently on this bill, or none.
+  ///
+  /// The invariant lives here rather than as a unique index on
+  /// `promotion_application` because reversals are new rows: the reversed
+  /// application keeps `reversal_kind IS NULL` on the row it reverses, so a
+  /// partial index there would block a second, legitimate discount. One
+  /// nullable column cannot hold two.
+  activePromotionApplicationId String? @map("active_promotion_application_id") @db.Uuid
+  activePromotion PromotionApplication? @relation("InvoiceActivePromotion", fields: [activePromotionApplicationId], references: [id], onDelete: Restrict, map: "invoice_active_promotion_fkey")
+
+  /// Every discount this bill has ever carried, reversed ones included.
+  promotionApplications PromotionApplication[] @relation("InvoicePromotionHistory")
+
+  /// One per money-in payment against this bill.
+  receipts Receipt[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, patientId, issuedAt])
+  @@index([tenantId, status])
+  @@index([tenantId, issuedAt])
+  @@index([tenantId, visitAppointmentId], map: "invoice_visit_appointment_idx")
+  @@map("invoice")
+}
+
+/// One charged item. FHIR: Invoice.lineItem.
+model InvoiceLine {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  invoiceId String  @map("invoice_id") @db.Uuid
+  serviceId String? @map("service_id") @db.Uuid
+
+  /// Denormalised, deliberately. An invoice must read the same in ten years even
+  /// if the service is renamed or repriced — this records what was charged, not
+  /// a pointer to what it is called now.
+  description   String @db.VarChar(200)
+  quantity      Int    @default(1)
+  unitPricePaise Int   @map("unit_price_paise")
+  discountPaise Int    @default(0) @map("discount_paise")
+  taxRateBasisPoints Int @default(0) @map("tax_rate_basis_points")
+  taxPaise      Int    @default(0) @map("tax_paise")
+  /// quantity × unit − discount + tax. Stored so the invoice never has to be
+  /// recomputed to be displayed, and CHECKed in the migration so it cannot lie.
+  totalPaise    Int    @map("total_paise")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  diagnosticOrder DiagnosticOrder?
+
+  @@index([tenantId, invoiceId])
+  @@map("invoice_line")
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  CARD
+  BANK_TRANSFER
+  OTHER
+
+  @@map("payment_mode")
+}
+
+enum PaymentDirection {
+  IN
+  /// A refund. Recorded as its own row so the drawer is never reconstructed by
+  /// subtracting from a total nobody kept.
+  REFUND
+
+  @@map("payment_direction")
+}
+
+/// One tender against an invoice. FHIR: PaymentReconciliation.
+model Payment {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  invoiceId String @map("invoice_id") @db.Uuid
+
+  direction PaymentDirection @default(IN)
+
+  /// Why a REFUND row exists — null on money-in, required on a refund.
+  ///
+  /// PATIENT_REFUND and RECORDED_IN_ERROR net to the same figure and are
+  /// completely different problems: money that LEFT the drawer versus money that
+  /// was never in it. A CHECK ties this to `direction` so neither can drift.
+  correctionKind PaymentCorrectionKind? @map("correction_kind")
+  mode      PaymentMode
+  /// Always POSITIVE. The direction says which way the money went; a signed
+  /// amount plus a direction is two sources of truth for one fact.
+  amountPaise Int @map("amount_paise")
+
+  /// UPI transaction id, card approval code, cheque number. Not captured from a
+  /// gateway — typed in by whoever took the money, which is what makes it
+  /// reconcilable against the bank statement.
+  reference String? @db.VarChar(120)
+
+  /// Who took the money. The day-end report groups by this.
+  collectedByUserId String   @map("collected_by_user_id") @db.Uuid
+  collectedAt       DateTime @default(now()) @map("collected_at") @db.Timestamptz(6)
+
+  /// Required on a refund.
+  reason String? @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  receipt Receipt?
+
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, collectedAt])
+  @@index([tenantId, collectedByUserId, collectedAt])
+  @@map("payment")
+}
+
+/// Per-tenant serial invoice numbers.
+///
+/// Same atomic INSERT ... ON CONFLICT DO UPDATE ... RETURNING pattern as the
+/// UHID and queue-token counters, for the same reason: a receipt number that
+/// repeats is a financial document that repeats.
+model InvoiceCounter {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+
+  prefix    String @default("INV") @db.VarChar(8)
+  lastNumber BigInt @default(0) @map("last_number")
+
+  @@map("invoice_counter")
+}
+
+/// Per-doctor, per-day token counter.
+///
+/// A counter row updated with INSERT ... ON CONFLICT DO UPDATE ... RETURNING is
+/// atomic; SELECT max(token)+1 is not, and two receptionists checking patients
+/// in at 9am would be handed the same number. Same reasoning as the UHID counter
+/// on tenant.
+model QueueCounter {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  practitionerId String   @map("practitioner_id") @db.Uuid
+  queueDate      DateTime @map("queue_date") @db.Date
+
+  lastToken Int @default(0) @map("last_token")
+
+  @@unique([tenantId, practitionerId, queueDate])
+  @@map("queue_counter")
+}
+
+/// A file held in S3 against a patient — an X-ray, a scanned report, a PDF.
+///
+/// The row is the index; the bytes are in the bucket. `objectKey` is ALWAYS
+/// `tenants/{tenantId}/patients/{patientId}/{uuid}{ext}`, built from the
+/// authenticated session and never from anything in a request — a database
+/// CHECK enforces the tenant prefix, because this is the one table whose
+/// contents point outside row-level security's reach.
+///
+/// Insert-only. No update, no delete, both revoked at the database. A wrong
+/// result is superseded by another document, not edited. See
+/// docs/09-diagnostics-plan.md.
+model ClinicalDocument {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  patientId String @map("patient_id") @db.Uuid
+
+  objectKey   String @map("object_key") @db.Text
+  /// What the clinic called it, sanitised. Display only — never used to build a key.
+  fileName    String @map("file_name") @db.VarChar(255)
+  /// Sniffed from the bytes. The upload's declared type is not trusted.
+  contentType String @map("content_type") @db.VarChar(128)
+  sizeBytes   Int    @map("size_bytes")
+
+  /// The order this satisfies, when there is one. Nullable: a clinic may attach
+  /// a report nobody ordered — a letter a patient brought in, a scan done
+  /// elsewhere. An order is how a result reaches the doctor who asked for it,
+  /// not the only way a file can exist.
+  diagnosticOrderId String? @map("diagnostic_order_id") @db.Uuid
+  uploadedByUserId String   @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "clinical_document_tenant_fkey")
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "clinical_document_patient_fkey")
+  uploadedBy User  @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict, map: "clinical_document_uploader_fkey")
+  diagnosticOrder DiagnosticOrder? @relation(fields: [diagnosticOrderId], references: [id], onDelete: Restrict, map: "clinical_document_order_fkey")
+
+  @@unique([objectKey], map: "clinical_document_object_key_key")
+  @@index([tenantId, patientId, createdAt(sort: Desc)], map: "clinical_document_patient_idx")
+  @@index([tenantId, diagnosticOrderId], map: "clinical_document_order_idx")
+  @@map("clinical_document")
+}
+
+/// Who decided a diagnostic test was needed. See `DiagnosticOrder.referralSource`.
+enum DiagnosticReferralSource {
+  /// This clinic's own doctor, during a consultation. The only kind with a visit.
+  INTERNAL
+  /// A doctor at another hospital. Their name is required, and printed.
+  EXTERNAL_DOCTOR
+  /// The patient walked in and asked for it. Nobody prescribed it.
+  SELF
+
+  @@map("diagnostic_referral_source")
+}
+
+enum DiagnosticOrderStatus {
+  PENDING
+  COMPLETED
+  /// The clinician withdrew the request. The test should not happen.
+  CANCELLED
+  /// The patient refused it at the desk. The request stood; the answer was no.
+  ///
+  /// Distinct from CANCELLED, and distinct from the derived "unpaid" state: one
+  /// says the test was called off, the other says money is still expected. A
+  /// technician has to be able to tell those apart at a glance.
+  DECLINED
+
+  @@map("diagnostic_order_status")
+}
+
+/// A test a doctor asked for: "X-ray, left knee, AP and lateral".
+///
+/// Belongs to the VISIT rather than the day — a patient sent for an X-ray and
+/// brought back is the same visit (docs/05), and the order hangs off it. The
+/// description is free text on purpose: a coded catalogue of studies is its own
+/// project, and a clinic that cannot type what it wants writes it on paper,
+/// which is the outcome this feature exists to prevent.
+///
+/// Never deleted. An order raised in error is CANCELLED — "why was this patient
+/// sent for an X-ray" is a question with an answer, and deleting the row deletes
+/// the answer.
+model DiagnosticOrder {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// The consultation this came out of. Null for a walk-in (FR-DIA-10).
+  ///
+  /// Tied to `referralSource` by a biconditional CHECK: exactly the INTERNAL
+  /// orders have a visit. A SELF-referred order attached to a consultation
+  /// would contradict itself, so the database refuses it.
+  appointmentId   String? @map("appointment_id") @db.Uuid
+  patientId       String  @map("patient_id") @db.Uuid
+  departmentId    String  @map("department_id") @db.Uuid
+
+  /// The STAFF USER who keyed this order in. Never null.
+  ///
+  /// Not the same question as `referralSource`, and the two get confused: this
+  /// is the finance person at the desk or the doctor in the room, which always
+  /// exists. Who decided the test was needed is the other column.
+  orderedByUserId String  @map("ordered_by_user_id") @db.Uuid
+
+  /// Who decided the test was needed (FR-DIA-10).
+  ///
+  /// Stored rather than inferred from a null appointment. Inferring works until
+  /// a fourth case appears, and FR-DIA-15 reports on this distinction rather
+  /// than deducing it.
+  referralSource DiagnosticReferralSource @default(INTERNAL) @map("referral_source")
+
+  /// The outside doctor who sent them, free text (FR-DIA-14).
+  ///
+  /// A managed list of referrers is the obvious next step and deliberately not
+  /// built until somebody asks for it. `referrerName` is required by CHECK when
+  /// the source is EXTERNAL_DOCTOR — a referral with no name is a blank on a
+  /// form, and this name is printed on the report and counted in a report.
+  referrerName   String? @map("referrer_name") @db.VarChar(160)
+  referrerClinic String? @map("referrer_clinic") @db.VarChar(160)
+  referrerPhone  String? @map("referrer_phone") @db.VarChar(32)
+
+  /// The priced catalogue test this order names, when it names one.
+  ///
+  /// Null for orders raised before the catalogue existed, and null for anything
+  /// the clinic does not offer — those never become orders at all (decision (b):
+  /// "Other" is a line on the printed slip, not work for a department).
+  ///
+  /// `description` stays the record of what was ordered. This is the join that
+  /// lets an order be priced and, in phase 2, billed.
+  serviceId String? @map("service_id") @db.Uuid
+
+  /// The charge raised for this test, when one was raised.
+  ///
+  /// The pay-first gate reads the invoice through this link rather than through
+  /// the appointment, because a walk-in test has no appointment and the same
+  /// gate has to serve both flows.
+  invoiceLineId String? @map("invoice_line_id") @db.Uuid
+
+  /// Raised before diagnostics were billable, so the gate lets it through.
+  ///
+  /// A pure timestamp cutoff, stamped by the migration's column default rather
+  /// than by any code here. Without it, the day the gate ships is the day every
+  /// clinic finds its existing worklist impossible to clear.
+  legacyUnbilled Boolean @default(false) @map("legacy_unbilled")
+
+  description String                @db.VarChar(300)
+  status      DiagnosticOrderStatus @default(PENDING)
+
+  /// Typed when the result is attached. One report per order.
+  resultNote        String?   @map("result_note") @db.VarChar(2000)
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
+  completedByUserId String?   @map("completed_by_user_id") @db.Uuid
+
+  /// Handed to the patient at the counter (FR-DIA-13).
+  ///
+  /// A doctor-ordered result ends up in a consultation, where the system can
+  /// see it arrive. A walk-in result ends as a sheet of paper given to a
+  /// person, which it cannot — so it is recorded. All three move together,
+  /// enforced by CHECK: a handover with nobody named is the exact claim a
+  /// later complaint disputes.
+  handedOverAt       DateTime? @map("handed_over_at") @db.Timestamptz(6)
+  handedOverByUserId String?   @map("handed_over_by_user_id") @db.Uuid
+  handedOverTo       String?   @map("handed_over_to") @db.VarChar(160)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "diagnostic_order_tenant_fkey")
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_appointment_fkey")
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "diagnostic_order_patient_fkey")
+  department  Department  @relation(fields: [departmentId], references: [id], onDelete: Restrict, map: "diagnostic_order_department_fkey")
+  service     Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull, map: "diagnostic_order_service_fkey")
+  invoiceLine InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict, map: "diagnostic_order_invoice_line_fkey")
+  orderedBy   User        @relation("DiagnosticOrdersRaised", fields: [orderedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_ordered_by_fkey")
+  completedBy User?       @relation("DiagnosticOrdersCompleted", fields: [completedByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_completed_by_fkey")
+  handedOverBy User?      @relation("DiagnosticOrdersHandedOver", fields: [handedOverByUserId], references: [id], onDelete: Restrict, map: "diagnostic_order_handover_fkey")
+
+  documents ClinicalDocument[]
+
+  @@index([tenantId, departmentId, status, createdAt], map: "diagnostic_order_worklist_idx")
+  @@index([tenantId, appointmentId], map: "diagnostic_order_visit_idx")
+  @@index([tenantId, serviceId], map: "diagnostic_order_service_idx")
+  @@index([tenantId, referralSource, createdAt], map: "diagnostic_order_referral_idx")
+  @@index([tenantId, patientId, createdAt], map: "diagnostic_order_patient_day_idx")
+  @@unique([invoiceLineId], map: "diagnostic_order_invoice_line_key")
+  @@map("diagnostic_order")
+}
+
+/// What a patient's record used to say.
+///
+/// One row per field changed. Written by `PatientsService.correct`, never by
+/// anything else, and never updated or deleted — the point of the table is that
+/// it records what the record previously claimed, and a history that can be
+/// edited answers a different question.
+///
+/// **This holds patient data outside the patient row**, which is a deliberate
+/// exception to the audit trail's rule of names-without-values. Narveer chose it
+/// on 27 Aug 2026 so that "what did it say before" has an answer. The cost is
+/// that a DPDP erasure request now has a second place to reach.
+model PatientCorrection {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  patientId String @map("patient_id") @db.Uuid
+
+  /// The API's property name — `mobile`, `birthDate` — not the column name.
+  field    String  @db.VarChar(64)
+  oldValue String? @map("old_value") @db.Text
+  newValue String? @map("new_value") @db.Text
+
+  correctedByUserId String   @map("corrected_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "patient_correction_tenant_fkey")
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "patient_correction_patient_fkey")
+  correctedBy User    @relation(fields: [correctedByUserId], references: [id], onDelete: Restrict, map: "patient_correction_user_fkey")
+
+  @@index([tenantId, patientId, createdAt(sort: Desc)], map: "patient_correction_patient_idx")
+  @@map("patient_correction")
+}
+
+/// Why a compensating payment row exists. See the `payment.correction_kind`
+/// migration for the reasoning.
+enum PaymentCorrectionKind {
+  /// Money physically went back to the patient.
+  PATIENT_REFUND
+  /// The entry was never real. No money moved either way.
+  RECORDED_IN_ERROR
+
+  @@map("payment_correction_kind")
+}
+
+/// How a promotion reduces a bill.
+///
+/// Two kinds and no more: a clinic saying "50% off" and a clinic saying "₹200
+/// off" covers every discount asked for in the demos. Both are held in the same
+/// `value` column, which a CHECK constrains differently per kind.
+enum PromotionType {
+  /// `value` is a whole percentage, 1–100. 100 is allowed on purpose: it is the
+  /// "don't charge this patient" case, and the reason the feature exists.
+  PERCENTAGE
+  /// `value` is an amount in paise.
+  FLAT
+  /// `value` is NULL: the amount is typed at the desk, per bill, and frozen onto
+  /// the application row like any other discount. For the discount a clinic
+  /// cannot decide in advance.
+  CUSTOM
+
+  @@map("promotion_type")
+}
+
+/// A discount the administrator has defined in advance (FR-PRO-01).
+///
+/// The point of the table is that the finance desk applies a KNOWN thing rather
+/// than inventing one. Today a discount is a verbal instruction and a
+/// hand-written note; this makes it a row somebody with `promotion:manage`
+/// created, that an invoice from March can still explain in September.
+///
+/// Never deleted, only switched off — `active` exists for exactly that, and the
+/// migration revokes DELETE from the app role so the rule is the database's
+/// rather than the service layer's.
+model Promotion {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  /// Typed or picked at billing — CAMP50. Internal only (decision 4, 3 Sep
+  /// 2026): staff-facing, behind the auth guard, never told to a patient. That
+  /// is what lets it be a plain readable string with no usage limit and no
+  /// guessing resistance. If it ever becomes patient-facing, this column is not
+  /// what changes — the whole surface around it is.
+  code String @db.VarChar(32)
+  /// What it is for, in words. Read by whoever approves it later.
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+
+  type PromotionType
+
+  /// 1–100 for PERCENTAGE, paise for FLAT, **NULL for CUSTOM** — whose amount is
+  /// not knowable until there is a bill. Constrained per type in the migration,
+  /// which is what keeps it mandatory for the two types that need it.
+  value Int?
+
+  /// Optional cap, so "50% off" cannot become ₹4,000. Null means uncapped, and
+  /// for CUSTOM the migration requires null: a cap the person typing the amount
+  /// cannot see would silently shrink what they entered.
+  maxDiscountPaise Int? @map("max_discount_paise")
+
+  /// A camp offer stops working when the camp ends. Dates, not instants: a
+  /// promotion is valid for a clinic's calendar day, and the tenant timezone is
+  /// what decides which day that is.
+  validFrom DateTime  @map("valid_from") @db.Date
+  /// Null means open-ended.
+  validTo   DateTime? @map("valid_to") @db.Date
+
+  /// Switched off without being deleted.
+  isActive Boolean @default(true) @map("is_active")
+
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "promotion_tenant_fkey")
+  createdBy User   @relation("PromotionsCreated", fields: [createdByUserId], references: [id], onDelete: Restrict, map: "promotion_created_by_fkey")
+
+  applications PromotionApplication[]
+
+  @@unique([tenantId, code], map: "promotion_tenant_code_key")
+  @@index([tenantId, isActive, validFrom], map: "promotion_pickable_idx")
+  @@map("promotion")
+}
+
+/// A promotion actually applied to a bill (FR-PRO-02).
+///
+/// Append-only, like `payment` and for the same reason: this is the record that
+/// answers "who gave this money away, and on whose instruction". A row that can
+/// be edited or removed answers nothing.
+///
+/// `authorisedByUserId` is NOT NULL by decision (3 Sep 2026). The instruction
+/// arrives by telephone, so the system cannot observe it — the finance person
+/// names the approver from the clinic's own staff. Without that, the record
+/// shows the finance person gave away money and shows nothing about the
+/// instruction they were following, and the person most exposed by the gap is
+/// the finance person. Mirrors `invoice.authorised_by_user_id`, made mandatory.
+model PromotionApplication {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  promotionId String @map("promotion_id") @db.Uuid
+  invoiceId   String @map("invoice_id") @db.Uuid
+
+  /// What the promotion actually took off, in paise, resolved at apply time.
+  /// Stored rather than recomputed: the promotion can be switched off or its
+  /// dates changed later, and this invoice must keep reading the same.
+  discountPaise Int @map("discount_paise")
+
+  /// From the session. Who was at the keyboard — on a reversal row, who undid it.
+  appliedByUserId String @map("applied_by_user_id") @db.Uuid
+  /// Named by the person applying it. Who said to.
+  ///
+  /// A reversal row carries the authoriser of the discount it is withdrawing,
+  /// not a fresh one: the column is NOT NULL, and inventing an approver for an
+  /// undo would put a name against an instruction nobody gave.
+  authorisedByUserId String   @map("authorised_by_user_id") @db.Uuid
+  appliedAt          DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  /// Set only on a compensating row. NULL means this row IS an application.
+  reversalKind          PromotionReversalKind? @map("reversal_kind")
+  reversesApplicationId String?                @map("reverses_application_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "promotion_application_tenant_fkey")
+  promotion    Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict, map: "promotion_application_promotion_fkey")
+  invoice      Invoice   @relation("InvoicePromotionHistory", fields: [invoiceId], references: [id], onDelete: Restrict, map: "promotion_application_invoice_fkey")
+  appliedBy    User      @relation("PromotionsApplied", fields: [appliedByUserId], references: [id], onDelete: Restrict, map: "promotion_application_applied_by_fkey")
+  authorisedBy User      @relation("PromotionsAuthorised", fields: [authorisedByUserId], references: [id], onDelete: Restrict, map: "promotion_application_authorised_by_fkey")
+
+  reverses PromotionApplication?  @relation("PromotionReversal", fields: [reversesApplicationId], references: [id], onDelete: Restrict, map: "promotion_application_reverses_fkey")
+  reversedBy PromotionApplication[] @relation("PromotionReversal")
+
+  /// The invoices pointing at this row as their current discount. At most one,
+  /// and only while it has not been reversed.
+  activeOn Invoice[] @relation("InvoiceActivePromotion")
+
+  /// An application is reversed at most once — reversing twice would count the
+  /// money coming back twice. Partial: application rows all carry NULL here.
+  @@unique([reversesApplicationId], map: "promotion_application_reverses_key")
+  @@index([tenantId, invoiceId, appliedAt], map: "promotion_application_invoice_idx")
+  @@index([tenantId, appliedAt], map: "promotion_application_reporting_idx")
+  @@map("promotion_application")
+}
+
+/// Why a compensating promotion row exists.
+///
+/// Mirrors PaymentCorrectionKind, and the distinction is the same one: whether
+/// the thing being undone should never have happened, or happened properly and
+/// was then called back. Whoever reads the day's discounts needs to tell those
+/// apart.
+enum PromotionReversalKind {
+  /// Wrong promotion, wrong bill, wrong patient.
+  APPLIED_IN_ERROR
+  /// The discount was given correctly and the approver then withdrew it.
+  AUTHORISATION_WITHDRAWN
+
+  @@map("promotion_reversal_kind")
+}
+
+/// The clinic's receipt sequence.
+///
+/// A separate table from `InvoiceCounter` rather than a column on it: that
+/// model's `tenantId` is `@unique`, so it holds exactly one counter per clinic.
+/// The two sequences are independent on purpose — one invoice can produce
+/// several receipts, so sharing a number would need a suffix, and a receipt with
+/// a suffix invites somebody to invent one.
+model ReceiptCounter {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+
+  prefix     String @default("R") @db.VarChar(8)
+  lastNumber BigInt @default(0) @map("last_number")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_counter_tenant_fkey")
+
+  @@map("receipt_counter")
+}
+
+/// A receipt — proof that a PAYMENT was received (FR-RCP-01, -03).
+///
+/// One per money-in payment, never one per invoice. A ₹1,100 bill paid ₹500 now
+/// and ₹600 later is one invoice and two receipts, each showing what was paid at
+/// that moment and what remained.
+///
+/// THE MONEY BLOCK IS FROZEN HERE, not derived at print time. Deriving it looked
+/// safe — the invoice total cannot move while money is on it — until
+/// `BillingService.loadEditable` turned out to test paid MINUS refunded, so a
+/// fully refunded invoice becomes editable again and its total can change after
+/// a receipt was issued. A reprint would then show a balance that was never
+/// true. Storing the figures is also simply what a receipt is: a record of what
+/// a document said.
+model Receipt {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  paymentId String @unique @map("payment_id") @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+
+  /// Serial per clinic, from `next_receipt_number()`.
+  number String @db.VarChar(32)
+
+  /// The money block, in the order it prints. Never collapsed into one figure:
+  /// a clinic that records ₹0 rather than ₹600 less ₹600 cannot say what it
+  /// gave away.
+  totalChargedPaise Int @map("total_charged_paise")
+  discountPaise     Int @default(0) @map("discount_paise")
+  taxPaise          Int @default(0) @map("tax_paise")
+  payablePaise      Int @map("payable_paise")
+  paidNowPaise      Int @map("paid_now_paise")
+  /// What was still outstanding immediately after this payment.
+  balancePaise      Int @map("balance_paise")
+
+  issuedAt  DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_tenant_fkey")
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict, map: "receipt_payment_fkey")
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict, map: "receipt_invoice_fkey")
+
+  prints ReceiptPrint[]
+
+  @@unique([tenantId, number], map: "receipt_tenant_id_number_key")
+  @@index([tenantId, invoiceId, issuedAt], map: "receipt_invoice_idx")
+  @@map("receipt")
+}
+
+/// Every time a receipt was put on paper (FR-RCP-03).
+///
+/// Not optional. This log is the only thing that can answer "has this been
+/// printed before", which is what lets the second copy carry DUPLICATE on its
+/// face. Two identical unmarked receipts for one payment is how cash goes
+/// missing in a clinic, and the person exposed by it is the finance desk, who
+/// otherwise cannot prove which copy was the original.
+model ReceiptPrint {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  receiptId       String   @map("receipt_id") @db.Uuid
+  printedByUserId String   @map("printed_by_user_id") @db.Uuid
+  printedAt       DateTime @default(now()) @map("printed_at") @db.Timestamptz(6)
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "receipt_print_tenant_fkey")
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Restrict, map: "receipt_print_receipt_fkey")
+  printedBy User    @relation("ReceiptsPrinted", fields: [printedByUserId], references: [id], onDelete: Restrict, map: "receipt_print_user_fkey")
+
+  @@index([tenantId, receiptId, printedAt], map: "receipt_print_receipt_idx")
+  @@map("receipt_print")
+}

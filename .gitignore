@@ -1,0 +1,70 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# npm/yarn lockfiles. This repo is pnpm-only (ADR-001) and a second lockfile
+# silently describes a different dependency tree â€” including losing the security
+# overrides in pnpm-workspace.yaml. If one appears, delete it and run
+# `pnpm install`.
+package-lock.json
+yarn.lock
+
+# build output
+dist/
+build/
+.next/
+.next-build/
+.next-dev/
+out/
+*.tsbuildinfo
+
+# NOTE: packages/db/src/generated/ IS committed, deliberately.
+#
+# It is machine-written and noisy, and the instinct is to ignore it. But nothing
+# regenerates it reliably on a fresh clone: pnpm skips lifecycle scripts when the
+# lockfile is already current, and neither `pnpm dev` nor `pnpm typecheck` runs
+# `prisma generate`. Ignoring it means clone â†’ install â†’ dev fails with a
+# confusing missing-module error.
+#
+# It is marked linguist-generated in .gitattributes so it collapses in diffs and
+# stays out of review.
+
+# turbo
+.turbo/
+
+# env â€” never commit. .env.example is the template.
+.env
+.env.*
+!.env.example
+
+# local runtime data (uploads written by LocalDiskStorageDriver)
+.data/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# coverage / test output
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+Thumbs.db
+Desktop.ini
+*.swp
+
+# secrets â€” belt and braces, these should never exist in the tree
+*.pem
+*.key
+*.p12
+*.pfx
+
+.postman/
+postman/
