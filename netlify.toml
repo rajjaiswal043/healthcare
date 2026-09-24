@@ -12,6 +12,13 @@
   command = "pnpm exec next build"
   publish = ".next"
 
+# Declared explicitly because Netlify only auto-enables its Next.js runtime when
+# it finds `next` at the repo root, and here it lives in apps/web. Without this
+# the first deploy uploaded .next as plain static files (pages at
+# /server/app/index.html) and every route 404'd. Pinned in apps/web devDependencies.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
 [build.environment]
   NODE_VERSION = "22"
 

@@ -68,3 +68,5 @@ Desktop.ini
 
 .postman/
 postman/
+# netlify cli local build output
+.netlify/
