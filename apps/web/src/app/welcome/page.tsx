@@ -123,45 +123,51 @@ export default function WelcomePage() {
     : { href: '/login', label: 'Staff sign-in', short: 'Sign in' };
 
   /**
-   * Sign-in opens over this page instead of leaving it.
-   *
-   * The pop-up is tied to the address (#sign-in): opening it adds a history
-   * entry, so the browser's Back button closes it, and a link to
-   * /welcome#sign-in opens straight into it. Ctrl/Cmd/Shift-click and middle
-   * click are left alone, so "open in new tab" still goes to /login — as does
-   * everything with JavaScript off, since the links keep their real href.
+   * Sign-in opens over this page instead of leaving it, and the address bar
+   * never changes: the pop-up is plain component state. Ctrl/Cmd/Shift-click
+   * and middle click are left alone, so "open in new tab" still goes to /login
+   * — as does everything with JavaScript off, since the links keep their real
+   * href.
    */
   const [signInOpen, setSignInOpen] = useState(false);
-  const pushedHash = useRef(false);
-
-  useEffect(() => {
-    const sync = () => {
-      const open = window.location.hash === '#sign-in';
-      if (!open) pushedHash.current = false;
-      setSignInOpen(open);
-    };
-    sync();
-    window.addEventListener('hashchange', sync);
-    return () => window.removeEventListener('hashchange', sync);
-  }, []);
 
   function openSignIn(e: React.MouseEvent) {
     if (signedIn || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     setMenuOpen(false);
-    pushedHash.current = true;
-    window.location.hash = 'sign-in';
+    setSignInOpen(true);
   }
 
-  const closeSignIn = useCallback(() => {
-    if (pushedHash.current) {
-      // We added the entry, so step back off it — Back and × behave the same.
-      window.history.back();
-    } else {
-      // Arrived with #sign-in already in the address: just drop it.
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      setSignInOpen(false);
-    }
+  const closeSignIn = useCallback(() => setSignInOpen(false), []);
+
+  /**
+   * In-page links scroll to their section without touching the address.
+   *
+   * One listener for the whole page, so it covers every `href="#…"` link —
+   * the nav, the section rail, the hero and footer links, the skip link —
+   * without each needing its own handler. The browser's own behaviour would
+   * glide there too (the smooth-scroll rule in CSS) but would also write
+   * `#features` into the URL; this scrolls and leaves the URL alone. Section
+   * `scroll-margin` still applies, so nothing ends up under the header.
+   * Modified clicks fall through to the browser as normal.
+   */
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const link = e.target instanceof Element ? e.target.closest('a[href^="#"]') : null;
+      const id = link?.getAttribute('href')?.slice(1);
+      const target = id ? document.getElementById(id) : null;
+      if (!target) return;
+
+      e.preventDefault();
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      // The skip link's job is to move keyboard focus, not just the view.
+      if (id === 'main') target.focus({ preventScroll: true });
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
   }, []);
 
   return (
