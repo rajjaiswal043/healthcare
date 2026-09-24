@@ -1,0 +1,24 @@
+# Netlify deploys the staff console (apps/web) only. The API (apps/api) is a
+# long-running NestJS server with Postgres and S3 behind it, which Netlify cannot
+# host — deploy it elsewhere and point NEXT_PUBLIC_API_BASE_URL at it.
+
+[build]
+  # Netlify installs from the pnpm workspace root, then runs the command here.
+  base = "apps/web"
+
+  # Plain `next build`, not `pnpm build`: the package script routes output to
+  # .next-build (see scripts/next-with-dist.mjs), which is a local-dev concern.
+  # Netlify's Next.js runtime expects the default .next.
+  command = "pnpm exec next build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+  # The root `prepare` script runs `prisma generate` on every install, and
+  # packages/db/prisma.config.ts refuses to load without these. Generate never
+  # connects to a database, and the web app never touches Prisma, so a
+  # placeholder is enough. These are NOT real credentials — nothing on Netlify
+  # should migrate.
+  MIGRATION_DATABASE_URL = "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+  SHADOW_DATABASE_URL = "postgresql://placeholder:placeholder@localhost:5432/placeholder"
