@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Newsreader } from 'next/font/google';
+import { usePathname, useRouter } from 'next/navigation';
 import { api, ApiRequestError, type MfaChallenge } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import type { ClinicBrand } from '@/components/auth-shell';
@@ -20,7 +21,6 @@ import {
   IconAlert,
   IconArrowLeft,
   IconBuilding,
-  IconCheck,
   IconEyeOff,
   IconKey,
   IconLock,
@@ -30,6 +30,19 @@ import {
 } from '@/components/icons';
 
 type Stage = 'credentials' | 'mfa-code' | 'mfa-enrol';
+
+/**
+ * A real italic serif for the one accent word in a heading. The display face
+ * (Bricolage) has no italic, and a sans the browser has slanted for you is one
+ * of the quicker tells of a page nobody actually set.
+ */
+const serif = Newsreader({
+  subsets: ['latin'],
+  style: ['italic'],
+  weight: ['400', '500'],
+  variable: '--font-serif',
+  display: 'swap',
+});
 
 /**
  * Where the last clinic signed in from this browser is remembered.
@@ -47,6 +60,7 @@ const RESOLVE_DEBOUNCE_MS = 400;
 
 export default function LoginPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { refresh } = useAuth();
 
   const [stage, setStage] = useState<Stage>('credentials');
@@ -202,6 +216,295 @@ export default function LoginPage() {
   const onCredentials = stage === 'credentials';
 
   /**
+   * The form itself — greeting, fields, two-factor steps, help. Shared by both
+   * layouts below, so the full page and the welcome-page pop-up can never
+   * drift apart in what they ask for or how they sign someone in.
+   */
+  const formBlock = (
+    <div key={stage} className="login-rise w-full max-w-[384px]">
+      {!onCredentials && (
+        <span className="mb-4 grid h-12 w-12 place-items-center rounded-panel bg-clinical text-white shadow-[0_10px_24px_-10px_rgba(15,118,110,0.8)]">
+          <IconShield size={22} />
+        </span>
+      )}
+
+      {onCredentials && (
+        <p className="mb-1 h-5 text-[13.5px] font-medium text-ink-40">
+          {greeting ? greeting.date : ' '}
+        </p>
+      )}
+      <h1 className="text-[clamp(28px,3.4vw,36px)] font-extrabold leading-[1.05] tracking-[-0.03em]">
+        {onCredentials ? (
+          greeting ? (
+            <>
+              {greeting.hello.split(' ')[0]}{' '}
+              <span className="login-serif text-clinical">
+                {greeting.hello.split(' ').slice(1).join(' ')}
+              </span>
+              .
+            </>
+          ) : (
+            <>
+              Welcome <span className="text-clinical">back</span>
+            </>
+          )
+        ) : (
+          <>
+            One more <span className="text-clinical">step</span>
+          </>
+        )}
+      </h1>
+      <p className="mt-2 text-[14.5px] text-ink-60">
+        {onCredentials
+          ? 'Sign in with your clinic account to open the console.'
+          : stage === 'mfa-enrol'
+            ? 'Your role requires two-factor authentication. Set it up once and you’re in.'
+            : 'Enter the six-digit code from your authenticator app.'}
+      </p>
+
+      <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+        {error && (
+          <div
+            role="alert"
+            className="login-shake flex items-start gap-2.5 rounded-[12px] border border-coral/30 bg-coral/8 px-3.5 py-2.5 text-[13px] text-coral-text"
+          >
+            <span className="mt-0.5 shrink-0">
+              <IconAlert size={14} />
+            </span>
+            <span>{error}</span>
+          </div>
+        )}
+
+        {onCredentials ? (
+          <>
+            <LoginField
+              id="tenantSlug"
+              label="Clinic"
+              icon={<IconBuilding size={16} />}
+              value={tenantSlug}
+              onChange={setTenantSlug}
+              autoComplete="organization"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="your-clinic"
+              autoFocus
+              trailing={
+                clinic ? (
+                  <span
+                    className="login-pop flex h-8 items-center rounded-[8px] bg-white px-1"
+                    title={clinic.name}
+                  >
+                    <ClinicLogo clinic={clinic} size={24} alt={clinic.name} />
+                  </span>
+                ) : null
+              }
+            />
+            <LoginField
+              id="email"
+              label="Email"
+              type="email"
+              icon={<IconMail size={16} />}
+              value={email}
+              onChange={setEmail}
+              autoComplete="username"
+              placeholder="you@clinic.in"
+            />
+            <LoginField
+              id="password"
+              label="Password"
+              type={showPassword ? 'text' : 'password'}
+              icon={<IconLock size={16} />}
+              value={password}
+              onChange={setPassword}
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              onKeyDown={(e) => setCapsLock(e.getModifierState('CapsLock'))}
+              onKeyUp={(e) => setCapsLock(e.getModifierState('CapsLock'))}
+              onBlur={() => setCapsLock(false)}
+              aside={
+                capsLock ? (
+                  <span className="rounded-pill bg-amber-soft px-2 py-0.5 text-[11px] font-semibold text-amber-text">
+                    Caps Lock is on
+                  </span>
+                ) : null
+              }
+              trailing={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  className="grid h-8 w-8 place-items-center rounded-[8px] text-ink-40 transition-colors hover:bg-ink/5 hover:text-ink"
+                >
+                  {showPassword ? <IconEyeOff size={16} /> : <EyeGlyph />}
+                </button>
+              }
+            />
+          </>
+        ) : (
+          /* Past the credentials step the three fields collapse to one line.
+             Re-showing them read-only wastes the vertical space the code field
+             and enrolment key need, and reads as clutter — the user has already
+             answered those questions. */
+          <div className="flex items-center justify-between gap-3 rounded-[14px] border border-ink/10 bg-white/80 px-3.5 py-2.5 shadow-sm">
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clinical-soft font-display text-[13px] font-bold uppercase text-clinical-text">
+                {email.charAt(0) || '·'}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[13.5px] font-semibold text-ink">{email}</span>
+                <span className="block truncate font-mono text-[11px] text-ink-40">
+                  {tenantSlug}
+                </span>
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={backToCredentials}
+              className="shrink-0 rounded-pill px-2.5 py-1 text-[12.5px] font-semibold text-clinical-text transition-colors hover:bg-clinical-tint"
+            >
+              Change
+            </button>
+          </div>
+        )}
+
+        {stage === 'mfa-enrol' && challenge?.enrolmentSecret && (
+          <div className="rounded-[14px] border border-amber/40 bg-amber-soft/50 px-3.5 py-3">
+            <p className="mono-label !text-amber-text">Add this key to your authenticator</p>
+            <p className="mt-2 select-all break-all rounded-[10px] bg-white px-2.5 py-2 font-mono text-[12px] tracking-wide text-ink">
+              {challenge.enrolmentSecret}
+            </p>
+          </div>
+        )}
+
+        {!onCredentials && (
+          <div>
+            <label
+              htmlFor="totpCode"
+              className="mb-1.5 block text-[12.5px] font-semibold text-ink-60"
+            >
+              Authentication code
+            </label>
+            <div className="group relative">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-20 transition-colors group-focus-within:text-clinical">
+                <IconKey size={18} />
+              </span>
+              <input
+                id="totpCode"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+                className="h-14 w-full rounded-[14px] border border-ink/12 bg-white/90 pl-12 pr-4 text-center font-mono text-[24px] font-semibold tracking-[0.5em] text-ink shadow-[0_1px_2px_rgba(60,50,35,0.04)] outline-none transition-all placeholder:text-ink-20/60 hover:border-ink/25 focus:border-clinical focus:bg-white focus:ring-4 focus:ring-clinical/12 focus-visible:outline-none"
+              />
+            </div>
+            <div className="mt-2 flex gap-1" aria-hidden="true">
+              {Array.from({ length: 6 }, (_, i) => (
+                <span
+                  key={i}
+                  className={`h-1 flex-1 rounded-full transition-colors ${
+                    i < totpCode.length ? 'bg-clinical' : 'bg-ink/10'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="group relative mt-2 inline-flex h-12 w-full items-center justify-center gap-2.5 overflow-hidden rounded-pill bg-clinical text-[15px] font-semibold text-white shadow-[0_12px_28px_-12px_rgba(15,118,110,0.9)] transition-all hover:bg-clinical-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 -left-1/2 w-1/3 -skew-x-12 bg-white/15 transition-all duration-700 group-hover:left-[120%]"
+          />
+          {busy ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              {onCredentials ? 'Signing in…' : 'Verifying…'}
+            </>
+          ) : (
+            <>
+              {onCredentials ? 'Sign in' : 'Verify and continue'}
+              <span className="transition-transform group-hover:translate-x-0.5">
+                <ArrowGlyph />
+              </span>
+            </>
+          )}
+        </button>
+      </form>
+
+      {/* Most sign-ins happen at a desk PC that three people share. The
+          one habit that keeps patient records safe there is signing out,
+          so it is said here, once, where the session starts. */}
+      {onCredentials && (
+        <p className="mt-4 flex items-center justify-center gap-2 rounded-[10px] bg-amber-soft/60 px-3 py-2 text-[12.5px] text-amber-text">
+          <IconUsers size={14} />
+          Shared desk computer? Sign out whenever you step away.
+        </p>
+      )}
+
+      <p className="mt-4 text-center text-[13px] text-ink-40 [@media(max-height:760px)]:hidden">
+        {onCredentials
+          ? 'Forgot your password or new to the clinic? Your administrator can set up or reset your account.'
+          : 'Lost access to your authenticator? Ask your clinic administrator to reset it.'}
+      </p>
+    </div>
+  );
+
+  /**
+   * Inside the welcome page's sign-in pop-up.
+   *
+   * The welcome page renders this same component in a dialog instead of sending
+   * people off to another page, so the form, its checks and its two-factor
+   * steps exist exactly once. A Next.js page takes no props, so it tells from
+   * the address: anywhere other than /login, it is embedded. The dialog itself
+   * — backdrop, close button, focus — belongs to the welcome page; this
+   * supplies only the two panels inside it.
+   */
+  if (pathname !== '/login') {
+    return (
+      <div className={`${serif.variable} grid md:grid-cols-[1fr_0.95fr]`}>
+        <style dangerouslySetInnerHTML={{ __html: LOGIN_CSS + HANDMADE_CSS }} />
+
+        <div className="flex flex-col px-6 pb-7 pt-8 sm:px-10 sm:pb-9 sm:pt-10">
+          <span className="mb-7 flex min-w-0 items-center gap-2.5">
+            {clinic ? (
+              <>
+                <ClinicLogo clinic={clinic} size={28} />
+                <span className="truncate font-display text-[16px] font-extrabold">
+                  {clinic.name}
+                </span>
+              </>
+            ) : (
+              <>
+                <ConsoleMark size={28} />
+                <span className="whitespace-nowrap font-display text-[16px] font-extrabold">
+                  Clinic <span className="text-clinical">Console</span>
+                </span>
+              </>
+            )}
+          </span>
+
+          {formBlock}
+
+          <p className="mt-6 flex items-center gap-2 text-[12.5px] text-ink-40">
+            <IconLock size={13} />
+            Everything you change is recorded under your name.
+          </p>
+        </div>
+
+        <PopupArt clinic={clinic} />
+      </div>
+    );
+  }
+
+  /**
    * Layout.
    *
    * HEIGHT IS STILL A HARD CONSTRAINT (scripts/check-viewport-fit.mjs): the page
@@ -214,7 +517,9 @@ export default function LoginPage() {
    * neutral "Clinic Console" mark.
    */
   return (
-    <main className="relative flex h-[100dvh] w-full overflow-hidden bg-bg lg:gap-3 lg:p-3">
+    <main
+      className={`${serif.variable} relative flex h-[100dvh] w-full overflow-hidden bg-bg lg:gap-3 lg:p-3`}
+    >
       <style dangerouslySetInnerHTML={{ __html: LOGIN_CSS + HANDMADE_CSS }} />
 
       {/* Soft colour behind the form, across the whole page so it has no edge */}
@@ -255,263 +560,15 @@ export default function LoginPage() {
               </>
             )}
           </span>
-
-          <span className="mono-label hidden items-center gap-1.5 lg:flex">
-            <span className="text-clinical">
-              <IconLock size={12} />
-            </span>
-            Secure sign-in
-          </span>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-5 py-4 sm:px-8">
-          <div key={stage} className="login-rise w-full max-w-[384px]">
-            {!onCredentials && (
-              <span className="mb-4 grid h-12 w-12 place-items-center rounded-panel bg-clinical text-white shadow-[0_10px_24px_-10px_rgba(15,118,110,0.8)]">
-                <IconShield size={22} />
-              </span>
-            )}
-
-            {onCredentials && (
-              <p className="mono-label mb-2 h-4">{greeting ? greeting.date : ' '}</p>
-            )}
-            <h1 className="text-[clamp(28px,3.4vw,36px)] font-extrabold leading-[1.05] tracking-[-0.03em]">
-              {onCredentials ? (
-                greeting ? (
-                  <>
-                    {greeting.hello.split(' ')[0]}{' '}
-                    <span className="pr-[0.06em] italic text-clinical">
-                      {greeting.hello.split(' ').slice(1).join(' ')}
-                    </span>
-                    .
-                  </>
-                ) : (
-                  <>
-                    Welcome <span className="text-clinical">back</span>
-                  </>
-                )
-              ) : (
-                <>
-                  One more <span className="text-clinical">step</span>
-                </>
-              )}
-            </h1>
-            <p className="mt-2 text-[14.5px] text-ink-60">
-              {onCredentials
-                ? 'Sign in with your clinic account to open the console.'
-                : stage === 'mfa-enrol'
-                  ? 'Your role requires two-factor authentication. Set it up once and you’re in.'
-                  : 'Enter the six-digit code from your authenticator app.'}
-            </p>
-
-            <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
-              {error && (
-                <div
-                  role="alert"
-                  className="login-shake flex items-start gap-2.5 rounded-[12px] border border-coral/30 bg-coral/8 px-3.5 py-2.5 text-[13px] text-coral-text"
-                >
-                  <span className="mt-0.5 shrink-0">
-                    <IconAlert size={14} />
-                  </span>
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {onCredentials ? (
-                <>
-                  <LoginField
-                    id="tenantSlug"
-                    label="Clinic"
-                    icon={<IconBuilding size={16} />}
-                    value={tenantSlug}
-                    onChange={setTenantSlug}
-                    autoComplete="organization"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    placeholder="your-clinic"
-                    autoFocus
-                    trailing={
-                      clinic ? (
-                        <span
-                          className="login-pop flex h-8 items-center rounded-[8px] bg-white px-1"
-                          title={clinic.name}
-                        >
-                          <ClinicLogo clinic={clinic} size={24} alt={clinic.name} />
-                        </span>
-                      ) : null
-                    }
-                  />
-                  <LoginField
-                    id="email"
-                    label="Email"
-                    type="email"
-                    icon={<IconMail size={16} />}
-                    value={email}
-                    onChange={setEmail}
-                    autoComplete="username"
-                    placeholder="you@clinic.in"
-                  />
-                  <LoginField
-                    id="password"
-                    label="Password"
-                    type={showPassword ? 'text' : 'password'}
-                    icon={<IconLock size={16} />}
-                    value={password}
-                    onChange={setPassword}
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                    onKeyDown={(e) => setCapsLock(e.getModifierState('CapsLock'))}
-                    onKeyUp={(e) => setCapsLock(e.getModifierState('CapsLock'))}
-                    onBlur={() => setCapsLock(false)}
-                    aside={
-                      capsLock ? (
-                        <span className="rounded-pill bg-amber-soft px-2 py-0.5 text-[11px] font-semibold text-amber-text">
-                          Caps Lock is on
-                        </span>
-                      ) : null
-                    }
-                    trailing={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((s) => !s)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        aria-pressed={showPassword}
-                        className="grid h-8 w-8 place-items-center rounded-[8px] text-ink-40 transition-colors hover:bg-ink/5 hover:text-ink"
-                      >
-                        {showPassword ? <IconEyeOff size={16} /> : <EyeGlyph />}
-                      </button>
-                    }
-                  />
-                </>
-              ) : (
-                /* Past the credentials step the three fields collapse to one line.
-                   Re-showing them read-only wastes the vertical space the code field
-                   and enrolment key need, and reads as clutter — the user has already
-                   answered those questions. */
-                <div className="flex items-center justify-between gap-3 rounded-[14px] border border-ink/10 bg-white/80 px-3.5 py-2.5 shadow-sm">
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clinical-soft font-display text-[13px] font-bold uppercase text-clinical-text">
-                      {email.charAt(0) || '·'}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13.5px] font-semibold text-ink">
-                        {email}
-                      </span>
-                      <span className="block truncate font-mono text-[11px] text-ink-40">
-                        {tenantSlug}
-                      </span>
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={backToCredentials}
-                    className="shrink-0 rounded-pill px-2.5 py-1 text-[12.5px] font-semibold text-clinical-text transition-colors hover:bg-clinical-tint"
-                  >
-                    Change
-                  </button>
-                </div>
-              )}
-
-              {stage === 'mfa-enrol' && challenge?.enrolmentSecret && (
-                <div className="rounded-[14px] border border-amber/40 bg-amber-soft/50 px-3.5 py-3">
-                  <p className="mono-label !text-amber-text">Add this key to your authenticator</p>
-                  <p className="mt-2 select-all break-all rounded-[10px] bg-white px-2.5 py-2 font-mono text-[12px] tracking-wide text-ink">
-                    {challenge.enrolmentSecret}
-                  </p>
-                </div>
-              )}
-
-              {!onCredentials && (
-                <div>
-                  <label
-                    htmlFor="totpCode"
-                    className="mb-1.5 block text-[12.5px] font-semibold text-ink-60"
-                  >
-                    Authentication code
-                  </label>
-                  <div className="group relative">
-                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-20 transition-colors group-focus-within:text-clinical">
-                      <IconKey size={18} />
-                    </span>
-                    <input
-                      id="totpCode"
-                      value={totpCode}
-                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="000000"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      autoFocus
-                      required
-                      className="h-14 w-full rounded-[14px] border border-ink/12 bg-white/90 pl-12 pr-4 text-center font-mono text-[24px] font-semibold tracking-[0.5em] text-ink shadow-[0_1px_2px_rgba(60,50,35,0.04)] outline-none transition-all placeholder:text-ink-20/60 hover:border-ink/25 focus:border-clinical focus:bg-white focus:ring-4 focus:ring-clinical/12 focus-visible:outline-none"
-                    />
-                  </div>
-                  <div className="mt-2 flex gap-1" aria-hidden="true">
-                    {Array.from({ length: 6 }, (_, i) => (
-                      <span
-                        key={i}
-                        className={`h-1 flex-1 rounded-full transition-colors ${
-                          i < totpCode.length ? 'bg-clinical' : 'bg-ink/10'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="group relative mt-2 inline-flex h-12 w-full items-center justify-center gap-2.5 overflow-hidden rounded-pill bg-clinical text-[15px] font-semibold text-white shadow-[0_12px_28px_-12px_rgba(15,118,110,0.9)] transition-all hover:bg-clinical-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-y-0 -left-1/2 w-1/3 -skew-x-12 bg-white/15 transition-all duration-700 group-hover:left-[120%]"
-                />
-                {busy ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                    {onCredentials ? 'Signing in…' : 'Verifying…'}
-                  </>
-                ) : (
-                  <>
-                    {onCredentials ? 'Sign in' : 'Verify and continue'}
-                    <span className="transition-transform group-hover:translate-x-0.5">
-                      <ArrowGlyph />
-                    </span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Most sign-ins happen at a desk PC that three people share. The
-                one habit that keeps patient records safe there is signing out,
-                so it is said here, once, where the session starts. */}
-            {onCredentials && (
-              <p className="mt-4 flex items-center justify-center gap-2 rounded-[10px] bg-amber-soft/60 px-3 py-2 text-[12.5px] text-amber-text">
-                <IconUsers size={14} />
-                Shared desk computer? Sign out whenever you step away.
-              </p>
-            )}
-
-            <p className="mt-4 text-center text-[13px] text-ink-40 [@media(max-height:760px)]:hidden">
-              {onCredentials
-                ? 'Forgot your password or new to the clinic? Your administrator can set up or reset your account.'
-                : 'Lost access to your authenticator? Ask your clinic administrator to reset it.'}
-            </p>
-          </div>
+          {formBlock}
         </div>
 
-        <footer className="flex shrink-0 flex-wrap items-center justify-center gap-x-5 gap-y-1 px-5 pb-4 sm:px-8 sm:pb-6">
-          {[
-            { icon: <IconShield size={12} />, label: 'DPDP-ready' },
-            { icon: <IconLock size={12} />, label: 'Encrypted' },
-            { icon: <IconCheck size={12} />, label: 'Audited' },
-          ].map((t) => (
-            <span key={t.label} className="mono-label flex items-center gap-1.5">
-              <span className="text-clinical">{t.icon}</span>
-              {t.label}
-            </span>
-          ))}
+        <footer className="flex shrink-0 items-center justify-center gap-2 px-5 pb-4 text-[12.5px] text-ink-40 sm:px-8 sm:pb-6">
+          <IconLock size={13} />
+          Everything you change is recorded under your name.
         </footer>
       </section>
     </main>
@@ -521,6 +578,7 @@ export default function LoginPage() {
 /* -------------------------------------------------------------------------- */
 
 const LOGIN_CSS = `
+.login-serif{font-family:var(--font-serif),Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.01em}
 @keyframes login-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .login-rise{animation:login-rise .6s cubic-bezier(.2,.7,.2,1) both}
 @keyframes login-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
@@ -593,14 +651,6 @@ function LoginField({
  * the page to scroll.
  */
 function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
-  const roles = [
-    { label: 'Front desk', color: '#8fa0e6' },
-    { label: 'Doctor', color: '#b894e6' },
-    { label: 'Nurse', color: '#e693bb' },
-    { label: 'Owner', color: '#d9ad85' },
-    { label: 'Admin', color: '#b5bcc7' },
-  ];
-
   return (
     <aside className="relative isolate hidden w-[46%] max-w-[700px] shrink-0 flex-col justify-between overflow-hidden rounded-[28px] bg-clinical-deep p-10 text-white lg:flex xl:p-12">
       <div
@@ -646,14 +696,10 @@ function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
       </div>
 
       <div>
-        <p className="inline-flex items-center gap-2 rounded-pill border border-white/15 bg-white/10 px-3 py-1 font-mono text-[10.5px] font-medium uppercase tracking-label text-white/80 backdrop-blur">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#5fd6c6]" />
-          Staff sign-in
-        </p>
-        <h2 className="mt-5 max-w-[460px] text-[clamp(30px,3vw,46px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
-          Every patient, every queue,{' '}
-          <Underlined color="#E8B23C" className="text-[#7fe0d2]">
-            one calm console.
+        <h2 className="max-w-[460px] text-[clamp(30px,3vw,46px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
+          The whole OPD,{' '}
+          <Underlined color="#E8B23C" className="login-serif text-[#7fe0d2]">
+            on one screen.
           </Underlined>
         </h2>
         <p className="mt-4 max-w-[400px] text-[15px] leading-relaxed text-white/65">
@@ -668,17 +714,18 @@ function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
           aria-hidden="true"
           className="relative mt-9 h-[250px] max-w-[460px] [@media(max-height:860px)]:hidden"
         >
-          <TokenSlip
-            className="absolute left-2 top-1"
-            heading={clinic ? clinic.name : 'OPD · Out-patient'}
-            token="19"
-            lines={[
-              ['Doctor', 'Dr. K. Rao'],
-              ['Room', '2'],
-              ['Issued', '09:04'],
-            ]}
-            footer="Please wait for your number"
-          />
+          <div className="absolute left-2 top-1">
+            <TokenSlip
+              heading={clinic ? clinic.name : 'OPD · Out-patient'}
+              token="19"
+              lines={[
+                ['Doctor', 'Dr. K. Rao'],
+                ['Room', '2'],
+                ['Issued', '09:04'],
+              ]}
+              footer="Please wait for your number"
+            />
+          </div>
           <Stamp
             className="absolute left-[222px] top-[122px]"
             top="OUT-PATIENT DEPT"
@@ -702,21 +749,110 @@ function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
       </div>
 
       <div>
-        <div className="flex flex-wrap gap-2">
-          {roles.map((r) => (
-            <span
-              key={r.label}
-              className="inline-flex items-center gap-1.5 rounded-pill border border-white/12 bg-white/[0.07] px-3 py-1.5 text-[12px] font-medium text-white/85"
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r.color }} />
-              {r.label}
-            </span>
-          ))}
-        </div>
-        <p className="mt-3 text-[12.5px] text-white/50">
-          One sign-in, and a console shaped for every role.
+        <p className="text-[13.5px] leading-relaxed text-white/55">
+          Front desk, doctors, nurses, owners and admins all sign in here.
+          <br />
+          Each lands on their own screen.
         </p>
       </div>
+    </aside>
+  );
+}
+
+/**
+ * The right half of the pop-up: the front desk as it looks today. Two printed
+ * tokens — the one just served, and the one being called — the OPD stamp, and a
+ * note in the margin, on the same deep teal as the full sign-in page. Hidden on
+ * phones, where the pop-up is the form and nothing else.
+ */
+function PopupArt({ clinic }: { clinic: ClinicBrand | null }) {
+  const heading = clinic ? clinic.name : 'OPD · Out-patient';
+  return (
+    <aside
+      aria-hidden="true"
+      className="relative isolate hidden min-h-[560px] overflow-hidden bg-clinical-deep text-white md:block"
+    >
+      <div
+        className="absolute inset-0 -z-10 opacity-[0.12]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+          maskImage: 'radial-gradient(ellipse 75% 65% at 50% 45%, black 20%, transparent 80%)',
+          WebkitMaskImage:
+            'radial-gradient(ellipse 75% 65% at 50% 45%, black 20%, transparent 80%)',
+        }}
+      />
+      <div className="auth-blob absolute -right-24 -top-24 -z-10 h-[340px] w-[340px] rounded-full bg-[#18a092]/60 blur-3xl" />
+      <div className="auth-blob-slow absolute -bottom-32 -left-20 -z-10 h-[320px] w-[320px] rounded-full bg-amber/25 blur-3xl" />
+
+      {/* A pulse running behind the slips. */}
+      <svg
+        className="absolute inset-x-0 top-[44%] -z-10 h-24 w-full"
+        viewBox="0 0 600 100"
+        preserveAspectRatio="none"
+        fill="none"
+      >
+        <path
+          d="M0 60h150l12-22 14 46 16-80 16 90 12-34h90l8-12 8 12h274"
+          stroke="#7fe0d2"
+          strokeOpacity="0.28"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+
+      <div className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2">
+        <div className="relative h-[330px] w-[300px]">
+          <div className="absolute left-[92px] top-[6px] opacity-60">
+            <TokenSlip
+              heading={heading}
+              token="18"
+              lines={[
+                ['Doctor', 'Dr. L. Iyer'],
+                ['Room', '1'],
+                ['Issued', '08:57'],
+              ]}
+              footer="Seen · Thank you"
+              rotate={7}
+            />
+          </div>
+          <div className="absolute left-0 top-[24px]">
+            <TokenSlip
+              heading={heading}
+              token="19"
+              lines={[
+                ['Doctor', 'Dr. K. Rao'],
+                ['Room', '2'],
+                ['Issued', '09:04'],
+              ]}
+              footer="Please wait for your number"
+              rotate={-5}
+            />
+          </div>
+          <Stamp
+            className="absolute -right-10 bottom-[-6px]"
+            top="OUT-PATIENT DEPT"
+            middle="OPD OPEN"
+            bottom="WALK-INS WELCOME"
+            color="#F08A6E"
+            size={128}
+            rotate={-14}
+          />
+        </div>
+      </div>
+
+      <span className="absolute right-20 top-9 flex flex-col items-end text-[#F6D48A]">
+        <HandNote className="text-[26px]" rotate={4}>
+          token 19, you&rsquo;re up!
+        </HandNote>
+        <HandArrow direction="down-left" className="mr-10 mt-1 h-11 w-14" color="#F6D48A" />
+      </span>
+
+      <p className="absolute inset-x-8 bottom-8 text-[26px] font-extrabold leading-[1.08] tracking-[-0.03em]">
+        The whole OPD, <span className="login-serif text-[#7fe0d2]">on one screen.</span>
+      </p>
     </aside>
   );
 }

@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Newsreader } from 'next/font/google';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ConsoleMark } from '@/components/console-mark';
 import { HANDMADE_CSS, HandArrow, HandNote, Underlined } from '@/components/handmade';
 import { ScrollScene, SectionRail } from '@/components/scroll-scene';
+import LoginPage from '../login/page';
 import {
   IconBell,
   IconCalendar,
@@ -49,19 +51,37 @@ import {
  * otherwise leave content hidden have an explicit fallback.
  */
 
+/**
+ * A real italic serif for accent words. Bricolage has no italic, and a sans
+ * the browser has slanted is one of the quicker tells of an untypeset page.
+ */
+const serif = Newsreader({
+  subsets: ['latin'],
+  style: ['italic'],
+  weight: ['400', '500'],
+  variable: '--font-serif',
+  display: 'swap',
+});
+
 const CSS = `
+/* In-page links (nav, section rail, hero buttons) glide to their section
+   instead of jumping. Only present while this page is mounted, so the console
+   is unaffected; the global reduced-motion rule turns it back into a jump. */
+html{scroll-behavior:smooth}
+.wl-serif,.wl-head .text-clinical{font-family:var(--font-serif),Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.015em}
 @keyframes wl-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .wl-rise{animation:wl-rise .9s cubic-bezier(.2,.7,.2,1) both}
-@keyframes wl-marquee{to{transform:translateX(-50%)}}
-.wl-marquee{animation:wl-marquee 50s linear infinite}
-.wl-marquee-wrap:hover .wl-marquee{animation-play-state:paused}
 @keyframes wl-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 .wl-float{animation:wl-float 6s ease-in-out infinite}
 @keyframes wl-blink{50%{opacity:0}}
 .wl-caret{animation:wl-blink 1s steps(1) infinite}
 @media (prefers-reduced-motion: reduce){
-  .wl-marquee,.wl-float,.wl-caret{animation:none}
+  .wl-float,.wl-caret{animation:none}
 }
+@keyframes wl-fade{from{opacity:0}to{opacity:1}}
+.wl-fade{animation:wl-fade .25s ease-out both}
+@keyframes wl-pop{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:none}}
+.wl-pop{animation:wl-pop .38s cubic-bezier(.2,.8,.2,1) both}
 `;
 
 /** Every section the side rail tracks, in page order. */
@@ -102,8 +122,50 @@ export default function WelcomePage() {
     ? { href: '/', label: 'Open console', short: 'Console' }
     : { href: '/login', label: 'Staff sign-in', short: 'Sign in' };
 
+  /**
+   * Sign-in opens over this page instead of leaving it.
+   *
+   * The pop-up is tied to the address (#sign-in): opening it adds a history
+   * entry, so the browser's Back button closes it, and a link to
+   * /welcome#sign-in opens straight into it. Ctrl/Cmd/Shift-click and middle
+   * click are left alone, so "open in new tab" still goes to /login — as does
+   * everything with JavaScript off, since the links keep their real href.
+   */
+  const [signInOpen, setSignInOpen] = useState(false);
+  const pushedHash = useRef(false);
+
+  useEffect(() => {
+    const sync = () => {
+      const open = window.location.hash === '#sign-in';
+      if (!open) pushedHash.current = false;
+      setSignInOpen(open);
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  function openSignIn(e: React.MouseEvent) {
+    if (signedIn || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    setMenuOpen(false);
+    pushedHash.current = true;
+    window.location.hash = 'sign-in';
+  }
+
+  const closeSignIn = useCallback(() => {
+    if (pushedHash.current) {
+      // We added the entry, so step back off it — Back and × behave the same.
+      window.history.back();
+    } else {
+      // Arrived with #sign-in already in the address: just drop it.
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      setSignInOpen(false);
+    }
+  }, []);
+
   return (
-    <div className="relative isolate min-h-screen overflow-x-clip">
+    <div className={`${serif.variable} relative isolate min-h-screen overflow-x-clip`}>
       <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS }} />
       <ScrollScene />
       <SectionRail sections={SECTIONS} />
@@ -152,6 +214,7 @@ export default function WelcomePage() {
           <div className="flex items-center gap-1.5">
             <Link
               href={primary.href}
+              onClick={openSignIn}
               className="group inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-pill bg-ink pl-4 pr-3 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-clinical-deep hover:shadow"
             >
               {!signedIn && (
@@ -209,10 +272,10 @@ export default function WelcomePage() {
               href="#display"
               className="wl-rise group inline-flex items-center gap-2 rounded-pill border border-ink/10 bg-white/75 py-1 pl-1 pr-3 text-[12.5px] font-medium text-ink-60 shadow-sm backdrop-blur transition-colors hover:border-clinical/30 hover:text-ink"
             >
-              <span className="rounded-pill bg-clinical px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-label text-white">
+              <span className="rounded-pill bg-clinical px-2 py-0.5 text-[11px] font-bold text-white">
                 New
               </span>
-              Waiting-room displays are live
+              Token screens for the waiting room
               <span className="text-ink-20 transition-transform group-hover:translate-x-0.5">
                 <ArrowRight size={12} />
               </span>
@@ -227,21 +290,19 @@ export default function WelcomePage() {
                   thing on a screen in a busy clinic, and screen readers only
                   ever heard the first word anyway.
 
-                  One word in italic teal, and the rest as heavy as the face
-                  goes: simple, and loud where it counts. Bricolage has no true
-                  italic, so the browser slants it — which, at this weight,
-                  reads as a deliberate hand-set lean rather than a font. */}
-              One calm console for the{' '}
-              <Underlined className="pr-[0.08em] italic text-clinical">whole OPD.</Underlined>
+                  Heavy sans for the statement, a real italic serif for the
+                  part that matters. */}
+              The whole OPD,{' '}
+              <Underlined className="wl-serif pr-[0.06em] text-clinical">on one screen.</Underlined>
             </h1>
 
             <p
               className="wl-rise mt-6 max-w-[560px] text-[clamp(16px,1.6vw,18.5px)] leading-relaxed text-ink-60"
               style={{ animationDelay: '160ms' }}
             >
-              Register patients in under two minutes, run a live queue, write prescriptions and
-              close the day&rsquo;s collections, all in one keyboard-first workspace built for the
-              pace of an Indian OPD.
+              Registration, the token queue, prescriptions and the day&rsquo;s collections. Made for
+              the front desk at eleven in the morning, with fourteen people waiting and the phone
+              ringing.
             </p>
 
             <div
@@ -250,6 +311,7 @@ export default function WelcomePage() {
             >
               <Link
                 href={primary.href}
+                onClick={openSignIn}
                 className="group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px"
               >
                 {signedIn ? 'Open your console' : 'Sign in to your clinic'}
@@ -261,25 +323,17 @@ export default function WelcomePage() {
                 href="#workflow"
                 className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill border-2 border-ink px-6 text-[15.5px] font-bold text-ink transition-colors hover:bg-ink hover:text-white"
               >
-                See a visit, start to finish
+                Follow one patient through
               </a>
             </div>
 
-            <ul
-              className="wl-rise mt-7 flex flex-wrap items-center gap-x-6 gap-y-2"
+            <p
+              className="wl-rise mt-6 max-w-[520px] text-[14px] leading-relaxed text-ink-40"
               style={{ animationDelay: '320ms' }}
             >
-              {['Nothing to install', 'Your clinic’s own branding', 'DPDP-ready by design'].map(
-                (t) => (
-                  <li key={t} className="flex items-center gap-2 text-[13px] text-ink-60">
-                    <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-clinical text-white">
-                      <IconCheck size={11} />
-                    </span>
-                    {t}
-                  </li>
-                ),
-              )}
-            </ul>
+              Runs in the browser you already use. Your clinic&rsquo;s own name and logo go on every
+              screen.
+            </p>
 
             {/* The four beats of a visit, numbered along the foot of the hero. */}
             <ol
@@ -288,18 +342,16 @@ export default function WelcomePage() {
             >
               {[
                 { t: 'Register', b: 'UHID issued the moment the form is saved.' },
-                { t: 'Queue', b: 'A token, a doctor, and the waiting-room TV updates itself.' },
+                { t: 'Queue', b: 'Gets a token and a doctor. The waiting-room TV updates.' },
                 { t: 'Consult', b: 'Vitals, notes and Rx on one panel, printed on the way out.' },
                 { t: 'Bill', b: 'Consultation and tests on one receipt. Record complete.' },
               ].map((s, i) => (
                 <li key={s.t} className="flex gap-4">
-                  <span className="font-display text-[40px] font-light leading-[0.85] text-ink-20">
+                  <span className="wl-serif text-[44px] leading-[0.8] text-ink-20">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <span>
-                    <span className="block font-mono text-[11.5px] font-semibold uppercase tracking-label text-ink">
-                      {s.t}
-                    </span>
+                    <span className="block text-[16px] font-bold text-ink">{s.t}</span>
                     <span className="mt-1.5 block text-[13.5px] leading-snug text-ink-60">
                       {s.b}
                     </span>
@@ -324,9 +376,6 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ==== Module marquee ============================================= */}
-        <ModuleMarquee />
-
         {/* ==== The paper it replaces ====================================== */}
         <PaperTrail />
 
@@ -339,12 +388,11 @@ export default function WelcomePage() {
                 eyebrow="Features"
                 title={
                   <>
-                    Everything the day needs.
-                    <br className="hidden sm:block" />{' '}
-                    <span className="text-ink-20">Nothing it doesn&rsquo;t.</span>
+                    Built for the <span className="text-clinical">fortieth</span> patient of the
+                    day.
                   </>
                 }
-                body="Designed at the front desk and in the chamber, for the fortieth patient of the day, not the first."
+                body="The first patient is easy. By the fortieth the queue is long, the doctor is running late and someone wants a receipt reprinted. Every screen here was drawn with that hour in mind."
               />
             </Reveal>
             <FeatureBento />
@@ -360,14 +408,14 @@ export default function WelcomePage() {
             <Reveal>
               <SectionHead
                 index="04"
-                eyebrow="Built for every role"
+                eyebrow="Roles"
                 title={
                   <>
-                    One sign-in. <span className="text-clinical">A console shaped</span> for each
-                    person on staff.
+                    Five people share the desk PC.{' '}
+                    <span className="text-clinical">Each gets their own screen.</span>
                   </>
                 }
-                body="Everyone signs in at the same door and lands on the screen their job needs, in their role's own colour, so a shared desk PC always shows whose session is open."
+                body="Front desk, doctor, nurse, owner and admin sign in at the same place and land on what their job needs. Each role has its own colour, so anyone walking past can see whose session is open."
               />
             </Reveal>
             <RolesShowcase />
@@ -383,11 +431,10 @@ export default function WelcomePage() {
                 eyebrow="How it works"
                 title={
                   <>
-                    From the front door to the receipt,{' '}
-                    <span className="text-clinical">in one flow.</span>
+                    Anil Verma, <span className="text-clinical">9:02 to 9:36.</span>
                   </>
                 }
-                body="One record follows the patient through the whole visit. Nobody retypes a name, and nobody hunts for a file."
+                body="One patient, from the counter to the receipt. His details were typed in once, at registration, and went with him through the visit."
               />
             </Reveal>
             <Journey />
@@ -404,13 +451,13 @@ export default function WelcomePage() {
               <SectionHead
                 align="left"
                 index="07"
-                eyebrow="Trust & compliance"
+                eyebrow="Security"
                 title={
                   <>
-                    Patient data, <span className="text-clinical">locked down</span> where it lives.
+                    Your patients stay <span className="text-clinical">in your clinic.</span>
                   </>
                 }
-                body="These guarantees are enforced in the database itself, not written into a policy nobody reads."
+                body="Clinics on the same system can’t see each other’s records. The database itself enforces that, on every row."
               />
               <ul className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
                 {[
@@ -466,10 +513,10 @@ export default function WelcomePage() {
                 eyebrow="FAQ"
                 title={
                   <>
-                    Questions staff <span className="text-clinical">actually ask.</span>
+                    What people ask <span className="text-clinical">at the counter.</span>
                   </>
                 }
-                body="If you can't find the answer here, your clinic administrator can help with anything about your account."
+                body="For anything else about your account, your clinic administrator can help."
               />
             </Reveal>
             <Reveal delay={100}>
@@ -506,7 +553,7 @@ export default function WelcomePage() {
                 <ConsoleMark size={36} light />
               </span>
               <h2 className="mx-auto mt-7 max-w-2xl text-[clamp(30px,5vw,56px)] font-extrabold leading-[1.02] tracking-[-0.03em] text-white">
-                Your clinic&rsquo;s day starts here.
+                Today&rsquo;s queue is waiting.
               </h2>
               <p className="mx-auto mt-5 max-w-lg text-[16px] leading-relaxed text-white/70">
                 Sign in with your clinic account to open today&rsquo;s queue. New to the team? Your
@@ -515,6 +562,7 @@ export default function WelcomePage() {
               <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
                 <Link
                   href={primary.href}
+                  onClick={openSignIn}
                   className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-pill bg-white px-7 text-[15px] font-semibold text-clinical-deep shadow-sm transition-all hover:bg-bg-soft"
                 >
                   {signedIn ? 'Open console' : 'Staff sign-in'}
@@ -545,8 +593,8 @@ export default function WelcomePage() {
               </span>
             </span>
             <p className="mt-4 max-w-xs text-[13.5px] leading-relaxed text-ink-40">
-              The clinical workspace for Indian OPDs. Encrypted, isolated per clinic and audited end
-              to end.
+              Made for outpatient clinics in India. Trouble signing in? Your clinic administrator
+              can reset your account.
             </p>
           </div>
           <FooterCol title="Product" links={NAV.slice(0, 4)} />
@@ -568,6 +616,8 @@ export default function WelcomePage() {
           </p>
         </div>
       </footer>
+
+      {signInOpen && !signedIn && <SignInDialog onClose={closeSignIn} />}
     </div>
   );
 }
@@ -575,6 +625,82 @@ export default function WelcomePage() {
 /* ========================================================================== */
 /*  Building blocks                                                            */
 /* ========================================================================== */
+
+/**
+ * The sign-in pop-up: the page dims and blurs behind a two-panel card, the
+ * form on the left and the front desk on the right. The card's contents are
+ * the real sign-in page (app/login/page.tsx), which lays itself out for a
+ * dialog when it is not at /login.
+ *
+ * A proper modal: focus is kept inside while it is open and handed back to
+ * whatever opened it afterwards, Escape and the backdrop close it, and the page
+ * behind does not scroll. On phones it rises from the bottom as a sheet.
+ */
+function SignInDialog({ onClose }: { onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+      opener?.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        className="wl-fade absolute inset-0 bg-[#0c1a19]/45 backdrop-blur-md"
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Staff sign-in"
+        className="wl-pop relative max-h-[94dvh] w-full max-w-[1000px] overflow-y-auto rounded-t-[28px] bg-bg-soft shadow-[0_40px_120px_-20px_rgba(0,0,0,0.55)] sm:rounded-[28px] md:overflow-hidden"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close sign-in"
+          className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full border border-ink/10 bg-white/90 text-ink shadow-sm backdrop-blur transition-colors hover:bg-white"
+        >
+          <IconX size={18} />
+        </button>
+        <LoginPage />
+      </div>
+    </div>
+  );
+}
 
 /** Fades a block up the first time it scrolls into view. */
 function Reveal({
@@ -626,7 +752,7 @@ function Reveal({
  * A section's opening: a numbered label row ruled across the width, then a big
  * heavy heading. 'wide' puts the body copy to the right of the heading on large
  * screens; 'left' stacks them, for heads that sit in a two-column section.
- * The heading's accent words (`text-clinical`) lean into italic.
+ * The heading's accent words (`text-clinical`) are set in the italic serif.
  */
 function SectionHead({
   index,
@@ -644,15 +770,15 @@ function SectionHead({
   const wide = align === 'wide';
   return (
     <div>
-      <p className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-label">
-        <span className="font-semibold text-clinical">{index}</span>
-        <span className="text-ink-40">&mdash; {eyebrow}</span>
-        <span aria-hidden="true" className="h-px flex-1 bg-ink/12" />
+      <p className="flex items-baseline gap-3">
+        <span className="wl-serif text-[22px] leading-none text-clinical">{index}</span>
+        <span className="text-[14px] font-semibold text-ink-60">{eyebrow}</span>
+        <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
       </p>
       <div
         className={wide ? 'mt-7 grid items-end gap-6 lg:grid-cols-[1.25fr_1fr] lg:gap-16' : 'mt-7'}
       >
-        <h2 className="text-[clamp(32px,5vw,60px)] font-extrabold leading-[0.98] tracking-[-0.04em] [&_.text-clinical]:italic">
+        <h2 className="wl-head text-[clamp(32px,5vw,60px)] font-extrabold leading-[0.98] tracking-[-0.04em]">
           {title}
         </h2>
         <p
@@ -704,7 +830,7 @@ const QUEUE_ROWS = [
     doctor: 'Dr. Rao',
     status: 'Waiting',
     tone: 'amber',
-    wait: '8 min',
+    wait: '23 min',
   },
   {
     token: '21',
@@ -717,12 +843,21 @@ const QUEUE_ROWS = [
   },
   {
     token: '22',
-    name: 'Kavya Nair',
-    meta: '8 · F',
+    name: 'Venkatalakshmi Subramanian',
+    meta: '58 · F',
     doctor: 'Dr. Iyer',
     status: 'Waiting',
     tone: 'amber',
     wait: '1 min',
+  },
+  {
+    token: '17',
+    name: 'Sameer Qureshi',
+    meta: '35 · M',
+    doctor: 'Dr. Iyer',
+    status: 'No-show',
+    tone: 'neutral',
+    wait: '—',
   },
   {
     token: '18',
@@ -740,6 +875,7 @@ const BADGE_TONE = {
   amber: 'badge-amber',
   coral: 'badge-coral',
   green: 'badge-green',
+  neutral: 'badge-neutral',
 } as const;
 
 /**
@@ -923,7 +1059,11 @@ function ProductWindow() {
                   >
                     <span className="font-mono text-[13px] font-semibold text-ink">{r.token}</span>
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold">{r.name}</span>
+                      <span
+                        className={`block truncate text-[13px] font-semibold ${r.tone === 'neutral' ? 'text-ink-40 line-through decoration-ink-20' : ''}`}
+                      >
+                        {r.name}
+                      </span>
                       <span className="block font-mono text-[10.5px] text-ink-40">{r.meta}</span>
                     </span>
                     <span className="hidden text-[12.5px] text-ink-60 sm:block">{r.doctor}</span>
@@ -1084,10 +1224,10 @@ function PaperTrail() {
             eyebrow="What it replaces"
             title={
               <>
-                Retires the <Underlined>paper</Underlined>, not the people.
+                What goes <Underlined>in the drawer.</Underlined>
               </>
             }
-            body="Every OPD already runs on the same four things. The console keeps the habits your staff know and quietly takes the paper off the desk."
+            body="Most OPDs run on the same four things: a token roll, a thick register, a carbon receipt book and an Rx pad. Keep them for the next power cut."
           />
         </Reveal>
 
@@ -1245,53 +1385,6 @@ function SketchRxPad() {
 /* -------------------------------------------------------------------------- */
 /*  Marquee                                                                    */
 /* -------------------------------------------------------------------------- */
-
-function ModuleMarquee() {
-  const items = [
-    { icon: <IconUserPlus size={16} />, label: 'Patient registration' },
-    { icon: <IconClock size={16} />, label: 'Live queue' },
-    { icon: <IconCalendar size={16} />, label: 'Appointments' },
-    { icon: <IconStethoscope size={16} />, label: 'Consultations' },
-    { icon: <RxGlyph size={16} />, label: 'Prescriptions' },
-    { icon: <FlaskGlyph size={16} />, label: 'Diagnostics' },
-    { icon: <IconReceipt size={16} />, label: 'Billing & receipts' },
-    { icon: <ChartGlyph size={16} />, label: 'Collections reports' },
-    { icon: <TvGlyph size={16} />, label: 'Waiting-room display' },
-    { icon: <TagGlyph size={16} />, label: 'Promotions' },
-    { icon: <IconShield size={16} />, label: 'Role-based access' },
-    { icon: <IconEyeOff size={16} />, label: 'Audit trail' },
-  ];
-
-  return (
-    <section
-      aria-label="Modules"
-      className="border-y border-ink/8 bg-white/30 py-6 backdrop-blur-sm"
-    >
-      <p className="mono-label mb-5 text-center">Every corner of the OPD, in one place</p>
-      <div
-        className="wl-marquee-wrap relative overflow-hidden"
-        style={{
-          maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
-          WebkitMaskImage:
-            'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
-        }}
-      >
-        <ul className="wl-marquee flex w-max gap-3">
-          {[...items, ...items].map((it, i) => (
-            <li
-              key={`${it.label}-${i}`}
-              aria-hidden={i >= items.length}
-              className="flex items-center gap-2.5 whitespace-nowrap rounded-pill border border-ink/8 bg-white px-4 py-2.5 text-[13.5px] font-medium text-ink-60 shadow-sm"
-            >
-              <span className="text-clinical">{it.icon}</span>
-              {it.label}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /*  Feature bento                                                              */
@@ -1929,8 +2022,8 @@ function Journey() {
       </ol>
       <Reveal delay={400}>
         <p className="mt-12 text-center text-[15px] text-ink-60">
-          <span className="font-semibold text-ink">34 minutes, one record,</span> and not a single
-          form filled in twice.
+          <span className="font-semibold text-ink">34 minutes at the clinic.</span> His name was
+          typed once.
         </p>
       </Reveal>
     </div>
@@ -1966,17 +2059,18 @@ function DisplayShowcase() {
 
       <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.85fr_1.15fr]">
         <Reveal>
-          <p className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-label">
-            <span className="font-semibold text-[#5fd6c6]">06</span>
-            <span className="text-white/50">&mdash; Waiting-room display</span>
+          <p className="flex items-baseline gap-3 text-[14px] font-semibold">
+            <span className="wl-serif text-[22px] leading-none text-[#5fd6c6]">06</span>
+            <span className="text-white/60">Waiting room</span>
             <span aria-hidden="true" className="h-px flex-1 bg-white/15" />
           </p>
           <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
-            A calmer waiting room, <span className="italic text-[#5fd6c6]">on any TV.</span>
+            The token screen <span className="wl-serif text-[#5fd6c6]">in the waiting room.</span>
           </h2>
           <p className="mt-5 max-w-md text-[16px] leading-relaxed text-white/65">
-            Pair a screen with a key from settings. It shows who each doctor is seeing and who is
-            next, and it updates itself. No names on the wall, just tokens.
+            Pair any TV with a key from settings. It shows who each doctor is seeing and who&rsquo;s
+            next, and updates on its own. Patients&rsquo; names never go on the wall, only token
+            numbers.
           </p>
           <ul className="mt-8 space-y-3.5">
             {[
@@ -1985,8 +2079,8 @@ function DisplayShowcase() {
               'Shows tokens only, never names or details',
             ].map((t) => (
               <li key={t} className="flex items-center gap-3 text-[14.5px] text-white/85">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-[#5fd6c6]/15 text-[#5fd6c6]">
-                  <IconCheck size={11} />
+                <span aria-hidden="true" className="text-[#5fd6c6]">
+                  &ndash;
                 </span>
                 {t}
               </li>
@@ -2266,19 +2360,6 @@ const FlaskGlyph = ({ size }: { size?: number }) => (
 const RxGlyph = ({ size }: { size?: number }) => (
   <Glyph size={size}>
     <path d="M6 20V4h5a4 4 0 010 8H6M10 12l8 8M18 13l-5 6" />
-  </Glyph>
-);
-
-const ChartGlyph = ({ size }: { size?: number }) => (
-  <Glyph size={size}>
-    <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
-  </Glyph>
-);
-
-const TvGlyph = ({ size }: { size?: number }) => (
-  <Glyph size={size}>
-    <rect x="3" y="5" width="18" height="12" rx="2" />
-    <path d="M8 21h8M12 17v4" />
   </Glyph>
 );
 
