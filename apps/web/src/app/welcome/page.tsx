@@ -481,7 +481,7 @@ export default function WelcomePage() {
                 body="Front desk, doctor, nurse, owner and admin sign in at the same place and land on what their job needs. Each role has its own colour, so anyone walking past can see whose session is open."
               />
             </Reveal>
-            <RolesShowcase />
+            <RolesShowcase night={look === 'night'} />
           </div>
         </section>
 
@@ -782,14 +782,18 @@ function Modal({
         aria-label={label}
         className={`wl-pop relative max-h-[94dvh] w-full overflow-y-auto rounded-t-[28px] bg-bg-soft shadow-[0_40px_120px_-20px_rgba(0,0,0,0.55)] sm:rounded-[28px] ${className}`}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={`Close ${label.toLowerCase()}`}
-          className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full border border-ink/10 bg-white/90 text-ink shadow-sm backdrop-blur transition-colors hover:bg-white"
-        >
-          <IconX size={18} />
-        </button>
+        {/* A zero-height sticky strip, so the close button stays in reach when a
+            tall card (larger text, two-factor steps) scrolls inside the dialog. */}
+        <div className="pointer-events-none sticky top-0 z-10 flex h-0 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={`Close ${label.toLowerCase()}`}
+            className="pointer-events-auto mr-4 mt-4 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ink/10 bg-white/90 text-ink shadow-sm backdrop-blur transition-colors hover:bg-white"
+          >
+            <IconX size={18} />
+          </button>
+        </div>
         {children}
       </div>
     </div>
@@ -804,7 +808,9 @@ function Modal({
  */
 function SignInDialog({ onClose }: { onClose: () => void }) {
   return (
-    <Modal label="Staff sign-in" onClose={onClose} className="max-w-[1000px] md:overflow-hidden">
+    // No overflow-hidden here: with larger text the form is taller than a
+    // laptop screen, and the dialog has to be able to scroll to its button.
+    <Modal label="Staff sign-in" onClose={onClose} className="max-w-[1000px]">
       <LoginPage />
     </Modal>
   );
@@ -1634,31 +1640,7 @@ function FeatureBento() {
           title="Registration that catches duplicates"
           body="One keyboard-first screen. The duplicate check runs while you type, and the UHID is issued the moment you save."
         >
-          <div className="mt-6 grid gap-3 rounded-[16px] border border-ink/8 bg-bg-soft p-4 sm:grid-cols-2">
-            <MockField label="Full name">
-              Priya Shar
-              <span className="wl-caret ml-px inline-block h-4 w-px translate-y-0.5 bg-clinical" />
-            </MockField>
-            <MockField label="Mobile">98••• ••410</MockField>
-            <div className="flex flex-col gap-3 rounded-[12px] border border-amber/40 bg-amber-soft/60 px-3.5 py-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
-              <span className="flex items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white font-display text-[12px] font-bold text-amber-text">
-                  PS
-                </span>
-                <span className="leading-tight">
-                  <span className="block text-[13px] font-semibold text-amber-text">
-                    This may be an existing patient
-                  </span>
-                  <span className="block font-mono text-[11px] text-amber-text/80">
-                    Priya Sharma · 34 F · UH-24-0192
-                  </span>
-                </span>
-              </span>
-              <span className="self-start rounded-pill bg-white px-3 py-1.5 text-[12px] font-semibold text-amber-text shadow-sm sm:self-auto">
-                Open record
-              </span>
-            </div>
-          </div>
+          <RegistrationDemo />
         </Tile>
       </Reveal>
 
@@ -1891,6 +1873,123 @@ function Tile({
   );
 }
 
+/**
+ * The registration card, typing itself: "Priya Shar" goes in a key at a time
+ * at an uneven, human pace, the duplicate warning slides in once the name is
+ * specific enough — the way the real check fires while you type — and the
+ * mobile number follows. It holds, clears and starts again.
+ *
+ * Only runs while the card is on screen, and not at all under reduced motion:
+ * there it simply shows the finished state. The warning keeps its space while
+ * hidden so the card never jumps.
+ */
+const TYPED_NAME = 'Priya Shar';
+const TYPED_MOBILE = '98••• ••410';
+/** "Priya S" — the point where there is enough to match on. */
+const MATCH_AT = 7;
+
+function RegistrationDemo() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [name, setName] = useState(TYPED_NAME.length);
+  const [mobile, setMobile] = useState(TYPED_MOBILE.length);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let timers: number[] = [];
+    let running = false;
+    const stop = () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      timers = [];
+    };
+    const at = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+
+    const play = () => {
+      stop();
+      setName(0);
+      setMobile(0);
+      let t = 500;
+      for (let i = 1; i <= TYPED_NAME.length; i++) {
+        // A space or a capital takes a beat longer, as it does for a person.
+        t += 85 + Math.random() * 120 + (/[ A-Z]/.test(TYPED_NAME[i - 1] ?? '') ? 90 : 0);
+        at(t, () => setName(i));
+      }
+      t += 450;
+      for (let i = 1; i <= TYPED_MOBILE.length; i++) {
+        t += 60 + Math.random() * 70;
+        at(t, () => setMobile(i));
+      }
+      at(t + 3400, play);
+    };
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting && !running) {
+          running = true;
+          play();
+        } else if (!entry?.isIntersecting && running) {
+          running = false;
+          stop();
+          setName(TYPED_NAME.length);
+          setMobile(TYPED_MOBILE.length);
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      stop();
+    };
+  }, []);
+
+  const typingName = name < TYPED_NAME.length;
+  const match = name >= MATCH_AT;
+  const caret = (
+    <span className="wl-caret ml-px inline-block h-4 w-px translate-y-0.5 bg-clinical" />
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="mt-6 grid gap-3 rounded-[16px] border border-ink/8 bg-bg-soft p-4 sm:grid-cols-2"
+    >
+      <MockField label="Full name">
+        {TYPED_NAME.slice(0, name)}
+        {(typingName || mobile === TYPED_MOBILE.length) && caret}
+      </MockField>
+      <MockField label="Mobile">
+        {TYPED_MOBILE.slice(0, mobile)}
+        {!typingName && mobile < TYPED_MOBILE.length && caret}
+      </MockField>
+      <div
+        className={`flex flex-col gap-3 rounded-[12px] border border-amber/40 bg-amber-soft/60 px-3.5 py-3 transition-all duration-500 ease-out sm:col-span-2 sm:flex-row sm:items-center sm:justify-between ${
+          match ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0'
+        }`}
+      >
+        <span className="flex items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white font-display text-[12px] font-bold text-amber-text">
+            PS
+          </span>
+          <span className="leading-tight">
+            <span className="block text-[13px] font-semibold text-amber-text">
+              This may be an existing patient
+            </span>
+            <span className="block font-mono text-[11px] text-amber-text/80">
+              Priya Sharma · 34 F · UH-24-0192
+            </span>
+          </span>
+        </span>
+        <span className="self-start rounded-pill bg-white px-3 py-1.5 text-[12px] font-semibold text-amber-text shadow-sm sm:self-auto">
+          Open record
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function MockField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
@@ -1924,6 +2023,7 @@ const ROLES = [
     key: 'front_desk',
     label: 'Front desk',
     color: '#3a4e9b',
+    glow: '#8fa0e6',
     soft: '#e2e6f6',
     text: '#2b3a75',
     person: 'Pooja Singh',
@@ -1945,6 +2045,7 @@ const ROLES = [
     key: 'doctor',
     label: 'Doctor',
     color: '#6b3fa0',
+    glow: '#b894e6',
     soft: '#ede2f7',
     text: '#52307b',
     person: 'Dr. Kiran Rao',
@@ -1966,6 +2067,7 @@ const ROLES = [
     key: 'nurse',
     label: 'Nurse',
     color: '#a83a6e',
+    glow: '#e693bb',
     soft: '#f7deeb',
     text: '#852c56',
     person: 'Anita Joseph',
@@ -1987,6 +2089,7 @@ const ROLES = [
     key: 'owner',
     label: 'Owner',
     color: '#7a5230',
+    glow: '#d9ad85',
     soft: '#efe1d3',
     text: '#5e3e22',
     person: 'Dr. Suresh Menon',
@@ -2008,6 +2111,7 @@ const ROLES = [
     key: 'administrator',
     label: 'Administrator',
     color: '#4c5563',
+    glow: '#b5bcc7',
     soft: '#e4e6ea',
     text: '#39414d',
     person: 'Rahul Kapoor',
@@ -2027,10 +2131,26 @@ const ROLES = [
   },
 ] as const;
 
-function RolesShowcase() {
+function RolesShowcase({ night }: { night: boolean }) {
   const [active, setActive] = useState(0);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
   const role = ROLES[active] ?? ROLES[0];
+
+  /*
+   * The role colours are set inline, so the page's night rules can't reach
+   * them. At night each role wears its lifted colour instead (the same ones the
+   * sign-in page uses), with dark text on it; the deep daytime colours — the
+   * administrator's slate most of all — would vanish on the dark ground.
+   */
+  const tone = night
+    ? {
+        color: role.glow,
+        soft: `${role.glow}24`,
+        text: role.glow,
+        blank: 'rgba(228,234,232,.08)',
+        on: '#0E1315',
+      }
+    : { color: role.color, soft: role.soft, text: role.text, blank: '#F6F4F0', on: '#FFFFFF' };
   const initials = role.person
     .replace(/^Dr\.\s+/, '')
     .split(' ')
@@ -2069,13 +2189,28 @@ function RolesShowcase() {
               tabIndex={on ? 0 : -1}
               onClick={() => setActive(i)}
               className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-pill px-4 py-2.5 text-[13.5px] font-semibold transition-all duration-300 ${
-                on ? 'text-white shadow-sm' : 'text-ink-60 hover:bg-ink/5 hover:text-ink'
+                on ? 'shadow-sm' : 'text-ink-60 hover:bg-ink/5 hover:text-ink'
               }`}
-              style={on ? { backgroundColor: r.color } : undefined}
+              style={
+                on
+                  ? {
+                      backgroundColor: night ? r.glow : r.color,
+                      color: night ? '#0E1315' : '#FFFFFF',
+                    }
+                  : undefined
+              }
             >
               <span
                 className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: on ? 'rgba(255,255,255,0.8)' : r.color }}
+                style={{
+                  backgroundColor: on
+                    ? night
+                      ? 'rgba(14,19,21,0.6)'
+                      : 'rgba(255,255,255,0.8)'
+                    : night
+                      ? r.glow
+                      : r.color,
+                }}
               />
               {r.label}
             </button>
@@ -2092,7 +2227,7 @@ function RolesShowcase() {
         style={{ animationDuration: '.5s' }}
       >
         <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl p-7 shadow-sm sm:p-9">
-          <p className="mono-label" style={{ color: role.text }}>
+          <p className="mono-label" style={{ color: tone.text }}>
             {role.label}
           </p>
           <h3 className="mt-3 text-[clamp(24px,3vw,32px)] font-extrabold tracking-[-0.02em]">
@@ -2103,8 +2238,8 @@ function RolesShowcase() {
             {role.points.map((p) => (
               <li key={p} className="flex items-start gap-3 text-[14.5px] text-ink">
                 <span
-                  className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-white"
-                  style={{ backgroundColor: role.color }}
+                  className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full"
+                  style={{ backgroundColor: tone.color, color: tone.on }}
                 >
                   <IconCheck size={11} />
                 </span>
@@ -2117,33 +2252,33 @@ function RolesShowcase() {
         {/* A sketch of that role's console */}
         <div
           className="relative overflow-hidden rounded-card-lg border border-ink/8 p-5 shadow-sm sm:p-7"
-          style={{ backgroundColor: role.soft }}
+          style={{ backgroundColor: tone.soft }}
         >
           <div
             aria-hidden="true"
             className="absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-25 blur-3xl"
-            style={{ backgroundColor: role.color }}
+            style={{ backgroundColor: tone.color }}
           />
           <div className="relative overflow-hidden rounded-[18px] border border-ink/8 bg-white shadow-lg">
-            <div className="h-1.5" style={{ backgroundColor: role.color }} />
+            <div className="h-1.5" style={{ backgroundColor: tone.color }} />
             <div className="flex items-center justify-between gap-3 border-b border-ink/8 px-4 py-3">
               <span className="flex items-center gap-2.5">
                 <span
-                  className="grid h-9 w-9 place-items-center rounded-full text-[12px] font-bold text-white"
-                  style={{ backgroundColor: role.color }}
+                  className="grid h-9 w-9 place-items-center rounded-full text-[12px] font-bold"
+                  style={{ backgroundColor: tone.color, color: tone.on }}
                 >
                   {initials}
                 </span>
                 <span className="leading-tight">
                   <span className="block text-[13.5px] font-semibold">{role.person}</span>
-                  <span className="block text-[11.5px] font-medium" style={{ color: role.text }}>
+                  <span className="block text-[11.5px] font-medium" style={{ color: tone.text }}>
                     {role.label}
                   </span>
                 </span>
               </span>
               <span
                 className="rounded-pill px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-label"
-                style={{ backgroundColor: role.soft, color: role.text }}
+                style={{ backgroundColor: tone.soft, color: tone.text }}
               >
                 Signed in
               </span>
@@ -2168,7 +2303,7 @@ function RolesShowcase() {
                   >
                     <span
                       className="h-7 w-7 shrink-0 rounded-full"
-                      style={{ backgroundColor: i === 0 ? role.soft : '#F6F4F0' }}
+                      style={{ backgroundColor: i === 0 ? tone.soft : tone.blank }}
                     />
                     <span className="flex-1 space-y-1.5">
                       <span
@@ -2641,6 +2776,8 @@ const NIGHT_CSS =
   // own inherit it instead of the console's near-black.
   '{color-scheme:dark;color:#E4EAE8}\nhtml:has(' +
   NIGHT +
+  '){background:#0E1315}\nbody:has(' +
+  NIGHT +
   '){background:#0E1315}\n' +
   nightRules({
     '.bg-bg': 'background-color:#0E1315',
@@ -2682,6 +2819,7 @@ const NIGHT_CSS =
     '.border-clinical\\/25, .border-clinical\\/30, .hover\\:border-clinical\\/25:hover, .hover\\:border-clinical\\/30:hover, .group[open] .group-open\\:border-clinical\\/30':
       'border-color:rgba(76,195,179,.4)',
     '.bg-clinical-deep': 'background-color:#0B2E2B',
+    '.group:hover .group-hover\\:bg-clinical-soft\\/70': 'background-color:rgba(76,195,179,.12)',
     '.bg-amber-soft, .bg-amber-soft\\/60, .bg-amber-soft\\/70':
       'background-color:rgba(232,178,60,.13)',
     '.text-amber-text, .text-amber-text\\/80': 'color:#F0C868',

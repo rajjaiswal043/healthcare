@@ -895,6 +895,8 @@ const NIGHT_CSS =
   // inherit it instead of the console's near-black.
   '{color-scheme:dark;color:#E4EAE8}\nhtml:has(' +
   NIGHT +
+  '){background:#0E1315}\nbody:has(' +
+  NIGHT +
   '){background:#0E1315}\n' +
   nightRules({
     '.bg-bg': 'background-color:#0E1315',
