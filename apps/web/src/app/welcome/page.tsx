@@ -96,6 +96,24 @@ const SECTIONS = [
   { id: 'faq', label: 'FAQ' },
 ] as const;
 
+/**
+ * Where "Book a demo" requests from clinic owners go.
+ *
+ * Empty for now, on purpose: nobody has decided which inbox answers them yet.
+ * While it is empty the owner door says demo booking is coming soon instead of
+ * offering a form whose message would go nowhere. Put an address here and the
+ * "Book a demo" button and its form switch on by themselves.
+ */
+const DEMO_REQUEST_EMAIL: string = '';
+
+/**
+ * Light or night. Shared with the sign-in page through the same key, so the
+ * choice follows the person between them. Until somebody picks, the night look
+ * comes on by itself between 10 pm and 5 am.
+ */
+const LOOK_KEY = 'healthcloud.look';
+type Look = 'light' | 'night';
+
 const NAV = [
   { href: '#features', label: 'Features' },
   { href: '#roles', label: 'Roles' },
@@ -140,6 +158,35 @@ export default function WelcomePage() {
 
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
 
+  const [demoOpen, setDemoOpen] = useState(false);
+  const closeDemo = useCallback(() => setDemoOpen(false), []);
+
+  const [look, setLook] = useState<Look>('light');
+
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = window.localStorage.getItem(LOOK_KEY);
+    } catch {
+      // No storage: fall through to the clock.
+    }
+    if (saved === 'light' || saved === 'night') setLook(saved);
+    else {
+      const h = new Date().getHours();
+      if (h >= 22 || h < 5) setLook('night');
+    }
+  }, []);
+
+  function toggleLook() {
+    const next: Look = look === 'night' ? 'light' : 'night';
+    setLook(next);
+    try {
+      window.localStorage.setItem(LOOK_KEY, next);
+    } catch {
+      // Remembered for this visit only.
+    }
+  }
+
   /**
    * In-page links scroll to their section without touching the address.
    *
@@ -171,8 +218,11 @@ export default function WelcomePage() {
   }, []);
 
   return (
-    <div className={`${serif.variable} relative isolate min-h-screen overflow-x-clip`}>
-      <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS }} />
+    <div
+      data-look={look}
+      className={`${serif.variable} relative isolate min-h-screen overflow-x-clip`}
+    >
+      <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS + NIGHT_CSS }} />
       <ScrollScene />
       <SectionRail sections={SECTIONS} />
 
@@ -218,6 +268,7 @@ export default function WelcomePage() {
           </nav>
 
           <div className="flex items-center gap-1.5">
+            <NightToggle look={look} onToggle={toggleLook} />
             <Link
               href={primary.href}
               onClick={openSignIn}
@@ -338,7 +389,13 @@ export default function WelcomePage() {
               style={{ animationDelay: '320ms' }}
             >
               Runs in the browser you already use. Your clinic&rsquo;s own name and logo go on every
-              screen.
+              screen.{' '}
+              <a
+                href="#owners"
+                className="font-semibold text-clinical-text underline decoration-clinical/30 underline-offset-4 hover:decoration-clinical"
+              >
+                Run a clinic? See how it would work for yours.
+              </a>
             </p>
 
             {/* The four beats of a visit, numbered along the foot of the hero. */}
@@ -531,10 +588,17 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ==== Closing CTA =============================================== */}
-        <section className="px-4 py-20 sm:px-6 lg:py-28">
-          <Reveal className="mx-auto max-w-6xl">
-            <div className="relative isolate overflow-hidden rounded-[32px] bg-clinical-deep px-6 py-16 text-center text-white shadow-lg sm:px-12 lg:py-24">
+        {/* ==== Two doors ================================================= */}
+        {/* Everything above leads to "Sign in", which leaves a clinic owner who
+            is only curious with nowhere to go. So the page ends on two doors:
+            one for the people who work there, one for the person who runs it. */}
+        <section
+          id="owners"
+          aria-label="Get started"
+          className="scroll-mt-24 px-4 py-20 sm:px-6 lg:py-28"
+        >
+          <Reveal className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[1.15fr_1fr]">
+            <div className="relative isolate overflow-hidden rounded-[32px] bg-clinical-deep px-7 py-12 text-white shadow-lg sm:px-10 lg:py-16">
               <div
                 aria-hidden="true"
                 className="absolute inset-0 -z-10 opacity-[0.14]"
@@ -542,46 +606,63 @@ export default function WelcomePage() {
                   backgroundImage:
                     'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
                   backgroundSize: '44px 44px',
-                  maskImage: 'radial-gradient(ellipse at center, black 10%, transparent 70%)',
-                  WebkitMaskImage: 'radial-gradient(ellipse at center, black 10%, transparent 70%)',
+                  maskImage: 'radial-gradient(ellipse at 30% 40%, black 10%, transparent 70%)',
+                  WebkitMaskImage:
+                    'radial-gradient(ellipse at 30% 40%, black 10%, transparent 70%)',
                 }}
               />
               <div
                 aria-hidden="true"
                 className="absolute -right-24 -top-32 -z-10 h-96 w-96 rounded-full bg-[#18a092]/50 blur-3xl"
               />
-              <div
-                aria-hidden="true"
-                className="absolute -bottom-40 -left-24 -z-10 h-96 w-96 rounded-full bg-amber/25 blur-3xl"
-              />
-
-              <span className="mx-auto grid h-16 w-16 place-items-center rounded-[20px] border border-white/20 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur">
-                <ConsoleMark size={36} light />
-              </span>
-              <h2 className="mx-auto mt-7 max-w-2xl text-[clamp(30px,5vw,56px)] font-extrabold leading-[1.02] tracking-[-0.03em] text-white">
-                Today&rsquo;s queue is waiting.
+              <p className="text-[14px] font-semibold text-white/60">I work at a clinic</p>
+              <h2 className="mt-3 text-[clamp(30px,4.4vw,52px)] font-extrabold leading-[1.02] tracking-[-0.035em] text-white">
+                Today&rsquo;s queue is <span className="wl-serif text-[#7fe0d2]">waiting.</span>
               </h2>
-              <p className="mx-auto mt-5 max-w-lg text-[16px] leading-relaxed text-white/70">
-                Sign in with your clinic account to open today&rsquo;s queue. New to the team? Your
-                clinic administrator will set up your account.
+              <p className="mt-4 max-w-md text-[16px] leading-relaxed text-white/70">
+                Sign in with your clinic account. New to the team? Your clinic administrator will
+                set up your account.
               </p>
-              <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+              <div className="mt-9">
                 <Link
                   href={primary.href}
                   onClick={openSignIn}
-                  className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-pill bg-white px-7 text-[15px] font-semibold text-clinical-deep shadow-sm transition-all hover:bg-bg-soft"
+                  className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-pill bg-white px-7 text-[15px] font-bold text-clinical-deep shadow-sm transition-all hover:bg-bg-soft"
                 >
                   {signedIn ? 'Open console' : 'Staff sign-in'}
                   <span className="transition-transform group-hover:translate-x-0.5">
                     <ArrowRight size={16} />
                   </span>
                 </Link>
-                <a
-                  href="#features"
-                  className="inline-flex h-12 items-center justify-center rounded-pill border border-white/25 px-7 text-[15px] font-semibold text-white transition-colors hover:bg-white/10"
-                >
-                  Explore features
-                </a>
+              </div>
+            </div>
+
+            <div className="flex flex-col rounded-[32px] border border-ink/10 bg-white/70 px-7 py-12 backdrop-blur-xl sm:px-10 lg:py-16">
+              <p className="text-[14px] font-semibold text-ink-40">I run a clinic</p>
+              <h2 className="wl-head mt-3 text-[clamp(28px,3.6vw,44px)] font-extrabold leading-[1.04] tracking-[-0.035em]">
+                See it with <span className="text-clinical">your own clinic</span> in mind.
+              </h2>
+              <p className="mt-4 max-w-sm text-[16px] leading-relaxed text-ink-60">
+                A 20-minute call that walks through a morning at your front desk: registration, the
+                queue, the doctor&rsquo;s screen and the day&rsquo;s collections.
+              </p>
+              <div className="mt-auto pt-9">
+                {DEMO_REQUEST_EMAIL ? (
+                  <button
+                    type="button"
+                    onClick={() => setDemoOpen(true)}
+                    className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-pill border-2 border-ink px-7 text-[15px] font-bold text-ink transition-colors hover:bg-ink hover:text-white"
+                  >
+                    Book a demo
+                    <span className="transition-transform group-hover:translate-x-0.5">
+                      <ArrowRight size={16} />
+                    </span>
+                  </button>
+                ) : (
+                  <p className="inline-flex h-12 items-center rounded-pill border-2 border-dashed border-ink/15 px-6 text-[15px] font-semibold text-ink-40">
+                    Demo booking opens soon
+                  </p>
+                )}
               </div>
             </div>
           </Reveal>
@@ -624,6 +705,7 @@ export default function WelcomePage() {
       </footer>
 
       {signInOpen && !signedIn && <SignInDialog onClose={closeSignIn} />}
+      {demoOpen && DEMO_REQUEST_EMAIL && <DemoDialog onClose={closeDemo} />}
     </div>
   );
 }
@@ -633,16 +715,22 @@ export default function WelcomePage() {
 /* ========================================================================== */
 
 /**
- * The sign-in pop-up: the page dims and blurs behind a two-panel card, the
- * form on the left and the front desk on the right. The card's contents are
- * the real sign-in page (app/login/page.tsx), which lays itself out for a
- * dialog when it is not at /login.
- *
- * A proper modal: focus is kept inside while it is open and handed back to
- * whatever opened it afterwards, Escape and the backdrop close it, and the page
- * behind does not scroll. On phones it rises from the bottom as a sheet.
+ * The modal shell both pop-ups use: the page dims and blurs behind a card,
+ * focus is kept inside while it is open and handed back to whatever opened it
+ * afterwards, Escape and the backdrop close it, and the page behind does not
+ * scroll. On phones it rises from the bottom as a sheet.
  */
-function SignInDialog({ onClose }: { onClose: () => void }) {
+function Modal({
+  label,
+  onClose,
+  className = '',
+  children,
+}: {
+  label: string;
+  onClose: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -691,20 +779,160 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Staff sign-in"
-        className="wl-pop relative max-h-[94dvh] w-full max-w-[1000px] overflow-y-auto rounded-t-[28px] bg-bg-soft shadow-[0_40px_120px_-20px_rgba(0,0,0,0.55)] sm:rounded-[28px] md:overflow-hidden"
+        aria-label={label}
+        className={`wl-pop relative max-h-[94dvh] w-full overflow-y-auto rounded-t-[28px] bg-bg-soft shadow-[0_40px_120px_-20px_rgba(0,0,0,0.55)] sm:rounded-[28px] ${className}`}
       >
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close sign-in"
+          aria-label={`Close ${label.toLowerCase()}`}
           className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full border border-ink/10 bg-white/90 text-ink shadow-sm backdrop-blur transition-colors hover:bg-white"
         >
           <IconX size={18} />
         </button>
-        <LoginPage />
+        {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * The sign-in pop-up: a two-panel card, the form on the left and the front
+ * desk on the right. Its contents are the real sign-in page
+ * (app/login/page.tsx), which lays itself out for a dialog when it is not at
+ * /login.
+ */
+function SignInDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal label="Staff sign-in" onClose={onClose} className="max-w-[1000px] md:overflow-hidden">
+      <LoginPage />
+    </Modal>
+  );
+}
+
+/**
+ * "Book a demo", for clinic owners. There is no server behind it: submitting
+ * opens the visitor's own email app with the request already written out to
+ * DEMO_REQUEST_EMAIL. The page cannot tell whether the email app opened, so
+ * the confirmation says so and shows the address to use instead.
+ */
+function DemoDialog({ onClose }: { onClose: () => void }) {
+  const [sent, setSent] = useState(false);
+
+  function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    const field = (k: string) => String(data.get(k) ?? '').trim();
+    const body = [
+      `Name: ${field('demo-name')}`,
+      `Clinic: ${field('demo-clinic')}`,
+      `City: ${field('demo-city') || '-'}`,
+      `Phone: ${field('demo-phone')}`,
+    ].join('\n');
+    const subject = `Demo request: ${field('demo-clinic')}`;
+    window.location.href = `mailto:${DEMO_REQUEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setSent(true);
+  }
+
+  const input =
+    'h-11 w-full rounded-[12px] border border-ink/12 bg-white px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-20 focus:border-clinical focus:ring-4 focus:ring-clinical/12';
+
+  return (
+    <Modal label="Book a demo" onClose={onClose} className="max-w-[520px]">
+      <div className="px-6 pb-8 pt-9 sm:px-9">
+        {sent ? (
+          <div className="pr-8">
+            <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
+              Your email should be <span className="wl-serif text-clinical">ready to send.</span>
+            </h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
+              We opened your email app with the request written out. If nothing opened, send the
+              same details to{' '}
+              <span className="select-all font-semibold text-ink">{DEMO_REQUEST_EMAIL}</span>.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-7 inline-flex h-11 items-center rounded-pill bg-clinical px-6 text-[14.5px] font-bold text-white hover:bg-clinical-deep"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="grid gap-4">
+            <div className="pr-8">
+              <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
+                Book a <span className="wl-serif text-clinical">demo.</span>
+              </h2>
+              <p className="mt-2 text-[14.5px] text-ink-60">
+                Twenty minutes, at a time that suits your OPD. We&rsquo;ll call you to fix it.
+              </p>
+            </div>
+            <label
+              className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
+              htmlFor="demo-name"
+            >
+              Your name
+              <input
+                id="demo-name"
+                name="demo-name"
+                required
+                autoComplete="name"
+                className={input}
+              />
+            </label>
+            <label
+              className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
+              htmlFor="demo-clinic"
+            >
+              Clinic
+              <input
+                id="demo-clinic"
+                name="demo-clinic"
+                required
+                autoComplete="organization"
+                className={input}
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label
+                className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
+                htmlFor="demo-city"
+              >
+                City
+                <input
+                  id="demo-city"
+                  name="demo-city"
+                  autoComplete="address-level2"
+                  className={input}
+                />
+              </label>
+              <label
+                className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
+                htmlFor="demo-phone"
+              >
+                Phone
+                <input
+                  id="demo-phone"
+                  name="demo-phone"
+                  type="tel"
+                  required
+                  autoComplete="tel"
+                  inputMode="tel"
+                  className={input}
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              className="mt-2 inline-flex h-12 items-center justify-center rounded-pill bg-clinical text-[15px] font-bold text-white transition-colors hover:bg-clinical-deep"
+            >
+              Write the request
+            </button>
+          </form>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -2382,3 +2610,145 @@ const KeyboardGlyph = ({ size }: { size?: number }) => (
     <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
   </Glyph>
 );
+
+/* ========================================================================== */
+/*  Night look                                                                 */
+/* ========================================================================== */
+
+/**
+ * The low-glare night look for this page. The console's colours are fixed
+ * values in tailwind.config.ts, so night is a set of overrides for the classes
+ * this page uses, active under [data-look="night"] on the page root. The
+ * sign-in pop-up's own classes come with its own rules (app/login/page.tsx).
+ */
+const NIGHT = '[data-look="night"]';
+
+function nightRules(map: Record<string, string>): string {
+  return Object.entries(map)
+    .map(([selectors, decl]) => {
+      const list = selectors
+        .split(',')
+        .map((sel) => sel.trim())
+        .flatMap((sel) => [NIGHT + ' ' + sel, NIGHT + sel]);
+      return list.join(',') + '{' + decl + '}';
+    })
+    .join('\n');
+}
+
+const NIGHT_CSS =
+  NIGHT +
+  // A light default colour too: headings and names that set no colour of their
+  // own inherit it instead of the console's near-black.
+  '{color-scheme:dark;color:#E4EAE8}\nhtml:has(' +
+  NIGHT +
+  '){background:#0E1315}\n' +
+  nightRules({
+    '.bg-bg': 'background-color:#0E1315',
+    '.bg-bg-soft, .bg-bg-soft\\/60, .hover\\:bg-bg-soft:hover': 'background-color:#151B1D',
+    '.bg-card, .bg-white, .bg-white\\/95, .bg-white\\/90, .hover\\:bg-white:hover':
+      'background-color:#1A2224',
+    '.bg-white\\/80, .bg-white\\/75, .bg-white\\/70, .bg-white\\/65':
+      'background-color:rgba(26,34,36,.78)',
+    '.bg-white\\/25, .bg-white\\/30': 'background-color:rgba(26,34,36,.35)',
+    '.text-ink, .hover\\:text-ink:hover': 'color:#E4EAE8',
+    '.text-ink-60': 'color:#B3BDBA',
+    '.text-ink-40, .mono-label': 'color:#939D9A',
+    '.text-ink-20, .placeholder\\:text-ink-20::placeholder': 'color:#6A7472',
+    '.decoration-ink-20': 'text-decoration-color:#6A7472',
+    '.border-ink\\/6, .border-ink\\/8, .border-ink\\/10, .border-ink\\/12, .border-ink\\/15':
+      'border-color:rgba(228,234,232,.12)',
+    '.divide-ink\\/6 > :not([hidden]) ~ :not([hidden]), .divide-ink\\/8 > :not([hidden]) ~ :not([hidden])':
+      'border-color:rgba(228,234,232,.1)',
+    '.hover\\:border-ink\\/20:hover, .hover\\:border-ink\\/25:hover':
+      'border-color:rgba(228,234,232,.26)',
+    '.border-ink': 'border-color:#E4EAE8',
+    '.bg-ink, .hover\\:bg-ink:hover, .focus\\:bg-ink:focus': 'background-color:#2A3436',
+    '.bg-ink\\/6, .bg-ink\\/10, .bg-ink\\/12, .bg-ink\\/15':
+      'background-color:rgba(228,234,232,.1)',
+    '.bg-ink\\/25': 'background-color:rgba(228,234,232,.22)',
+    '.group:hover .group-hover\\:bg-ink\\/50': 'background-color:rgba(228,234,232,.45)',
+    '.bg-ink\\/70': 'background-color:rgba(228,234,232,.6)',
+    '.hover\\:bg-ink\\/5:hover': 'background-color:rgba(228,234,232,.06)',
+    '.text-clinical, .group[open] .group-open\\:text-clinical': 'color:#4CC3B3',
+    '.text-clinical-text, .text-clinical-deep, .hover\\:text-clinical-text:hover, .hover\\:text-clinical:hover':
+      'color:#6AD1C2',
+    '.bg-clinical': 'background-color:#1F8F83',
+    '.hover\\:bg-clinical-deep:hover': 'background-color:#17766C',
+    '.focus\\:border-clinical:focus': 'border-color:#4CC3B3',
+    '.bg-clinical-tint, .bg-clinical-tint\\/70, .bg-clinical-tint\\/60, .hover\\:bg-clinical-tint:hover, .group[open] .group-open\\:bg-clinical-tint':
+      'background-color:rgba(76,195,179,.12)',
+    '.bg-clinical-soft, .bg-clinical-soft\\/80, .bg-clinical-soft\\/70':
+      'background-color:rgba(76,195,179,.16)',
+    '.border-clinical\\/25, .border-clinical\\/30, .hover\\:border-clinical\\/25:hover, .hover\\:border-clinical\\/30:hover, .group[open] .group-open\\:border-clinical\\/30':
+      'border-color:rgba(76,195,179,.4)',
+    '.bg-clinical-deep': 'background-color:#0B2E2B',
+    '.bg-amber-soft, .bg-amber-soft\\/60, .bg-amber-soft\\/70':
+      'background-color:rgba(232,178,60,.13)',
+    '.text-amber-text, .text-amber-text\\/80': 'color:#F0C868',
+    '.border-amber\\/40': 'border-color:rgba(232,178,60,.35)',
+    '.bg-coral-soft\\/50': 'background-color:rgba(228,103,79,.1)',
+    '.text-coral-text': 'color:#F4A08C',
+    '.bg-green-soft': 'background-color:rgba(46,114,69,.3)',
+    '.text-green-text': 'color:#7FD19B',
+    '.from-clinical-soft\\/70':
+      '--tw-gradient-from:rgba(76,195,179,.14) var(--tw-gradient-from-position)',
+    '.to-amber-soft\\/60': '--tw-gradient-to:rgba(232,178,60,.1) var(--tw-gradient-to-position)',
+    '.badge-clinical': 'background-color:rgba(76,195,179,.16);color:#6AD1C2',
+    '.badge-amber': 'background-color:rgba(232,178,60,.14);color:#F0C868',
+    '.badge-coral': 'background-color:rgba(228,103,79,.16);color:#F4A08C',
+    '.badge-green': 'background-color:rgba(46,114,69,.32);color:#7FD19B',
+    '.badge-neutral': 'background-color:rgba(228,234,232,.08);color:#B3BDBA',
+    '.eyebrow': 'color:#6AD1C2',
+    // Paper index cards and the queue mock's highlighted row.
+    '.bg-\\[\\#FFFDF8\\]': 'background-color:#1C2426',
+    '.bg-\\[\\#e2e6f6\\]': 'background-color:rgba(143,160,230,.18)',
+    '.text-\\[\\#2b3a75\\]': 'color:#B9C4F0',
+    // The workflow nodes wear a ring of the page colour to cut the track.
+    '[class*="0_0_0_8px_#EFECE6"]':
+      'box-shadow:0 0 0 8px #0E1315,0 10px 24px -8px rgba(15,118,110,.7)',
+  });
+
+/** The header's sun/moon switch between the light and night looks. */
+function NightToggle({ look, onToggle }: { look: Look; onToggle: () => void }) {
+  const night = look === 'night';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={night}
+      aria-label={night ? 'Switch to the light look' : 'Switch to the night look'}
+      title={night ? 'Light look' : 'Night look'}
+      className="grid h-10 w-10 place-items-center rounded-full border border-ink/10 bg-white/80 text-ink-60 backdrop-blur transition-colors hover:border-ink/20 hover:text-ink"
+    >
+      {night ? (
+        <svg
+          width="17"
+          height="17"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.9}
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+        </svg>
+      ) : (
+        <svg
+          width="17"
+          height="17"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.9}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+        </svg>
+      )}
+    </button>
+  );
+}

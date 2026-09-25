@@ -58,6 +58,93 @@ const LAST_CLINIC_KEY = 'healthcloud.lastClinicSlug';
 /** How long to wait after a keystroke before asking the API whose clinic this is. */
 const RESOLVE_DEBOUNCE_MS = 400;
 
+/**
+ * The last few people who signed in on this computer, for the quick switch.
+ *
+ * A front-desk PC is shared across a shift, and handing it over used to mean
+ * typing the clinic and email again every time. Only what is already on the
+ * screen after a sign-in is kept — name, email, clinic — never the password,
+ * which is always typed fresh. Each person can remove themselves ("Forget me").
+ */
+const RECENT_KEY = 'healthcloud.recentSignIns';
+const MAX_RECENT = 3;
+
+type RecentUser = { email: string; name: string; slug: string; clinic: string };
+
+/*
+ * Stored as one tab-separated line per person rather than JSON: there is no
+ * zod on this page to validate a parsed blob with, and four plain fields read
+ * back by position are checked as they are read — a line that isn't exactly
+ * four non-empty fields is dropped.
+ */
+const clean = (v: string) => v.replace(/[\t\n\r]+/g, ' ').trim();
+
+function readRecents(): RecentUser[] {
+  try {
+    return (window.localStorage.getItem(RECENT_KEY) ?? '')
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .filter((p) => p.length === 4 && p.every((v) => v.length > 0))
+      .map(([slug = '', email = '', name = '', clinic = '']) => ({ slug, email, name, clinic }))
+      .slice(0, MAX_RECENT);
+  } catch {
+    return [];
+  }
+}
+
+function writeRecents(list: RecentUser[]) {
+  try {
+    window.localStorage.setItem(
+      RECENT_KEY,
+      list
+        .slice(0, MAX_RECENT)
+        .map((r) => [r.slug, r.email, r.name, r.clinic].map(clean).join('\t'))
+        .join('\n'),
+    );
+  } catch {
+    // Storage disabled: the quick switch simply doesn't appear.
+  }
+}
+
+const sameRecent = (a: RecentUser, b: RecentUser) => a.email === b.email && a.slug === b.slug;
+
+/** "Pooja Singh" → "Pooja"; "Dr. Kiran Rao" → "Dr. Rao": what colleagues call each other. */
+const shortName = (name: string) => {
+  const words = name.trim().split(/\s+/);
+  return /^dr\.?$/i.test(words[0] ?? '')
+    ? `Dr. ${words[words.length - 1] ?? ''}`
+    : (words[0] ?? name);
+};
+
+const initialsOf = (name: string) =>
+  name
+    .replace(/^Dr\.?\s+/i, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+
+/**
+ * Light or night. Shared with the welcome page through the same key, so the
+ * choice follows the person from one to the other. Until somebody chooses, the
+ * night look comes on by itself between 10 pm and 5 am — the same hours the
+ * greeting says "Night shift".
+ */
+const LOOK_KEY = 'healthcloud.look';
+type Look = 'light' | 'night';
+
+/**
+ * Standard or larger text for the sign-in form, remembered per computer.
+ *
+ * Kept on the PC rather than the person because the PC is what differs: the
+ * consultant's chamber PC is set large once and stays large for everyone who
+ * signs in there, while the reception PC stays standard. Clearing the browser's
+ * data puts it back to standard.
+ */
+const TEXT_KEY = 'healthcloud.textSize';
+type TextSize = 'standard' | 'large';
+
 export default function LoginPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -78,6 +165,95 @@ export default function LoginPage() {
 
   /** Whose sign-in this is. Null until a slug resolves to a real clinic. */
   const [clinic, setClinic] = useState<ClinicBrand | null>(null);
+
+  /** People who signed in on this computer recently, and the one just picked. */
+  const [recents, setRecents] = useState<RecentUser[]>([]);
+  const [picked, setPicked] = useState<RecentUser | null>(null);
+
+  /**
+   * When the last attempt failed because of the network rather than the
+   * details. Kept apart from `error` because the advice is different: a wrong
+   * password is the person's to fix, a dropped connection is not — and "Could
+   * not reach the server" used to send staff round in circles retyping it.
+   */
+  const [netProblem, setNetProblem] = useState<'offline' | 'unreachable' | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  /** Light or night, for the full page. In the welcome pop-up the page decides. */
+  const [look, setLook] = useState<Look>('light');
+
+  /** Text size for the form — here and in the welcome pop-up alike. */
+  const [textSize, setTextSize] = useState<TextSize>('standard');
+
+  useEffect(() => {
+    let saved: string | null = null;
+    let savedSize: string | null = null;
+    try {
+      saved = window.localStorage.getItem(LOOK_KEY);
+      savedSize = window.localStorage.getItem(TEXT_KEY);
+    } catch {
+      // No storage: fall through to the clock, and standard text.
+    }
+    if (saved === 'light' || saved === 'night') setLook(saved);
+    else {
+      const h = new Date().getHours();
+      if (h >= 22 || h < 5) setLook('night');
+    }
+    if (savedSize === 'large') setTextSize('large');
+  }, []);
+
+  function chooseTextSize(next: TextSize) {
+    setTextSize(next);
+    try {
+      window.localStorage.setItem(TEXT_KEY, next);
+    } catch {
+      // Remembered for this visit only.
+    }
+  }
+
+  function toggleLook() {
+    const next: Look = look === 'night' ? 'light' : 'night';
+    setLook(next);
+    try {
+      window.localStorage.setItem(LOOK_KEY, next);
+    } catch {
+      // Remembered for this visit only.
+    }
+  }
+
+  /**
+   * Offline: try again the moment the connection is back. The details are
+   * still in the form, so nobody has to type anything twice.
+   */
+  useEffect(() => {
+    if (netProblem !== 'offline') return;
+    const retry = () => formRef.current?.requestSubmit();
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [netProblem]);
+
+  function pickRecent(r: RecentUser) {
+    setPicked(r);
+    setTenantSlug(r.slug);
+    setEmail(r.email);
+    setPassword('');
+    setError(null);
+    requestAnimationFrame(() => document.getElementById('password')?.focus());
+  }
+
+  function notMe() {
+    setPicked(null);
+    setEmail('');
+    setPassword('');
+    requestAnimationFrame(() => document.getElementById('email')?.focus());
+  }
+
+  function forgetRecent(r: RecentUser) {
+    const list = recents.filter((x) => !sameRecent(x, r));
+    setRecents(list);
+    writeRecents(list);
+    if (picked && sameRecent(picked, r)) notMe();
+  }
 
   /**
    * "Good morning", and today's date, in the desk's own time.
@@ -115,6 +291,7 @@ export default function LoginPage() {
    * tree rather than reconcile it.
    */
   useEffect(() => {
+    setRecents(readRecents());
     try {
       const remembered = window.localStorage.getItem(LAST_CLINIC_KEY);
       if (remembered) {
@@ -175,6 +352,7 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setNetProblem(null);
 
     try {
       const result =
@@ -197,10 +375,21 @@ export default function LoginPage() {
         // Nothing to do; the next visit simply starts blank.
       }
 
+      // Put this person at the front of the quick switch for this computer.
+      const me: RecentUser = {
+        email: email.trim().toLowerCase(),
+        name: result.user.fullName,
+        slug: result.tenant.slug,
+        clinic: result.tenant.name,
+      };
+      writeRecents([me, ...readRecents().filter((r) => !sameRecent(r, me))]);
+
       await refresh();
       router.replace('/');
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.error.message : 'Could not reach the server.');
+      if (err instanceof ApiRequestError) setError(err.error.message);
+      // Anything else never reached the API at all: a network failure.
+      else setNetProblem(navigator.onLine ? 'unreachable' : 'offline');
     } finally {
       setBusy(false);
     }
@@ -221,7 +410,7 @@ export default function LoginPage() {
    * drift apart in what they ask for or how they sign someone in.
    */
   const formBlock = (
-    <div key={stage} className="login-rise w-full max-w-[384px]">
+    <div key={stage} className="login-rise login-scale w-full max-w-[384px]">
       {!onCredentials && (
         <span className="mb-4 grid h-12 w-12 place-items-center rounded-panel bg-clinical text-white shadow-[0_10px_24px_-10px_rgba(15,118,110,0.8)]">
           <IconShield size={22} />
@@ -262,7 +451,30 @@ export default function LoginPage() {
             : 'Enter the six-digit code from your authenticator app.'}
       </p>
 
-      <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
+      <form ref={formRef} onSubmit={submit} className="mt-6 space-y-4" noValidate>
+        {netProblem && (
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-[12px] border border-amber/40 bg-amber-soft/60 px-3.5 py-2.5 text-[13px] leading-snug text-amber-text"
+          >
+            <span className="mt-0.5 shrink-0">
+              <OfflineGlyph />
+            </span>
+            {netProblem === 'offline' ? (
+              <span>
+                <b className="block font-semibold">This computer is offline.</b>
+                What you typed is kept. You&rsquo;ll be signed in as soon as the internet is back.
+              </span>
+            ) : (
+              <span>
+                <b className="block font-semibold">The clinic server isn&rsquo;t answering.</b>
+                The internet here looks fine. Try again in a minute, and tell your administrator if
+                it keeps happening.
+              </span>
+            )}
+          </div>
+        )}
+
         {error && (
           <div
             role="alert"
@@ -277,38 +489,103 @@ export default function LoginPage() {
 
         {onCredentials ? (
           <>
-            <LoginField
-              id="tenantSlug"
-              label="Clinic"
-              icon={<IconBuilding size={16} />}
-              value={tenantSlug}
-              onChange={setTenantSlug}
-              autoComplete="organization"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="your-clinic"
-              autoFocus
-              trailing={
-                clinic ? (
-                  <span
-                    className="login-pop flex h-8 items-center rounded-[8px] bg-white px-1"
-                    title={clinic.name}
-                  >
-                    <ClinicLogo clinic={clinic} size={24} alt={clinic.name} />
+            {!picked && recents.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-[12.5px] font-semibold text-ink-60">
+                  Signed in on this computer before
+                </p>
+                <ul className="grid grid-cols-3 gap-2">
+                  {recents.map((r) => (
+                    <li key={`${r.slug}/${r.email}`} className="group relative">
+                      <button
+                        type="button"
+                        onClick={() => pickRecent(r)}
+                        className="flex w-full flex-col items-center gap-1 rounded-[12px] border border-ink/10 bg-white/80 px-1.5 pb-2 pt-2.5 text-center transition-colors hover:border-clinical/40 hover:bg-clinical-tint"
+                      >
+                        <span className="grid h-8 w-8 place-items-center rounded-full bg-clinical font-display text-[11.5px] font-bold text-white">
+                          {initialsOf(r.name)}
+                        </span>
+                        <span className="w-full truncate text-[12.5px] font-semibold text-ink">
+                          {shortName(r.name)}
+                        </span>
+                        <span className="w-full truncate text-[10.5px] text-ink-40">
+                          {r.clinic}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => forgetRecent(r)}
+                        aria-label={`Forget ${r.name} on this computer`}
+                        title="Forget me on this computer"
+                        className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full border border-ink/10 bg-white text-[13px] leading-none text-ink-40 opacity-0 shadow-sm transition-opacity hover:text-coral-text focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                      >
+                        &times;
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {picked ? (
+              <div className="flex items-center justify-between gap-3 rounded-[14px] border border-ink/10 bg-white/80 px-3.5 py-2.5 shadow-sm">
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clinical font-display text-[12.5px] font-bold text-white">
+                    {initialsOf(picked.name)}
                   </span>
-                ) : null
-              }
-            />
-            <LoginField
-              id="email"
-              label="Email"
-              type="email"
-              icon={<IconMail size={16} />}
-              value={email}
-              onChange={setEmail}
-              autoComplete="username"
-              placeholder="you@clinic.in"
-            />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13.5px] font-semibold text-ink">
+                      {picked.name}
+                    </span>
+                    <span className="block truncate text-[11.5px] text-ink-40">
+                      {picked.email} · {picked.clinic}
+                    </span>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={notMe}
+                  className="shrink-0 rounded-pill px-2.5 py-1 text-[12.5px] font-semibold text-clinical-text transition-colors hover:bg-clinical-tint"
+                >
+                  Not you?
+                </button>
+              </div>
+            ) : (
+              <>
+                <LoginField
+                  id="tenantSlug"
+                  label="Clinic"
+                  icon={<IconBuilding size={16} />}
+                  value={tenantSlug}
+                  onChange={setTenantSlug}
+                  autoComplete="organization"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="your-clinic"
+                  autoFocus
+                  trailing={
+                    clinic ? (
+                      <span
+                        className="login-pop flex h-8 items-center rounded-[8px] bg-white px-1"
+                        title={clinic.name}
+                      >
+                        <ClinicLogo clinic={clinic} size={24} alt={clinic.name} />
+                      </span>
+                    ) : null
+                  }
+                />
+                <LoginField
+                  id="email"
+                  label="Email"
+                  type="email"
+                  icon={<IconMail size={16} />}
+                  value={email}
+                  onChange={setEmail}
+                  autoComplete="username"
+                  placeholder="you@clinic.in"
+                />
+              </>
+            )}
             <LoginField
               id="password"
               label="Password"
@@ -469,27 +746,32 @@ export default function LoginPage() {
    */
   if (pathname !== '/login') {
     return (
-      <div className={`${serif.variable} grid md:grid-cols-[1fr_0.95fr]`}>
+      <div data-text={textSize} className={`${serif.variable} grid md:grid-cols-[1fr_0.95fr]`}>
         <style dangerouslySetInnerHTML={{ __html: LOGIN_CSS + HANDMADE_CSS }} />
 
         <div className="flex flex-col px-6 pb-7 pt-8 sm:px-10 sm:pb-9 sm:pt-10">
-          <span className="mb-7 flex min-w-0 items-center gap-2.5">
-            {clinic ? (
-              <>
-                <ClinicLogo clinic={clinic} size={28} />
-                <span className="truncate font-display text-[16px] font-extrabold">
-                  {clinic.name}
-                </span>
-              </>
-            ) : (
-              <>
-                <ConsoleMark size={28} />
-                <span className="whitespace-nowrap font-display text-[16px] font-extrabold">
-                  Clinic <span className="text-clinical">Console</span>
-                </span>
-              </>
-            )}
-          </span>
+          {/* Right padding on phones keeps the size switch clear of the
+              dialog's close button, which sits over this corner there. */}
+          <div className="mb-7 flex items-center justify-between gap-3 pr-12 md:pr-0">
+            <span className="flex min-w-0 items-center gap-2.5">
+              {clinic ? (
+                <>
+                  <ClinicLogo clinic={clinic} size={28} />
+                  <span className="truncate font-display text-[16px] font-extrabold">
+                    {clinic.name}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <ConsoleMark size={28} />
+                  <span className="whitespace-nowrap font-display text-[16px] font-extrabold">
+                    Clinic <span className="text-clinical">Console</span>
+                  </span>
+                </>
+              )}
+            </span>
+            <TextSizeToggle size={textSize} onChange={chooseTextSize} />
+          </div>
 
           {formBlock}
 
@@ -518,6 +800,8 @@ export default function LoginPage() {
    */
   return (
     <main
+      data-look={look}
+      data-text={textSize}
       className={`${serif.variable} relative flex h-[100dvh] w-full overflow-hidden bg-bg lg:gap-3 lg:p-3`}
     >
       <style dangerouslySetInnerHTML={{ __html: LOGIN_CSS + HANDMADE_CSS }} />
@@ -542,23 +826,27 @@ export default function LoginPage() {
             Back to home
           </Link>
 
-          {/* Compact lockup where the brand panel is hidden */}
-          <span className="flex min-w-0 items-center gap-2 lg:hidden">
-            {clinic ? (
-              <>
-                <ClinicLogo clinic={clinic} size={26} />
-                <span className="truncate font-display text-[15px] font-extrabold">
-                  {clinic.name}
-                </span>
-              </>
-            ) : (
-              <>
-                <ConsoleMark size={26} />
-                <span className="hidden whitespace-nowrap font-display text-[15px] font-extrabold min-[380px]:inline">
-                  Clinic <span className="text-clinical">Console</span>
-                </span>
-              </>
-            )}
+          <span className="flex min-w-0 items-center gap-3">
+            {/* Compact lockup where the brand panel is hidden */}
+            <span className="flex min-w-0 items-center gap-2 lg:hidden">
+              {clinic ? (
+                <>
+                  <ClinicLogo clinic={clinic} size={26} />
+                  <span className="truncate font-display text-[15px] font-extrabold">
+                    {clinic.name}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <ConsoleMark size={26} />
+                  <span className="hidden whitespace-nowrap font-display text-[15px] font-extrabold min-[380px]:inline">
+                    Clinic <span className="text-clinical">Console</span>
+                  </span>
+                </>
+              )}
+            </span>
+            <TextSizeToggle size={textSize} onChange={chooseTextSize} />
+            <LookToggle look={look} onToggle={toggleLook} />
           </span>
         </header>
 
@@ -577,7 +865,90 @@ export default function LoginPage() {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Night: a low-glare version of this page for the night shift and dim wards.
+ *
+ * The console's colours are fixed values in tailwind.config.ts, so the night
+ * look is a set of overrides for exactly the classes this page uses, active
+ * under any [data-look="night"] ancestor — this page's own root, or the
+ * welcome page when the form sits in its pop-up. The ground drops to a deep
+ * blue-green slate rather than black, text to a soft off-white, and teal is
+ * lifted just enough to stay readable on it.
+ */
+const NIGHT = '[data-look="night"]';
+
+function nightRules(map: Record<string, string>): string {
+  return Object.entries(map)
+    .map(([selectors, decl]) => {
+      const list = selectors
+        .split(',')
+        .map((sel) => sel.trim())
+        .flatMap((sel) => [NIGHT + ' ' + sel, NIGHT + sel]);
+      return list.join(',') + '{' + decl + '}';
+    })
+    .join('\n');
+}
+
+const NIGHT_CSS =
+  NIGHT +
+  // A light default colour too: headings that set no colour of their own
+  // inherit it instead of the console's near-black.
+  '{color-scheme:dark;color:#E4EAE8}\nhtml:has(' +
+  NIGHT +
+  '){background:#0E1315}\n' +
+  nightRules({
+    '.bg-bg': 'background-color:#0E1315',
+    '.bg-bg-soft': 'background-color:#151B1D',
+    '.bg-white, .focus\\:bg-white:focus': 'background-color:#1A2224',
+    '.bg-white\\/70, .bg-white\\/80, .bg-white\\/90': 'background-color:rgba(26,34,36,.86)',
+    '.text-ink, .hover\\:text-ink:hover': 'color:#E4EAE8',
+    '.text-ink-60': 'color:#B3BDBA',
+    '.text-ink-40, .mono-label': 'color:#939D9A',
+    '.text-ink-20, .placeholder\\:text-ink-20::placeholder, .placeholder\\:text-ink-20\\/60::placeholder':
+      'color:#6A7472',
+    '.border-ink\\/10, .border-ink\\/12': 'border-color:rgba(228,234,232,.13)',
+    '.hover\\:border-ink\\/20:hover, .hover\\:border-ink\\/25:hover':
+      'border-color:rgba(228,234,232,.26)',
+    '.hover\\:bg-ink\\/5:hover': 'background-color:rgba(228,234,232,.06)',
+    '.bg-ink\\/10': 'background-color:rgba(228,234,232,.1)',
+    '.text-clinical, .group:focus-within .group-focus-within\\:text-clinical': 'color:#4CC3B3',
+    '.text-clinical-text': 'color:#6AD1C2',
+    '.bg-clinical': 'background-color:#1F8F83',
+    '.hover\\:bg-clinical-deep:hover': 'background-color:#17766C',
+    '.focus\\:border-clinical:focus, .hover\\:border-clinical\\/40:hover': 'border-color:#4CC3B3',
+    '.bg-clinical-soft, .hover\\:bg-clinical-tint:hover': 'background-color:rgba(76,195,179,.16)',
+    '.bg-clinical-soft\\/70': 'background-color:rgba(76,195,179,.09)',
+    '.bg-clinical-deep': 'background-color:#0B2E2B',
+    '.bg-amber-soft, .bg-amber-soft\\/50, .bg-amber-soft\\/60':
+      'background-color:rgba(232,178,60,.13)',
+    '.text-amber-text': 'color:#F0C868',
+    '.border-amber\\/40': 'border-color:rgba(232,178,60,.35)',
+    '.text-coral-text, .hover\\:text-coral-text:hover': 'color:#F4A08C',
+    '.bg-coral\\/8': 'background-color:rgba(228,103,79,.13)',
+    '.border-coral\\/30': 'border-color:rgba(228,103,79,.35)',
+    // The token slip is paper-white; at night it is dimmed so it doesn't glare.
+    '.bg-\\[\\#FFFEFB\\]': 'filter:brightness(.82)',
+    // The selected half of the text-size switch.
+    '.bg-ink': 'background-color:#3A4648',
+  });
+
+/**
+ * Larger text. The form's sizes are fixed pixel values, so raising the root
+ * font size would change nothing; instead the whole form is zoomed, which keeps
+ * every proportion, and borders and labels get heavier on top — what actually
+ * helps on a dim, old monitor. Width still fits: percentages resolve against
+ * the unzoomed column, so the form never spills past it. On short screens the
+ * form column already scrolls on its own, so the page itself never does.
+ */
+const LARGE_TEXT_CSS = [
+  '[data-text="large"] .login-scale{zoom:1.17}',
+  '[data-text="large"] .login-scale label{font-weight:700}',
+  '[data-text="large"] .login-scale input{border-width:2px}',
+].join('\n');
+
 const LOGIN_CSS = `
+${NIGHT_CSS}
+${LARGE_TEXT_CSS}
 .login-serif{font-family:var(--font-serif),Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.01em}
 @keyframes login-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .login-rise{animation:login-rise .6s cubic-bezier(.2,.7,.2,1) both}
@@ -872,6 +1243,120 @@ function EyeGlyph() {
     >
       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+/** The sun/moon switch between the light and night looks. */
+/**
+ * The two-part "Aa | Aa" switch: small A for standard, big A for larger text.
+ * Each half says what it does to screen readers, and the current one is
+ * marked pressed.
+ */
+function TextSizeToggle({
+  size,
+  onChange,
+}: {
+  size: TextSize;
+  onChange: (next: TextSize) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Text size"
+      className="inline-flex h-9 shrink-0 items-center gap-0.5 rounded-pill border border-ink/10 bg-white/70 p-0.5 shadow-sm backdrop-blur"
+    >
+      {(['standard', 'large'] as const).map((t) => {
+        const on = size === t;
+        return (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onChange(t)}
+            aria-pressed={on}
+            aria-label={t === 'large' ? 'Larger text' : 'Standard text'}
+            title={t === 'large' ? 'Larger text' : 'Standard text'}
+            className={`grid h-8 min-w-[34px] place-items-center rounded-pill px-2 font-display font-bold leading-none transition-colors ${
+              t === 'large' ? 'text-[16.5px]' : 'text-[12.5px]'
+            } ${on ? 'bg-ink text-white' : 'text-ink-60 hover:text-ink'}`}
+          >
+            Aa
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LookToggle({ look, onToggle }: { look: Look; onToggle: () => void }) {
+  const night = look === 'night';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={night}
+      aria-label={night ? 'Switch to the light look' : 'Switch to the night look'}
+      title={night ? 'Light look' : 'Night look'}
+      className="inline-flex h-9 items-center gap-2 rounded-pill border border-ink/10 bg-white/70 px-3 text-[13px] font-medium text-ink-60 shadow-sm backdrop-blur transition-colors hover:border-ink/20 hover:text-ink"
+    >
+      {night ? <SunGlyph /> : <MoonGlyph />}
+      <span className="hidden sm:inline">{night ? 'Light' : 'Night'}</span>
+    </button>
+  );
+}
+
+function MoonGlyph() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+    </svg>
+  );
+}
+
+function SunGlyph() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+    </svg>
+  );
+}
+
+/** A cloud with a line through it: "no connection". */
+function OfflineGlyph() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 18h10a4 4 0 0 0 1.2-7.8A6 6 0 0 0 7.1 8.6 4.8 4.8 0 0 0 7 18z" />
+      <path d="M3 3l18 18" />
     </svg>
   );
 }
