@@ -97,14 +97,56 @@ const SECTIONS = [
 ] as const;
 
 /**
- * Where "Book a demo" requests from clinic owners go.
+ * ============================================================================
+ *  THE BUSINESS BEHIND THE PAGE — fill these in with real details.
+ * ============================================================================
  *
- * Empty for now, on purpose: nobody has decided which inbox answers them yet.
- * While it is empty the owner door says demo booking is coming soon instead of
- * offering a form whose message would go nowhere. Put an address here and the
- * "Book a demo" button and its form switch on by themselves.
+ * A clinic owner is deciding whether to trust this product with patient
+ * records, and the thing that earns that trust is real-world detail: a company
+ * name, a phone number that gets answered, a price, a real clinic that uses it.
+ * None of that can be made up, so every field starts empty — and every part of
+ * the page that depends on one stays hidden until it is filled in. Nothing
+ * invented ever shows. Fill a field, save, and its section appears.
+ *
+ *   companyName   Legal name, as on invoices ("Cxvoxa Health Pvt Ltd").
+ *   address       One line: city and state at least.
+ *   email         Where demo requests and questions go. Turns on "Book a demo".
+ *   phone         Answered during clinic hours. Shown and tap-to-call.
+ *   whatsapp      Country code + number, digits only ("919876543210").
+ *   pricing       Starting price as it should read ("₹1,499"), what it covers
+ *                 ("per clinic, per month"), and the trial, if any.
+ *   pilot         One real clinic, with their permission: the doctor's own
+ *                 words, name, role, clinic and city.
+ *   founder       Who is behind it, and in two or three plain sentences why.
+ *   dataRegion    Where patient data is actually stored, once it is live
+ *                 there (the architecture notes choose AWS Mumbai, ap-south-1).
+ *   abdm          Only once true, e.g. "ABDM M1 certified". Until then the page
+ *                 says only what exists: ABHA numbers stored and searchable.
+ *   privacyUrl / termsUrl / dataUrl
+ *                 Links to the real documents. Needed before real patient
+ *                 data goes in — ideally reviewed by a lawyer.
+ *   statusUrl     A real status page. The footer's "all systems normal" line
+ *                 only appears when it links to one.
  */
-const DEMO_REQUEST_EMAIL: string = '';
+const BUSINESS = {
+  companyName: '',
+  address: '',
+  email: '',
+  phone: '',
+  whatsapp: '',
+  pricing: { from: '', per: 'per clinic, per month', trial: '' },
+  pilot: { quote: '', name: '', role: '', clinic: '', city: '' },
+  founder: { name: '', role: '', story: '' },
+  dataRegion: '',
+  abdm: '',
+  privacyUrl: '',
+  termsUrl: '',
+  dataUrl: '',
+  statusUrl: '',
+};
+
+/** Any way at all for a clinic owner to reach a person. */
+const OWNER_CONTACT = Boolean(BUSINESS.email || BUSINESS.phone || BUSINESS.whatsapp);
 
 /**
  * Light or night. Shared with the sign-in page through the same key, so the
@@ -366,16 +408,31 @@ export default function WelcomePage() {
               className="wl-rise mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"
               style={{ animationDelay: '240ms' }}
             >
-              <Link
-                href={primary.href}
-                onClick={openSignIn}
-                className="group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px"
-              >
-                {signedIn ? 'Open your console' : 'Sign in to your clinic'}
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                  <ArrowRight size={15} />
-                </span>
-              </Link>
+              {/* This page is for the people who choose and pay for the
+                  software. Staff have the sign-in button in the header; once
+                  an owner can actually reach someone, the main button is theirs. */}
+              {OWNER_CONTACT && !signedIn ? (
+                <a
+                  href="#owners"
+                  className="group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px"
+                >
+                  See it for your clinic
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                    <ArrowRight size={15} />
+                  </span>
+                </a>
+              ) : (
+                <Link
+                  href={primary.href}
+                  onClick={openSignIn}
+                  className="group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px"
+                >
+                  {signedIn ? 'Open your console' : 'Sign in to your clinic'}
+                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                    <ArrowRight size={15} />
+                  </span>
+                </Link>
+              )}
               <a
                 href="#workflow"
                 className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill border-2 border-ink px-6 text-[15.5px] font-bold text-ink transition-colors hover:bg-ink hover:text-white"
@@ -394,7 +451,9 @@ export default function WelcomePage() {
                 href="#owners"
                 className="font-semibold text-clinical-text underline decoration-clinical/30 underline-offset-4 hover:decoration-clinical"
               >
-                Run a clinic? See how it would work for yours.
+                {BUSINESS.pricing.from
+                  ? `From ${BUSINESS.pricing.from} ${BUSINESS.pricing.per}.`
+                  : 'Run a clinic? See how it would work for yours.'}
               </a>
             </p>
 
@@ -447,7 +506,6 @@ export default function WelcomePage() {
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
-                index="03"
                 eyebrow="Features"
                 title={
                   <>
@@ -470,7 +528,6 @@ export default function WelcomePage() {
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
-                index="04"
                 eyebrow="Roles"
                 title={
                   <>
@@ -490,7 +547,6 @@ export default function WelcomePage() {
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
-                index="05"
                 eyebrow="How it works"
                 title={
                   <>
@@ -513,14 +569,16 @@ export default function WelcomePage() {
             <Reveal>
               <SectionHead
                 align="left"
-                index="07"
                 eyebrow="Security"
                 title={
                   <>
                     Your patients stay <span className="text-clinical">in your clinic.</span>
                   </>
                 }
-                body="Clinics on the same system can’t see each other’s records. The database itself enforces that, on every row."
+                body={
+                  'Clinics on the same system can’t see each other’s records. The database itself enforces that, on every row.' +
+                  (BUSINESS.dataRegion ? ` Patient data is stored in ${BUSINESS.dataRegion}.` : '')
+                }
               />
               <ul className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
                 {[
@@ -556,6 +614,26 @@ export default function WelcomePage() {
                   </li>
                 ))}
               </ul>
+              {(BUSINESS.privacyUrl || BUSINESS.dataUrl) && (
+                <p className="mt-9 flex flex-wrap gap-x-5 gap-y-2 text-[14px] font-semibold">
+                  {BUSINESS.dataUrl && (
+                    <a
+                      className="text-clinical-text underline underline-offset-4"
+                      href={BUSINESS.dataUrl}
+                    >
+                      How we handle patient data
+                    </a>
+                  )}
+                  {BUSINESS.privacyUrl && (
+                    <a
+                      className="text-clinical-text underline underline-offset-4"
+                      href={BUSINESS.privacyUrl}
+                    >
+                      Privacy policy
+                    </a>
+                  )}
+                </p>
+              )}
             </Reveal>
             <Reveal delay={120}>
               <AuditLog />
@@ -572,14 +650,13 @@ export default function WelcomePage() {
             <Reveal className="lg:sticky lg:top-28 lg:self-start">
               <SectionHead
                 align="left"
-                index="08"
                 eyebrow="FAQ"
                 title={
                   <>
-                    What people ask <span className="text-clinical">at the counter.</span>
+                    What clinic owners <span className="text-clinical">ask first.</span>
                   </>
                 }
-                body="For anything else about your account, your clinic administrator can help."
+                body="Staff with a sign-in question will find the answers on the sign-in page itself, under “Trouble signing in?”."
               />
             </Reveal>
             <Reveal delay={100}>
@@ -646,8 +723,21 @@ export default function WelcomePage() {
                 A 20-minute call that walks through a morning at your front desk: registration, the
                 queue, the doctor&rsquo;s screen and the day&rsquo;s collections.
               </p>
-              <div className="mt-auto pt-9">
-                {DEMO_REQUEST_EMAIL ? (
+              {BUSINESS.pricing.from && (
+                <p className="mt-6 text-[15px] text-ink">
+                  <span className="font-display text-[26px] font-extrabold tracking-[-0.02em]">
+                    {BUSINESS.pricing.from}
+                  </span>{' '}
+                  <span className="text-ink-60">{BUSINESS.pricing.per}</span>
+                  {BUSINESS.pricing.trial && (
+                    <span className="mt-1 block text-[14px] font-semibold text-clinical-text">
+                      {BUSINESS.pricing.trial}
+                    </span>
+                  )}
+                </p>
+              )}
+              <div className="mt-auto flex flex-wrap items-center gap-3 pt-9">
+                {BUSINESS.email && (
                   <button
                     type="button"
                     onClick={() => setDemoOpen(true)}
@@ -658,7 +748,26 @@ export default function WelcomePage() {
                       <ArrowRight size={16} />
                     </span>
                   </button>
-                ) : (
+                )}
+                {BUSINESS.whatsapp && (
+                  <a
+                    href={`https://wa.me/${BUSINESS.whatsapp}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-12 items-center rounded-pill bg-[#1F8F55] px-6 text-[15px] font-bold text-white hover:bg-[#177544]"
+                  >
+                    WhatsApp us
+                  </a>
+                )}
+                {BUSINESS.phone && (
+                  <a
+                    href={`tel:${BUSINESS.phone.replace(/[^+\d]/g, '')}`}
+                    className="inline-flex h-12 items-center rounded-pill px-2 text-[15px] font-semibold text-clinical-text underline underline-offset-4"
+                  >
+                    Call {BUSINESS.phone}
+                  </a>
+                )}
+                {!OWNER_CONTACT && (
                   <p className="inline-flex h-12 items-center rounded-pill border-2 border-dashed border-ink/15 px-6 text-[15px] font-semibold text-ink-40">
                     Demo booking opens soon
                   </p>
@@ -667,6 +776,51 @@ export default function WelcomePage() {
             </div>
           </Reveal>
         </section>
+
+        {(BUSINESS.pilot.quote || BUSINESS.founder.story) && (
+          <section aria-label="Who is behind it" className="px-4 pb-24 sm:px-6">
+            <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2">
+              {BUSINESS.pilot.quote && BUSINESS.pilot.name && (
+                <Reveal>
+                  <figure className="h-full rounded-[28px] border border-ink/10 bg-white/70 p-8 backdrop-blur-xl sm:p-10">
+                    <p className="text-[14px] font-semibold text-ink-40">Used every day at</p>
+                    <p className="mt-1 font-display text-[20px] font-extrabold tracking-[-0.02em]">
+                      {BUSINESS.pilot.clinic}
+                      {BUSINESS.pilot.city && (
+                        <span className="text-ink-40">, {BUSINESS.pilot.city}</span>
+                      )}
+                    </p>
+                    <blockquote className="wl-serif mt-6 text-[clamp(22px,2.4vw,30px)] leading-snug text-ink">
+                      &ldquo;{BUSINESS.pilot.quote}&rdquo;
+                    </blockquote>
+                    <figcaption className="mt-6 text-[14.5px]">
+                      <span className="font-semibold text-ink">{BUSINESS.pilot.name}</span>
+                      {BUSINESS.pilot.role && (
+                        <span className="text-ink-60"> · {BUSINESS.pilot.role}</span>
+                      )}
+                    </figcaption>
+                  </figure>
+                </Reveal>
+              )}
+              {BUSINESS.founder.name && BUSINESS.founder.story && (
+                <Reveal delay={80}>
+                  <div className="h-full rounded-[28px] border border-ink/10 bg-white/70 p-8 backdrop-blur-xl sm:p-10">
+                    <p className="text-[14px] font-semibold text-ink-40">Who is behind it</p>
+                    <p className="mt-4 text-[16.5px] leading-relaxed text-ink-60">
+                      {BUSINESS.founder.story}
+                    </p>
+                    <p className="mt-6 text-[14.5px]">
+                      <span className="font-semibold text-ink">{BUSINESS.founder.name}</span>
+                      {BUSINESS.founder.role && (
+                        <span className="text-ink-60"> · {BUSINESS.founder.role}</span>
+                      )}
+                    </p>
+                  </div>
+                </Reveal>
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
       {/* ==== Footer ======================================================= */}
@@ -680,32 +834,55 @@ export default function WelcomePage() {
               </span>
             </span>
             <p className="mt-4 max-w-xs text-[13.5px] leading-relaxed text-ink-40">
-              Made for outpatient clinics in India. Trouble signing in? Your clinic administrator
-              can reset your account.
+              Made for outpatient clinics in India.
             </p>
+            {(BUSINESS.companyName || BUSINESS.address || BUSINESS.email || BUSINESS.phone) && (
+              <address className="mt-4 space-y-1 text-[13.5px] not-italic leading-relaxed text-ink-60">
+                {BUSINESS.companyName && (
+                  <span className="block font-semibold text-ink">{BUSINESS.companyName}</span>
+                )}
+                {BUSINESS.address && <span className="block">{BUSINESS.address}</span>}
+                {BUSINESS.phone && <span className="block select-all">{BUSINESS.phone}</span>}
+                {BUSINESS.email && <span className="block select-all">{BUSINESS.email}</span>}
+              </address>
+            )}
           </div>
           <FooterCol title="Product" links={NAV.slice(0, 4)} />
           <FooterCol
             title="Staff"
             links={[
               { href: primary.href, label: primary.label },
-              { href: '#faq', label: 'Help signing in' },
+              { href: '/login', label: 'Help signing in' },
             ]}
           />
         </div>
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 border-t border-ink/8 py-6 sm:flex-row">
-          <p className="font-mono text-[11px] text-ink-40">
-            © {new Date().getFullYear()} Clinic Console. All rights reserved.
+          <p className="text-[12.5px] text-ink-40">
+            © {new Date().getFullYear()} {BUSINESS.companyName || 'Clinic Console'}
           </p>
-          <p className="flex items-center gap-2 font-mono text-[11px] text-ink-40">
-            <span className="h-1.5 w-1.5 rounded-full bg-green" />
-            All systems normal
+          <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px] text-ink-40">
+            {BUSINESS.privacyUrl && (
+              <a className="hover:text-ink" href={BUSINESS.privacyUrl}>
+                Privacy
+              </a>
+            )}
+            {BUSINESS.termsUrl && (
+              <a className="hover:text-ink" href={BUSINESS.termsUrl}>
+                Terms
+              </a>
+            )}
+            {BUSINESS.statusUrl && (
+              <a className="flex items-center gap-2 hover:text-ink" href={BUSINESS.statusUrl}>
+                <span className="h-1.5 w-1.5 rounded-full bg-green" />
+                System status
+              </a>
+            )}
           </p>
         </div>
       </footer>
 
       {signInOpen && !signedIn && <SignInDialog onClose={closeSignIn} />}
-      {demoOpen && DEMO_REQUEST_EMAIL && <DemoDialog onClose={closeDemo} />}
+      {demoOpen && BUSINESS.email && <DemoDialog onClose={closeDemo} />}
     </div>
   );
 }
@@ -819,7 +996,7 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
 /**
  * "Book a demo", for clinic owners. There is no server behind it: submitting
  * opens the visitor's own email app with the request already written out to
- * DEMO_REQUEST_EMAIL. The page cannot tell whether the email app opened, so
+ * BUSINESS.email. The page cannot tell whether the email app opened, so
  * the confirmation says so and shows the address to use instead.
  */
 function DemoDialog({ onClose }: { onClose: () => void }) {
@@ -836,7 +1013,7 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
       `Phone: ${field('demo-phone')}`,
     ].join('\n');
     const subject = `Demo request: ${field('demo-clinic')}`;
-    window.location.href = `mailto:${DEMO_REQUEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = `mailto:${BUSINESS.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setSent(true);
   }
 
@@ -854,7 +1031,7 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
             <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
               We opened your email app with the request written out. If nothing opened, send the
               same details to{' '}
-              <span className="select-all font-semibold text-ink">{DEMO_REQUEST_EMAIL}</span>.
+              <span className="select-all font-semibold text-ink">{BUSINESS.email}</span>.
             </p>
             <button
               type="button"
@@ -995,13 +1172,11 @@ function Reveal({
  * The heading's accent words (`text-clinical`) are set in the italic serif.
  */
 function SectionHead({
-  index,
   eyebrow,
   title,
   body,
   align = 'wide',
 }: {
-  index: string;
   eyebrow: string;
   title: ReactNode;
   body: string;
@@ -1011,7 +1186,6 @@ function SectionHead({
   return (
     <div>
       <p className="flex items-baseline gap-3">
-        <span className="wl-serif text-[22px] leading-none text-clinical">{index}</span>
         <span className="text-[14px] font-semibold text-ink-60">{eyebrow}</span>
         <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
       </p>
@@ -1460,14 +1634,13 @@ function PaperTrail() {
       <div className="mx-auto max-w-6xl">
         <Reveal>
           <SectionHead
-            index="02"
             eyebrow="What it replaces"
             title={
               <>
                 What goes <Underlined>in the drawer.</Underlined>
               </>
             }
-            body="Most OPDs run on the same four things: a token roll, a thick register, a carbon receipt book and an Rx pad. Keep them for the next power cut."
+            body="Most OPDs run on the same four things: a token roll, a thick register, a carbon receipt book and an Rx pad. Each one has a screen here that does its job."
           />
         </Reveal>
 
@@ -2171,7 +2344,7 @@ function RolesShowcase({ night }: { night: boolean }) {
         role="tablist"
         aria-label="Roles"
         onKeyDown={onKey}
-        className="mx-auto flex w-full max-w-3xl gap-1 overflow-x-auto rounded-pill border border-ink/10 bg-white p-1.5 shadow-sm [scrollbar-width:none]"
+        className="mx-auto flex w-full max-w-3xl flex-wrap justify-center gap-1 rounded-[22px] border border-ink/10 bg-white p-1.5 shadow-sm sm:flex-nowrap sm:rounded-pill"
       >
         {ROLES.map((r, i) => {
           const on = i === active;
@@ -2391,8 +2564,8 @@ function Journey() {
       </ol>
       <Reveal delay={400}>
         <p className="mt-12 text-center text-[15px] text-ink-60">
-          <span className="font-semibold text-ink">34 minutes at the clinic.</span> His name was
-          typed once.
+          <span className="font-semibold text-ink">34 minutes from arrival to receipt,</span> with
+          his details entered once at the front desk.
         </p>
       </Reveal>
     </div>
@@ -2429,7 +2602,6 @@ function DisplayShowcase() {
       <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.85fr_1.15fr]">
         <Reveal>
           <p className="flex items-baseline gap-3 text-[14px] font-semibold">
-            <span className="wl-serif text-[22px] leading-none text-[#5fd6c6]">06</span>
             <span className="text-white/60">Waiting room</span>
             <span aria-hidden="true" className="h-px flex-1 bg-white/15" />
           </p>
@@ -2614,31 +2786,45 @@ function AuditLog() {
 /*  FAQ                                                                        */
 /* -------------------------------------------------------------------------- */
 
-const FAQ = [
+/*
+ * Questions a clinic owner asks before choosing, answered only with what the
+ * product does today. Staff sign-in help (accounts, the clinic field,
+ * authenticator codes, forgotten passwords) lives on the sign-in page, where
+ * the people who need it already are.
+ */
+const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   {
-    q: 'How do I get an account?',
-    a: 'Your clinic administrator creates staff accounts and assigns your role. You get a temporary password and choose your own the first time you sign in.',
-  },
-  {
-    q: 'What do I type in the “Clinic” field?',
-    a: 'Your clinic’s short sign-in name, like sunrise-clinic. Your administrator can tell you what it is. Once you have signed in successfully, this browser remembers it.',
-  },
-  {
-    q: 'Why am I asked for a code from an authenticator app?',
-    a: 'Some roles hold more of the clinic’s keys, so they confirm each sign-in with a six-digit code. Any standard authenticator app works.',
-  },
-  {
-    q: 'Do I need to install anything?',
-    a: 'No. It runs in any modern browser (Chrome, Edge, Firefox or Safari) on a desk PC, laptop or tablet.',
+    q: 'Do we need to install anything?',
+    a: 'No. It runs in any modern browser (Chrome, Edge, Firefox or Safari) on the desk PCs, laptops or tablets you already have. A waiting-room TV only needs a browser too.',
   },
   {
     q: 'Can other clinics see our patients?',
-    a: 'Never. Each clinic’s records are isolated in the database itself, and every change is logged with who made it and when.',
+    a: 'No. Each clinic’s records are kept apart by the database itself, row by row, and every change is logged with who made it and when.',
   },
   {
-    q: 'I forgot my password. What now?',
-    a: 'Ask your clinic administrator to reset it. You will sign in with a temporary password and set a new one straight away.',
+    q: 'Does it work with ABHA?',
+    a:
+      'You can record a patient’s ABHA number and ABHA address, and find a patient by their ABHA number from the same search box as name, mobile and UHID.' +
+      (BUSINESS.abdm ? ' ' + BUSINESS.abdm + '.' : ''),
   },
+  {
+    q: 'Will it look like our clinic, or like your software?',
+    a: 'Like your clinic. Your name and logo go on the sign-in page, every screen and the printed prescription, and staff never see our name.',
+  },
+  {
+    q: 'Who can see what?',
+    a: 'Each person signs in with their own account and role: front desk, doctor, nurse, owner or administrator. Each role sees only what it needs, and the roles that can change settings must use two-factor sign-in.',
+  },
+  ...(BUSINESS.pricing.from
+    ? [
+        {
+          q: 'What does it cost?',
+          a:
+            `From ${BUSINESS.pricing.from} ${BUSINESS.pricing.per}.` +
+            (BUSINESS.pricing.trial ? ' ' + BUSINESS.pricing.trial + '.' : ''),
+        },
+      ]
+    : []),
 ];
 
 function FaqList() {

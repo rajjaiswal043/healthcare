@@ -135,6 +135,38 @@ const LOOK_KEY = 'healthcloud.look';
 type Look = 'light' | 'night';
 
 /**
+ * The questions staff actually get stuck on at sign-in. Every answer matches
+ * what the API does — including the lock after repeated wrong passwords, which
+ * otherwise looks exactly like a wrong password (auth.service.ts).
+ */
+const SIGN_IN_HELP: ReadonlyArray<{ q: string; a: string }> = [
+  {
+    q: 'I’m new. How do I get an account?',
+    a: 'Your clinic administrator creates it and sets your role. You get a temporary password and choose your own the first time you sign in.',
+  },
+  {
+    q: 'What goes in the Clinic box?',
+    a: 'Your clinic’s short sign-in name, like sunrise-clinic. Your administrator can tell you. After one successful sign-in, this computer remembers it.',
+  },
+  {
+    q: 'It keeps saying “Invalid credentials”.',
+    a: 'Check the clinic name, your email and Caps Lock. After 8 wrong passwords the account locks for 15 minutes, and during that time even the right password is refused, so wait, or ask your administrator.',
+  },
+  {
+    q: 'Why does it ask for a 6-digit code?',
+    a: 'Roles that can change the clinic’s settings confirm each sign-in with a code from an authenticator app on their phone.',
+  },
+  {
+    q: 'I forgot my password.',
+    a: 'Ask your clinic administrator. They can give you a new temporary password, and you choose your own as soon as you sign in.',
+  },
+  {
+    q: 'I lost the phone with my authenticator app.',
+    a: 'Tell your clinic administrator straight away, so they know your account’s second step is on a phone that is no longer with you.',
+  },
+];
+
+/**
  * Standard or larger text for the sign-in form, remembered per computer.
  *
  * Kept on the PC rather than the person because the PC is what differs: the
@@ -726,11 +758,26 @@ export default function LoginPage() {
         </p>
       )}
 
-      <p className="mt-4 text-center text-[13px] text-ink-40 [@media(max-height:760px)]:hidden">
-        {onCredentials
-          ? 'Forgot your password or new to the clinic? Your administrator can set up or reset your account.'
-          : 'Lost access to your authenticator? Ask your clinic administrator to reset it.'}
-      </p>
+      {/* Staff help lives here, where the people who need it already are,
+          rather than on the welcome page, which is for clinic owners. Closed
+          by default so the page still fits one screen; the form column
+          scrolls when it is opened on a short one. */}
+      <details className="group mt-4 rounded-[12px] border border-ink/10 bg-white/70 px-4 text-[13.5px]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2.5 font-semibold text-ink-60 [&::-webkit-details-marker]:hidden">
+          Trouble signing in?
+          <span className="text-ink-40 transition-transform group-open:rotate-180">
+            <ChevronGlyph />
+          </span>
+        </summary>
+        <dl className="space-y-3 pb-4 leading-relaxed">
+          {SIGN_IN_HELP.map((h) => (
+            <div key={h.q}>
+              <dt className="font-semibold text-ink">{h.q}</dt>
+              <dd className="text-ink-60">{h.a}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
     </div>
   );
 
@@ -1339,6 +1386,24 @@ function SunGlyph() {
     >
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+    </svg>
+  );
+}
+
+function ChevronGlyph() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" />
     </svg>
   );
 }
