@@ -702,3 +702,67 @@ describe('the approver list', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+/**
+ * A member of staff needs a name, not a number.
+ *
+ * Reported by the front desk on 28 Sep 2026: "12345" was accepted as a staff
+ * name and created the account. `@MinLength(2)` was the only rule on the field,
+ * and a five-digit string satisfies it.
+ *
+ * The account this produces is worse than untidy. Nobody can search for that
+ * person, the audit trail names them "12345" against every patient record they
+ * touch, and a prescription signed by them prints a number where the clinician
+ * should be.
+ *
+ * The rule lives in `IsPersonName`, whose own cases are in
+ * `src/common/__tests__/is-person-name.test.ts`. These tests prove it is wired
+ * into the endpoints — the rule being right and the rule being applied are two
+ * different facts, and only one of them is visible from here.
+ */
+describe('a staff name has to be a name', () => {
+  it('refuses a number', async () => {
+    const res = await createUser({ email: 'numeric@main.test', fullName: '12345' });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain('two letters');
+  });
+
+  it('refuses punctuation with no letters in it', async () => {
+    const res = await createUser({ email: 'dots@main.test', fullName: '...' });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses a mobile number, which is the mistake that actually happens', async () => {
+    const res = await createUser({ email: 'mobile@main.test', fullName: '9876543210' });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('still accepts a short real name', async () => {
+    const res = await createUser({ email: 'ram@main.test', fullName: 'Ram' });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('still accepts a name written in Devanagari', async () => {
+    // An Indian product that refused this while accepting "..." would be
+    // exactly backwards.
+    const res = await createUser({ email: 'devanagari@main.test', fullName: 'नरवीर सिंह' });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('refuses a number on edit as well as on create', async () => {
+    // The update DTO carried its own copy of the old rule, so fixing only the
+    // create path would leave the account renameable to "12345" afterwards.
+    const created = await createUser({ email: 'renamed@main.test', fullName: 'Valid Name' });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ id: string }>().id;
+
+    const res = await updateUser(id, { fullName: '4321' });
+
+    expect(res.statusCode).toBe(400);
+  });
+});

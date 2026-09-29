@@ -21,11 +21,13 @@ import { PERMISSIONS } from '../platform/auth/permissions.js';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { AvailabilityService } from './availability.service.js';
 import { AppointmentsService, type RequestMeta } from './appointments.service.js';
+import { DayBoardService } from './day-board.service.js';
 import {
   AvailabilityQueryDto,
   BookAppointmentDto,
   CancelAppointmentDto,
   PrioritiseDto,
+  DayBoardQueryDto,
   QueueQueryDto,
   RescheduleAppointmentDto,
   ReturnFromTestsDto,
@@ -39,6 +41,7 @@ export class SchedulingController {
     private readonly prisma: PrismaService,
     private readonly availability: AvailabilityService,
     private readonly appointments: AppointmentsService,
+    private readonly dayBoard: DayBoardService,
   ) {}
 
   // --- masters -------------------------------------------------------------
@@ -307,6 +310,25 @@ export class SchedulingController {
   ) {
     await this.appointments.assertMayReadQueue(tenantId, user, query.practitionerId);
     return this.appointments.queue(tenantId, query.practitionerId, query.date);
+  }
+
+  /**
+   * Everybody in the clinic today, one row per patient — the home screen.
+   *
+   * No `practitionerId`: unlike the queue, this is not a question about one
+   * doctor. Who the caller may see is decided from the caller, by the same rule
+   * the queue applies — a doctor gets their own patients, the desk gets
+   * everyone. Taking an id here would invite a doctor to ask for somebody
+   * else's and get a 403 for a screen that never offered them the choice.
+   */
+  @Get('day-board')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
+  async dayBoardForToday(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: DayBoardQueryDto,
+  ) {
+    return this.dayBoard.forDay(tenantId, user, query.date);
   }
 }
 

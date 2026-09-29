@@ -11,6 +11,7 @@ import {
 } from '@/lib/api';
 import { IconAlert, IconCalendar, IconUserPlus } from '@/components/icons';
 import { useAuth } from '@/components/auth-provider';
+import { looksLikeAPersonName } from '@/lib/person-name';
 
 /** 0 = Sunday, matching the schedule rows and JavaScript's getDay(). */
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -255,7 +256,7 @@ export default function DoctorsPage() {
             <button
               type="button"
               className="btn-primary"
-              disabled={busy === 'new' || form.fullName.trim().length < 2}
+              disabled={busy === 'new' || !looksLikeAPersonName(form.fullName)}
               onClick={() => void addDoctor()}
             >
               {busy === 'new' ? 'Adding…' : 'Add the doctor'}

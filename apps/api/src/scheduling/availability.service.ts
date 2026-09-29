@@ -20,6 +20,12 @@ export interface SlotView {
   available: number;
   /** True when only the doctor's overbooking allowance keeps this bookable. */
   overbooking: boolean;
+  /**
+   * The slot has finished. Kept in the list rather than dropped so the day does
+   * not reflow underneath the front desk as the morning goes on, and so the
+   * doctor's whole day stays readable. `available` is 0 whatever the capacity.
+   */
+  past: boolean;
 }
 
 export interface DayAvailability {
@@ -158,6 +164,16 @@ export class AvailabilityService {
 
     const slots: SlotView[] = [];
 
+    /**
+     * A slot is bookable until it ENDS, not until it starts.
+     *
+     * At 14:03 the 14:00-14:15 slot is still live: a patient three minutes late
+     * is completely ordinary, and a front desk told to pick the next slot
+     * instead would be fighting the software over nothing. Comparing instants
+     * needs no timezone reasoning — `endAt` is already an instant, and so is now.
+     */
+    const now = Date.now();
+
     for (const schedule of schedules) {
       if (
         input.visitType &&
@@ -179,27 +195,46 @@ export class AvailabilityService {
         const used = bookedByTime.get(time) ?? 0;
         const capacity = schedule.capacityPerSlot;
         const ceiling = capacity + practitioner.overbookPerSession;
+        const endAt = localToInstant(input.date, minutesToTime(slotEnd), tz);
+        const past = endAt.getTime() <= now;
 
         slots.push({
           time,
           startAt: localToInstant(input.date, time, tz),
-          endAt: localToInstant(input.date, minutesToTime(slotEnd), tz),
+          endAt,
           capacity,
           booked: used,
-          available: Math.max(0, ceiling - used),
-          overbooking: used >= capacity && used < ceiling,
+          // A finished slot offers nothing, however much room it had. This is
+          // also what stops `bookIn` taking it: booking asks this engine what
+          // is bookable rather than re-deriving the rules.
+          available: past ? 0 : Math.max(0, ceiling - used),
+          overbooking: !past && used >= capacity && used < ceiling,
+          past,
         });
       }
     }
 
     slots.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 
+    /**
+     * Why nothing can be booked, when nothing can.
+     *
+     * "Every slot is taken" for a day whose clinic finished hours ago sends the
+     * front desk hunting for a cancellation that was never the problem.
+     */
+    function reasonFor(all: SlotView[]): string | null {
+      if (all.length === 0) return 'Every slot is taken for this day.';
+      if (all.every((s) => s.past)) return 'The doctor’s clinic has already finished.';
+      if (all.every((s) => s.available <= 0)) return 'Every slot is taken for this day.';
+      return null;
+    }
+
     return {
       date: input.date,
       timezone: tz,
       practitionerId: input.practitionerId,
       slots,
-      unavailableReason: slots.length === 0 ? 'Every slot is taken for this day.' : null,
+      unavailableReason: reasonFor(slots),
     };
   }
 }

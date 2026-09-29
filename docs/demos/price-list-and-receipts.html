@@ -1,0 +1,778 @@
+<title>Price List and Receipts</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Ledger palette: paper with a green bias, ink that isn't black, one teal
+     accent for money, amber for what is still undecided, clay for what must
+     not be broken. */
+  :root {
+    --paper:      #F6F8F6;
+    --surface:    #FFFFFF;
+    --surface-2:  #EEF2EF;
+    --ink:        #17211F;
+    --ink-70:     #47544F;
+    --ink-45:     #77837E;
+    --rule:       #DCE3DE;
+    --rule-soft:  #E8EDE9;
+    --accent:     #0E6B58;
+    --accent-bg:  #E4F0EB;
+    --amber:      #9A6412;
+    --amber-bg:   #F6EEDD;
+    --clay:       #97363A;
+    --clay-bg:    #F6E5E4;
+
+    --measure: 68ch;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #101614;
+      --surface:   #18201D;
+      --surface-2: #1F2825;
+      --ink:       #E7EDE9;
+      --ink-70:    #A9B5B0;
+      --ink-45:    #7C8883;
+      --rule:      #2C3733;
+      --rule-soft: #232D2A;
+      --accent:    #4FBB9E;
+      --accent-bg: #16302A;
+      --amber:     #D3A253;
+      --amber-bg:  #322817;
+      --clay:      #DC8B86;
+      --clay-bg:   #33201F;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #101614;
+    --surface:   #18201D;
+    --surface-2: #1F2825;
+    --ink:       #E7EDE9;
+    --ink-70:    #A9B5B0;
+    --ink-45:    #7C8883;
+    --rule:      #2C3733;
+    --rule-soft: #232D2A;
+    --accent:    #4FBB9E;
+    --accent-bg: #16302A;
+    --amber:     #D3A253;
+    --amber-bg:  #322817;
+    --clay:      #DC8B86;
+    --clay-bg:   #33201F;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 64px 0 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: clamp(38px, 6vw, 54px);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-70);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    padding-top: 6px;
+  }
+
+  /* ---- sections ---- */
+
+  section { padding-top: 56px; }
+
+  h2 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  p { max-width: var(--measure); margin: 0; }
+
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stack-tight { display: flex; flex-direction: column; gap: 10px; }
+
+  strong { font-weight: 600; }
+
+  /* ---- requirement cards ---- */
+
+  .req {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 26px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .req-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 14px;
+  }
+
+  .req-id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* Build state is real information, not decoration: it tells the developer
+     whether a requirement is a new build or a setting on something that
+     already ships. */
+  .state {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .state-new    { background: var(--clay-bg);   color: var(--clay); }
+  .state-extend { background: var(--amber-bg);  color: var(--amber); }
+  .state-config { background: var(--accent-bg); color: var(--accent); }
+
+  /* ---- tables ---- */
+
+  .scroll { overflow-x: auto; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 14.5px;
+    min-width: 460px;
+  }
+
+  th {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+    font-weight: 500;
+    padding: 0 16px 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  td {
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    color: var(--ink-70);
+  }
+
+  td:first-child { color: var(--ink); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---- flow ---- */
+
+  ol.flow {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  ol.flow li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    align-items: baseline;
+    max-width: var(--measure);
+  }
+
+  ol.flow li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  ul.plain {
+    margin: 0;
+    padding-left: 20px;
+    max-width: var(--measure);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  ul.plain li { padding-left: 3px; }
+  ul.plain::marker { color: var(--ink-45); }
+
+  /* ---- notes ---- */
+
+  .note {
+    border-left: 2px solid var(--accent);
+    padding: 2px 0 2px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .note-warn { border-left-color: var(--clay); }
+
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+  }
+
+  .note p { font-size: 15px; color: var(--ink-70); }
+  .note strong { color: var(--ink); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.88em;
+    background: var(--surface-2);
+    padding: 1.5px 5px;
+    border-radius: 2px;
+  }
+
+  /* ---- decisions ---- */
+
+  .decision {
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .decision-q {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.3;
+    max-width: var(--measure);
+    text-wrap: balance;
+  }
+
+  .rec {
+    font-size: 14.5px;
+    color: var(--ink-70);
+    max-width: var(--measure);
+  }
+  .rec b {
+    color: var(--accent);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-45);
+    max-width: var(--measure);
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* ---- specimen receipt ---- */
+
+  .slip {
+    max-width: 340px;
+    margin: 4px 0;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 20px 22px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--ink-70);
+  }
+  .slip hr {
+    border: none;
+    border-top: 1px dashed var(--rule);
+    margin: 9px 0;
+  }
+  .slip-clinic {
+    text-align: center;
+    color: var(--ink);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .slip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .slip-row.total { color: var(--ink); font-weight: 500; }
+  .slip-row.cut   { color: var(--accent); }
+  .slip-note { color: var(--ink-45); font-size: 10.5px; text-align: center; }
+  .slip-dup {
+    text-align: center;
+    color: var(--clay);
+    letter-spacing: 0.22em;
+    font-size: 10.5px;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">Requirements · HealthCloud</span>
+    <h1>Price List and Receipts</h1>
+    <p class="standfirst">
+      The administrator decides what things cost. The finance desk hands the
+      patient a piece of paper proving they paid it. Neither one works without the
+      other.
+    </p>
+    <div class="meta">
+      <span>From clinic demos, 3 Sep 2026</span>
+      <span>6 requirements</span>
+      <span>5 decisions outstanding</span>
+      <span>Companion to “Finance Desk” and “Walk-in Diagnostics”</span>
+    </div>
+  </header>
+
+  <section class="stack">
+    <h2>Why these are one requirement</h2>
+    <p>
+      A receipt is only as good as the prices on it. If the price list is a number
+      somebody typed from memory, the receipt is a piece of paper with a guess
+      printed on it. The administrator sets the prices once, at onboarding; every
+      bill and every receipt afterwards is those numbers being read back.
+    </p>
+    <p>
+      They also fail together. A clinic that cannot print a receipt cannot prove a
+      patient paid — and a patient who paid ₹500 for an X-ray with nothing in their
+      hand has no way to show the department they are owed one.
+    </p>
+  </section>
+
+  <section class="stack">
+    <h2>What exists today</h2>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Already built</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>A service with a price and tax rate, per clinic</td><td>Prices in integer paise</td></tr>
+          <tr><td>A per-practitioner price override</td><td>Dr A's consultation can cost more than Dr B's</td></tr>
+          <tr><td>An endpoint to create or update a service</td><td>Guarded by <code>tenant:configure</code></td></tr>
+          <tr><td>Invoices, numbered per clinic, with lines and payments</td><td><code>docs/04-billing-plan.md</code></td></tr>
+          <tr><td>Invoice lines store the name and price <em>as charged</em></td><td>See the warning below</td></tr>
+          <tr><td>A print stylesheet and a working print flow</td><td>Built for the prescription; reusable</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      <strong>Missing:</strong> any way to <em>list</em> services — there is only an
+      upsert — any screen at all for prices, and any printed receipt. The receipt is
+      a known gap, recorded in the handover doc as “invoices are numbered and
+      complete; nothing prints one yet.”
+    </p>
+
+    <div class="note note-warn">
+      <span class="note-label">Warning for whoever picks this up</span>
+      <p>
+        Invoice lines deliberately <strong>copy</strong> the service name and unit
+        price at the moment of billing rather than pointing at the service row. This
+        looks like duplication and is not: it is what lets a receipt reprinted in
+        2029 show the ₹500 that was actually charged, not the ₹800 the X-ray costs
+        by then. <strong>Do not “normalise” it.</strong>
+      </p>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>The price list</h2>
+
+    <article class="req">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-PRC-01</span>
+          <h3>An administrator sets what everything costs</h3>
+        </div>
+        <span class="state state-new">New screen</span>
+      </div>
+
+      <p>
+        The hospital administrator opens a screen and sees everything the clinic
+        charges for, with its price, and can change it.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Field</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Name</td><td>What it is called on the bill — “Chest X-ray”, “CBC”</td></tr>
+            <tr><td>Category</td><td>Consultation, diagnostic, procedure — so the list stays legible</td></tr>
+            <tr><td>Department</td><td>Which department performs it, where that applies</td></tr>
+            <tr><td>Price</td><td>Entered in rupees, stored in paise</td></tr>
+            <tr><td>Tax rate</td><td>Zero for most clinics — see decision 3</td></tr>
+            <tr><td>Active</td><td>Switched off without being deleted</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        <strong>The screen shows the whole list at once</strong>, grouped and
+        searchable. An administrator pricing a clinic is comparing forty numbers
+        against each other, not editing one in isolation.
+      </p>
+
+      <div class="note">
+        <span class="note-label">For the developer</span>
+        <p>
+          The model and the upsert exist. What is missing is a <strong>list
+          endpoint</strong> and the screen. Prices are integer paise in the database
+          and rupees on screen — convert at the edge, never store a float.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-PRC-02</span>
+          <h3>Prices are set when the clinic is onboarded</h3>
+        </div>
+        <span class="state state-config">Behaviour exists</span>
+      </div>
+
+      <p>
+        Pricing is part of onboarding, not something a clinic discovers is empty on
+        its first morning. Whoever onboards sits with the clinic and enters their
+        charges.
+      </p>
+
+      <ul class="plain">
+        <li>A clinic with <strong>no prices raises no invoices</strong>, and its check-in gate stays open. This is already how the system behaves, and it is right — a clinic can start using the software before its pricing is settled.</li>
+        <li>But an empty price list should <strong>say so plainly</strong> on the finance desk rather than looking like a bug: “No services are priced yet. Ask your administrator.”</li>
+      </ul>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-PRC-03</span>
+          <h3>Changing a price later</h3>
+        </div>
+        <span class="state state-config">Model already correct</span>
+      </div>
+
+      <p>
+        Prices go up. When they do, <strong>every invoice and receipt already issued
+        keeps the price it was issued at.</strong>
+      </p>
+
+      <ul class="plain">
+        <li>A change applies to bills raised from that moment on.</li>
+        <li>Nothing already billed changes, ever — not the invoice, not a reprint of its receipt, not the collection figures for a past date.</li>
+        <li>A service no longer offered is <strong>switched off, not deleted.</strong> Reporting groups by service, and a deleted one makes last month's report unexplainable.</li>
+      </ul>
+
+      <div class="note">
+        <span class="note-label">Scope</span>
+        <p>
+          Because invoice lines already copy the price, this is <strong>mostly
+          satisfied by the data model.</strong> The work is making sure the screens
+          don't undo it, and that the price-change screen says what it does.
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <section class="stack">
+    <h2>The receipt</h2>
+
+    <article class="req">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-RCP-01</span>
+          <h3>Print a receipt for every payment</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        Every time the finance desk takes money, they can print a receipt and hand
+        it over. It is the patient's proof of payment — and in the walk-in test
+        flow, it is what they carry to the department.
+      </p>
+
+      <ul class="plain">
+        <li>Available immediately after taking the payment, and again later from the invoice.</li>
+        <li>Prints on the paper the clinic already owns — A5 or thermal, see decision 4.</li>
+        <li>Carries the clinic's own name and logo, as the prescription already does.</li>
+      </ul>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-RCP-02</span>
+          <h3>What is on it</h3>
+        </div>
+        <span class="state state-new">Layout</span>
+      </div>
+
+      <p>Specimen — the order matters more than the styling:</p>
+
+      <div class="slip">
+        <div class="slip-clinic">DR VIVEK ORTHOPAEDIC CLINIC</div>
+        <div class="slip-note">Kothrud, Pune · 020 2547 8890</div>
+        <hr>
+        <div class="slip-row"><span>Receipt</span><span>R-000418</span></div>
+        <div class="slip-row"><span>Date</span><span>03 Sep 2026, 11:24</span></div>
+        <hr>
+        <div class="slip-row"><span>Patient</span><span>Sunita Kulkarni</span></div>
+        <div class="slip-row"><span>Patient ID</span><span>DRVIV-0207</span></div>
+        <div class="slip-row"><span>Age / Sex</span><span>54 / F</span></div>
+        <div class="slip-row"><span>Doctor</span><span>Dr V. Kulkarni</span></div>
+        <hr>
+        <div class="slip-row"><span>Chest X-ray &nbsp;·&nbsp; ₹500 × 1</span><span>₹500</span></div>
+        <div class="slip-row"><span>CBC &nbsp;·&nbsp; ₹700 × 1</span><span>₹700</span></div>
+        <hr>
+        <div class="slip-row"><span>Total charged</span><span>₹1,200</span></div>
+        <div class="slip-row cut"><span>Discount · CAMP50</span><span>−₹600</span></div>
+        <div class="slip-row total"><span>Payable</span><span>₹600</span></div>
+        <div class="slip-row"><span>Paid now · UPI</span><span>₹600</span></div>
+        <div class="slip-row"><span>Balance</span><span>₹0</span></div>
+        <hr>
+        <div class="slip-note">Received by Meena Joshi</div>
+      </div>
+
+      <ul class="plain">
+        <li><strong>Top — who and where.</strong> Clinic name, logo, address, phone. Receipt number and date-time. Patient name, patient ID, age, sex, mobile. The doctor, <em>where there is one</em> — a walk-in test has none and the receipt should not pretend otherwise.</li>
+        <li><strong>Middle — what they are paying for.</strong> One line per item, showing the rate, the quantity and the amount.</li>
+        <li><strong>Bottom — the money, in this order and never collapsed:</strong> total charged; discount with the promotion named; payable; paid now and how; balance outstanding.</li>
+        <li><strong>Who took it</strong> — the name of the person at the desk, and space for the clinic's stamp.</li>
+      </ul>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-RCP-03</span>
+          <h3>A receipt is for a payment, not for a bill</h3>
+        </div>
+        <span class="state state-new">Gets got wrong</span>
+      </div>
+
+      <p>
+        This is the part most likely to be built wrong, so it is stated on its own.
+      </p>
+
+      <ul class="plain">
+        <li><strong>One invoice can have several receipts.</strong> A ₹1,100 bill where the patient pays ₹500 now and ₹600 on the way out is <strong>one invoice and two receipts</strong> — each showing what was paid at that moment and what remained. A receipt that reprints the whole bill every time is a receipt the patient can use to claim they paid twice.</li>
+        <li><strong>Reprints are marked.</strong> The first print is the receipt; every print after it says DUPLICATE on its face.</li>
+        <li><strong>Every print is recorded</strong> — which receipt, by whom, when. Cheap to store, and it is the answer when somebody asks how a second copy exists.</li>
+      </ul>
+
+      <div class="slip" style="margin-top:4px">
+        <div class="slip-dup">— &nbsp;D U P L I C A T E&nbsp; —</div>
+        <hr>
+        <div class="slip-row"><span>Receipt</span><span>R-000418</span></div>
+        <div class="slip-row"><span>Reprinted</span><span>03 Sep 2026, 18:02</span></div>
+        <div class="slip-note" style="text-align:left">by Meena Joshi</div>
+      </div>
+
+      <div class="note note-warn">
+        <span class="note-label">Why this one matters</span>
+        <p>
+          Two identical unmarked receipts for one payment is how cash goes missing
+          in a clinic — and the person it exposes is the finance desk, who has no
+          way to prove which copy was the original.
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <section class="stack">
+    <h2>Decisions still needed</h2>
+
+    <div class="stack" style="gap:24px; margin-top:12px">
+      <div class="decision">
+        <div class="decision-q">1. Who owns the prices — the platform, or the clinic's administrator?</div>
+        <p class="rec">
+          The requirement says both: set at onboarding, changed by the clinic
+          afterwards.
+        </p>
+        <p class="rec">
+          <b>Recommendation</b>
+          The clinic's administrator owns it, and onboarding is simply the first
+          time they use the screen. Prices change far too often for a clinic to have
+          to ask you.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">2. Does the per-doctor price override belong on this screen?</div>
+        <p class="rec">
+          The model already supports Dr A's consultation costing more than Dr B's.
+          <b>Recommendation</b>
+          On the doctor's own setup screen, where the rest of that doctor's
+          arrangements already live — not mixed into the price list.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">3. GST — what must a receipt legally carry?</div>
+        <p class="rec">
+          Most clinical services in India are GST-exempt, and the tax field exists
+          but is zero. <strong>If any of your clinics are GST-registered</strong>,
+          their receipt legally needs more than what is listed above — GSTIN, HSN or
+          SAC codes, a tax breakdown, a specific document title. That is a
+          compliance question, not a design one, and it needs answering before
+          receipts print. If none are, say so and the field stays zero.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">4. What paper does it print on?</div>
+        <p class="rec">
+          A5 from a normal printer, or a thermal roll from a till printer? Different
+          layouts, and the clinic already owns one of them.
+          <strong>Ask the ortho clinic what is on their desk.</strong> One question
+          now, or a rebuild later.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">5. Is the receipt number the invoice number, or its own sequence?</div>
+        <p class="rec">
+          <b>Recommendation</b>
+          Its own sequence. One invoice can produce several receipts, so they cannot
+          share a number without a suffix — and a receipt with a suffix invites
+          somebody to invent one.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Summary for the developer</h2>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Requirement</th><th>State</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>FR-PRC-01</td><td>New screen. Model and upsert exist; the list endpoint does not</td></tr>
+          <tr><td>FR-PRC-02</td><td>Onboarding step. Behaviour with no prices is already correct</td></tr>
+          <tr><td>FR-PRC-03</td><td>Mostly satisfied by the data model — don't break it</td></tr>
+          <tr><td>FR-RCP-01</td><td>New. The print flow exists from the prescription</td></tr>
+          <tr><td>FR-RCP-02</td><td>New. Layout only</td></tr>
+          <tr><td>FR-RCP-03</td><td>New, and the one with real consequences if it is got wrong</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note note-warn" style="margin-top:8px">
+      <span class="note-label">Rules that apply throughout</span>
+      <p>
+        Money is <strong>integer paise</strong>, never float. Invoice lines keep the
+        price as charged. Every new table needs its row-level security policy, or
+        <code>pnpm rls:check</code> fails the build.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Full text, kept in the repository alongside the code, at
+    <code>docs/13-price-list-and-receipts.md</code>. Companions:
+    <code>docs/10-finance-persona-and-promotions.md</code>,
+    <code>docs/11-walk-in-diagnostics.md</code>,
+    <code>docs/12-patient-id-format.md</code>.
+  </footer>
+
+</div>

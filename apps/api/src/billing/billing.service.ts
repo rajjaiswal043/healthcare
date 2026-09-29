@@ -38,6 +38,57 @@ export type DiagnosticBillingState =
   | { status: 'SETTLED'; invoiceNumber: string }
   | { status: 'VOID'; invoiceNumber: string };
 
+/**
+ * Where ONE INVOICE stands with the money, as a pure function over rows already
+ * loaded.
+ *
+ * Extracted on 29 Sep 2026 for the home-page day board, which asks this question
+ * about sixty patients at a time. The alternative was a second copy of the
+ * arithmetic for the bulk case, which is exactly what `diagnosticBillingState`
+ * below was written to avoid — and the consequence of getting it wrong is
+ * specific: a board that says "Fee paid" for a visit the check-in gate then
+ * refuses, so the front desk is told the patient is clear and then blocked.
+ *
+ * `blockingReason` and `diagnosticBillingState` both call this, so there is one
+ * definition of "paid" in the system and all three screens agree by
+ * construction rather than by review.
+ */
+export interface InvoiceSettlementInput {
+  number: string;
+  status: string;
+  totalPaise: number;
+  payments: Array<{ direction: string; amountPaise: number }>;
+}
+
+export type InvoiceSettlement =
+  /** No charge was raised — this clinic prices nothing, or not this item. */
+  | { status: 'NOT_BILLED' }
+  | { status: 'UNPAID'; invoiceNumber: string; balancePaise: number }
+  | { status: 'SETTLED'; invoiceNumber: string }
+  | { status: 'VOID'; invoiceNumber: string };
+
+export function invoiceSettlement(invoice: InvoiceSettlementInput | null): InvoiceSettlement {
+  if (!invoice) return { status: 'NOT_BILLED' };
+
+  if (invoice.status === 'CANCELLED') {
+    return { status: 'VOID', invoiceNumber: invoice.number };
+  }
+
+  // PAID, WAIVED and DEFERRED all mean "no more money is expected before the
+  // patient is served" — a clinic that defers a bill must not find it deferred
+  // at the desk and blocked in the X-ray room.
+  if ((SETTLED as readonly string[]).includes(invoice.status)) {
+    return { status: 'SETTLED', invoiceNumber: invoice.number };
+  }
+
+  const paid = sum(invoice.payments.filter((p) => p.direction === 'IN'));
+  const refunded = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
+  const balancePaise = invoice.totalPaise - (paid - refunded);
+
+  if (balancePaise <= 0) return { status: 'SETTLED', invoiceNumber: invoice.number };
+  return { status: 'UNPAID', invoiceNumber: invoice.number, balancePaise };
+}
+
 /** What `diagnosticBillingState` needs loaded. Shared so the rule has one home. */
 export interface DiagnosticBillingInput {
   legacyUnbilled: boolean;
@@ -60,30 +111,11 @@ export interface DiagnosticBillingInput {
  * is how a worklist ends up showing "paid" for something the gate then refuses.
  */
 export function diagnosticBillingState(order: DiagnosticBillingInput): DiagnosticBillingState {
+  // The one state that is a fact about the ORDER rather than about any invoice,
+  // so it is answered before the invoice is looked at.
   if (order.legacyUnbilled) return { status: 'LEGACY' };
 
-  const line = order.invoiceLine;
-  if (!line) return { status: 'NOT_BILLED' };
-
-  const invoice = line.invoice;
-  if (invoice.status === 'CANCELLED') {
-    return { status: 'VOID', invoiceNumber: invoice.number };
-  }
-
-  // PAID, WAIVED and DEFERRED all mean "no more money is expected before the
-  // patient is served" — the same list the check-in gate uses, deliberately, so
-  // a clinic that defers a bill does not find it deferred at the desk and
-  // blocked in the X-ray room.
-  if ((SETTLED as readonly string[]).includes(invoice.status)) {
-    return { status: 'SETTLED', invoiceNumber: invoice.number };
-  }
-
-  const paid = sum(invoice.payments.filter((p) => p.direction === 'IN'));
-  const refunded = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
-  const balancePaise = invoice.totalPaise - (paid - refunded);
-
-  if (balancePaise <= 0) return { status: 'SETTLED', invoiceNumber: invoice.number };
-  return { status: 'UNPAID', invoiceNumber: invoice.number, balancePaise };
+  return invoiceSettlement(order.invoiceLine?.invoice ?? null);
 }
 
 /** The nested shape `diagnosticBillingState` reads. Reused by the worklist. */
@@ -557,26 +589,33 @@ export class BillingService {
   async blockingReason(tx: TenantClient, appointmentId: string): Promise<string | null> {
     const invoice = await tx.invoice.findUnique({
       where: { appointmentId },
-      select: { id: true, status: true, totalPaise: true, number: true },
+      // Payments come with the invoice rather than in a second round trip, so
+      // the pure rule below can be handed everything it needs. One query.
+      select: {
+        status: true,
+        totalPaise: true,
+        number: true,
+        payments: { select: { direction: true, amountPaise: true } },
+      },
     });
 
-    // No invoice at all — this clinic has not priced anything. See the note on
-    // ensureInvoiceForAppointment.
-    if (!invoice) return null;
+    // `invoiceSettlement` is the same function the worklist and the day board
+    // use. No invoice at all means this clinic has not priced anything — see
+    // the note on ensureInvoiceForAppointment.
+    const state = invoiceSettlement(invoice);
 
-    if (invoice.status === 'CANCELLED') {
-      return `Invoice ${invoice.number} was cancelled. Raise a new one before checking in.`;
+    if (state.status === 'VOID') {
+      return `Invoice ${state.invoiceNumber} was cancelled. Raise a new one before checking in.`;
     }
 
-    if ((SETTLED as readonly string[]).includes(invoice.status)) return null;
+    if (state.status === 'UNPAID') {
+      // "before issuing a token" until 12 Aug 2026, when tokens moved to
+      // booking. The gate did not move; the sentence had to, because by
+      // check-in the patient is already holding their token.
+      return `${formatPaise(state.balancePaise)} outstanding on invoice ${state.invoiceNumber}. Collect payment before adding them to the queue.`;
+    }
 
-    const { balancePaise } = await this.totals(tx, invoice.id, invoice.totalPaise);
-    if (balancePaise <= 0) return null;
-
-    // "before issuing a token" until 12 Aug 2026, when tokens moved to booking.
-    // The gate did not move; the sentence had to, because by check-in the
-    // patient is already holding their token.
-    return `${formatPaise(balancePaise)} outstanding on invoice ${invoice.number}. Collect payment before adding them to the queue.`;
+    return null;
   }
 
   async getForAppointment(tenantId: string, appointmentId: string) {

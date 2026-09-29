@@ -471,3 +471,202 @@ describe('the all-patients list', () => {
     expect(res.json()).toHaveProperty('total');
   });
 });
+
+/**
+ * Finding a patient by name.
+ *
+ * Names match by PREFIX, on any word: "rajesh" finds Rajesh Naidu and Kumar
+ * Rajesh, and does not find Ramesh Rao.
+ *
+ * This replaced trigram similarity on 28 Sep 2026, after the front desk
+ * reported unrelated names in the results. That rule scored the query against
+ * the whole name, so the number depended on how long the rest of the name was
+ * rather than on how well anything matched: "Rajesh" scored 0.333 against
+ * "Ramesh Rao" and was returned, while "Muhammad Rao" scored 0.308 against its
+ * own surname and was nearly lost. One threshold governed both and no value
+ * separated them.
+ *
+ * These patients are inserted by this block and deleted after it, so the
+ * assertions can be exact counts rather than "at least one" — a search test
+ * that only checks the right row is present cannot catch the wrong row being
+ * present beside it, which is the entire bug.
+ */
+describe('finding a patient by name', () => {
+  const PREFIX = 'SRCH';
+
+  const PEOPLE = [
+    'Rajesh Naidu',
+    'Rajesh Sharma',
+    'Ramesh Rao', // The false positive: trigram-similar, a different person.
+    'Kumar Rajesh', // The surname case: matches on a word that is not the first.
+    'Muhammad Rao', // Scored 0.308 for its own surname under the old rule.
+    'Rekha Chauhan',
+  ];
+
+  beforeAll(async () => {
+    for (const [i, name] of PEOPLE.entries()) {
+      await ownerQuery(
+        fx.main.id,
+        `INSERT INTO patient (tenant_id, uhid, name, gender, age_years, mobile, updated_at)
+         VALUES ($1, $2, $3, 'MALE', 40, $4, now())`,
+        [
+          fx.main.id,
+          `${PREFIX}${String(i).padStart(3, '0')}`,
+          name,
+          `96000${String(i).padStart(5, '0')}`,
+        ],
+      );
+    }
+  });
+
+  afterAll(async () => {
+    await ownerQuery(fx.main.id, `DELETE FROM patient WHERE uhid LIKE '${PREFIX}%'`);
+  });
+
+  async function search(query: string): Promise<string[]> {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/patients?q=${encodeURIComponent(query)}&limit=25`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // Only the patients this block inserted: the seed has its own people, and
+    // a test that asserted over all of them would break every time it changed.
+    return res
+      .json<{ patients: Array<{ name: string; uhid: string }> }>()
+      .patients.filter((p) => p.uhid.startsWith(PREFIX))
+      .map((p) => p.name);
+  }
+
+  it('finds everyone whose name starts with what was typed', async () => {
+    expect(await search('Rajesh')).toEqual(
+      expect.arrayContaining(['Rajesh Naidu', 'Rajesh Sharma']),
+    );
+  });
+
+  /** The reported bug. Ramesh is not Rajesh, however the trigrams fall. */
+  it('does not find a different name that merely looks similar', async () => {
+    const found = await search('Rajesh');
+
+    expect(found).not.toContain('Ramesh Rao');
+    expect(found).not.toContain('Rekha Chauhan');
+  });
+
+  it('finds a name by its second word', async () => {
+    // "Kumar Rajesh" has to come back for "rajesh", or a patient whose given
+    // name is recorded second is unfindable by it.
+    expect(await search('Rajesh')).toContain('Kumar Rajesh');
+  });
+
+  it('finds a patient by surname whatever the rest of the name is', async () => {
+    // "Muhammad Rao" scored 0.308 against "Rao" under the old rule — inside the
+    // 0.3 threshold by a hair, and the reason the threshold could not simply be
+    // raised to exclude Ramesh.
+    expect(await search('Rao')).toEqual(expect.arrayContaining(['Muhammad Rao', 'Ramesh Rao']));
+  });
+
+  it('matches the start of a word, not the middle of one', async () => {
+    // Plain "contains" would return every Rajesh here. Nobody searches by the
+    // middle of a name, and the results are noise if they do.
+    expect(await search('esh')).toEqual([]);
+  });
+
+  it('puts a whole-name match above a match on a later word', async () => {
+    const found = await search('Rajesh');
+
+    expect(found.indexOf('Kumar Rajesh')).toBeGreaterThan(found.indexOf('Rajesh Naidu'));
+  });
+
+  it('is case-insensitive', async () => {
+    expect(await search('rAjEsH')).toContain('Rajesh Naidu');
+  });
+
+  /**
+   * Matching is now entirely ILIKE, so the query reaches a pattern language.
+   * Without escaping, one "%" returns every patient in the clinic — a data
+   * leak wearing the costume of a search result.
+   */
+  it('treats a wildcard as a character, not as a wildcard', async () => {
+    expect(await search('%a')).toEqual([]);
+    expect(await search('_a')).toEqual([]);
+    expect(await search('Ra%')).toEqual([]);
+  });
+
+  it('ignores a query too short to mean anything', async () => {
+    expect(await search('R')).toEqual([]);
+  });
+});
+
+/**
+ * A patient needs a name, not a number.
+ *
+ * The same defect as the staff one reported on 28 Sep 2026, on a screen that
+ * matters more. A patient recorded as "9876543210" cannot be found by the
+ * search that now matches on letters, cannot be told apart from a genuine
+ * duplicate, and prints as a number on their own prescription.
+ *
+ * The rule's own cases are in `src/common/__tests__/is-person-name.test.ts`;
+ * these prove it reaches registration, correction, and the duplicate check.
+ */
+describe('a patient name has to be a name', () => {
+  // Ten digits starting 6-9, which is what the mobile rule requires. The first
+  // draft of this was nine digits long, so every request failed on the phone
+  // number and the "refuses" tests passed for the wrong reason.
+  let mobile = 95000000;
+
+  function registerWith(name: unknown) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/patients',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        name,
+        gender: 'FEMALE',
+        ageYears: 30,
+        mobile: `98${mobile++}`,
+        confirmedNotDuplicate: true,
+        consentCareDelivery: true,
+      },
+    });
+  }
+
+  it('refuses a number at registration', async () => {
+    const res = await registerWith('9876543210');
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain('two letters');
+  });
+
+  it('refuses punctuation at registration', async () => {
+    expect((await registerWith('...')).statusCode).toBe(400);
+  });
+
+  it('still registers a short real name', async () => {
+    expect((await registerWith('Ram')).statusCode).toBe(201);
+  });
+
+  it('still registers a name in Devanagari', async () => {
+    expect((await registerWith('नरवीर सिंह')).statusCode).toBe(201);
+  });
+
+  /**
+   * Correction is the second way in, and it was its own DTO with its own copy
+   * of the rule — so a patient registered correctly could be renamed to a
+   * number afterwards, which is the same broken record by a slower route.
+   */
+  it('refuses a number when correcting an existing patient', async () => {
+    const registered = await registerWith('Sunita Kulkarni');
+    expect(registered.statusCode).toBe(201);
+    const id = registered.json<{ patient: { id: string } }>().patient.id;
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/patients/${id}`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { name: '12345', reason: 'Typed wrongly at the desk' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});

@@ -14,6 +14,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import { IsPersonName } from '../../../common/is-person-name.decorator.js';
 
 export enum GenderDto {
   MALE = 'MALE',
@@ -58,6 +59,7 @@ export class RegisterPatientDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value))
   name!: string;
 

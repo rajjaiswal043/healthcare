@@ -32,6 +32,7 @@ import {
 } from '../../platform/auth/decorators.js';
 import { PERMISSIONS } from '../../platform/auth/permissions.js';
 import { ClinicSetupService, type RequestMeta } from './clinic-setup.service.js';
+import { IsPersonName } from '../../common/is-person-name.decorator.js';
 
 class DepartmentDto {
   @IsString()
@@ -75,6 +76,7 @@ class PractitionerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName!: string;
 
   @IsOptional()
@@ -161,6 +163,7 @@ class UpdatePractitionerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName?: string;
 
   @IsOptional()

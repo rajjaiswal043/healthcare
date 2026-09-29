@@ -1,0 +1,752 @@
+<title>Finance Desk and Promotions</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Ledger palette: paper with a green bias, ink that isn't black, one teal
+     accent for money, amber for what is still undecided, clay for what must
+     not be broken. */
+  :root {
+    --paper:      #F6F8F6;
+    --surface:    #FFFFFF;
+    --surface-2:  #EEF2EF;
+    --ink:        #17211F;
+    --ink-70:     #47544F;
+    --ink-45:     #77837E;
+    --rule:       #DCE3DE;
+    --rule-soft:  #E8EDE9;
+    --accent:     #0E6B58;
+    --accent-bg:  #E4F0EB;
+    --amber:      #9A6412;
+    --amber-bg:   #F6EEDD;
+    --clay:       #97363A;
+    --clay-bg:    #F6E5E4;
+
+    --measure: 68ch;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #101614;
+      --surface:   #18201D;
+      --surface-2: #1F2825;
+      --ink:       #E7EDE9;
+      --ink-70:    #A9B5B0;
+      --ink-45:    #7C8883;
+      --rule:      #2C3733;
+      --rule-soft: #232D2A;
+      --accent:    #4FBB9E;
+      --accent-bg: #16302A;
+      --amber:     #D3A253;
+      --amber-bg:  #322817;
+      --clay:      #DC8B86;
+      --clay-bg:   #33201F;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #101614;
+    --surface:   #18201D;
+    --surface-2: #1F2825;
+    --ink:       #E7EDE9;
+    --ink-70:    #A9B5B0;
+    --ink-45:    #7C8883;
+    --rule:      #2C3733;
+    --rule-soft: #232D2A;
+    --accent:    #4FBB9E;
+    --accent-bg: #16302A;
+    --amber:     #D3A253;
+    --amber-bg:  #322817;
+    --clay:      #DC8B86;
+    --clay-bg:   #33201F;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 64px 0 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: clamp(38px, 6vw, 54px);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-70);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    padding-top: 6px;
+  }
+
+  /* ---- sections ---- */
+
+  section { padding-top: 56px; }
+
+  h2 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  p { max-width: var(--measure); margin: 0; }
+
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stack-tight { display: flex; flex-direction: column; gap: 10px; }
+
+  strong { font-weight: 600; }
+
+  /* ---- requirement cards ---- */
+
+  .req {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 26px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .req-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 14px;
+  }
+
+  .req-id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* Build state is real information, not decoration: it tells the developer
+     whether a requirement is a new build or a setting on something that
+     already ships. */
+  .state {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .state-new    { background: var(--clay-bg);   color: var(--clay); }
+  .state-extend { background: var(--amber-bg);  color: var(--amber); }
+  .state-config { background: var(--accent-bg); color: var(--accent); }
+
+  /* ---- tables ---- */
+
+  .scroll { overflow-x: auto; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 14.5px;
+    min-width: 460px;
+  }
+
+  th {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+    font-weight: 500;
+    padding: 0 16px 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  td {
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    color: var(--ink-70);
+  }
+
+  td:first-child { color: var(--ink); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---- flow ---- */
+
+  ol.flow {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  ol.flow li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    align-items: baseline;
+    max-width: var(--measure);
+  }
+
+  ol.flow li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  ul.plain {
+    margin: 0;
+    padding-left: 20px;
+    max-width: var(--measure);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  ul.plain li { padding-left: 3px; }
+  ul.plain::marker { color: var(--ink-45); }
+
+  /* ---- notes ---- */
+
+  .note {
+    border-left: 2px solid var(--accent);
+    padding: 2px 0 2px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .note-warn { border-left-color: var(--clay); }
+
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+  }
+
+  .note p { font-size: 15px; color: var(--ink-70); }
+  .note strong { color: var(--ink); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.88em;
+    background: var(--surface-2);
+    padding: 1.5px 5px;
+    border-radius: 2px;
+  }
+
+  /* ---- decisions ---- */
+
+  .decision {
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .decision-q {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.3;
+    max-width: var(--measure);
+    text-wrap: balance;
+  }
+
+  .rec {
+    font-size: 14.5px;
+    color: var(--ink-70);
+    max-width: var(--measure);
+  }
+  .rec b {
+    color: var(--accent);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-45);
+    max-width: var(--measure);
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">Requirements · HealthCloud</span>
+    <h1>Finance Desk and Promotions</h1>
+    <p class="standfirst">
+      The clinics we demoed to want money handled before the front desk, by
+      somebody whose whole job is money — and they want to be able to give a
+      patient a discount without it being a hand-written note.
+    </p>
+    <div class="meta">
+      <span>From clinic demos, 3 Sep 2026</span>
+      <span>7 requirements</span>
+      <span>6 decisions outstanding</span>
+    </div>
+  </header>
+
+  <section class="stack">
+    <h2>What is changing</h2>
+    <p>
+      Today the front desk does everything at the door: finds the patient,
+      registers them, books, takes the money, checks them in. These clinics split
+      that job in two. <strong>A finance person now meets the patient first</strong> —
+      finds or registers them, settles which doctor they are seeing, raises the
+      bill, applies a discount if one has been authorised, and takes payment. The
+      patient reaches the front desk only once the money is settled, and the front
+      desk's job shrinks to arrival and the queue.
+    </p>
+    <div class="note">
+      <span class="note-label">The shape of the work</span>
+      <p>
+        <strong>This changes who does what, not how money works.</strong> Invoices,
+        payments, receipts and the pay-first rule already exist and are unchanged.
+        What is genuinely new is promotions. Everything else is a role, a screen
+        that puts existing steps in one flow, and a reporting view.
+      </p>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Requirements</h2>
+
+    <article class="req">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-FIN-01</span>
+          <h3>A finance role</h3>
+        </div>
+        <span class="state state-config">Exists · configure</span>
+      </div>
+
+      <p>
+        A member of staff whose entire job is money. They can find and register
+        patients and handle everything financial, and they can do nothing clinical
+        and nothing to the diary.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Can do</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Search patients, open a record</td><td>The first thing they do when somebody walks in</td></tr>
+            <tr><td>Register a new patient</td><td>A first-time patient must not be sent to another desk</td></tr>
+            <tr><td>See which doctors are consulting today, and whether they have room</td><td>To answer “can I be seen today?” before taking money</td></tr>
+            <tr><td>Open today's visit for a doctor</td><td>So the bill has something to attach to — see decision 1</td></tr>
+            <tr><td>Raise an invoice, add and remove charges</td><td>The bill itself</td></tr>
+            <tr><td>Apply an authorised promotion</td><td>FR-PRO-02</td></tr>
+            <tr><td>Take payment, print a receipt</td><td>The money</td></tr>
+            <tr><td>See all financial reporting</td><td>FR-FIN-03</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        <strong>Cannot do:</strong> book or reschedule a future appointment, cancel
+        one, order a test, open or write a consultation, prescribe, record vitals.
+        Refunds, waivers and deferrals stay with the administrator — that is
+        already the rule and should not be relaxed for this role.
+      </p>
+
+      <div class="note note-warn">
+        <span class="note-label">For the developer</span>
+        <p>
+          Roles are already editable per clinic at <strong>Settings → Roles and
+          permissions</strong>; the catalogue is
+          <code>packages/db/src/permission-catalogue.ts</code>. If Finance becomes a
+          seventh built-in role, it needs <strong>two changes that must not
+          drift</strong>: an entry in <code>SYSTEM_ROLES</code> <em>and</em> a
+          backfill migration for clinics that already exist. These have drifted
+          once before and caused a bug. Migrations run under FORCE row-level
+          security, so a backfill must loop tenants with
+          <code>set_config('app.tenant_id', …)</code> or it matches zero rows and
+          reports success.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-FIN-02</span>
+          <h3>The finance desk — one screen, one flow</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        Everything the finance person does for a walk-in patient, in one place, in
+        the order it actually happens — so they are not moving between four screens
+        with a patient standing in front of them.
+      </p>
+
+      <ol class="flow">
+        <li><strong>Find the patient.</strong> By name, mobile or UHID, with enough detail shown to tell two people of the same name apart.</li>
+        <li><strong>Or register them.</strong> Without leaving the screen, with the same duplicate checking the front desk uses today.</li>
+        <li><strong>Choose the doctor.</strong> Who is consulting today, and whether they still have room.</li>
+        <li><strong>Raise the bill.</strong> The doctor's consultation fee comes in automatically; other priced services can be added.</li>
+        <li><strong>Apply a promotion,</strong> if one has been authorised.</li>
+        <li><strong>Take the payment.</strong> Cash, UPI or card, as today.</li>
+        <li><strong>Print the receipt,</strong> and send the patient to the front desk.</li>
+      </ol>
+
+      <div class="note">
+        <span class="note-label">Acceptance</span>
+        <p>
+          A new patient can be found-or-registered, billed and paid in a single
+          screen without navigating away, and arrives at the front desk with
+          nothing outstanding. Steps 1, 2, 4, 6 and 7 already exist as endpoints —
+          this is a screen over work that is done.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-FIN-03</span>
+          <h3>Finance reporting</h3>
+        </div>
+        <span class="state state-extend">Extends existing</span>
+      </div>
+
+      <p>
+        The finance person owns the numbers, and the owner asks them — not the
+        doctor — where the day's money went. For a chosen day or date range:
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Report</th><th>Content</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Collections</td><td>Total taken, split by cash / UPI / card</td></tr>
+            <tr><td>By doctor</td><td>Patients seen, gross billed, discount given, net collected</td></tr>
+            <tr><td>Discounts</td><td>Every promotion applied: which, how much, by whom, authorised by whom</td></tr>
+            <tr><td>Outstanding</td><td>Bills raised and unpaid, and anything deferred</td></tr>
+            <tr><td>Refunds and reversals</td><td>Money returned to a patient, kept separate from entries recorded in error</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note note-warn">
+        <span class="note-label">The rule that decides the design</span>
+        <p>
+          <strong>Gross billed, discount and net collected are three separate
+          figures, never one.</strong> A ₹600 consultation given away free and
+          recorded as a ₹0 bill leaves the clinic unable to say how much it gave
+          away, and unable to pay a doctor on what they billed. Recorded as ₹600
+          billed less ₹600 discount, both questions have answers.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-PRO-01</span>
+          <h3>The administrator sets up promotions</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        Clinics give discounts for real reasons — a doctor's own patient, a camp, a
+        staff family member, a hardship case. Today that is a verbal instruction and
+        a hand-written note. The administrator should set the discounts up in
+        advance so the finance person applies a known thing rather than inventing
+        one.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Field</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Code</td><td>Short, typed or picked at billing — <code>CAMP50</code></td></tr>
+            <tr><td>Name</td><td>What it is for, in words. Read by whoever approves it later</td></tr>
+            <tr><td>Type</td><td>Percentage, or flat rupee amount</td></tr>
+            <tr><td>Value</td><td>1–100 for a percentage; a rupee amount for a flat discount</td></tr>
+            <tr><td>Maximum discount</td><td>Optional cap, so “50% off” cannot become ₹4,000</td></tr>
+            <tr><td>Valid from / to</td><td>A camp offer stops working when the camp ends</td></tr>
+            <tr><td>Active</td><td>Switched off without being deleted</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ul class="plain">
+        <li><strong>100% is allowed.</strong> It is the “don't charge this patient” case, and the reason the feature exists.</li>
+        <li>A flat discount larger than the bill reduces it to zero and <strong>never below</strong> — the clinic does not owe money because a promo was too big.</li>
+        <li>A promotion that has ever been used <strong>cannot be deleted or edited</strong>, only switched off. An invoice from March has to keep explaining itself in September.</li>
+        <li>Only the administrator creates, changes or switches off a promotion. Finance applies them and cannot invent one.</li>
+      </ul>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-PRO-02</span>
+          <h3>Applying a promotion at billing</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        The administrator rings the finance desk: “this one is my patient, give
+        them 50%.” The finance person applies it and takes the reduced amount.
+      </p>
+
+      <ul class="plain">
+        <li><strong>The discount is a line on the invoice, not a changed price.</strong> The doctor's fee still reads ₹600 and the discount reads −₹300. A bill that simply says ₹300 loses the fact that anything was given away.</li>
+        <li><strong>Who authorised it is recorded, and is required.</strong> The instruction arrives by phone, so the system cannot see it — the finance person names the approver from the clinic's own staff list. Free text is not enough.</li>
+        <li>A promotion can only be applied <strong>before payment is taken</strong>. Afterwards it is a refund or a correction — an administrator's job, and already built.</li>
+        <li>Applying one is recorded permanently: which promotion, the amount, who applied it, who authorised it, when.</li>
+      </ul>
+
+      <div class="note note-warn">
+        <span class="note-label">Why the approver is named</span>
+        <p>
+          Without it, the record shows the finance person gave away money and shows
+          nothing about the instruction they were following. That is how discount
+          schemes go wrong in clinics, and the person most exposed by it is the
+          finance person. <strong>Naming the approver protects them.</strong>
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-FIN-04</span>
+          <h3>The front desk after this change</h3>
+        </div>
+        <span class="state state-config">Exists · configure</span>
+      </div>
+
+      <p>
+        Once finance takes the money, the front desk checks the patient in and runs
+        the queue. Billing is no longer its job.
+      </p>
+
+      <div class="note">
+        <span class="note-label">For the developer</span>
+        <p>
+          <strong>Do not remove billing from the front desk in code.</strong> Some
+          clinics keep one person doing both, and the roles screen lets each clinic
+          decide: a clinic adopting this flow removes <code>invoice:write</code> and
+          <code>payment:collect</code> from its own Front desk role. Configuration,
+          not a code change — it is the reason that screen was built.
+        </p>
+        <p>
+          The <strong>pay-first rule already enforces the sequence.</strong> Check-in
+          refuses to put a patient in the queue while money is outstanding, and that
+          lives in the API, not the UI — so a patient who skips finance is stopped
+          at the front desk automatically. Nothing new is needed for it.
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <section class="stack">
+    <h2>Decisions still needed</h2>
+    <p>
+      These change what gets built, and are far cheaper to answer now than to
+      discover halfway through.
+    </p>
+
+    <div class="stack" style="gap:24px; margin-top:12px">
+      <div class="decision">
+        <div class="decision-q">1. What does the bill attach to?</div>
+        <p class="rec">
+          An invoice hangs off a visit today. If finance bills before anyone has
+          booked, either the bill floats and is matched later, or the act of billing
+          opens the visit.
+        </p>
+        <p class="rec">
+          <b>Recommendation</b>
+          Billing opens today's visit. Finance picks the doctor anyway, the walk-in
+          visit already exists, and the invoice stays attached to something real.
+          Note this is <em>not</em> the same as letting finance book — opening
+          today's visit and booking Thursday afternoon are different powers.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">2. Are doctors paid on gross or net?</div>
+        <p class="rec">
+          A ₹600 consultation given away free: does the doctor's figure show ₹600 or
+          ₹0? There is no right answer — it is a commercial decision, and it must be
+          settled before the reports are built, because it decides what they add up.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">3. Can finance apply a promotion with nobody named?</div>
+        <p class="rec">
+          <b>Recommendation</b>
+          No. Naming the approver is the control. If the answer is yes, say so
+          explicitly — it is a deliberate decision to give the finance desk
+          unsupervised discretion over price.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">4. Are promo codes told to patients, or internal only?</div>
+        <p class="rec">
+          If patients are ever given a code, codes need to be hard to guess and
+          usage limits start to matter. If purely internal, <code>CAMP50</code> is
+          fine. This changes the design.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">5. Do promotions apply to tests, or only the consultation fee?</div>
+        <p class="rec">
+          An X-ray and a consultation are both priced services. “50% off” needs to
+          say off what.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">6. Does finance close a drawer at the end of the day?</div>
+        <p class="rec">
+          Not raised in the demo, and usually the next thing asked for once one
+          person owns the cash. Worth confirming it is out of scope rather than
+          assumed in.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>What already exists</h2>
+    <p>So that none of it gets rebuilt.</p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Already built</th><th>Where</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Invoices, charges, payments, receipts</td><td><code>docs/04-billing-plan.md</code></td></tr>
+          <tr><td>Pay-first gate at check-in</td><td><code>AppointmentsService.checkIn</code></td></tr>
+          <tr><td>Day-end collections, split by method</td><td>Reports · <code>report:revenue</code></td></tr>
+          <tr><td>Refunds, waivers, deferrals — administrator only, with a reason</td><td><code>payment.correction_kind</code></td></tr>
+          <tr><td>Editable roles and permissions per clinic</td><td>Settings → Roles · <code>docs/06</code> §9</td></tr>
+          <tr><td>Patient search, registration, duplicate detection</td><td>Patients module</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note note-warn" style="margin-top:8px">
+      <span class="note-label">Rules the new work must not break</span>
+      <p>
+        Money is <strong>integer paise</strong> everywhere — never float, never
+        decimal rupees. Payments are <strong>append-only rows</strong>, never edited
+        or deleted; a correction is a new compensating row. Every clinic's data is
+        isolated by <strong>row-level security</strong>, so every new table needs its
+        tenant policy — <code>pnpm rls:check</code> fails the build if it is missing.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Full text, kept in the repository alongside the code, at
+    <code>docs/10-finance-persona-and-promotions.md</code>. Project context for
+    somebody joining: <code>docs/03-resume-here.md</code>.
+  </footer>
+
+</div>

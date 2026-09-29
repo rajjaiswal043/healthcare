@@ -194,6 +194,41 @@ export interface ClinicRole {
   staffCount: number;
 }
 
+export type DayBucket =
+  'EXPECTED' | 'WAITING' | 'WITH_DOCTOR' | 'AT_DEPARTMENT' | 'DONE' | 'NOT_ATTENDING';
+
+/** Money as a tag, never a figure. Null when nothing was charged. */
+export type FeeTag = 'PAID' | 'PENDING' | null;
+
+export interface DayBoardRow {
+  patient: { id: string; name: string; uhid: string; ageYears: number | null; gender: string };
+  bucket: DayBucket;
+  hasVisit: boolean;
+  hasTest: boolean;
+  token: number | null;
+  withWhom: string | null;
+  time: string | null;
+  visitFee: FeeTag;
+  testFee: FeeTag;
+}
+
+export interface DayBoard {
+  date: string;
+  timezone: string;
+  /** OWN for a doctor — their own patients only. CLINIC for everyone else. */
+  scope: 'CLINIC' | 'OWN';
+  counts: {
+    expected: number;
+    waiting: number;
+    with_doctor: number;
+    at_department: number;
+    done: number;
+    not_attending: number;
+    total: number;
+  };
+  rows: DayBoardRow[];
+}
+
 export interface StaffUser {
   id: string;
   email: string;
@@ -677,6 +712,8 @@ export interface Slot {
   booked: number;
   available: number;
   overbooking: boolean;
+  /** The slot has finished. Shown, but not selectable. */
+  past: boolean;
 }
 
 export interface DayAvailability {
@@ -1708,6 +1745,11 @@ export const api = {
     request<ClinicRole & { signedOut: number }>(`/roles/${id}/reset`, { method: 'POST' }),
 
   deleteRole: (id: string) => request<{ id: string }>(`/roles/${id}`, { method: 'DELETE' }),
+
+  // --- the day board --------------------------------------------------------
+
+  /** Everybody in the clinic today, one row per patient. Scope decided server-side. */
+  dayBoard: (date?: string) => request<DayBoard>(`/day-board${date ? `?date=${date}` : ''}`),
 
   // --- staff accounts -------------------------------------------------------
 
