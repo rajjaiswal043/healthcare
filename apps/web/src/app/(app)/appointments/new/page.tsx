@@ -36,6 +36,20 @@ function dateKey(offsetDays = 0): string {
 
 const DAYS = Array.from({ length: 14 }, (_, i) => i);
 
+/**
+ * Why the patient is coming, as a short list rather than a free-text box.
+ *
+ * FR-APT-03 asks for reason codes, and the point is counting: free text alone
+ * gives a thousand spellings of "back pain" and no answer to "what does this
+ * clinic mostly see". A code plus an optional note gives both.
+ *
+ * **These are orthopaedic**, chosen on 29 Sep 2026 for the clinic adopting the
+ * system — and every clinic on the platform currently sees the same four. A
+ * paediatrician has no use for "Spine". Making the list per clinic is a column
+ * and a settings screen; until somebody asks, this constant is the whole of it.
+ */
+const VISIT_REASONS = ['Spine', 'Trauma', 'Joint pain', 'Other'] as const;
+
 export default function NewAppointmentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -50,6 +64,14 @@ export default function NewAppointmentPage() {
   const [date, setDate] = useState<string>(dateKey());
   const [availability, setAvailability] = useState<DayAvailability | null>(null);
   const [slotStart, setSlotStart] = useState<string>('');
+  /**
+   * The reason IS the code, and one has to be picked.
+   *
+   * There was a free-text note beside it until 29 Sep 2026; Narveer removed it,
+   * so "Other" now carries no detail and the column holds one of exactly four
+   * values. That is the trade: the field counts perfectly and says nothing
+   * more than it counts.
+   */
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -215,8 +237,10 @@ export default function NewAppointmentPage() {
   }
 
   const selectedDoctor = doctors.find((d) => d.id === doctorId) ?? null;
-  const canBook = Boolean(patient && doctorId && locationId && slotStart);
-  const canWalkIn = Boolean(patient && doctorId && locationId);
+  // A reason is required for both routes into the day, or a walk-in would be
+  // the way round the rule — and walk-ins are most of an ortho clinic's list.
+  const canBook = Boolean(patient && doctorId && locationId && slotStart && reason);
+  const canWalkIn = Boolean(patient && doctorId && locationId && reason);
 
   return (
     <div className="space-y-6">
@@ -379,25 +403,38 @@ export default function NewAppointmentPage() {
         ) : (
           <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
             {availability.slots.map((s) => {
-              const full = s.available <= 0;
+              // A finished slot and a full one are both unbookable and are not
+              // the same thing — struck through says "taken", faded says
+              // "gone". A receptionist reading the day needs to tell them
+              // apart, so the titles differ too.
+              const full = !s.past && s.available <= 0;
+              const disabled = s.past || full;
               return (
                 <button
                   key={s.startAt}
                   type="button"
-                  disabled={full}
+                  disabled={disabled}
                   onClick={() => setSlotStart(s.startAt)}
                   title={
-                    full ? 'Fully booked' : s.overbooking ? 'Overbooking this slot' : undefined
+                    s.past
+                      ? 'This time has already passed'
+                      : full
+                        ? 'Fully booked'
+                        : s.overbooking
+                          ? 'Overbooking this slot'
+                          : undefined
                   }
                   className={[
                     'rounded-tiny border-[1.5px] px-2 py-2 font-mono text-[13px] transition-colors',
-                    full
-                      ? 'cursor-not-allowed border-ink/8 bg-ink/5 text-ink-20 line-through'
-                      : slotStart === s.startAt
-                        ? 'border-clinical bg-clinical text-white'
-                        : s.overbooking
-                          ? 'border-amber/50 bg-amber-soft/40 text-amber-text'
-                          : 'border-ink/10 bg-white hover:border-clinical/50',
+                    s.past
+                      ? 'cursor-not-allowed border-ink/6 bg-transparent text-ink-20'
+                      : full
+                        ? 'cursor-not-allowed border-ink/8 bg-ink/5 text-ink-20 line-through'
+                        : slotStart === s.startAt
+                          ? 'border-clinical bg-clinical text-white'
+                          : s.overbooking
+                            ? 'border-amber/50 bg-amber-soft/40 text-amber-text'
+                            : 'border-ink/10 bg-white hover:border-clinical/50',
                   ].join(' ')}
                 >
                   {s.time}
@@ -410,14 +447,34 @@ export default function NewAppointmentPage() {
 
       {/* 4 — reason and confirm */}
       <section className="card p-5">
-        <p className="mono-label mb-3">4 · Reason (optional)</p>
-        <input
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          className="field-input"
-          placeholder="e.g. Fever for 3 days"
-          maxLength={300}
-        />
+        <p className="mono-label mb-3">
+          4 · Reason <span className="text-coral">*</span>
+        </p>
+
+        <div className="flex flex-wrap gap-1.5">
+          {VISIT_REASONS.map((r) => {
+            const on = reason === r;
+            return (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={on}
+                // No un-picking now that one is required: clearing the choice
+                // would only ever put the form back into a state it cannot be
+                // submitted from.
+                onClick={() => setReason(r)}
+                className={[
+                  'rounded-pill border-[1.5px] px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
+                  on
+                    ? 'border-clinical bg-clinical text-white'
+                    : 'border-ink/12 bg-white text-ink-60 hover:border-ink/25 hover:text-ink',
+                ].join(' ')}
+              >
+                {r}
+              </button>
+            );
+          })}
+        </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button

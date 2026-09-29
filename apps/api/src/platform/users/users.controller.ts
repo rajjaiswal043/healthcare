@@ -21,6 +21,7 @@ import {
 } from '../auth/decorators.js';
 import { PERMISSIONS } from '../auth/permissions.js';
 import { UsersService, type RequestMeta } from './users.service.js';
+import { IsPersonName } from '../../common/is-person-name.decorator.js';
 
 class CreateUserDto {
   @IsEmail()
@@ -30,6 +31,7 @@ class CreateUserDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName!: string;
 
   @IsOptional()
@@ -49,6 +51,7 @@ class UpdateUserDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName?: string;
 
   /**

@@ -154,6 +154,26 @@ export class AppointmentsService {
           day.unavailableReason ?? 'That time is not part of the doctor’s schedule for this day.',
       });
     }
+    /**
+     * Checked before capacity, because a finished slot is not a full one.
+     *
+     * The availability engine already reports `available: 0` for a slot that
+     * has ended, so without this the refusal below would tell a receptionist
+     * the 09:00 slot is "fully booked" at two in the afternoon — and send them
+     * looking for a cancellation that was never the problem.
+     *
+     * The line sits at the slot's END, matching the engine: a patient three
+     * minutes into their 14:00 appointment can still be booked in.
+     */
+    if (slot.past) {
+      throw new ConflictException({
+        code: 'SLOT_IN_THE_PAST',
+        message:
+          'That appointment time has already passed. Pick a later slot, or add the ' +
+          'patient to today’s queue as a walk-in.',
+      });
+    }
+
     if (slot.available <= 0) {
       throw new ConflictException({ code: 'SLOT_FULL', message: 'That slot is fully booked.' });
     }

@@ -9,6 +9,7 @@ import {
   type PatientDetail,
 } from '@/lib/api';
 import { IconAlert, IconCheck } from '@/components/icons';
+import { looksLikeAPersonName } from '@/lib/person-name';
 
 const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNKNOWN'] as const;
 /**
@@ -294,7 +295,7 @@ export function PatientCorrectionDialog({
           <button
             type="button"
             className="btn-primary"
-            disabled={busy || form.name.trim().length < 2}
+            disabled={busy || !looksLikeAPersonName(form.name)}
             onClick={() => void save()}
           >
             {busy ? 'Saving…' : 'Save correction'}

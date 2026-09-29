@@ -467,12 +467,34 @@ export class PatientsService {
    * One box, four things a receptionist might type: UHID, mobile, name, ABHA
    * number. Asking them to pick a field first is how you lose the sub-two-minute
    * registration target.
+   *
+   * **Names match by prefix, on any word.** "rajesh" finds Rajesh Naidu and
+   * Kumar Rajesh; it does not find Ramesh Rao.
+   *
+   * This replaced trigram similarity on 28 Sep 2026. That rule scored the query
+   * against the WHOLE name, so the number it produced depended on how long the
+   * rest of the name was rather than on how well anything matched: "Rajesh"
+   * scored 0.333 against "Ramesh Rao" and was returned, while "Muhammad Rao"
+   * scored 0.308 against its own surname and was nearly lost. One threshold
+   * governed both, and no value of it separated them — any bar high enough to
+   * exclude Ramesh started dropping real patients. A fitted constant in a WHERE
+   * clause is a number nobody can defend six months later, so there isn't one.
+   *
+   * The cost, stated plainly: misspellings no longer match. "Mohamed" does not
+   * find "Mohammed". Catching that properly needs phonetic matching, which is
+   * its own piece of work and not a threshold.
    */
   async search(tenantId: string, query: string, meta: RequestMeta = {}): Promise<PatientSummary[]> {
     const trimmed = query.trim();
     if (trimmed.length < 2) return [];
 
     const digits = trimmed.replace(/\D/g, '');
+
+    /**
+     * `%` and `_` are ILIKE wildcards, and matching is now entirely ILIKE.
+     * Without this, typing a single "%" returns every patient in the clinic.
+     */
+    const like = trimmed.replace(/([\\%_])/g, '\\$1');
 
     return this.prisma.forTenant(tenantId, async (tx) => {
       const rows = await tx.$queryRaw<
@@ -494,13 +516,19 @@ export class PatientsService {
           FROM patient
          WHERE is_active = true
            AND (
-                 uhid ILIKE ${'%' + trimmed + '%'}
+                 uhid ILIKE ${'%' + like + '%'}
               OR (${digits.length >= 4}::boolean AND mobile LIKE ${'%' + digits + '%'})
-              OR similarity(name, ${trimmed}) >= 0.3
-              OR name ILIKE ${trimmed + '%'}
+              -- The whole name starts with it, or any word in it does. Two
+              -- patterns rather than a plain contains: "esh" should not find
+              -- Rajesh, because nobody searches by the middle of a name.
+              OR name ILIKE ${like + '%'}
+              OR name ILIKE ${'% ' + like + '%'}
               OR abha_number = ${trimmed}
            )
-         ORDER BY similarity(name, ${trimmed}) DESC, created_at DESC
+         -- Whole-name matches first: someone typing "rajesh" wants Rajesh
+         -- Naidu above Kumar Rajesh. Then alphabetically, because sixteen
+         -- patients called Rao are read down a list, not ranked.
+         ORDER BY (name ILIKE ${like + '%'}) DESC, name ASC
          LIMIT 25
       `;
 

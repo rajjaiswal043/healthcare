@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiRequestError, type SeatUsage, type StaffUser } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { IconAlert, IconCheck, IconUserPlus, IconUsers } from '@/components/icons';
+import { looksLikeAPersonName } from '@/lib/person-name';
 
 /**
  * Staff accounts for one clinic.
@@ -57,7 +58,7 @@ export default function StaffPage() {
   }, [load]);
 
   async function add() {
-    if (fullName.trim().length < 2 || !email.trim() || roleKeys.length === 0) return;
+    if (!looksLikeAPersonName(fullName) || !email.trim() || roleKeys.length === 0) return;
     setBusyId('new');
     setError(null);
     try {
@@ -340,7 +341,7 @@ export default function StaffPage() {
               disabled={
                 busyId === 'new' ||
                 !email.trim() ||
-                fullName.trim().length < 2 ||
+                !looksLikeAPersonName(fullName) ||
                 roleKeys.length === 0
               }
               onClick={() => void add()}

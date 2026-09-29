@@ -5,6 +5,7 @@ import { ClinicSetupController } from './setup/clinic-setup.controller.js';
 import { ClinicSetupService } from './setup/clinic-setup.service.js';
 import { AvailabilityService } from './availability.service.js';
 import { AppointmentsService } from './appointments.service.js';
+import { DayBoardService } from './day-board.service.js';
 import { DisplayService } from './display.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
 import { BillingModule } from '../billing/billing.module.js';
@@ -21,6 +22,7 @@ import { BillingModule } from '../billing/billing.module.js';
   providers: [
     AvailabilityService,
     AppointmentsService,
+    DayBoardService,
     DisplayService,
     ClinicSetupService,
     AuditService,

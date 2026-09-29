@@ -10,6 +10,7 @@ import {
   type RegisterPatientInput,
 } from '@/lib/api';
 import { IconAlert, IconCheck, IconInfo, IconSearch, IconUserPlus } from '@/components/icons';
+import { looksLikeAPersonName } from '@/lib/person-name';
 
 type Form = {
   name: string;
@@ -78,7 +79,7 @@ export default function RegisterPatientPage() {
   // standing there rather than after.
   const checkDuplicates = useCallback(async (name: string, mobile: string) => {
     const digits = mobile.replace(/\D/g, '').slice(-10);
-    if (name.trim().length < 3 || !/^[6-9]\d{9}$/.test(digits)) {
+    if (name.trim().length < 3 || !looksLikeAPersonName(name) || !/^[6-9]\d{9}$/.test(digits)) {
       setDuplicates([]);
       return;
     }

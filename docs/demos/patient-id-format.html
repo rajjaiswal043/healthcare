@@ -1,0 +1,637 @@
+<title>Patient ID Format</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Ledger palette: paper with a green bias, ink that isn't black, one teal
+     accent for money, amber for what is still undecided, clay for what must
+     not be broken. */
+  :root {
+    --paper:      #F6F8F6;
+    --surface:    #FFFFFF;
+    --surface-2:  #EEF2EF;
+    --ink:        #17211F;
+    --ink-70:     #47544F;
+    --ink-45:     #77837E;
+    --rule:       #DCE3DE;
+    --rule-soft:  #E8EDE9;
+    --accent:     #0E6B58;
+    --accent-bg:  #E4F0EB;
+    --amber:      #9A6412;
+    --amber-bg:   #F6EEDD;
+    --clay:       #97363A;
+    --clay-bg:    #F6E5E4;
+
+    --measure: 68ch;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #101614;
+      --surface:   #18201D;
+      --surface-2: #1F2825;
+      --ink:       #E7EDE9;
+      --ink-70:    #A9B5B0;
+      --ink-45:    #7C8883;
+      --rule:      #2C3733;
+      --rule-soft: #232D2A;
+      --accent:    #4FBB9E;
+      --accent-bg: #16302A;
+      --amber:     #D3A253;
+      --amber-bg:  #322817;
+      --clay:      #DC8B86;
+      --clay-bg:   #33201F;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #101614;
+    --surface:   #18201D;
+    --surface-2: #1F2825;
+    --ink:       #E7EDE9;
+    --ink-70:    #A9B5B0;
+    --ink-45:    #7C8883;
+    --rule:      #2C3733;
+    --rule-soft: #232D2A;
+    --accent:    #4FBB9E;
+    --accent-bg: #16302A;
+    --amber:     #D3A253;
+    --amber-bg:  #322817;
+    --clay:      #DC8B86;
+    --clay-bg:   #33201F;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 64px 0 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: clamp(38px, 6vw, 54px);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-70);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    padding-top: 6px;
+  }
+
+  /* ---- sections ---- */
+
+  section { padding-top: 56px; }
+
+  h2 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  p { max-width: var(--measure); margin: 0; }
+
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stack-tight { display: flex; flex-direction: column; gap: 10px; }
+
+  strong { font-weight: 600; }
+
+  /* ---- requirement cards ---- */
+
+  .req {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 26px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .req-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 14px;
+  }
+
+  .req-id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* Build state is real information, not decoration: it tells the developer
+     whether a requirement is a new build or a setting on something that
+     already ships. */
+  .state {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .state-new    { background: var(--clay-bg);   color: var(--clay); }
+  .state-extend { background: var(--amber-bg);  color: var(--amber); }
+  .state-config { background: var(--accent-bg); color: var(--accent); }
+
+  /* ---- tables ---- */
+
+  .scroll { overflow-x: auto; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 14.5px;
+    min-width: 460px;
+  }
+
+  th {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+    font-weight: 500;
+    padding: 0 16px 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  td {
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    color: var(--ink-70);
+  }
+
+  td:first-child { color: var(--ink); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---- flow ---- */
+
+  ol.flow {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  ol.flow li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    align-items: baseline;
+    max-width: var(--measure);
+  }
+
+  ol.flow li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  ul.plain {
+    margin: 0;
+    padding-left: 20px;
+    max-width: var(--measure);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  ul.plain li { padding-left: 3px; }
+  ul.plain::marker { color: var(--ink-45); }
+
+  /* ---- notes ---- */
+
+  .note {
+    border-left: 2px solid var(--accent);
+    padding: 2px 0 2px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .note-warn { border-left-color: var(--clay); }
+
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+  }
+
+  .note p { font-size: 15px; color: var(--ink-70); }
+  .note strong { color: var(--ink); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.88em;
+    background: var(--surface-2);
+    padding: 1.5px 5px;
+    border-radius: 2px;
+  }
+
+  /* ---- decisions ---- */
+
+  .decision {
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .decision-q {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.3;
+    max-width: var(--measure);
+    text-wrap: balance;
+  }
+
+  .rec {
+    font-size: 14.5px;
+    color: var(--ink-70);
+    max-width: var(--measure);
+  }
+  .rec b {
+    color: var(--accent);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-45);
+    max-width: var(--measure);
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">Requirements · HealthCloud</span>
+    <h1>Patient ID Format</h1>
+    <p class="standfirst">
+      Every hospital wants its own patient numbers — <code>DRVIV-0001</code>, and
+      up from there. Almost all of this is already built; what is missing is
+      being asked the question.
+    </p>
+    <div class="meta">
+      <span>From clinic demos, 3 Sep 2026</span>
+      <span>4 requirements</span>
+      <span>5 decisions outstanding</span>
+      <span>Mostly a screen, not a build</span>
+    </div>
+  </header>
+
+  <section class="stack">
+    <h2>Read this before scoping it</h2>
+    <p>
+      <strong>Every patient already has a unique per-clinic ID.</strong> It is
+      called the UHID, it appears on the record, on bills and in search, and it
+      cannot be changed after registration. The clinic table already carries the
+      format, and numbers are allocated by a database function that increments and
+      returns in one statement — so two receptionists registering at the same
+      moment can never be handed the same ID. <strong>That part is solved and
+      should not be touched.</strong>
+    </p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Stored today</th><th>Meaning</th><th>Default</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>uhid_prefix</code></td><td>The letters in front, up to 8 characters</td><td><code>P</code></td></tr>
+          <tr><td><code>uhid_padding</code></td><td>How many digits the number is padded to</td><td>6</td></tr>
+          <tr><td><code>uhid_counter</code></td><td>The last number issued</td><td>0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      The onboarding API even accepts a prefix already. What is missing is smaller
+      and more specific than “add a unique hospital ID”:
+    </p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Gap</th><th>Effect today</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>The onboarding <em>screen</em> never asks for a prefix</td><td>Every clinic silently gets the first three letters of its name</td></tr>
+          <tr><td>Digit width is settable nowhere — no API input, no screen</td><td>Every clinic gets 6 digits whether it wants them or not</td></tr>
+          <tr><td>Nothing previews the result</td><td>Whoever onboards cannot see what they chose</td></tr>
+          <tr><td>Nothing shows the format afterwards</td><td>The clinic cannot find out what its own format is</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note note-warn">
+      <span class="note-label">What that means concretely</span>
+      <p>
+        Dr Vivek's clinic onboarded today gets <code>DRV000001</code>, not
+        <code>DRVIV-0001</code>. Right mechanism, wrong prefix, wrong number of
+        digits — <strong>and nobody was asked.</strong>
+      </p>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Requirements</h2>
+
+    <article class="req">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-UID-01</span>
+          <h3>Choose the format when the clinic is onboarded</h3>
+        </div>
+        <span class="state state-extend">Extends existing</span>
+      </div>
+
+      <p>
+        Whoever onboards a clinic asks what the hospital wants its patient IDs to
+        look like, and sets it there and then.
+      </p>
+
+      <ul class="plain">
+        <li><strong>Prefix</strong> — the letters in front, including any separator the clinic wants. <code>DRVIV-</code> is a prefix; so is <code>SNC/</code>.</li>
+        <li><strong>Number width</strong> — how many digits, zero-padded. Four gives <code>0001</code>.</li>
+        <li><strong>A live preview</strong>, updating as they type: “Your first patient will be <code>DRVIV-0001</code>.” This is the whole point of the screen — somebody choosing a format they cannot see will choose wrong.</li>
+        <li>Sensible defaults, so an onboarding that skips this still works, as it does today.</li>
+      </ul>
+
+      <div class="note">
+        <span class="note-label">For the developer</span>
+        <p>
+          The API already takes the prefix; it needs the digit width alongside it,
+          and the onboarding screen needs both fields. The allocation function
+          already composes the two correctly and <strong>needs no change</strong>.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-UID-02</span>
+          <h3>The clinic can see its own format</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        The format appears in the clinic's own settings, so an administrator can
+        answer “what do our patient numbers look like?” without asking us. Shows the
+        prefix, the width, an example, and how many IDs have been issued.
+        <strong>Read-only for the clinic</strong> — changing it is the platform's
+        job, for the reason below.
+      </p>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-UID-03</span>
+          <h3>Changing the format after patients exist</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        A clinic will ask for this, usually a fortnight in, usually because they got
+        it wrong at onboarding.
+      </p>
+
+      <div class="note note-warn">
+        <span class="note-label">Not negotiable</span>
+        <p>
+          <strong>Existing patients keep the ID they were given.</strong> A UHID is
+          printed on cards, written on files, quoted on bills and stuck on X-ray
+          envelopes. Renumbering makes every one of those wrong, and the patient
+          holding the card becomes untraceable.
+        </p>
+      </div>
+
+      <ul class="plain">
+        <li>Applies to patients registered <strong>from that moment on</strong>, never retrospectively.</li>
+        <li>Leaves the clinic with <strong>two formats in circulation, permanently.</strong> That is correct, and must not be tidied away.</li>
+        <li><strong>Does not reset the counter.</strong> If 40 patients exist, the next is 41 in the new format. Restarting at 1 creates two patients whose numbers differ only by prefix — the one thing this ID exists to prevent.</li>
+        <li>Done by the platform, not the clinic, and recorded.</li>
+      </ul>
+
+      <p>
+        <strong>Say it on the screen</strong> when somebody changes it: “Patients
+        already registered keep their existing IDs. This applies to new
+        registrations only.”
+      </p>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-UID-04</span>
+          <h3>Where the ID has to appear</h3>
+        </div>
+        <span class="state state-config">Mostly done</span>
+      </div>
+
+      <p>
+        Already true in most places; listed so nothing is missed once the format
+        becomes something a clinic chose rather than something it was given.
+      </p>
+
+      <ul class="plain">
+        <li>The patient record and search results — searching by ID already works.</li>
+        <li>Every bill and receipt.</li>
+        <li>The prescription.</li>
+        <li>Diagnostic reports, including walk-in ones.</li>
+        <li>The patient's card, if the clinic prints one.</li>
+      </ul>
+    </article>
+  </section>
+
+  <section class="stack">
+    <h2>Decisions still needed</h2>
+
+    <div class="stack" style="gap:24px; margin-top:12px">
+      <div class="decision">
+        <div class="decision-q">1. A template like <code>DRVIV-{0000}</code>, or two fields?</div>
+        <p class="rec">
+          You described a template string. Two fields — prefix and digit width —
+          produce exactly the same result, and that is what the database already
+          stores.
+        </p>
+        <p class="rec">
+          <b>Recommendation</b>
+          Two fields with a live preview. A template <em>syntax</em> invites the
+          next question immediately — <code>{YYYY}</code> for the year,
+          <code>{DEPT}</code> for the department, a check digit — and each one is a
+          parser, a validator, and a new way for a clinic to lock itself into a
+          format that collides with itself. Two fields cannot express anything that
+          breaks. If you want the template box because it demos better, it can be a
+          box that accepts one placeholder — but that is a presentation choice, not
+          a capability.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">2. Eight characters — is that enough prefix?</div>
+        <p class="rec">
+          <code>DRVIV-</code> fits. <code>DRVIVEKCLINIC-</code> does not. Widening
+          it is a small migration, but it must be decided before clinics start
+          using it — narrowing it again later is not possible without touching
+          issued IDs.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">3. Can a clinic administrator change it themselves?</div>
+        <p class="rec">
+          <b>Recommendation</b>
+          No — platform only. It is a decision with permanent consequences that
+          looks like a harmless setting, and there is no undo. A clinic that wants
+          it changed should have to say so out loud to somebody.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">4. Does the number ever restart — per year, say?</div>
+        <p class="rec">
+          <b>Recommendation</b>
+          No. <code>DRVIV-2026-0001</code> and <code>DRVIV-2027-0001</code> are two
+          different patients whose IDs differ by a year nobody says out loud on the
+          phone. If a clinic asks for it, that is decision 1 all over again.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">5. Does a sequential number tell people too much?</div>
+        <p class="rec">
+          <code>DRVIV-0007</code> on a card says the clinic has seen seven patients.
+          Patients compare cards, and so do competitors. Most Indian clinics number
+          sequentially and nobody minds — but if it matters to any of your clinics,
+          decide before the first card is printed, because the fix is a different
+          numbering scheme entirely.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Honest summary</h2>
+    <div class="note">
+      <span class="note-label">Scope, plainly</span>
+      <p>
+        <strong>This is a screen, one database column exposed, and a preview.</strong>
+        The identifier, its uniqueness, its atomic allocation, its per-clinic
+        isolation and its appearance across the system are all built and working.
+        Do not rebuild any of it — in particular, do not replace the allocation
+        function. The whole requirement is: ask the question at onboarding, store
+        the answer, show what it will look like, and be honest on screen about what
+        changing it later does and does not do.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Full text, kept in the repository alongside the code, at
+    <code>docs/12-patient-id-format.md</code>. Companion requirements:
+    <code>docs/10-finance-persona-and-promotions.md</code> and
+    <code>docs/11-walk-in-diagnostics.md</code>. Project context for somebody
+    joining: <code>docs/03-resume-here.md</code>.
+  </footer>
+
+</div>

@@ -67,9 +67,11 @@ beforeEach(async () => {
 interface Slot {
   time: string;
   startAt: string;
+  endAt: string;
   capacity: number;
   booked: number;
   available: number;
+  past: boolean;
 }
 
 async function availability(
@@ -1344,5 +1346,145 @@ describe('whose queue you may read', () => {
       headers: { cookie: frontDesk.cookie },
     });
     expect(asFrontDesk.json<{ practitionerId: string | null }>().practitionerId).toBeNull();
+  });
+});
+
+/**
+ * A slot that has already happened cannot be booked.
+ *
+ * The bug: at two in the afternoon the front desk could still book a patient
+ * into the nine o'clock slot. Availability was derived purely from the weekly
+ * template minus what was booked and blocked — correct about the doctor's hours
+ * and with no notion of "now" anywhere in it. Booking asks availability what is
+ * bookable rather than re-deriving the rules, so both layers agreed that a
+ * finished slot was free.
+ *
+ * **The line sits at the slot's END, not its start**, decided 28 Sep 2026. At
+ * 14:03 the 14:00–14:15 slot is still bookable: a patient three minutes late is
+ * ordinary, and a front desk told to pick a later slot would be fighting the
+ * software over nothing.
+ *
+ * These tests use a date a week in the PAST rather than an early hour today,
+ * because the fixture doctor sits 09:00–12:00 every day from thirty days ago —
+ * so every slot on that date has passed whatever time the suite runs. A test
+ * that booked "09:00 today" would pass all afternoon and fail at dawn.
+ */
+describe('a slot that has already passed', () => {
+  /** Same weekday as today, one week ago — inside the schedule's validity. */
+  const PAST_DAY = clinicDate(-7);
+
+  async function pastSlots(): Promise<Slot[]> {
+    const day = await availability(frontDesk, fx.main.practitionerId, PAST_DAY);
+    expect(day.slots.length).toBeGreaterThan(0);
+    return day.slots;
+  }
+
+  it('is still listed, so the day does not reflow under the front desk', async () => {
+    // Dropping them would renumber the morning as it went on, and would hide
+    // the doctor's own record of the day from the person reading it.
+    expect((await pastSlots()).length).toBe(12);
+  });
+
+  it('is marked past and offers nothing', async () => {
+    for (const slot of await pastSlots()) {
+      expect(slot.past).toBe(true);
+      expect(slot.available).toBe(0);
+    }
+  });
+
+  it('says the clinic has finished rather than that every slot is taken', async () => {
+    const day = await availability(frontDesk, fx.main.practitionerId, PAST_DAY);
+
+    // "Every slot is taken" sends the front desk hunting for a cancellation
+    // that was never the problem.
+    expect(day.unavailableReason).toBe('The doctor’s clinic has already finished.');
+  });
+
+  it('is refused at booking, and not as a full slot', async () => {
+    const [first] = await pastSlots();
+
+    const res = await book(frontDesk, { startAt: first!.startAt });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('SLOT_IN_THE_PAST');
+  });
+
+  it('is refused when rescheduling into it', async () => {
+    // Reschedule routes through the same booking path, so this is the test
+    // that proves the rule went where both callers pass through it.
+    const booked = await book(frontDesk, { slotIndex: 2 });
+    expect(booked.statusCode).toBe(201);
+    const id = booked.json<{ id: string }>().id;
+
+    const [first] = await pastSlots();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/reschedule`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { startAt: first!.startAt, reason: 'Patient asked for the earlier slot' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('SLOT_IN_THE_PAST');
+  });
+
+  it('leaves a future day entirely bookable', async () => {
+    const day = await availability(frontDesk);
+
+    expect(day.slots.every((s) => s.past === false)).toBe(true);
+    expect(day.unavailableReason).toBeNull();
+  });
+
+  /**
+   * The boundary, and the reason this test builds its own schedule.
+   *
+   * A doctor sitting all day means there is a slot straddling "now" whatever
+   * the hour — which is what makes "bookable until it ends" assertable at all.
+   * The fixture's 09:00–12:00 would only produce one during those three hours,
+   * and a test that only proves its point between nine and noon proves nothing
+   * at half past four.
+   */
+  it('ends at the slot end, so the one running now is still bookable', async () => {
+    const { practitionerId } = await createDoctor(app, fx.main, {
+      email: 'allday@main.test',
+      fullName: 'Dr All Day',
+      linked: true,
+    });
+
+    const today = clinicDate(0);
+    const dayOfWeek = new Date(`${today}T00:00:00Z`).getUTCDay();
+
+    // Replace the 09:00–12:00 the helper gives every doctor: two overlapping
+    // schedules would emit the same slot twice and the assertion below would
+    // be reading a duplicate rather than the rule.
+    await ownerQuery(fx.main.id, 'DELETE FROM practitioner_schedule WHERE practitioner_id = $1', [
+      practitionerId,
+    ]);
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO practitioner_schedule
+         (tenant_id, practitioner_id, location_id, day_of_week, start_time, end_time,
+          slot_minutes, capacity_per_slot, visit_types, valid_from, updated_at)
+       VALUES ($1, $2, $3, $4, '00:00', '23:45', 15, 1, '{}',
+               current_date - interval '30 days', now())`,
+      [fx.main.id, practitionerId, fx.main.locationId, dayOfWeek],
+    );
+
+    const day = await availability(frontDesk, practitionerId!, today);
+    const now = Date.now();
+
+    // The invariant, checked against every slot in the day: `past` is exactly
+    // "this slot has finished", never "this slot has started".
+    for (const slot of day.slots) {
+      expect(slot.past).toBe(new Date(slot.endAt).getTime() <= now);
+    }
+
+    const running = day.slots.find(
+      (s) => new Date(s.startAt).getTime() <= now && now < new Date(s.endAt).getTime(),
+    );
+    expect(running).toBeDefined();
+    expect(running!.past).toBe(false);
+    expect(running!.available).toBeGreaterThan(0);
   });
 });

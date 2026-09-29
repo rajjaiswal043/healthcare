@@ -162,6 +162,13 @@ export class PrioritiseDto {
   note?: string;
 }
 
+/** The home-page day board. No practitioner: scope comes from who is asking. */
+export class DayBoardQueryDto {
+  @IsOptional()
+  @Matches(DATE_RE, { message: 'date must be YYYY-MM-DD' })
+  date?: string;
+}
+
 export class QueueQueryDto {
   @IsUUID()
   practitionerId!: string;

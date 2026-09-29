@@ -41,12 +41,19 @@ function makeRandom(seed) {
 const rand = makeRandom(20260807);
 const pick = (a) => a[Math.floor(rand() * a.length)];
 
+/** `[name, displayOrder, isDiagnostic]`. */
 const DEPARTMENTS = [
-  ['General Medicine', 1],
-  ['Paediatrics', 2],
-  ['Orthopaedics', 3],
-  ['Dermatology', 4],
-  ['ENT', 5],
+  ['General Medicine', 1, false],
+  ['Paediatrics', 2, false],
+  ['Orthopaedics', 3, false],
+  ['Dermatology', 4, false],
+  ['ENT', 5, false],
+  // Diagnostic departments, added 29 Sep 2026. Without them the home board's
+  // "At a department" tab is permanently empty and the walk-in test flow — a
+  // patient who comes in for an X-ray and never sees a doctor — cannot be
+  // demonstrated at all.
+  ['X-ray', 6, true],
+  ['Pathology', 7, true],
 ];
 
 /**
@@ -176,9 +183,38 @@ async function seedTenant(tenant, doctors) {
   // is destructive by design: this seeds a demo dataset, and a demo dataset you
   // cannot rebuild on demand is not much of a demo. Never point
   // MIGRATION_DATABASE_URL at anything holding real patient data.
+  // Diagnostics before billing, and both before appointments. A diagnostic
+  // order holds RESTRICT references in three directions at once — to the
+  // appointment it was raised on, to the invoice line that charged for it, and
+  // from any film or report filed against it — so it has to come out first or
+  // the teardown stops on whichever one it meets.
+  //
+  // Only the documents belonging to an order are cleared. A file attached to a
+  // patient directly is not part of the scheduling demo and is left alone.
+  await client.query(
+    `DELETE FROM clinical_document
+      WHERE tenant_id = $1 AND diagnostic_order_id IS NOT NULL`,
+    [tenant.id],
+  );
+  await client.query('DELETE FROM diagnostic_order WHERE tenant_id = $1', [tenant.id]);
+
   // Billing first: invoice.appointment_id is ON DELETE RESTRICT, and payment
   // references the invoice, so an appointment cannot be cleared while a bill
-  // points at it. Order matters — payments, lines, then invoices.
+  // points at it. Order matters — receipts, payments, lines, then invoices.
+  //
+  // `receipt` arrived with the printed receipt in Sep 2026 and holds a RESTRICT
+  // reference to `payment`, which broke this script silently until somebody ran
+  // it: every reseed failed on "violates RESTRICT setting of foreign key
+  // constraint receipt_payment_fkey". A receipt is a record of a document
+  // handed to a patient, so RESTRICT is right — the demo teardown simply has to
+  // clear it first, like everything else here — and `receipt_print` before it,
+  // which holds the same kind of reference to the receipt.
+  await client.query(
+    `DELETE FROM receipt_print WHERE receipt_id IN
+       (SELECT id FROM receipt WHERE tenant_id = $1)`,
+    [tenant.id],
+  );
+  await client.query('DELETE FROM receipt WHERE tenant_id = $1', [tenant.id]);
   await client.query(
     `DELETE FROM payment WHERE invoice_id IN (SELECT id FROM invoice WHERE tenant_id = $1)`,
     [tenant.id],
@@ -209,13 +245,15 @@ async function seedTenant(tenant, doctors) {
 
   // --- departments -------------------------------------------------------
   const deptIds = {};
-  for (const [name, order] of DEPARTMENTS) {
+  for (const [name, order, isDiagnostic] of DEPARTMENTS) {
     const { rows } = await client.query(
-      `INSERT INTO department (tenant_id, name, display_order, updated_at)
-       VALUES ($1,$2,$3, now())
-       ON CONFLICT (tenant_id, name) DO UPDATE SET display_order = EXCLUDED.display_order
+      `INSERT INTO department (tenant_id, name, display_order, is_diagnostic, updated_at)
+       VALUES ($1,$2,$3,$4, now())
+       ON CONFLICT (tenant_id, name) DO UPDATE
+         SET display_order = EXCLUDED.display_order,
+             is_diagnostic = EXCLUDED.is_diagnostic
        RETURNING id`,
-      [tenant.id, name, order],
+      [tenant.id, name, order, isDiagnostic],
     );
     deptIds[name] = rows[0].id;
   }
@@ -276,7 +314,7 @@ async function seedTenant(tenant, doctors) {
  * shows a plausible mid-morning clinic: some finished, one in the room, some
  * waiting with tokens, and some yet to arrive.
  */
-async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
+async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnosticDeptIds) {
   const today = clinicToday();
 
   // Tenant context FIRST. `patient` is under FORCE row-level security, so a read
@@ -308,10 +346,14 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
   const session = practitioner.sessions[0];
   const slot = session.slot;
 
-  // 4 finished, 1 with the doctor, 3 waiting, 4 still to arrive.
+  // 4 finished, 1 with the doctor, 2 out for tests, 3 waiting, 4 still to
+  // arrive. AWAITING_TESTS is the patient the doctor sent for an X-ray
+  // mid-consultation: same visit, same token, same bill — out of the room and
+  // out of the waiting list until they come back.
   const plan = [
     ...Array(4).fill('FULFILLED'),
     'IN_PROGRESS',
+    ...Array(2).fill('AWAITING_TESTS'),
     ...Array(3).fill('ARRIVED'),
     ...Array(4).fill('BOOKED'),
   ];
@@ -338,9 +380,9 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
          (tenant_id, patient_id, practitioner_id, location_id, department_id,
           start_at, end_at, status, visit_type, source, reason_for_visit,
           token_number, queue_date, checked_in_at, ready_at, called_at, completed_at,
-          updated_at)
+          sent_out_at, sent_out_reason, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::appointment_status,$9::visit_type,
-               $10::appointment_source,$11,$12,$13,$14,$15,$16,$17, now())
+               $10::appointment_source,$11,$12,$13,$14,$15,$16,$17,$18,$19, now())
        RETURNING id`,
         [
           tenant.id,
@@ -367,8 +409,19 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
           // ready_at is the queue position, and it is deliberately the same
           // instant as check-in: the waiting list is in arrival order.
           arrived ? new Date(startAt.getTime() - 10 * 60000) : null,
-          status === 'FULFILLED' || status === 'IN_PROGRESS' ? startAt : null,
+          // Out for tests means they were called in first, so they have a
+          // called_at like anyone the doctor has seen.
+          ['FULFILLED', 'IN_PROGRESS', 'AWAITING_TESTS'].includes(status) ? startAt : null,
           status === 'FULFILLED' ? endAt : null,
+          status === 'AWAITING_TESTS' ? new Date(startAt.getTime() + 5 * 60000) : null,
+          // `appointment_send_out_is_explained`: you cannot send a patient out
+          // of the room without saying what for. The flag that brings them back
+          // ahead of the queue is only reachable through a recorded send-out.
+          status === 'AWAITING_TESTS'
+            ? i % 2 === 0
+              ? 'X-ray — right knee'
+              : 'Blood test — CBC'
+            : null,
         ],
       ),
     );
@@ -423,6 +476,32 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
       [tenant.id, invoice.id, feePaise],
     );
 
+    /**
+     * The test the doctor asked for, for a patient sent out mid-visit.
+     *
+     * `legacy_unbilled` is true so the demo does not have to raise a second
+     * invoice per test: the flag means "raised before tests were billable" and
+     * is never blocked by the pay-first gate, which keeps the seeded worklist
+     * workable rather than a wall of unpaid tests nobody can clear.
+     */
+    if (status === 'AWAITING_TESTS' && frontDeskUserId) {
+      await client.query(
+        `INSERT INTO diagnostic_order
+           (tenant_id, appointment_id, patient_id, department_id, ordered_by_user_id,
+            description, status, referral_source, legacy_unbilled, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,'PENDING','INTERNAL',true,$7, now())`,
+        [
+          tenant.id,
+          appointmentId,
+          patients[i].id,
+          i % 2 === 0 ? diagnosticDeptIds.xray : diagnosticDeptIds.pathology,
+          frontDeskUserId,
+          i % 2 === 0 ? 'X-ray — right knee, AP and lateral' : 'Complete blood count',
+          new Date(startAt.getTime() + 5 * 60000),
+        ],
+      );
+    }
+
     if (arrived) {
       await client.query(
         `INSERT INTO payment
@@ -436,6 +515,57 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId) {
           feePaise,
           frontDeskUserId,
           startAt,
+        ],
+      );
+    }
+  }
+
+  /**
+   * Walk-in tests: patients who came in for an X-ray and will never see a
+   * doctor.
+   *
+   * These have NO appointment — `appointment_id` is null, which is the whole
+   * point of the walk-in diagnostics work. They exist only as diagnostic
+   * orders, so any screen built on the appointment table alone cannot see
+   * them, and the home board's "At a department" tab is where they show up.
+   *
+   * Taken from the far end of the patient list so they never collide with the
+   * twelve the queue above just used, and only for the first doctor seeded at
+   * each clinic — a walk-in belongs to the clinic, not to a doctor, so seeding
+   * them once per doctor would multiply them.
+   */
+  if (frontDeskUserId && practitioner.isFirst && patients.length >= 20) {
+    const walkIns = [
+      { offset: 1, status: 'PENDING', dept: 'xray', what: 'X-ray — chest, PA view' },
+      { offset: 2, status: 'PENDING', dept: 'pathology', what: 'Lipid profile, fasting' },
+      { offset: 3, status: 'COMPLETED', dept: 'xray', what: 'X-ray — left wrist' },
+    ];
+
+    for (const w of walkIns) {
+      const patient = patients[patients.length - w.offset];
+      const done = w.status === 'COMPLETED';
+
+      await client.query(
+        `INSERT INTO diagnostic_order
+           (tenant_id, appointment_id, patient_id, department_id, ordered_by_user_id,
+            description, status, referral_source, referrer_name, legacy_unbilled,
+            completed_at, completed_by_user_id, created_at, updated_at)
+         VALUES ($1, NULL, $2,$3,$4,$5,$6::diagnostic_order_status,$7,$8,true,
+                 $9::timestamptz,$10::uuid,$11, now())`,
+        [
+          tenant.id,
+          patient.id,
+          diagnosticDeptIds[w.dept],
+          frontDeskUserId,
+          w.what,
+          w.status,
+          // One of the three was sent by a doctor at another hospital, which is
+          // the case the referrer fields exist for.
+          w.offset === 2 ? 'EXTERNAL_DOCTOR' : 'SELF',
+          w.offset === 2 ? 'Dr S. Menon, Apollo' : null,
+          done ? new Date() : null,
+          done ? frontDeskUserId : null,
+          new Date(Date.now() - w.offset * 40 * 60000),
         ],
       );
     }
@@ -469,8 +599,14 @@ try {
     const { practitioners, locations, deptIds } = await seedTenant(tenant, doctors);
 
     let appts = 0;
-    for (const p of practitioners.slice(0, 2)) {
-      appts += await seedTodaysQueue(tenant, p, locations[0].id, deptIds[p.dept]);
+    for (const [index, p] of practitioners.slice(0, 2).entries()) {
+      // Walk-in tests belong to the clinic, not to a doctor, so they are seeded
+      // once — on the first doctor's pass — rather than once per doctor.
+      p.isFirst = index === 0;
+      appts += await seedTodaysQueue(tenant, p, locations[0].id, deptIds[p.dept], {
+        xray: deptIds['X-ray'],
+        pathology: deptIds['Pathology'],
+      });
     }
 
     console.log(
