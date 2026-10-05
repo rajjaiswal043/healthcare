@@ -93,3 +93,43 @@ overrides:
   #                 dev-only advisory that is fixed inside the 4.x line. Same
   #                 trap as nanoid above. The fix is 4.3.2; stay in 4.x.
   js-yaml: '^4.3.2'
+  #   fastify     — four advisories fixed in 5.12.2, among them an
+  #                 authentication bypass via a malformed URL and request/header
+  #                 validation bypasses. This one is the API's own HTTP server,
+  #                 not build tooling. @nestjs/platform-fastify 11.2.7 pins
+  #                 fastify EXACTLY at 5.11.3, so without this the tree held two
+  #                 copies: the patched one we depend on directly, and the
+  #                 vulnerable one Nest actually serves requests with. Caret, to
+  #                 stay inside 5.x. Remove once Nest's pin is >=5.12.2.
+  fastify: '^5.12.5'
+  #   brace-expansion — GHSA DoS via uncontrolled recursion (two advisories,
+  #                 Oct 2026). Dev-only: reached through minimatch under eslint,
+  #                 typescript-eslint and @swc/cli. Three major lines are in the
+  #                 tree and each has its own fixed version, so each is pinned
+  #                 inside its own major rather than with one open range — the
+  #                 trap nanoid and js-yaml fell into above.
+  brace-expansion@1: '^1.1.21'
+  brace-expansion@2: '^2.1.7'
+  brace-expansion@>=4: '^5.0.12'
+  #   piscina     — prototype-pollution gadget in ThreadPool options, fixed in
+  #                 4.9.4. Reached only through @swc/cli, the API's build tool.
+  piscina@4: '^4.9.4'
+  #   @xhmikosr/decompress — path traversal via symlink chain, fixed in 10.2.2.
+  #                 Reached through @swc/cli's binary downloader. Build tool only.
+  '@xhmikosr/decompress@10': '^10.2.2'
+  #   http-cache-semantics — max-stale cross-user disclosure, fixed in 4.2.1.
+  #                 Same @swc/cli downloader path. Build tool only.
+  http-cache-semantics: '^4.2.1'
+
+# Advisories accepted on purpose, each with its reason. `pnpm audit` honours
+# this list, so the pre-push gate stays green without hiding anything new.
+auditConfig:
+  ignoreGhsas:
+    #   braces — GHSA-vfj7-8cjw-p6xm, stack exhaustion on deeply nested brace
+    #            patterns. NO FIXED VERSION IS PUBLISHED: the advisory names
+    #            3.0.4 and npm's latest is 3.0.3 (checked 5 Oct 2026). Reached
+    #            only through tailwindcss's file watcher and glob matcher, at
+    #            build time, matching the content globs in tailwind.config.ts —
+    #            patterns we write, never user input. Remove this entry the day
+    #            3.0.4 ships, and add `braces: '^3.0.4'` above instead.
+    - GHSA-vfj7-8cjw-p6xm
