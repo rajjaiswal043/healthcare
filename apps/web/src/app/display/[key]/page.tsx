@@ -38,6 +38,11 @@ interface DisplayDoctor {
   next: Array<{ token: number | null; name: string }>;
   waiting: number;
   minutesSinceLastCall: number | null;
+  /** For somebody arriving now. Null when nobody is ahead. docs/10. */
+  estimatedWaitMinutes?: number | null;
+  /** Booked today and not here yet — waiting from home. A count, never names. */
+  atHome?: number;
+  onTheWay?: number;
 }
 
 interface DisplayBoard {
@@ -134,7 +139,7 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
      * the served token is the biggest thing in the room, and everything else is
      * deliberately quiet around it.
      */
-    <main className="min-h-screen bg-bg px-[3vw] py-[3vh]">
+    <main className="flex min-h-screen flex-col bg-bg px-[3vw] pt-[3vh]">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-[2vh]">
         <div className="flex items-center gap-[1.6vw]">
           {/* No white chip needed now: the logo's own background and the card
@@ -190,6 +195,20 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
           No clinics running right now.
         </p>
       )}
+
+      {/* A thank-you, in English and Hindi, at the foot of the screen a room
+          stares at all morning. The one line on this board that is not
+          information, and on purpose. */}
+      <footer className="sticky bottom-0 -mx-[3vw] mt-auto bg-amber px-[3vw] py-[2.2vh] text-center text-ink">
+        <p className="font-display text-[clamp(18px,1.8vw,32px)] font-bold">
+          Thank you for your patience
+          {homeCount(board.doctors) > 0 &&
+            ` · ${homeCount(board.doctors)} more ${homeCount(board.doctors) === 1 ? 'patient is' : 'patients are'} waiting from home`}
+        </p>
+        <p lang="hi" className="mt-[0.4vh] text-[clamp(15px,1.4vw,26px)] font-semibold">
+          आपके धैर्य के लिए धन्यवाद
+        </p>
+      </footer>
     </main>
   );
 }
@@ -202,13 +221,22 @@ function DoctorCard({ doctor: d }: { doctor: DisplayDoctor }) {
       {/* The doctor's name sits on the same soft header strip every panel in the
           console uses, so a patient and a receptionist are looking at one thing
           drawn one way. */}
-      <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-ink/8 bg-bg-soft px-[2vw] py-[1.6vh]">
-        <h2 className="font-display text-[clamp(18px,1.7vw,30px)] font-bold tracking-display">
-          {d.name}
-        </h2>
-        {d.specialty && (
-          <span className="text-[clamp(12px,1vw,17px)] text-ink-40">{d.specialty}</span>
-        )}
+      <header className="flex items-center gap-[1vw] border-b border-ink/8 bg-bg-soft px-[2vw] py-[1.6vh]">
+        {/* A face for the name. Initials until doctors can upload a photo
+            (docs/10 section 3) — patients relax when they can see who they are
+            waiting for, and a coloured disc with "AM" is a start. */}
+        <span
+          aria-hidden="true"
+          className="grid h-[clamp(40px,3.6vw,68px)] w-[clamp(40px,3.6vw,68px)] shrink-0 place-items-center rounded-full bg-clinical font-display text-[clamp(15px,1.4vw,26px)] font-bold text-white"
+        >
+          {doctorInitials(d.name)}
+        </span>
+        <div className="min-w-0">
+          <h2 className="truncate font-display text-[clamp(18px,1.7vw,30px)] font-bold tracking-display">
+            {d.name}
+          </h2>
+          {d.specialty && <p className="text-[clamp(12px,1vw,17px)] text-ink-40">{d.specialty}</p>}
+        </div>
       </header>
 
       <div className="px-[2vw] py-[2vh]">
@@ -272,7 +300,42 @@ function DoctorCard({ doctor: d }: { doctor: DisplayDoctor }) {
             </div>
           )}
         </div>
+
+        {(d.estimatedWaitMinutes != null || (d.atHome ?? 0) > 0) && (
+          <div className="mt-[2vh] flex flex-wrap gap-x-[2vw] gap-y-1 border-t border-ink/8 pt-[1.6vh] text-[clamp(13px,1.1vw,20px)]">
+            {d.estimatedWaitMinutes != null && (
+              <p>
+                <span className="text-ink-40">Wait if you arrive now: </span>
+                <strong className="font-semibold text-amber-text">
+                  about {d.estimatedWaitMinutes} min
+                </strong>
+              </p>
+            )}
+            {(d.atHome ?? 0) > 0 && (
+              <p className="text-ink-40">
+                {d.atHome} waiting from home
+                {(d.onTheWay ?? 0) > 0 ? `, ${d.onTheWay} on the way` : ''}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
+}
+
+/** "Dr Anjali Mehta" → "AM". The honorific is not part of anyone's face. */
+function doctorInitials(name: string): string {
+  const words = name
+    .replace(/^(dr|prof)\.?\s+/i, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const first = words[0]?.[0] ?? '';
+  const last = words.length > 1 ? (words.at(-1)?.[0] ?? '') : '';
+  return (first + last).toUpperCase() || '·';
+}
+
+function homeCount(doctors: DisplayDoctor[]): number {
+  return doctors.reduce((sum, d) => sum + (d.atHome ?? 0), 0);
 }

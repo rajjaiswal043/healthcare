@@ -35,11 +35,14 @@ const PUBLIC_PATHS = ['/login', '/welcome'];
  *   /display   a television in a waiting room. It holds a screen key, not a
  *              user session, and there is nobody there to sign in — redirecting
  *              it puts a login form on a wall in front of patients.
+ *   /p         a patient's own link from WhatsApp (docs/10). The key in the URL
+ *              is the credential; a login form here would be a clinic's staff
+ *              sign-in shown to a patient on their phone.
  *
  * Prefix-matched rather than listed exactly, so a second platform page does not
  * silently reintroduce this.
  */
-const OTHER_REALMS = ['/platform', '/display'];
+const OTHER_REALMS = ['/platform', '/display', '/p'];
 
 function governedByThisProvider(pathname: string): boolean {
   return !OTHER_REALMS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

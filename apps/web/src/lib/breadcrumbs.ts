@@ -35,6 +35,7 @@ export const BREADCRUMBS: Record<string, string> = {
   '/patients/[id]': 'Patient record',
   '/queue': "Today's queue",
   '/appointments/new': 'Book an appointment',
+  '/follow-ups': 'Follow-ups',
   '/consultations/[id]': 'Consultation',
   '/diagnostics': 'Tests to do',
   '/finance': 'Finance desk',

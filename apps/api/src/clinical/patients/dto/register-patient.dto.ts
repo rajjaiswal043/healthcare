@@ -142,6 +142,15 @@ export class RegisterPatientDto {
   consentMarketing?: boolean;
 
   /**
+   * WhatsApp and SMS about their own care: token, time to leave, check-ins,
+   * review reminders (docs/10). Its own purpose, separate from marketing,
+   * and optional — a patient who says no is treated exactly the same.
+   */
+  @IsOptional()
+  @IsBoolean()
+  consentCommunications?: boolean;
+
+  /**
    * Set when the front desk has reviewed the duplicate warnings and is
    * deliberately creating a new record anyway. Without it, a likely duplicate is
    * rejected rather than silently created (FR-P36-03).

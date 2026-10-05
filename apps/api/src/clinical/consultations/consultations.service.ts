@@ -8,6 +8,9 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
+import { EngagementService } from '../../engagement/engagement.service.js';
+import { scheduleRecoveryCheckins } from '../../engagement/recovery.js';
+import { instantToLocalDate } from '../../scheduling/clinic-time.js';
 import type {
   AddendumDto,
   DiagnosisInputDto,
@@ -91,6 +94,7 @@ export class ConsultationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly engagement: EngagementService,
   ) {}
 
   /**
@@ -106,6 +110,13 @@ export class ConsultationsService {
    * should be doing.
    */
   async open(tenantId: string, appointmentId: string, meta: RequestMeta) {
+    const view = await this.openIn(tenantId, appointmentId, meta);
+    // Opening calls the patient in, which moves everyone behind them up.
+    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
+    return view;
+  }
+
+  private async openIn(tenantId: string, appointmentId: string, meta: RequestMeta) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const appointment = await tx.appointment.findUnique({
         where: { id: appointmentId },
@@ -233,6 +244,7 @@ export class ConsultationsService {
         ...defined('advice', input.advice),
         ...defined('prescriptionNote', input.prescriptionNote),
         ...defined('followUpNote', input.followUpNote),
+        ...defined('checkInIntervalDays', input.checkInIntervalDays),
         ...(input.followUpDate === undefined
           ? {}
           : { followUpDate: input.followUpDate === '' ? null : new Date(input.followUpDate) }),
@@ -426,7 +438,7 @@ export class ConsultationsService {
       throw new BadRequestException('A signature needs an author.');
     }
 
-    return this.prisma.forTenant(tenantId, async (tx) => {
+    const signed = await this.prisma.forTenant(tenantId, async (tx) => {
       const draft = await this.loadDraft(tx, id, {
         as: 'treating-doctor',
         userId: meta.actorUserId,
@@ -445,9 +457,28 @@ export class ConsultationsService {
         });
       }
 
-      await tx.encounter.update({
+      const signedRow = await tx.encounter.update({
         where: { id },
         data: { status: 'SIGNED', signedAt: new Date(), signedByUserId },
+        select: { startedAt: true, followUpDate: true, checkInIntervalDays: true },
+      });
+
+      /**
+       * The recovery schedule, in the same transaction as the signature: a
+       * signed note and its check-ins exist together or not at all. Nothing is
+       * SENT here — the timer sends each one on its day (docs/10).
+       */
+      const { timezone } = await tx.tenant.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: { timezone: true },
+      });
+      await scheduleRecoveryCheckins(tx, {
+        tenantId,
+        encounterId: id,
+        patientId: draft.patientId,
+        visitDate: instantToLocalDate(signedRow.startedAt, timezone),
+        reviewDate: signedRow.followUpDate?.toISOString().slice(0, 10) ?? null,
+        intervalDays: signedRow.checkInIntervalDays,
       });
 
       const appointment = await tx.appointment.findUnique({
@@ -486,6 +517,10 @@ export class ConsultationsService {
 
       return this.view(tx, id);
     });
+
+    // Signing ends the visit and frees the room.
+    await this.engagement.afterQueueMoved(tenantId, signed.practitioner.id);
+    return signed;
   }
 
   /** A correction to a signed note. Appended, never merged into the original. */
@@ -816,6 +851,7 @@ export class ConsultationsService {
       prescriptionNote: e.prescriptionNote,
       followUpDate: e.followUpDate,
       followUpNote: e.followUpNote,
+      checkInIntervalDays: e.checkInIntervalDays,
       patient: e.patient,
       practitioner: e.practitioner,
       appointment: e.appointment,

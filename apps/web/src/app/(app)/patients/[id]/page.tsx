@@ -11,6 +11,7 @@ import {
   type PatientDetail,
 } from '@/lib/api';
 import { PatientCorrectionDialog } from '@/components/patient-correction-dialog';
+import { PatientMessagesPanel } from '@/components/patient-messages-panel';
 import { useAuth } from '@/components/auth-provider';
 import { formatAge, genderInitial } from '@/lib/format';
 import {
@@ -252,6 +253,8 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
               Current position per purpose, under the DPDP Act. Earlier decisions are retained.
             </p>
           </section>
+
+          <PatientMessagesPanel patientId={patient.id} onConsentChanged={() => void load()} />
         </div>
 
         <div className="space-y-5">

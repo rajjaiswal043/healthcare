@@ -27,6 +27,7 @@ type Form = {
   emergencyContactMobile: string;
   consentCareDelivery: boolean;
   consentMarketing: boolean;
+  consentCommunications: boolean;
 };
 
 const EMPTY: Form = {
@@ -47,6 +48,7 @@ const EMPTY: Form = {
   emergencyContactMobile: '',
   consentCareDelivery: false,
   consentMarketing: false,
+  consentCommunications: false,
 };
 
 const BLOOD_GROUPS = [
@@ -112,6 +114,7 @@ export default function RegisterPatientPage() {
       mobile: form.mobile,
       consentCareDelivery: form.consentCareDelivery,
       consentMarketing: form.consentMarketing,
+      consentCommunications: form.consentCommunications,
       ...(confirmedNotDuplicate ? { confirmedNotDuplicate: true } : {}),
       ...(form.ageMode === 'age' && form.ageYears ? { ageYears: Number(form.ageYears) } : {}),
       ...(form.ageMode === 'dob' && form.birthDate ? { birthDate: form.birthDate } : {}),
@@ -384,6 +387,15 @@ export default function RegisterPatientPage() {
               required
               title="Care delivery"
               body="Process personal and health data for treatment and medical records."
+            />
+            {/* docs/10. Its own purpose: messages about THIS patient's own care,
+                which is not marketing and must not be bundled with it. */}
+            <Consent
+              id="consentCommunications"
+              checked={form.consentCommunications}
+              onChange={(v) => set('consentCommunications', v)}
+              title="WhatsApp about their visits"
+              body="Their token and live place in line, a message when it is time to leave, recovery check-ins and review reminders. Optional."
             />
             <Consent
               id="consentMarketing"

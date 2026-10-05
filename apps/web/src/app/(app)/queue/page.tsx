@@ -335,7 +335,7 @@ export default function QueuePage() {
               </div>
             ) : (
               <p className="mt-2 text-[14px] text-ink-60">
-                Nobody is with the doctor. Call the next token when they are ready.
+                The room is free. Call the next token when the doctor is ready.
               </p>
             )}
           </section>
@@ -344,7 +344,7 @@ export default function QueuePage() {
             <Panel
               title="Waiting"
               count={queue.waiting.length}
-              empty="Nobody is waiting."
+              empty="Nobody is waiting. A quiet moment."
               icon={<IconClock size={16} />}
             >
               {queue.waiting.map((a, i) => (
@@ -456,7 +456,7 @@ export default function QueuePage() {
             <Panel
               title="Yet to arrive"
               count={queue.yetToArrive.length}
-              empty="Everyone booked has arrived."
+              empty="Everyone booked is here. Nobody left to wait for."
               icon={<IconUsers size={16} />}
             >
               {queue.yetToArrive.map((a) => (
@@ -661,6 +661,23 @@ function Row({
           {a.priority && (
             <span className="badge-amber" title={priorityLabel(a.priority)}>
               seen next
+            </span>
+          )}
+          {/* Said from their own phone (docs/10). Only while they are still
+              out: once checked in, the desk can see them. */}
+          {a.status === 'BOOKED' && a.arrivalIntent === 'ON_THE_WAY' && (
+            <span className="badge-green" title="The patient said so from their WhatsApp link">
+              on the way
+            </span>
+          )}
+          {a.status === 'BOOKED' && a.arrivalIntent === 'RUNNING_LATE' && (
+            <span className="badge-amber" title="The patient said so from their WhatsApp link">
+              running late
+            </span>
+          )}
+          {a.status === 'BOOKED' && !a.arrivalIntent && a.leaveNowSentAt && (
+            <span className="badge-neutral" title="The time-to-leave message has gone">
+              told to leave
             </span>
           )}
         </p>

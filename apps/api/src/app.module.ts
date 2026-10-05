@@ -16,6 +16,7 @@ import { DiagnosticsModule } from './clinical/diagnostics/diagnostics.module.js'
 import { ConsultationsModule } from './clinical/consultations/consultations.module.js';
 import { SchedulingModule } from './scheduling/scheduling.module.js';
 import { BillingModule } from './billing/billing.module.js';
+import { EngagementModule } from './engagement/engagement.module.js';
 import { loadEnv } from './config/env.js';
 
 const env = loadEnv();
@@ -64,6 +65,7 @@ const env = loadEnv();
     ConsultationsModule,
     SchedulingModule,
     BillingModule,
+    EngagementModule,
   ],
   controllers: [HealthController],
   providers: [

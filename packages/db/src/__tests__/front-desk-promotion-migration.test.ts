@@ -28,8 +28,17 @@ const EDITED = '01930000-0000-7000-8000-0000000002b1';
 
 const fromCode = (key: string) => SYSTEM_ROLES.find((r) => r.key === key)!.permissions;
 
+/**
+ * Permissions the front desk gained AFTER this migration, from migrations of
+ * their own. Removed here so "as shipped before this change" still means what
+ * it meant on 22 Sep 2026: 20260929090000 added the follow-up board.
+ */
+const ADDED_LATER = ['followup:read', 'followup:manage'];
+
 /** The front desk as it shipped BEFORE this change — what the migration looks for. */
-const OLD_FRONT_DESK = fromCode('front_desk').filter((p) => p !== 'promotion:apply');
+const OLD_FRONT_DESK = fromCode('front_desk').filter(
+  (p) => p !== 'promotion:apply' && !ADDED_LATER.includes(p),
+);
 
 let owner: pg.Client;
 

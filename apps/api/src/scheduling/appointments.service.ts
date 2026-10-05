@@ -10,6 +10,8 @@ import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
 import { PERMISSIONS } from '../platform/auth/permissions.js';
 import { BillingService } from '../billing/billing.service.js';
+import { EngagementService } from '../engagement/engagement.service.js';
+import { SERVING_ORDER } from '../engagement/queue-day.js';
 import { AvailabilityService } from './availability.service.js';
 import {
   clinicToday,
@@ -46,6 +48,11 @@ export interface AppointmentView {
   checkedInAt: Date | null;
   calledAt: Date | null;
   completedAt: Date | null;
+  /** What the patient said from their phone — "on my way", "running late". */
+  arrivalIntent: string | null;
+  arrivalIntentAt: Date | null;
+  /** Set once the "time to leave" message has gone. */
+  leaveNowSentAt: Date | null;
   patient: {
     id: string;
     uhid: string;
@@ -93,6 +100,7 @@ export class AppointmentsService {
     private readonly audit: AuditService,
     private readonly availability: AvailabilityService,
     private readonly billing: BillingService,
+    private readonly engagement: EngagementService,
   ) {}
 
   /** The clinic's IANA timezone — every wall-clock conversion depends on it. */
@@ -112,7 +120,13 @@ export class AppointmentsService {
    * and two receptionists taking the last 10:15 slot would both pass the check.
    */
   async book(tenantId: string, input: BookInput, meta: RequestMeta): Promise<AppointmentView> {
-    return this.prisma.forTenant(tenantId, (tx) => this.bookIn(tx, tenantId, input, meta));
+    const view = await this.prisma.forTenant(tenantId, (tx) =>
+      this.bookIn(tx, tenantId, input, meta),
+    );
+    // After the commit, and unable to fail the booking: a patient without a
+    // WhatsApp message still has a token on a slip (docs/10, NFR-01).
+    await this.engagement.afterVisitBooked(tenantId, view.id);
+    return view;
   }
 
   /**
@@ -246,6 +260,23 @@ export class AppointmentsService {
    * doctor's worklist stays one query rather than a union of two record types.
    */
   async walkIn(
+    tenantId: string,
+    input: {
+      patientId: string;
+      practitionerId: string;
+      locationId: string;
+      departmentId?: string;
+      reasonForVisit?: string;
+      visitType?: string;
+    },
+    meta: RequestMeta,
+  ): Promise<AppointmentView> {
+    const view = await this.walkInIn(tenantId, input, meta);
+    await this.engagement.afterVisitBooked(tenantId, view.id);
+    return view;
+  }
+
+  private async walkInIn(
     tenantId: string,
     input: {
       patientId: string;
@@ -434,7 +465,16 @@ export class AppointmentsService {
 
   /** Doctor calls the next patient in. */
   async call(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    return this.transition(tenantId, id, 'ARRIVED', 'IN_PROGRESS', { calledAt: new Date() }, meta);
+    const view = await this.transition(
+      tenantId,
+      id,
+      'ARRIVED',
+      'IN_PROGRESS',
+      { calledAt: new Date() },
+      meta,
+    );
+    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
+    return view;
   }
 
   /**
@@ -667,7 +707,7 @@ export class AppointmentsService {
 
   /** Visit finished. */
   async complete(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    return this.transition(
+    const view = await this.transition(
       tenantId,
       id,
       'IN_PROGRESS',
@@ -675,6 +715,8 @@ export class AppointmentsService {
       { completedAt: new Date() },
       meta,
     );
+    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
+    return view;
   }
 
   async cancel(
@@ -683,7 +725,11 @@ export class AppointmentsService {
     reason: string,
     meta: RequestMeta,
   ): Promise<AppointmentView> {
-    return this.prisma.forTenant(tenantId, (tx) => this.cancelIn(tx, tenantId, id, reason, meta));
+    const view = await this.prisma.forTenant(tenantId, (tx) =>
+      this.cancelIn(tx, tenantId, id, reason, meta),
+    );
+    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
+    return view;
   }
 
   private async cancelIn(
@@ -730,7 +776,16 @@ export class AppointmentsService {
 
   /** Did not turn up (FR-APT-09). */
   async markNoShow(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    return this.transition(tenantId, id, 'BOOKED', 'NO_SHOW', { noShowAt: new Date() }, meta);
+    const view = await this.transition(
+      tenantId,
+      id,
+      'BOOKED',
+      'NO_SHOW',
+      { noShowAt: new Date() },
+      meta,
+    );
+    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
+    return view;
   }
 
   /**
@@ -758,7 +813,7 @@ export class AppointmentsService {
      * (FOR SHARE, inside `bookIn`). Switching a doctor off takes only the
      * doctor's row, so no lock here waits on anything that waits on it.
      */
-    return this.prisma.forTenant(tenantId, async (tx) => {
+    const view = await this.prisma.forTenant(tenantId, async (tx) => {
       await tx.$queryRaw`SELECT id FROM appointment WHERE id = ${id}::uuid FOR UPDATE`;
       const existing = await tx.appointment.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException('Appointment not found');
@@ -787,6 +842,11 @@ export class AppointmentsService {
         meta,
       );
     });
+
+    // A new visit, so a new token and a new link. The old link now shows the
+    // visit as cancelled, which is true.
+    await this.engagement.afterVisitBooked(tenantId, view.id);
+    return view;
   }
 
   /**
@@ -896,11 +956,10 @@ export class AppointmentsService {
         // Serving order, in the database rather than in application code: this
         // is the rule the display board will read too, and two implementations
         // of it would disagree the first time one of them changed.
-        orderBy: [
-          { prioritySetAt: { sort: 'asc', nulls: 'last' } },
-          { readyAt: { sort: 'asc', nulls: 'last' } },
-          { tokenNumber: 'asc' },
-        ],
+        //
+        // Defined once, in SERVING_ORDER, because a patient's live link reads
+        // the same order (engagement/queue-day.ts) and must never disagree.
+        orderBy: SERVING_ORDER.map((o) => ({ ...o })) as never,
       });
 
       const views = rows.map((r) => toView(r, tz));
@@ -1071,6 +1130,9 @@ function toView(
     checkedInAt: Date | null;
     calledAt: Date | null;
     completedAt: Date | null;
+    arrivalIntent?: string | null;
+    arrivalIntentAt?: Date | null;
+    leaveNowSentAt?: Date | null;
     patientId: string;
     patient: AppointmentView['patient'];
     practitioner: AppointmentView['practitioner'];
@@ -1100,6 +1162,9 @@ function toView(
     checkedInAt: a.checkedInAt,
     calledAt: a.calledAt,
     completedAt: a.completedAt,
+    arrivalIntent: a.arrivalIntent ?? null,
+    arrivalIntentAt: a.arrivalIntentAt ?? null,
+    leaveNowSentAt: a.leaveNowSentAt ?? null,
     patient: a.patient,
     practitioner: a.practitioner,
   };

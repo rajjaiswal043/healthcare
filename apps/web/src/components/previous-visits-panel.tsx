@@ -22,10 +22,23 @@ import { IconAlert, IconClock } from '@/components/icons';
  * orthopaedic follow-up the answer is usually "the same again", which needs the
  * strength and the frequency to be visible.
  */
-export function PreviousVisitsPanel({ encounterId }: { encounterId: string }) {
+export function PreviousVisitsPanel({
+  encounterId,
+  onCarryForward,
+}: {
+  encounterId: string;
+  /**
+   * FR-P36-24: "the same again" in one click. Given only while the note is a
+   * draft the caller may write; the caller merges and saves, so the doctor
+   * still edits the result before signing.
+   */
+  onCarryForward?: ((prescriptions: PreviousVisit['prescriptions']) => Promise<void>) | undefined;
+}) {
   const [visits, setVisits] = useState<PreviousVisit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [carried, setCarried] = useState<string | null>(null);
+  const [carrying, setCarrying] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -121,7 +134,33 @@ export function PreviousVisitsPanel({ encounterId }: { encounterId: string }) {
                   {/* The reason this panel exists. */}
                   {v.prescriptions.length > 0 && (
                     <div>
-                      <p className="mono-label mb-1">Medicines</p>
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <p className="mono-label">Medicines</p>
+                        {onCarryForward && (
+                          <button
+                            type="button"
+                            className="text-[12.5px] font-semibold text-clinical-text underline underline-offset-2 disabled:opacity-50"
+                            disabled={carrying || carried === v.id}
+                            onClick={() =>
+                              void (async () => {
+                                setCarrying(true);
+                                try {
+                                  await onCarryForward(v.prescriptions);
+                                  setCarried(v.id);
+                                } finally {
+                                  setCarrying(false);
+                                }
+                              })()
+                            }
+                          >
+                            {carried === v.id
+                              ? 'Added to today’s prescription'
+                              : carrying
+                                ? 'Adding…'
+                                : 'Repeat these medicines'}
+                          </button>
+                        )}
+                      </div>
                       <ul className="space-y-0.5">
                         {v.prescriptions.map((p, i) => (
                           <li key={i}>

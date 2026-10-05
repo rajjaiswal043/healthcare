@@ -14,7 +14,23 @@ import {
 import { PrescriptionPrint } from '@/components/prescription-print';
 import { DiagnosticOrdersPanel } from '@/components/diagnostic-orders-panel';
 import { PreviousVisitsPanel } from '@/components/previous-visits-panel';
-import { IconAlert, IconArrowLeft, IconCheckCircle, IconClock, IconLock } from '@/components/icons';
+import { RecoveryPanel } from '@/components/recovery-panel';
+import {
+  IconAlert,
+  IconArrowLeft,
+  IconChat,
+  IconCheckCircle,
+  IconClock,
+  IconLock,
+} from '@/components/icons';
+
+/** How often to ask the patient how they are, until the review. docs/10. */
+const CHECKIN_OPTIONS = [
+  { value: '', label: 'No check-ins' },
+  { value: '2', label: 'Every 2 days' },
+  { value: '3', label: 'Every 3 days' },
+  { value: '7', label: 'Once a week' },
+];
 
 /** Narrative fields, saved on blur rather than on every keystroke. */
 /**
@@ -58,6 +74,8 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
   const [sendingOut, setSendingOut] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [narrative, setNarrative] = useState<Record<string, string>>({});
+  const [sendingToPatient, setSendingToPatient] = useState(false);
+  const [sentNotice, setSentNotice] = useState<string | null>(null);
 
   const mayWrite = can('consultation:write');
 
@@ -137,6 +155,92 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
       );
     } finally {
       setSendingOut(false);
+    }
+  }
+
+  /**
+   * "The same again", merged into whatever is already on today's list.
+   * A drug already there (same name and strength) is not added twice.
+   */
+  async function carryForward(
+    previous: Array<{
+      drugName: string;
+      strength: string | null;
+      form: string | null;
+      dose: string;
+      frequency: string;
+      durationDays: number | null;
+    }>,
+  ) {
+    if (!encounter) return;
+    const key = (p: { drugName: string; strength: string | null }) =>
+      `${p.drugName.trim().toLowerCase()}|${(p.strength ?? '').trim().toLowerCase()}`;
+    const present = new Set(encounter.prescriptions.map(key));
+
+    const today = encounter.prescriptions.map((p) => ({
+      ...(p.formularyItemId ? { formularyItemId: p.formularyItemId } : {}),
+      drugName: p.drugName,
+      ...(p.strength ? { strength: p.strength } : {}),
+      ...(p.form ? { form: p.form } : {}),
+      dose: p.dose,
+      frequency: p.frequency,
+      route: p.route,
+      ...(p.durationDays ? { durationDays: p.durationDays } : {}),
+      ...(p.quantity ? { quantity: p.quantity } : {}),
+      ...(p.instructions ? { instructions: p.instructions } : {}),
+    }));
+    const repeated = previous
+      .filter((p) => !present.has(key(p)))
+      .map((p) => ({
+        drugName: p.drugName,
+        ...(p.strength ? { strength: p.strength } : {}),
+        ...(p.form ? { form: p.form } : {}),
+        dose: p.dose,
+        frequency: p.frequency,
+        ...(p.durationDays ? { durationDays: p.durationDays } : {}),
+      }));
+
+    try {
+      applyEncounter(await api.setPrescriptions(encounter.id, [...today, ...repeated]));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not add the medicines.');
+      throw err;
+    }
+  }
+
+  async function saveCheckinInterval(value: string) {
+    if (!encounter || !editable) return;
+    try {
+      applyEncounter(
+        await api.updateEncounter(encounter.id, {
+          checkInIntervalDays: value === '' ? null : Number(value),
+        }),
+      );
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not save.');
+    }
+  }
+
+  async function sendToPatient() {
+    if (!encounter) return;
+    setSendingToPatient(true);
+    setError(null);
+    try {
+      const { status } = await api.sendToPatient(encounter.id);
+      const first = encounter.patient.name.trim().split(' ')[0];
+      setSentNotice(
+        status === 'SENT'
+          ? `Sent to ${first} on WhatsApp.`
+          : status === 'SKIPPED_NO_CONSENT'
+            ? 'Not sent: this patient has not agreed to WhatsApp messages. The front desk can record their consent on their record.'
+            : 'The message could not be sent. Print the prescription instead.',
+      );
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not send.');
+    } finally {
+      setSendingToPatient(false);
     }
   }
 
@@ -234,6 +338,17 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 Print prescription
               </button>
             )}
+            {signed && mayWrite && (
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={sendingToPatient}
+                onClick={() => void sendToPatient()}
+              >
+                <IconChat size={16} />
+                {sendingToPatient ? 'Sending…' : 'Send to patient on WhatsApp'}
+              </button>
+            )}
             {/* Sending for an X-ray pauses the visit rather than ending it. The
                 note stays a draft, the bill stays as it is, and the patient
                 keeps their token — signing here would close a consultation the
@@ -323,6 +438,15 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
+        {sentNotice && (
+          <div
+            role="status"
+            className="rounded-panel border border-clinical/25 bg-clinical-tint p-3 text-[13px]"
+          >
+            {sentNotice}
+          </div>
+        )}
+
         {signed && (
           <div className="flex items-start gap-2 rounded-panel border border-green/30 bg-green-soft/40 p-3 text-[13px]">
             <span className="mt-0.5 shrink-0 text-green-text">
@@ -340,7 +464,18 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
             {/* Above the vitals, because "what did I give her last time" is the
                 first question of a follow-up and the answer should not be
                 below the fold. Renders nothing on a first visit. */}
-            <PreviousVisitsPanel encounterId={encounter.id} />
+            {/* How they did since last time, in their own check-ins — the first
+                question of a follow-up, answered before they sit down. */}
+            <RecoveryPanel encounterId={encounter.id} />
+
+            <PreviousVisitsPanel
+              encounterId={encounter.id}
+              onCarryForward={
+                encounter.status === 'IN_PROGRESS' && can('prescription:write')
+                  ? carryForward
+                  : undefined
+              }
+            />
 
             <VitalsPanel
               encounter={encounter}
@@ -378,14 +513,38 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   Follow-up
                 </label>
                 {editable ? (
-                  <input
-                    id="followUpDate"
-                    type="date"
-                    className="field-input mt-1.5 block max-w-[200px] text-[13.5px]"
-                    value={narrative.followUpDate ?? ''}
-                    onChange={(e) => setNarrative({ ...narrative, followUpDate: e.target.value })}
-                    onBlur={(e) => void saveField('followUpDate', e.target.value)}
-                  />
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <input
+                      id="followUpDate"
+                      type="date"
+                      className="field-input block max-w-[200px] text-[13.5px]"
+                      value={narrative.followUpDate ?? ''}
+                      onChange={(e) => setNarrative({ ...narrative, followUpDate: e.target.value })}
+                      onBlur={(e) => void saveField('followUpDate', e.target.value)}
+                    />
+                    {/* Check-ins run until the review, so they need one. */}
+                    <select
+                      id="checkInIntervalDays"
+                      aria-label="WhatsApp check-ins until the review"
+                      className="field-input block max-w-[200px] text-[13.5px]"
+                      disabled={!narrative.followUpDate}
+                      value={
+                        encounter.checkInIntervalDays ? String(encounter.checkInIntervalDays) : ''
+                      }
+                      onChange={(e) => void saveCheckinInterval(e.target.value)}
+                    >
+                      {CHECKIN_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="field-hint w-full">
+                      {narrative.followUpDate
+                        ? 'Check-ins ask the patient on WhatsApp about their pain and exercises until the review. Rising pain is flagged to the clinic.'
+                        : 'Set a review date to turn on WhatsApp check-ins.'}
+                    </p>
+                  </div>
                 ) : (
                   <p className="mt-1 text-[13.5px]">
                     {encounter.followUpDate ? (

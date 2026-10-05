@@ -806,6 +806,18 @@ export class PatientsService {
         noticeVersion: NOTICE_VERSION,
       },
     });
+
+    // Recorded either way, for the same reason as marketing. Nothing is ever
+    // sent to a patient without a yes here (EngagementService.deliver).
+    await tx.consentRecord.create({
+      data: {
+        tenantId,
+        patientId,
+        purpose: 'COMMUNICATIONS',
+        granted: dto.consentCommunications ?? false,
+        noticeVersion: NOTICE_VERSION,
+      },
+    });
   }
 }
 

@@ -186,7 +186,7 @@ miswrites one and the two cancel out.
 | Per-clinic logo                  | One default for everyone at `apps/web/public/branding/`. Upload waits on S3.   |
 | Assigning a custom role          | Made at Settings → Roles, given out at Settings → Staff. Two screens, one job. |
 | Password reset                   | No flow at all.                                                                |
-| Reminders (FR-APT-06)            | Blocked on a WhatsApp BSP and DLT registration — a customer onboarding task.   |
+| Reminders (FR-APT-06)            | Built against a console channel (docs/10). A real BSP + DLT is still needed.   |
 | Patient self-booking (FR-APT-04) | Needs the patient portal, which does not exist.                                |
 | `audit_event` partitioning       | Plain table with a BRIN index. Fine until production volume.                   |
 | Rate limiting                    | Per-account lockout only. No IP throttle.                                      |

@@ -131,6 +131,16 @@ export const PERMISSIONS = {
 
   REPORT_REVENUE: 'report:revenue',
 
+  /**
+   * The follow-up board — docs/10.
+   *
+   * Two, because reading who is due and SENDING a patient a message are
+   * different acts. The owner watches the return rate; the front desk and the
+   * doctor are the ones who nudge a patient or call back about rising pain.
+   */
+  FOLLOWUP_READ: 'followup:read',
+  FOLLOWUP_MANAGE: 'followup:manage',
+
   AUDIT_READ: 'audit:read',
 
   USER_MANAGE: 'user:manage',
@@ -198,6 +208,9 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       // Fields "are my X-ray results back yet". Reads; never attaches.
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_READ,
+      // Works the follow-up board: reminds the overdue, calls back rising pain.
+      PERMISSIONS.FOLLOWUP_READ,
+      PERMISSIONS.FOLLOWUP_MANAGE,
     ],
     requiresMfa: false,
   },
@@ -223,6 +236,9 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_ORDER,
       PERMISSIONS.DIAGNOSTIC_READ,
+      // Their own patients' recovery, and the callback when pain is rising.
+      PERMISSIONS.FOLLOWUP_READ,
+      PERMISSIONS.FOLLOWUP_MANAGE,
     ],
     requiresMfa: false,
   },
@@ -240,6 +256,7 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.VITALS_WRITE,
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_READ,
+      PERMISSIONS.FOLLOWUP_READ,
     ],
     requiresMfa: false,
   },
@@ -353,6 +370,8 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.REPORT_REVENUE,
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_READ,
+      // The return rate is the owner's number. Watching it, not working it.
+      PERMISSIONS.FOLLOWUP_READ,
     ],
     requiresMfa: true,
   },

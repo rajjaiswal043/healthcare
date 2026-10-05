@@ -191,6 +191,11 @@ async function seedTenant(tenant, doctors) {
   // appointment — so clearing appointments without clearing these fails with a
   // foreign-key error halfway through, leaving one tenant seeded and the other
   // not.
+  // The patient journey (docs/10) hangs off appointments and encounters too,
+  // with RESTRICT keys for the same reason. seed:journey writes it back.
+  await client.query('DELETE FROM recovery_checkin WHERE tenant_id = $1', [tenant.id]);
+  await client.query('DELETE FROM outbound_message WHERE tenant_id = $1', [tenant.id]);
+  await client.query('DELETE FROM patient_link WHERE tenant_id = $1', [tenant.id]);
   await client.query(
     `DELETE FROM encounter_addendum WHERE encounter_id IN
        (SELECT id FROM encounter WHERE tenant_id = $1)`,

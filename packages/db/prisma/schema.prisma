@@ -355,6 +355,9 @@ model Patient {
   diagnosticOrders DiagnosticOrder[]
   corrections  PatientCorrection[]
   invoices     Invoice[]
+  links            PatientLink[]
+  messages         OutboundMessage[]
+  recoveryCheckins RecoveryCheckin[]
 
   @@unique([tenantId, uhid])
   @@index([tenantId, mobile])
@@ -958,6 +961,16 @@ model Appointment {
   /// is wiring rather than a migration against live appointment data.
   reminderSentAt DateTime? @map("reminder_sent_at") @db.Timestamptz(6)
 
+  // --- waiting from home (docs/10) ------------------------------------------
+  /// What the patient said from their own phone. Null means they have not said.
+  /// Shown to the front desk and counted on the waiting-room screen; it moves
+  /// nobody in the queue — position is still `readyAt`.
+  arrivalIntent   ArrivalIntent? @map("arrival_intent")
+  arrivalIntentAt DateTime?      @map("arrival_intent_at") @db.Timestamptz(6)
+  /// Set once the "time to leave" message has gone. Once per visit: a patient
+  /// told twice to leave stops believing either message.
+  leaveNowSentAt  DateTime?      @map("leave_now_sent_at") @db.Timestamptz(6)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -991,6 +1004,8 @@ model Appointment {
   @@index([tenantId, practitionerId, queueDate, status])
   @@index([tenantId, practitionerId, queueDate, prioritySetAt, readyAt], map: "appointment_queue_order_idx")
   diagnosticOrders DiagnosticOrder[]
+  links            PatientLink[]
+  messages         OutboundMessage[]
 
   @@map("appointment")
 }
@@ -1047,6 +1062,10 @@ model Encounter {
 
   followUpDate DateTime? @map("follow_up_date") @db.Date
   followUpNote String?   @map("follow_up_note") @db.VarChar(300)
+  /// How often to ask the patient how they are, until `followUpDate`. Null is
+  /// off. Scheduled into `recovery_checkin` at signing, so the rows exist only
+  /// for a note that is final. CHECK 1–30. See docs/10.
+  checkInIntervalDays Int? @map("check_in_interval_days")
 
   startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
 
@@ -1067,6 +1086,9 @@ model Encounter {
   diagnoses     Diagnosis[]
   prescriptions Prescription[]
   addenda       EncounterAddendum[]
+  links            PatientLink[]
+  messages         OutboundMessage[]
+  recoveryCheckins RecoveryCheckin[]
 
   @@index([tenantId, patientId, startedAt])
   @@index([tenantId, practitionerId, startedAt])
@@ -2051,4 +2073,166 @@ model ReceiptPrint {
 
   @@index([tenantId, receiptId, printedAt], map: "receipt_print_receipt_idx")
   @@map("receipt_print")
+}
+
+// =============================================================================
+// PATIENT JOURNEY — waiting from home, recovery check-ins, follow-ups
+//
+// See docs/10-patient-journey-plan.md. One rule governs everything below:
+// nothing reaches a patient without COMMUNICATIONS consent, and every attempt
+// — sent, failed or skipped for want of consent — leaves a row.
+// =============================================================================
+
+enum ArrivalIntent {
+  ON_THE_WAY
+  RUNNING_LATE
+
+  @@map("arrival_intent")
+}
+
+enum PatientLinkPurpose {
+  /// Today's visit: live token, place in line, "on my way".
+  VISIT
+  /// After a signed visit: check-ins until the review.
+  RECOVERY
+
+  @@map("patient_link_purpose")
+}
+
+enum MessageKind {
+  TOKEN_ISSUED
+  LEAVE_NOW
+  CHECKIN_REQUEST
+  REVIEW_REMINDER
+  PRESCRIPTION
+
+  @@map("message_kind")
+}
+
+enum MessageStatus {
+  SENT
+  FAILED
+  /// Not sent: the patient has not given COMMUNICATIONS consent. Recorded so
+  /// "why did they hear nothing" has an answer that is not a guess.
+  SKIPPED_NO_CONSENT
+
+  @@map("message_status")
+}
+
+/// A link a patient opens without signing in. Transport, not a FHIR resource.
+///
+/// Built like a waiting-room screen key: `<tenantId>.<256 random bits>`, only
+/// the SHA-256 stored. The tenant in the key is what lets the API set tenant
+/// context before it reads this table, which is under FORCE RLS like the rest.
+///
+/// What it grants is narrow by construction and decided in one place,
+/// `PatientLinkService`: a first name, a token, a doctor, a wait. Never a UHID,
+/// a mobile number or a diagnosis.
+model PatientLink {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  patientId String             @map("patient_id") @db.Uuid
+  purpose   PatientLinkPurpose
+
+  /// Set for VISIT, null for RECOVERY. CHECK patient_link_target.
+  appointmentId String? @map("appointment_id") @db.Uuid
+  /// Set for RECOVERY, null for VISIT.
+  encounterId   String? @map("encounter_id") @db.Uuid
+
+  keyHash String @unique @map("key_hash") @db.VarChar(64)
+
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  encounter   Encounter?   @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, patientId, createdAt])
+  @@map("patient_link")
+}
+
+/// Every message the clinic sent, tried to send, or chose not to send.
+///
+/// Append-only: SELECT and INSERT are granted, nothing else. The body is kept
+/// WITHOUT the patient link in it. The link's plaintext is a credential, and
+/// this table is read by the front desk.
+model OutboundMessage {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  patientId     String  @map("patient_id") @db.Uuid
+  appointmentId String? @map("appointment_id") @db.Uuid
+  encounterId   String? @map("encounter_id") @db.Uuid
+
+  kind    MessageKind
+  /// "whatsapp" today. A string rather than an enum: which channels exist is
+  /// configuration, and SMS arrives with DLT registration.
+  channel String        @default("whatsapp") @db.VarChar(16)
+  status  MessageStatus
+
+  toMobile    String  @map("to_mobile") @db.VarChar(10)
+  body        String  @db.Text
+  providerRef String? @map("provider_ref") @db.VarChar(120)
+  error       String? @db.VarChar(300)
+
+  /// Null when the system sent it on its own: a token, a scheduled check-in.
+  createdByUserId String? @map("created_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  encounter   Encounter?   @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, patientId, createdAt])
+  @@index([tenantId, encounterId, kind])
+  @@map("outbound_message")
+}
+
+/// One "how are you today?" between visits. FHIR: QuestionnaireResponse.
+///
+/// Rows are created when the note is SIGNED, one per interval up to the review
+/// date, so the schedule is a fact rather than a calculation that changes when
+/// somebody edits the interval. Answering fills the row; it is never deleted.
+model RecoveryCheckin {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  encounterId String @map("encounter_id") @db.Uuid
+  patientId   String @map("patient_id") @db.Uuid
+
+  /// Clinic-local date it is due to go out.
+  dueOn  DateTime  @map("due_on") @db.Date
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(6)
+
+  /// Set together with `painScore`. CHECK recovery_checkin_answer_complete.
+  answeredAt    DateTime? @map("answered_at") @db.Timestamptz(6)
+  /// 0 = no pain, 10 = worst. CHECK 0–10.
+  painScore     Int?      @map("pain_score") @db.SmallInt
+  exercisesDone Boolean?  @map("exercises_done")
+  /// In the patient's own words, shown to the doctor as written.
+  note          String?   @db.VarChar(300)
+
+  /// Rising or severe pain. Somebody at the clinic calls; the software advises
+  /// nothing. Cleared by a person, with their name on it.
+  flaggedAt           DateTime? @map("flagged_at") @db.Timestamptz(6)
+  flagReason          String?   @map("flag_reason") @db.VarChar(120)
+  flagClearedAt       DateTime? @map("flag_cleared_at") @db.Timestamptz(6)
+  flagClearedByUserId String?   @map("flag_cleared_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, encounterId, dueOn])
+  @@index([tenantId, patientId, dueOn])
+  @@index([tenantId, dueOn, sentAt])
+  @@map("recovery_checkin")
 }

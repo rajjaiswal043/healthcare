@@ -9,11 +9,18 @@ import { logoUrlFor } from '@/lib/api';
  * a clinic that has not uploaded one still gets.
  *
  * To swap the default image, replace the file at
- * `apps/web/public/branding/clinic-logo.jpeg`. See the README beside it.
+ * `apps/web/public/branding/clinic-logo.svg`. See the README beside it.
  */
 
-/** The only reference to the bundled file. Change it here to swap the image. */
-const DEFAULT_LOGO = '/branding/clinic-logo.jpeg';
+/**
+ * The only reference to the bundled file. Change it here to swap the image.
+ *
+ * An SVG since 29 Sep 2026 (docs/10): a flat two-colour mark that prints
+ * cleanly on a monochrome laser and needs no white chip on the screen. The
+ * glossy shield JPEG it replaced was stock clip art, and carried a caduceus —
+ * the staff of Hermes, god of commerce, not the Rod of Asclepius.
+ */
+const DEFAULT_LOGO = '/branding/clinic-logo.svg';
 
 export interface LogoSource {
   slug: string;

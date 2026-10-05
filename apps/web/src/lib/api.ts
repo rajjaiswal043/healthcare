@@ -408,6 +408,8 @@ export interface RegisterPatientInput {
   emergencyContactMobile?: string;
   consentCareDelivery: boolean;
   consentMarketing?: boolean;
+  /** WhatsApp about their own care — docs/10. */
+  consentCommunications?: boolean;
   confirmedNotDuplicate?: boolean;
 }
 
@@ -716,6 +718,11 @@ export interface Appointment {
   checkedInAt: string | null;
   calledAt: string | null;
   completedAt: string | null;
+  /** What the patient said from their phone. Informational: it moves nobody. */
+  arrivalIntent: 'ON_THE_WAY' | 'RUNNING_LATE' | null;
+  arrivalIntentAt: string | null;
+  /** When the "time to leave" message went, if it has. */
+  leaveNowSentAt: string | null;
   patient: {
     id: string;
     uhid: string;
@@ -828,6 +835,8 @@ export interface Encounter {
   prescriptionNote: string | null;
   followUpDate: string | null;
   followUpNote: string | null;
+  /** Ask how they are every N days until the review. Null is off. docs/10. */
+  checkInIntervalDays: number | null;
   patient: {
     id: string;
     uhid: string;
@@ -1134,6 +1143,93 @@ export interface OutstandingInvoice {
   issuedAt: string;
   reason: string | null;
   patient: { id: string; name: string; uhid: string; mobile: string };
+}
+
+export type MessageStatus = 'SENT' | 'FAILED' | 'SKIPPED_NO_CONSENT';
+
+export interface PatientMessage {
+  id: string;
+  kind: 'TOKEN_ISSUED' | 'LEAVE_NOW' | 'CHECKIN_REQUEST' | 'REVIEW_REMINDER' | 'PRESCRIPTION';
+  channel: string;
+  status: MessageStatus;
+  /** As sent, with "[patient link]" where the link was. The link is never stored. */
+  body: string;
+  createdAt: string;
+  appointmentId: string | null;
+  encounterId: string | null;
+}
+
+export interface RecoveryCheckin {
+  id: string;
+  dueOn: string;
+  sent: boolean;
+  answeredAt: string | null;
+  painScore: number | null;
+  exercisesDone: boolean | null;
+  note: string | null;
+  flagReason: string | null;
+  flagOpen: boolean;
+}
+
+export interface Recovery {
+  sinceEncounterId: string;
+  since: string;
+  reviewDate: string | null;
+  intervalDays: number | null;
+  checkins: RecoveryCheckin[];
+  summary: {
+    answered: number;
+    missed: number;
+    firstPain: number | null;
+    lastPain: number | null;
+    exercisesDone: number;
+    exercisesAnswered: number;
+  };
+}
+
+export type FollowUpStatus = 'FLAGGED' | 'OVERDUE' | 'DUE' | 'BOOKED' | 'CAME_BACK';
+
+export interface FollowUpRow {
+  encounterId: string;
+  status: FollowUpStatus;
+  reviewDate: string | null;
+  daysOverdue: number | null;
+  visitDate: string;
+  patient: { id: string; name: string; uhid: string; mobile: string };
+  practitioner: { id: string; fullName: string };
+  cameBackAt: string | null;
+  valuePaise: number;
+  bookedFor: string | null;
+  checkins: {
+    intervalDays: number | null;
+    answered: number;
+    missed: number;
+    firstPain: number | null;
+    lastPain: number | null;
+    lastAnsweredAt: string | null;
+    exercisesDone: number;
+    exercisesAnswered: number;
+  };
+  flag: { checkinId: string; reason: string | null; at: string | null } | null;
+  lastRemindedAt: string | null;
+}
+
+export interface FollowUpBoard {
+  today: string;
+  weekStart: string;
+  weekEnd: string;
+  scopedToPractitionerId: string | null;
+  stats: {
+    dueThisWeek: number;
+    cameBack: number;
+    booked: number;
+    overdue: number;
+    flagged: number;
+    valueKeptPaise: number;
+    waitedFromHome: { opened: number; total: number };
+  };
+  trend: Array<{ weekStart: string; due: number; cameBack: number; rate: number | null }>;
+  rows: FollowUpRow[];
 }
 
 export const api = {
@@ -1557,6 +1653,7 @@ export const api = {
       prescriptionNote?: string;
       followUpDate?: string;
       followUpNote?: string;
+      checkInIntervalDays?: number | null;
     },
   ) => request<Encounter>(`/encounters/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
 
@@ -1611,6 +1708,40 @@ export const api = {
     }),
 
   signEncounter: (id: string) => request<Encounter>(`/encounters/${id}/sign`, { method: 'POST' }),
+
+  // --- the patient's journey (docs/10) --------------------------------------
+
+  /** The signed prescription to the patient's WhatsApp, with the check-in link. */
+  sendToPatient: (encounterId: string) =>
+    request<{ status: MessageStatus }>(`/encounters/${encounterId}/send-to-patient`, {
+      method: 'POST',
+    }),
+
+  /** Check-ins since the previous visit. Null on a first visit or with none. */
+  recovery: (encounterId: string) =>
+    request<{ recovery: Recovery | null }>(`/encounters/${encounterId}/recovery`),
+
+  followUps: (week?: string) => request<FollowUpBoard>(`/follow-ups${week ? `?week=${week}` : ''}`),
+  remindReview: (encounterId: string) =>
+    request<{ status: MessageStatus }>(`/follow-ups/${encounterId}/remind`, { method: 'POST' }),
+  remindAllOverdue: () =>
+    request<{ sent: number; skipped: number }>('/follow-ups/remind-overdue', { method: 'POST' }),
+  dispatchCheckins: () =>
+    request<{ sent: number }>('/follow-ups/dispatch-checkins', { method: 'POST' }),
+  clearFlag: (checkinId: string) =>
+    request<{ id: string; cleared: boolean }>(`/follow-ups/checkins/${checkinId}/clear-flag`, {
+      method: 'POST',
+    }),
+
+  setCommunicationsConsent: (patientId: string, granted: boolean) =>
+    request<{ patientId: string; communications: boolean }>(
+      `/patients/${patientId}/communications-consent`,
+      { method: 'PUT', body: JSON.stringify({ granted }) },
+    ),
+  patientMessages: (patientId: string) =>
+    request<{ messages: PatientMessage[]; communicationsConsent: boolean }>(
+      `/patients/${patientId}/messages`,
+    ),
 
   addAddendum: (id: string, text: string) =>
     request<Encounter>(`/encounters/${id}/addenda`, {

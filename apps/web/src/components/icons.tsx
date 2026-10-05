@@ -235,3 +235,18 @@ export const IconArrowLeft = (p: IconProps) => (
     <path d="M15 5l-7 7 7 7" />
   </Svg>
 );
+
+/** Recovery — a heartbeat line. The follow-up board and the recovery panel. */
+export const IconPulse = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 12h4l2-5 4 10 2-5h6" />
+  </Svg>
+);
+
+/** A message to the patient's phone. */
+export const IconChat = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+    <path d="M8.5 11h.01M12 11h.01M15.5 11h.01" />
+  </Svg>
+);

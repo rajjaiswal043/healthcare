@@ -2,11 +2,21 @@
 
 ## The default logo
 
-    apps/web/public/branding/clinic-logo.jpeg     ← live, 156 × 148, colour
+    apps/web/public/branding/clinic-logo.svg      ← live, vector, two flat colours
+    apps/web/public/branding/clinic-logo.jpeg     ← the previous default, kept for reference
+
+**Changed 29 Sep 2026** (docs/10). The old default was a glossy blue shield with
+a winged caduceus: stock clip art, in a blue the app uses nowhere else, and the
+wrong symbol — the caduceus is the staff of Hermes, god of commerce. The new one
+is a sun rising behind a rounded cross in the product's teal and amber. It is an
+SVG we wrote by hand with no script in it, so the objection below to clinic
+SVGs does not apply; it prints cleanly on a monochrome laser and needs no white
+chip on the waiting-room screen. Most of the JPEG notes below now describe the
+old file.
 
 Overwrite that file and every clinic picks it up on the next page load. Nothing
 to rebuild, nothing to re-seed, no database change — it is served straight from
-`/branding/clinic-logo.jpeg`.
+`/branding/clinic-logo.svg`.
 
 Changing the FORMAT means one edit: the constant at the top of
 `apps/web/src/components/clinic-logo.tsx`. There is exactly one reference to the

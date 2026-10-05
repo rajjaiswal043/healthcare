@@ -5,6 +5,7 @@ import { AppointmentsService, type RequestMeta } from './appointments.service.js
 import { generateDisplayKey, hashDisplayKey, tenantIdFromDisplayKey } from './display-key.js';
 import { logoVersionOf } from '../platform/branding/logo-version.js';
 import { publicPatientName } from './public-name.js';
+import { minutesPerPatient } from '../engagement/queue-estimate.js';
 
 /**
  * The waiting-room screen.
@@ -219,6 +220,19 @@ export class DisplayService {
 
       const lastCalledAt = queue.nowServing?.calledAt ?? null;
 
+      // For a patient arriving now: everybody waiting, plus whoever is in the
+      // room, at today's pace. Labelled "about" on the screen, because it is.
+      const pace = minutesPerPatient(
+        [...queue.completed, ...(queue.nowServing ? [queue.nowServing] : [])].map((v) => ({
+          id: v.id,
+          status: v.status,
+          startAt: v.startAt,
+          calledAt: v.calledAt,
+          completedAt: v.completedAt,
+        })),
+      );
+      const ahead = queue.waiting.length + (queue.nowServing ? 1 : 0);
+
       doctors.push({
         // The name as the clinic typed it. `prefix` was folded into
         // full_name on 26 Aug 2026 and is no longer read — composing it here
@@ -245,6 +259,14 @@ export class DisplayService {
           name: publicPatientName(a.patient.name),
         })),
         waiting: queue.waiting.length,
+        /** Minutes a patient arriving now can expect to wait. Null when nobody is ahead. */
+        estimatedWaitMinutes: ahead > 0 ? ahead * pace : null,
+        /**
+         * Booked today and not yet here — waiting from home. A count, never a
+         * list: who is at home is nobody else's business.
+         */
+        atHome: queue.yetToArrive.length,
+        onTheWay: queue.yetToArrive.filter((a) => a.arrivalIntent === 'ON_THE_WAY').length,
         /**
          * Minutes since the last patient was called in, or null if none has
          * been. The screen decides what counts as late — deriving it here means

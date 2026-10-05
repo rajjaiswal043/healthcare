@@ -93,6 +93,14 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((v) => /^(1|true|yes)$/i.test(v ?? '')),
+
+  /**
+   * How often the API sends due recovery check-ins and late "time to leave"
+   * messages — docs/10. `0` turns the timer off; the integration suite does, so
+   * no test races it. Every pass is idempotent, so a short interval costs
+   * queries, never duplicate messages.
+   */
+  ENGAGEMENT_SWEEP_SECONDS: z.coerce.number().int().min(0).default(120),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

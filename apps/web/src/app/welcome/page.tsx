@@ -5,7 +5,13 @@ import { Newsreader } from 'next/font/google';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ConsoleMark } from '@/components/console-mark';
-import { HANDMADE_CSS, HandArrow, HandNote, Underlined } from '@/components/handmade';
+import { HANDMADE_CSS, HandArrow, HandNote } from '@/components/handmade';
+import {
+  readTextSize,
+  saveTextSize,
+  TextSizeToggle,
+  type TextSize,
+} from '@/components/text-size-toggle';
 import { ScrollScene, SectionRail } from '@/components/scroll-scene';
 import LoginPage from '../login/page';
 import {
@@ -68,7 +74,8 @@ const CSS = `
    instead of jumping. Only present while this page is mounted, so the console
    is unaffected; the global reduced-motion rule turns it back into a jump. */
 html{scroll-behavior:smooth}
-.wl-serif,.wl-head .text-clinical{font-family:var(--font-serif),Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.015em}
+[data-text="large"] main{zoom:1.12}
+.wl-serif{font-family:var(--font-serif),Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.015em}
 @keyframes wl-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .wl-rise{animation:wl-rise .9s cubic-bezier(.2,.7,.2,1) both}
 @keyframes wl-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
@@ -205,6 +212,15 @@ export default function WelcomePage() {
 
   const [look, setLook] = useState<Look>('light');
 
+  /** Standard or larger text, for this page and the sign-in form alike. */
+  const [textSize, setTextSize] = useState<TextSize>('standard');
+  useEffect(() => setTextSize(readTextSize()), []);
+
+  function chooseTextSize(next: TextSize) {
+    setTextSize(next);
+    saveTextSize(next);
+  }
+
   useEffect(() => {
     let saved: string | null = null;
     try {
@@ -262,6 +278,7 @@ export default function WelcomePage() {
   return (
     <div
       data-look={look}
+      data-text={textSize}
       className={`${serif.variable} relative isolate min-h-screen overflow-x-clip`}
     >
       <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS + NIGHT_CSS }} />
@@ -310,6 +327,9 @@ export default function WelcomePage() {
           </nav>
 
           <div className="flex items-center gap-1.5">
+            <span className="hidden sm:inline-flex">
+              <TextSizeToggle size={textSize} onChange={chooseTextSize} />
+            </span>
             <NightToggle look={look} onToggle={toggleLook} />
             <Link
               href={primary.href}
@@ -374,7 +394,7 @@ export default function WelcomePage() {
               <span className="rounded-pill bg-clinical px-2 py-0.5 text-[11px] font-bold text-white">
                 New
               </span>
-              Token screens for the waiting room
+              Wait from home, recover with a WhatsApp check-in
               <span className="text-ink-20 transition-transform group-hover:translate-x-0.5">
                 <ArrowRight size={12} />
               </span>
@@ -391,17 +411,20 @@ export default function WelcomePage() {
 
                   Heavy sans for the statement, a real italic serif for the
                   part that matters. */}
-              The whole OPD,{' '}
-              <Underlined className="wl-serif pr-[0.06em] text-clinical">on one screen.</Underlined>
+              {/* The promise, not the feature list (docs/10). Most clinic
+                  software stops at the prescription; this is what happens
+                  either side of it. */}
+              Patients wait at home, and come back on time.
             </h1>
 
             <p
               className="wl-rise mt-6 max-w-[560px] text-[clamp(16px,1.6vw,18.5px)] leading-relaxed text-ink-60"
               style={{ animationDelay: '160ms' }}
             >
-              Registration, the token queue, prescriptions and the day&rsquo;s collections. Made for
-              the front desk at eleven in the morning, with fourteen people waiting and the phone
-              ringing.
+              A live token on WhatsApp, so the waiting room holds a few people instead of thirty.
+              Recovery check-ins between visits, so the doctor sees how the knee has been before the
+              patient sits down. And a list of every review that is due, so they actually come back.
+              Registration, prescriptions and billing are already here.
             </p>
 
             <div
@@ -463,10 +486,22 @@ export default function WelcomePage() {
               style={{ animationDelay: '380ms' }}
             >
               {[
-                { t: 'Register', b: 'UHID issued the moment the form is saved.' },
-                { t: 'Queue', b: 'Gets a token and a doctor. The waiting-room TV updates.' },
-                { t: 'Consult', b: 'Vitals, notes and Rx on one panel, printed on the way out.' },
-                { t: 'Bill', b: 'Consultation and tests on one receipt. Record complete.' },
+                {
+                  t: 'Wait from home',
+                  b: 'Token and live place in line on WhatsApp. A message when it is time to leave.',
+                },
+                {
+                  t: 'Consult',
+                  b: 'Pain since the last visit, last medicines and X-ray on one panel.',
+                },
+                {
+                  t: 'Recover',
+                  b: 'A 20-second check-in every few days. Rising pain goes to a person.',
+                },
+                {
+                  t: 'Come back',
+                  b: 'Every review due, who came back, and a one-tap nudge for the rest.',
+                },
               ].map((s, i) => (
                 <li key={s.t} className="flex gap-4">
                   <span className="wl-serif text-[44px] leading-[0.8] text-ink-20">
@@ -507,12 +542,7 @@ export default function WelcomePage() {
             <Reveal>
               <SectionHead
                 eyebrow="Features"
-                title={
-                  <>
-                    Built for the <span className="text-clinical">fortieth</span> patient of the
-                    day.
-                  </>
-                }
+                title={<>Built for the fortieth patient of the day.</>}
                 body="The first patient is easy. By the fortieth the queue is long, the doctor is running late and someone wants a receipt reprinted. Every screen here was drawn with that hour in mind."
               />
             </Reveal>
@@ -529,12 +559,7 @@ export default function WelcomePage() {
             <Reveal>
               <SectionHead
                 eyebrow="Roles"
-                title={
-                  <>
-                    Five people share the desk PC.{' '}
-                    <span className="text-clinical">Each gets their own screen.</span>
-                  </>
-                }
+                title={<>Five people share the desk PC. Each gets their own screen.</>}
                 body="Front desk, doctor, nurse, owner and admin sign in at the same place and land on what their job needs. Each role has its own colour, so anyone walking past can see whose session is open."
               />
             </Reveal>
@@ -548,11 +573,7 @@ export default function WelcomePage() {
             <Reveal>
               <SectionHead
                 eyebrow="How it works"
-                title={
-                  <>
-                    Anil Verma, <span className="text-clinical">9:02 to 9:36.</span>
-                  </>
-                }
+                title={<>Anil Verma, 9:02 to 9:36.</>}
                 body="One patient, from the counter to the receipt. His details were typed in once, at registration, and went with him through the visit."
               />
             </Reveal>
@@ -570,11 +591,7 @@ export default function WelcomePage() {
               <SectionHead
                 align="left"
                 eyebrow="Security"
-                title={
-                  <>
-                    Your patients stay <span className="text-clinical">in your clinic.</span>
-                  </>
-                }
+                title={<>Your patients stay in your clinic.</>}
                 body={
                   'Clinics on the same system can’t see each other’s records. The database itself enforces that, on every row.' +
                   (BUSINESS.dataRegion ? ` Patient data is stored in ${BUSINESS.dataRegion}.` : '')
@@ -651,11 +668,7 @@ export default function WelcomePage() {
               <SectionHead
                 align="left"
                 eyebrow="FAQ"
-                title={
-                  <>
-                    What clinic owners <span className="text-clinical">ask first.</span>
-                  </>
-                }
+                title={<>What clinic owners ask first.</>}
                 body="Staff with a sign-in question will find the answers on the sign-in page itself, under “Trouble signing in?”."
               />
             </Reveal>
@@ -694,7 +707,7 @@ export default function WelcomePage() {
               />
               <p className="text-[14px] font-semibold text-white/60">I work at a clinic</p>
               <h2 className="mt-3 text-[clamp(30px,4.4vw,52px)] font-extrabold leading-[1.02] tracking-[-0.035em] text-white">
-                Today&rsquo;s queue is <span className="wl-serif text-[#7fe0d2]">waiting.</span>
+                Today&rsquo;s queue is waiting.
               </h2>
               <p className="mt-4 max-w-md text-[16px] leading-relaxed text-white/70">
                 Sign in with your clinic account. New to the team? Your clinic administrator will
@@ -717,7 +730,7 @@ export default function WelcomePage() {
             <div className="flex flex-col rounded-[32px] border border-ink/10 bg-white/70 px-7 py-12 backdrop-blur-xl sm:px-10 lg:py-16">
               <p className="text-[14px] font-semibold text-ink-40">I run a clinic</p>
               <h2 className="wl-head mt-3 text-[clamp(28px,3.6vw,44px)] font-extrabold leading-[1.04] tracking-[-0.035em]">
-                See it with <span className="text-clinical">your own clinic</span> in mind.
+                See it with your own clinic in mind.
               </h2>
               <p className="mt-4 max-w-sm text-[16px] leading-relaxed text-ink-60">
                 A 20-minute call that walks through a morning at your front desk: registration, the
@@ -1026,7 +1039,7 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
         {sent ? (
           <div className="pr-8">
             <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
-              Your email should be <span className="wl-serif text-clinical">ready to send.</span>
+              Your email should be ready to send.
             </h2>
             <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
               We opened your email app with the request written out. If nothing opened, send the
@@ -1045,7 +1058,7 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
           <form onSubmit={submit} className="grid gap-4">
             <div className="pr-8">
               <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
-                Book a <span className="wl-serif text-clinical">demo.</span>
+                Book a demo.
               </h2>
               <p className="mt-2 text-[14.5px] text-ink-60">
                 Twenty minutes, at a time that suits your OPD. We&rsquo;ll call you to fix it.
@@ -1600,28 +1613,24 @@ function PaperTrail() {
       was: 'the token roll',
       now: 'A live queue, and token numbers on the waiting-room TV.',
       href: '#display',
-      tilt: -1.2,
     },
     {
       sketch: <SketchRegister />,
       was: 'the big register',
       now: 'Find any patient by name, mobile, UHID or ABHA in one box.',
       href: '#features',
-      tilt: 0.8,
     },
     {
       sketch: <SketchReceiptBook />,
       was: 'the carbon receipt book',
       now: 'One bill for consultation and tests, and a receipt in a click.',
       href: '#features',
-      tilt: -0.6,
     },
     {
       sketch: <SketchRxPad />,
       was: 'the Rx pad',
       now: 'Prescriptions printed on your own letterhead.',
       href: '#features',
-      tilt: 1.1,
     },
   ];
 
@@ -1635,11 +1644,7 @@ function PaperTrail() {
         <Reveal>
           <SectionHead
             eyebrow="What it replaces"
-            title={
-              <>
-                What goes <Underlined>in the drawer.</Underlined>
-              </>
-            }
+            title={<>What goes in the drawer.</>}
             body="Most OPDs run on the same four things: a token roll, a thick register, a carbon receipt book and an Rx pad. Each one has a screen here that does its job."
           />
         </Reveal>
@@ -1651,7 +1656,6 @@ function PaperTrail() {
                 <a
                   href={it.href}
                   className="group flex h-full flex-col rounded-card border border-ink/10 bg-[#FFFDF8] p-5 shadow-sm transition-shadow duration-300 hover:border-clinical/30 hover:shadow-lg"
-                  style={{ transform: `rotate(${it.tilt}deg)` }}
                 >
                   <div
                     className="grid h-36 place-items-center rounded-[14px] text-ink-60"
@@ -1662,7 +1666,7 @@ function PaperTrail() {
                   >
                     {it.sketch}
                   </div>
-                  <HandNote className="mt-4 text-[24px] text-ink-60" rotate={-2}>
+                  <HandNote className="mt-4 text-[24px] text-ink-60" rotate={0}>
                     <span className="line-through decoration-coral decoration-2">{it.was}</span>
                   </HandNote>
                   <p className="mt-3 flex-1 text-[14.5px] font-medium leading-snug text-ink">
@@ -1705,21 +1709,20 @@ function Sketch({ children }: { children: ReactNode }) {
 function SketchTokenRoll() {
   return (
     <Sketch>
-      {/* A strip of tear-off tickets, the last one half torn and curling. */}
-      <path d="M14 34.6 106.4 32.8 107.2 77.4 14.8 79.2z" />
-      <path d="M45 34 45.6 78.6M76 33.4l.6 44.6" strokeDasharray="2.4 3.4" />
-      <path d="M107 33c9.6 1.8 18.4-1.2 27.6 3.4l8.4 40.2c-9-3.2-18.4-.6-35.6.8" />
-      <path d="M134.4 36.6c-2.4 2.8-2.2 5.8.4 8.6" />
-      <path d="M22 43.4c6.4-.2 13-.3 19.4-.2M53 42.9c6.4-.2 13-.3 19.4-.2M84 42.3c6.4-.2 13-.3 19.4-.1M114.6 43.2c5.8.2 11.2.8 16.6 1.8" />
+      {/* A strip of four tear-off tickets, drawn square. */}
+      <rect x="12" y="32" width="136" height="46" rx="2" />
+      <path d="M46 32v46M80 32v46M114 32v46" strokeDasharray="2.4 3.4" />
+      <path d="M20 42h18M54 42h18M88 42h18M122 42h18" />
       {[
-        { x: 29.5, y: 68, n: '21' },
-        { x: 60.8, y: 67.4, n: '22' },
-        { x: 91.8, y: 66.8, n: '23' },
+        { x: 29, n: '21' },
+        { x: 63, n: '22' },
+        { x: 97, n: '23' },
+        { x: 131, n: '24' },
       ].map((t) => (
         <text
           key={t.n}
           x={t.x}
-          y={t.y}
+          y="67"
           textAnchor="middle"
           fontFamily="var(--font-display), sans-serif"
           fontSize="17"
@@ -1730,19 +1733,6 @@ function SketchTokenRoll() {
           {t.n}
         </text>
       ))}
-      <text
-        x="125"
-        y="65"
-        textAnchor="middle"
-        fontFamily="var(--font-display), sans-serif"
-        fontSize="16"
-        fontWeight="800"
-        stroke="none"
-        fill="currentColor"
-        transform="rotate(8 125 65)"
-      >
-        24
-      </text>
     </Sketch>
   );
 }
@@ -1750,12 +1740,11 @@ function SketchTokenRoll() {
 function SketchRegister() {
   return (
     <Sketch>
-      <path d="M80 22.5c-15-7.4-40-8.8-62-4.1l1.6 73.2c20.6-4.8 44.1-3.6 60.8 4.2" />
-      <path d="M80 22.5c15.2-7.2 40.4-8.2 62.4-3.3l-1.9 73c-20.1-4.6-44-3.8-60.9 4.1" />
-      <path d="M80 22.5 80.4 95.8" />
-      <path d="M28 34.5c13-1.6 26.5-1.6 42 .6M28.4 45.7c13.2-1.4 26.6-1.2 41.6.9M28.6 57c11.6-1.2 24.6-1 41.4.7M29 68.2c12-1 25-1 40.8.8M29.2 79.4c10-.8 20.6-.8 30.8.2" />
-      <path d="M90 35.1c14.8-2.4 28.6-2.6 42.2-1M90.2 46.4c14-2 27.8-2.1 41.6-.7M90.4 57.7c13.4-1.8 27-1.8 41.2-.5M90.6 68.9c11-1.5 22.4-1.6 33.4-.8" />
-      <path d="M42 28.2v58.4" strokeDasharray="2 4" />
+      <rect x="18" y="18" width="62" height="76" rx="2" />
+      <rect x="80" y="18" width="62" height="76" rx="2" />
+      <path d="M28 34h42M28 45h42M28 56h42M28 67h42M28 78h30" />
+      <path d="M90 34h42M90 45h42M90 56h42M90 67h34" />
+      <path d="M42 28v58" strokeDasharray="2 4" />
     </Sketch>
   );
 }
@@ -1763,9 +1752,9 @@ function SketchRegister() {
 function SketchReceiptBook() {
   return (
     <Sketch>
-      <path d="M36 26.4 124.6 24.8 126 94.4 37.4 95.8z" />
-      <path d="M40.6 21.5 128.8 20.4 130 88.8" opacity="0.55" />
-      <path d="M36.2 38.4c29.4-1.2 59-1.8 88.6-1.5" strokeDasharray="4 3.2" />
+      <path d="M41 21h88v68" opacity="0.55" />
+      <rect x="36" y="26" width="88" height="69" rx="2" />
+      <path d="M36 38h88" strokeDasharray="4 3.2" />
       <text
         x="48"
         y="33.5"
@@ -1776,9 +1765,9 @@ function SketchReceiptBook() {
       >
         No. 0417
       </text>
-      <path d="M48 52.6c18-.8 36-.9 54-.4M48.2 63.4c14.8-.6 29.8-.6 44.6-.2M48.4 74.2c20.4-.7 41-.6 61.4 0" />
-      <path d="M106.5 52.4c2.2 0 4.4.1 6.6.3M98 63.2c5 0 10 .1 15 .3" />
-      <path d="M92 86.4c4-3.8 7.4-4.4 9.6-1.2 2.4 3.4 5.6 3.2 9.8-1.4" />
+      <path d="M48 52h54M48 63h44M48 74h62" />
+      <path d="M106 52h7M98 63h15" />
+      <path d="M92 85h20" />
     </Sketch>
   );
 }
@@ -1786,11 +1775,11 @@ function SketchReceiptBook() {
 function SketchRxPad() {
   return (
     <Sketch>
-      <path d="M44 14.6 118.2 15.8 116.4 99.4 42.4 98.2z" />
-      <path d="M52 9.8v9.4M64 9.8v9.4M76 9.9v9.4M88 10v9.4M100 10.1v9.4M112 10.2v9.4" />
-      <path d="M54.4 27.8c14.2-.5 28.2-.6 42.4-.2" />
-      <path d="M56 44.6V62.4M56 44.8h7.4c5.2 0 7.6 2.2 7.6 5s-2.6 4.8-7.4 4.8H56m7.6.2 9.6 11.2M73.2 57.4 64.8 66.8" />
-      <path d="M80 50.2c9.8-.4 19.8-.4 29.4-.1M80.4 60.4c8.2-.3 16.6-.3 25-.1M56.2 76.4c16-.6 32.4-.6 49 0M56.6 86.2c11.4-.4 23-.4 34.6-.1" />
+      <rect x="43" y="15" width="74" height="84" rx="2" />
+      <path d="M52 10v9M64 10v9M76 10v9M88 10v9M100 10v9M112 10v9" />
+      <path d="M54 28h42" />
+      <path d="M56 45v18M56 45h7.5c5 0 7.5 2.2 7.5 5s-2.5 5-7.5 5H56m7.5 0 9.5 11M73 57l-8.5 9.5" />
+      <path d="M80 50h30M80 60h25M56 76h49M56 86h35" />
     </Sketch>
   );
 }
@@ -2204,15 +2193,11 @@ const ROLES = [
     body: 'Registration, bookings, the queue and the cash counter: the whole front of house on one screen.',
     points: [
       'Register a patient in under two minutes, with a live duplicate check',
-      'Book appointments or add walk-ins straight to the queue',
+      'Patients get their token on WhatsApp and wait from home',
+      'See who is on the way, running late or told to leave',
       'Take payments and print receipts in one step',
-      'Find anyone by name, mobile, UHID or ABHA with Ctrl + K',
     ],
-    tiles: [
-      { k: 'Queue', v: '7 waiting' },
-      { k: 'Appointments', v: '12 today' },
-      { k: 'Collected', v: '₹18,400' },
-    ],
+    only: 'The queue, the cash counter and every patient arriving',
   },
   {
     key: 'doctor',
@@ -2226,15 +2211,11 @@ const ROLES = [
     body: 'Their own queue, the patient’s history and a prescription pad that prints itself.',
     points: [
       'A personal queue that updates as the desk checks patients in',
-      'Previous visits and past tests beside every consultation',
-      'Prescriptions printed on the clinic’s own letterhead',
-      'Order diagnostics without leaving the consultation',
+      'Pain and exercise check-ins since the last visit, as a chart',
+      'Repeat last visit’s medicines in one click, then edit',
+      'Send the signed prescription to the patient’s WhatsApp',
     ],
-    tiles: [
-      { k: 'My queue', v: '5 waiting' },
-      { k: 'Next', v: 'Token 20' },
-      { k: 'Seen', v: '14 today' },
-    ],
+    only: 'Their own patients’ notes, prescriptions and recovery',
   },
   {
     key: 'nurse',
@@ -2249,14 +2230,10 @@ const ROLES = [
     points: [
       'Record vitals ahead of the consultation',
       'Move urgent patients to the front of the queue',
-      'Help the desk with registrations at rush hour',
+      'See whose pain is rising between visits',
       'See at a glance who is waiting for which doctor',
     ],
-    tiles: [
-      { k: 'Vitals due', v: '3 patients' },
-      { k: 'Priority', v: '1 flagged' },
-      { k: 'Waiting', v: '7 total' },
-    ],
+    only: 'Vitals and triage. Reads notes, never writes a prescription',
   },
   {
     key: 'owner',
@@ -2270,15 +2247,11 @@ const ROLES = [
     body: 'Collections, finance and pricing: the business side of the clinic, without a spreadsheet.',
     points: [
       'Daily collections that match the cash drawer',
-      'Finance reports ready whenever you need them',
+      'How many patients came back for review, week by week',
+      'The money those reviews kept, in rupees',
       'Set prices and run promotions from settings',
-      'Manage doctors and their consulting hours',
     ],
-    tiles: [
-      { k: 'Today', v: '₹18,400' },
-      { k: 'This month', v: '₹4.2 L' },
-      { k: 'Outstanding', v: '₹2,150' },
-    ],
+    only: 'The numbers. Reads everything, changes none of it',
   },
   {
     key: 'administrator',
@@ -2296,18 +2269,60 @@ const ROLES = [
       'Pair waiting-room TVs with a screen key',
       'Choose how patient IDs are numbered',
     ],
-    tiles: [
-      { k: 'Staff', v: '14 active' },
-      { k: 'Screens', v: '2 paired' },
-      { k: 'Two-factor', v: 'Enforced' },
-    ],
+    only: 'Staff, roles, branding and screens. Set once, audited after',
   },
 ] as const;
+
+/** How long each role stays on screen before the next one comes up. */
+const ROLE_ROTATE_MS = 3500;
 
 function RolesShowcase({ night }: { night: boolean }) {
   const [active, setActive] = useState(0);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
   const role = ROLES[active] ?? ROLES[0];
+
+  /*
+   * The roles take turns on their own, so a visitor sees what each one gets
+   * without having to find the tabs. Three things stop it: a pointer over the
+   * section or keyboard focus inside it (someone is reading), the section being
+   * off screen (nobody is), and a reduced-motion preference (WCAG 2.2.2 — a
+   * reader who asked for stillness gets the tabs and nothing else). Clicking a
+   * tab restarts the clock from that role.
+   */
+  const shell = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [inView, setInView] = useState(false);
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(mq.matches);
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    const el = shell.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(([entry]) => setInView(Boolean(entry?.isIntersecting)), {
+      threshold: 0.35,
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const rotating = inView && !hovered && !focused && !reduced;
+
+  useEffect(() => {
+    if (!rotating) return;
+    const t = setTimeout(() => setActive((a) => (a + 1) % ROLES.length), ROLE_ROTATE_MS);
+    return () => clearTimeout(t);
+  }, [active, rotating]);
 
   /*
    * The role colours are set inline, so the page's night rules can't reach
@@ -2341,158 +2356,507 @@ function RolesShowcase({ night }: { night: boolean }) {
   return (
     <Reveal className="mt-14">
       <div
-        role="tablist"
-        aria-label="Roles"
-        onKeyDown={onKey}
-        className="mx-auto flex w-full max-w-3xl flex-wrap justify-center gap-1 rounded-[22px] border border-ink/10 bg-white p-1.5 shadow-sm sm:flex-nowrap sm:rounded-pill"
+        ref={shell}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={() => setFocused(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+        }}
       >
-        {ROLES.map((r, i) => {
-          const on = i === active;
-          return (
-            <button
-              key={r.key}
-              ref={(el) => {
-                tabs.current[i] = el;
-              }}
-              type="button"
-              role="tab"
-              id={`role-tab-${r.key}`}
-              aria-selected={on}
-              aria-controls="role-panel"
-              tabIndex={on ? 0 : -1}
-              onClick={() => setActive(i)}
-              className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-pill px-4 py-2.5 text-[13.5px] font-semibold transition-all duration-300 ${
-                on ? 'shadow-sm' : 'text-ink-60 hover:bg-ink/5 hover:text-ink'
-              }`}
-              style={
-                on
-                  ? {
-                      backgroundColor: night ? r.glow : r.color,
-                      color: night ? '#0E1315' : '#FFFFFF',
-                    }
-                  : undefined
-              }
-            >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{
-                  backgroundColor: on
-                    ? night
-                      ? 'rgba(14,19,21,0.6)'
-                      : 'rgba(255,255,255,0.8)'
-                    : night
-                      ? r.glow
-                      : r.color,
+        <div
+          role="tablist"
+          aria-label="Roles"
+          onKeyDown={onKey}
+          className="mx-auto flex w-full max-w-3xl flex-wrap justify-center gap-1 rounded-[22px] border border-ink/10 bg-white p-1.5 shadow-sm sm:flex-nowrap sm:rounded-pill"
+        >
+          {ROLES.map((r, i) => {
+            const on = i === active;
+            return (
+              <button
+                key={r.key}
+                ref={(el) => {
+                  tabs.current[i] = el;
                 }}
-              />
-              {r.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        id="role-panel"
-        role="tabpanel"
-        aria-labelledby={`role-tab-${role.key}`}
-        key={role.key}
-        className="wl-rise mt-8 grid items-stretch gap-6 lg:grid-cols-2"
-        style={{ animationDuration: '.5s' }}
-      >
-        <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl p-7 shadow-sm sm:p-9">
-          <p className="mono-label" style={{ color: tone.text }}>
-            {role.label}
-          </p>
-          <h3 className="mt-3 text-[clamp(24px,3vw,32px)] font-extrabold tracking-[-0.02em]">
-            {role.headline}
-          </h3>
-          <p className="mt-3 text-[15px] leading-relaxed text-ink-60">{role.body}</p>
-          <ul className="mt-7 space-y-3.5">
-            {role.points.map((p) => (
-              <li key={p} className="flex items-start gap-3 text-[14.5px] text-ink">
+                type="button"
+                role="tab"
+                id={`role-tab-${r.key}`}
+                aria-selected={on}
+                aria-controls="role-panel"
+                tabIndex={on ? 0 : -1}
+                onClick={() => setActive(i)}
+                className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-pill px-4 py-2.5 text-[13.5px] font-semibold transition-all duration-300 ${
+                  on ? 'shadow-sm' : 'text-ink-60 hover:bg-ink/5 hover:text-ink'
+                }`}
+                style={
+                  on
+                    ? {
+                        backgroundColor: night ? r.glow : r.color,
+                        color: night ? '#0E1315' : '#FFFFFF',
+                      }
+                    : undefined
+                }
+              >
                 <span
-                  className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full"
-                  style={{ backgroundColor: tone.color, color: tone.on }}
-                >
-                  <IconCheck size={11} />
-                </span>
-                {p}
-              </li>
-            ))}
-          </ul>
+                  className="h-2 w-2 rounded-full"
+                  style={{
+                    backgroundColor: on
+                      ? night
+                        ? 'rgba(14,19,21,0.6)'
+                        : 'rgba(255,255,255,0.8)'
+                      : night
+                        ? r.glow
+                        : r.color,
+                  }}
+                />
+                {r.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* A sketch of that role's console */}
         <div
-          className="relative overflow-hidden rounded-card-lg border border-ink/8 p-5 shadow-sm sm:p-7"
-          style={{ backgroundColor: tone.soft }}
+          id="role-panel"
+          role="tabpanel"
+          aria-labelledby={`role-tab-${role.key}`}
+          key={role.key}
+          className="wl-rise mt-8 grid items-stretch gap-6 lg:grid-cols-2"
+          style={{ animationDuration: '.5s' }}
         >
+          <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl p-7 shadow-sm sm:p-9">
+            <p className="mono-label" style={{ color: tone.text }}>
+              {role.label}
+            </p>
+            <h3 className="mt-3 text-[clamp(24px,3vw,32px)] font-extrabold tracking-[-0.02em]">
+              {role.headline}
+            </h3>
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-60">{role.body}</p>
+            <ul className="mt-7 space-y-3.5">
+              {role.points.map((p) => (
+                <li key={p} className="flex items-start gap-3 text-[14.5px] text-ink">
+                  <span
+                    className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full"
+                    style={{ backgroundColor: tone.color, color: tone.on }}
+                  >
+                    <IconCheck size={11} />
+                  </span>
+                  {p}
+                </li>
+              ))}
+            </ul>
+            <p
+              className="mt-7 rounded-panel px-3.5 py-2.5 text-[13px] font-medium"
+              style={{ backgroundColor: tone.soft, color: tone.text }}
+            >
+              Sees: {role.only}
+            </p>
+          </div>
+
+          {/* A sketch of that role's console */}
           <div
-            aria-hidden="true"
-            className="absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-25 blur-3xl"
-            style={{ backgroundColor: tone.color }}
-          />
-          <div className="relative overflow-hidden rounded-[18px] border border-ink/8 bg-white shadow-lg">
-            <div className="h-1.5" style={{ backgroundColor: tone.color }} />
-            <div className="flex items-center justify-between gap-3 border-b border-ink/8 px-4 py-3">
-              <span className="flex items-center gap-2.5">
-                <span
-                  className="grid h-9 w-9 place-items-center rounded-full text-[12px] font-bold"
-                  style={{ backgroundColor: tone.color, color: tone.on }}
-                >
-                  {initials}
-                </span>
-                <span className="leading-tight">
-                  <span className="block text-[13.5px] font-semibold">{role.person}</span>
-                  <span className="block text-[11.5px] font-medium" style={{ color: tone.text }}>
-                    {role.label}
+            className="relative overflow-hidden rounded-card-lg border border-ink/8 p-5 shadow-sm sm:p-7"
+            style={{ backgroundColor: tone.soft }}
+          >
+            <div
+              aria-hidden="true"
+              className="absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-25 blur-3xl"
+              style={{ backgroundColor: tone.color }}
+            />
+            <div className="relative overflow-hidden rounded-[18px] border border-ink/8 bg-white shadow-lg">
+              <div className="h-1.5" style={{ backgroundColor: tone.color }} />
+              <div className="flex items-center justify-between gap-3 border-b border-ink/8 px-4 py-3">
+                <span className="flex items-center gap-2.5">
+                  <span
+                    className="grid h-9 w-9 place-items-center rounded-full text-[12px] font-bold"
+                    style={{ backgroundColor: tone.color, color: tone.on }}
+                  >
+                    {initials}
+                  </span>
+                  <span className="leading-tight">
+                    <span className="block text-[13.5px] font-semibold">{role.person}</span>
+                    <span className="block text-[11.5px] font-medium" style={{ color: tone.text }}>
+                      {role.label}
+                    </span>
                   </span>
                 </span>
-              </span>
-              <span
-                className="rounded-pill px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-label"
-                style={{ backgroundColor: tone.soft, color: tone.text }}
-              >
-                Signed in
-              </span>
-            </div>
-            <div className="p-4">
-              <p className="mono-label">First thing on screen</p>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {role.tiles.map((t) => (
-                  <div key={t.k} className="rounded-panel border border-ink/8 bg-bg-soft p-3">
-                    <p className="font-mono text-[9.5px] uppercase tracking-label text-ink-40">
-                      {t.k}
-                    </p>
-                    <p className="mt-1 text-[14px] font-bold leading-tight">{t.v}</p>
-                  </div>
-                ))}
+                <span
+                  className="rounded-pill px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-label"
+                  style={{ backgroundColor: tone.soft, color: tone.text }}
+                >
+                  Signed in
+                </span>
               </div>
-              <div className="mt-3 space-y-2">
-                {[82, 64, 74].map((w, i) => (
-                  <div
-                    key={w}
-                    className="flex items-center gap-3 rounded-panel border border-ink/6 px-3 py-2.5"
-                  >
-                    <span
-                      className="h-7 w-7 shrink-0 rounded-full"
-                      style={{ backgroundColor: i === 0 ? tone.soft : tone.blank }}
-                    />
-                    <span className="flex-1 space-y-1.5">
-                      <span
-                        className="block h-2 rounded-full bg-ink/12"
-                        style={{ width: `${w}%` }}
-                      />
-                      <span className="block h-1.5 w-1/3 rounded-full bg-ink/6" />
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <RoleScreen roleKey={role.key} tone={tone} />
             </div>
           </div>
         </div>
       </div>
     </Reveal>
+  );
+}
+
+type RoleTone = { color: string; soft: string; text: string; blank: string; on: string };
+
+/**
+ * What each role actually has open, drawn as a different SCREEN rather than
+ * the same card with different numbers — so the difference between the five
+ * logins is visible at a glance, before anybody reads the bullet points.
+ * Names and figures are illustrative.
+ */
+function RoleScreen({ roleKey, tone }: { roleKey: string; tone: RoleTone }) {
+  switch (roleKey) {
+    case 'front_desk':
+      return <FrontDeskScreen tone={tone} />;
+    case 'doctor':
+      return <DoctorScreen tone={tone} />;
+    case 'nurse':
+      return <NurseScreen tone={tone} />;
+    case 'owner':
+      return <OwnerScreen tone={tone} />;
+    default:
+      return <AdminScreen tone={tone} />;
+  }
+}
+
+function ScreenTitle({ title, meta }: { title: string; meta: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <p className="text-[13.5px] font-bold">{title}</p>
+      <p className="font-mono text-[10px] uppercase tracking-label text-ink-40">{meta}</p>
+    </div>
+  );
+}
+
+/** Status colours for both looks. Inline, because the night rules on this page
+ * cannot reach a colour set in a style attribute. */
+const CHIP = {
+  day: {
+    green: ['#DCEFE1', '#1F5531'],
+    amber: ['#FBEBC4', '#9A6C00'],
+    coral: ['#F8C9BE', '#B23A22'],
+    neutral: ['rgba(22,24,28,.06)', '#54514B'],
+  },
+  night: {
+    green: ['rgba(46,114,69,.28)', '#8FD3A6'],
+    amber: ['rgba(232,178,60,.16)', '#F0C969'],
+    coral: ['rgba(228,103,79,.18)', '#F4A593'],
+    neutral: ['rgba(228,234,232,.08)', '#B3BDBA'],
+  },
+} as const;
+
+type ChipTone = keyof (typeof CHIP)['day'];
+
+/** The night look is the one whose text on a role colour is dark. */
+const isNight = (tone: RoleTone) => tone.on !== '#FFFFFF';
+
+function Chip({ children, tone, role }: { children: ReactNode; tone: ChipTone; role: RoleTone }) {
+  const [bg, fg] = CHIP[isNight(role) ? 'night' : 'day'][tone];
+  return (
+    <span
+      className="shrink-0 rounded-pill px-2 py-0.5 font-mono text-[9.5px] font-medium uppercase tracking-label"
+      style={{ backgroundColor: bg, color: fg }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function MiniButton({
+  children,
+  tone,
+  solid,
+}: {
+  children: ReactNode;
+  tone: RoleTone;
+  solid?: boolean;
+}) {
+  return (
+    <span
+      className="shrink-0 rounded-pill border px-2.5 py-1 text-[11px] font-semibold"
+      style={
+        solid
+          ? { backgroundColor: tone.color, borderColor: tone.color, color: tone.on }
+          : { borderColor: tone.color, color: tone.text }
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+/** The queue, with the thing to DO on each row. */
+function FrontDeskScreen({ tone }: { tone: RoleTone }) {
+  const rows = [
+    { t: 14, n: 'Geeta Sharma', chip: ['green', 'On the way'], act: 'Check in', solid: true },
+    { t: 15, n: 'Ramesh Kumar', chip: ['neutral', 'Waiting · paid'], act: 'Call' },
+    { t: 16, n: 'Sunita Patil', chip: ['neutral', 'At home · told to leave'] },
+    { t: 17, n: 'Arjun Shah', chip: ['amber', 'Unpaid ₹350'], act: 'Collect' },
+  ] as const;
+  return (
+    <div className="p-4">
+      <ScreenTitle title="Today’s queue" meta="7 waiting · 4 at home" />
+      <ul className="mt-3 divide-y divide-ink/6 rounded-panel border border-ink/8">
+        {rows.map((r) => (
+          <li key={r.t} className="flex items-center gap-2.5 px-3 py-2.5">
+            <span
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-tiny font-mono text-[12px] font-bold"
+              style={{ backgroundColor: tone.soft, color: tone.text }}
+            >
+              {r.t}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12.5px] font-semibold">{r.n}</span>
+              <span className="mt-0.5 inline-block">
+                <Chip tone={r.chip[0]} role={tone}>
+                  {r.chip[1]}
+                </Chip>
+              </span>
+            </span>
+            {'act' in r && (
+              <MiniButton tone={tone} solid={'solid' in r}>
+                {r.act}
+              </MiniButton>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p
+        className="mt-3 flex items-center gap-2 rounded-panel px-3 py-2 text-[11.5px]"
+        style={{
+          backgroundColor: CHIP[isNight(tone) ? 'night' : 'day'].green[0],
+          color: CHIP[isNight(tone) ? 'night' : 'day'].green[1],
+        }}
+      >
+        <span aria-hidden="true">●</span>
+        Token 18 sent to Meera on WhatsApp, with her live place in line
+      </p>
+    </div>
+  );
+}
+
+/** One patient, how they did since last time, and the prescription. */
+function DoctorScreen({ tone }: { tone: RoleTone }) {
+  const pain = [7, 6, 6, 4, 4, 3];
+  const x = (i: number) => 6 + (i / (pain.length - 1)) * 128;
+  const y = (v: number) => 6 + (1 - v / 10) * 48;
+  const line = pain.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(v)}`).join(' ');
+  return (
+    <div className="p-4">
+      <ScreenTitle title="Ramesh Kumar · 64 M" meta="Token 20 · visit 3" />
+      <div className="mt-3 grid grid-cols-[1.1fr_1fr] gap-2.5">
+        <div className="rounded-panel border border-ink/8 p-3">
+          <p className="font-mono text-[9.5px] uppercase tracking-label text-ink-40">
+            Pain since last visit
+          </p>
+          <svg viewBox="0 0 140 60" className="mt-1 h-[60px] w-full" aria-hidden="true">
+            <path d={`${line} L${x(pain.length - 1)},54 L${x(0)},54 Z`} fill={tone.soft} />
+            <path
+              d={line}
+              fill="none"
+              stroke={tone.color}
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+            />
+            <circle cx={x(pain.length - 1)} cy={y(3)} r="3.5" fill={tone.color} />
+          </svg>
+          <p className="text-[12px] font-bold" style={{ color: tone.text }}>
+            7 → 3 · exercises 5 of 6 days
+          </p>
+        </div>
+        <div className="rounded-panel border border-ink/8 p-3">
+          <p className="font-mono text-[9.5px] uppercase tracking-label text-ink-40">Last time</p>
+          <p className="mt-1.5 text-[11.5px] leading-snug">Diclofenac gel 1% · 1-0-1</p>
+          <p className="text-[11.5px] leading-snug">Physio 3× a week</p>
+          <p className="mt-2 text-[11px] font-semibold" style={{ color: tone.text }}>
+            Repeat these →
+          </p>
+        </div>
+      </div>
+      <div className="mt-2.5 rounded-panel border border-ink/8 p-3">
+        <p className="font-mono text-[9.5px] uppercase tracking-label text-ink-40">
+          Today’s prescription
+        </p>
+        <p className="mt-1.5 text-[11.5px]">1. Diclofenac gel 1% · 1-0-1 · 2 weeks</p>
+        <p className="text-[11.5px]">2. Calcium + D3 · 0-0-1 · 1 month</p>
+        <div className="mt-2.5 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-ink-40">
+            Review in 2 weeks · check-ins every 3 days
+          </span>
+          <MiniButton tone={tone} solid>
+            Sign &amp; send
+          </MiniButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A vitals form being filled, and the room she is watching. */
+function NurseScreen({ tone }: { tone: RoleTone }) {
+  const vitals = [
+    ['BP', '138/86'],
+    ['Pulse', '82'],
+    ['SpO₂', '97%'],
+    ['Weight', '71 kg'],
+  ];
+  return (
+    <div className="p-4">
+      <ScreenTitle title="Vitals · Ramesh Kumar" meta="Before Dr. Rao" />
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        {vitals.map(([k, v]) => (
+          <div
+            key={k}
+            className="rounded-panel border-[1.5px] p-2"
+            style={{ borderColor: tone.soft }}
+          >
+            <p className="font-mono text-[9px] uppercase tracking-label text-ink-40">{k}</p>
+            <p className="mt-0.5 text-[13.5px] font-bold">{v}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2.5 flex justify-end">
+        <MiniButton tone={tone} solid>
+          Save vitals
+        </MiniButton>
+      </div>
+      <p className="mt-3 font-mono text-[9.5px] uppercase tracking-label text-ink-40">
+        Waiting room
+      </p>
+      <ul className="mt-1.5 space-y-1.5">
+        <li className="flex items-center gap-2.5 rounded-panel border border-ink/8 px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
+            Lata Iyer · dizzy
+          </span>
+          <Chip tone="amber" role={tone}>
+            Seen next
+          </Chip>
+        </li>
+        <li
+          className="flex items-center gap-2.5 rounded-panel border px-3 py-2"
+          style={{ borderColor: CHIP[isNight(tone) ? 'night' : 'day'].coral[0] }}
+        >
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
+            Rekha Iyer · pain 5 → 8 at home
+          </span>
+          <Chip tone="coral" role={tone}>
+            Call back
+          </Chip>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+/** The money and the return rate, as charts, not rows. */
+function OwnerScreen({ tone }: { tone: RoleTone }) {
+  const week = [12.1, 15.4, 14.2, 17.8, 16.3, 21.0, 18.4];
+  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const max = Math.max(...week);
+  return (
+    <div className="p-4">
+      <ScreenTitle title="This week" meta="Read-only" />
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div>
+          <p className="font-mono text-[9.5px] uppercase tracking-label text-ink-40">
+            Collected today
+          </p>
+          <p className="text-[26px] font-extrabold leading-none tracking-[-0.02em]">₹18,400</p>
+          <p className="mt-1 text-[11px] text-ink-40">Cash ₹6,200 · UPI ₹12,200</p>
+        </div>
+        <div className="rounded-panel px-3 py-2 text-right" style={{ backgroundColor: tone.soft }}>
+          <p className="font-mono text-[9px] uppercase tracking-label" style={{ color: tone.text }}>
+            Came back
+          </p>
+          <p className="text-[18px] font-extrabold leading-none" style={{ color: tone.text }}>
+            83%
+          </p>
+        </div>
+      </div>
+      <div
+        className="mt-4 flex h-24 items-end gap-2 border-b border-ink/10 pb-1"
+        aria-hidden="true"
+      >
+        {week.map((v, i) => (
+          <div key={i} className="flex flex-1 flex-col items-center justify-end gap-1">
+            <div
+              className="w-full rounded-t-[4px]"
+              style={{
+                height: `${(v / max) * 80}px`,
+                backgroundColor: i === week.length - 1 ? tone.color : tone.soft,
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-1 flex gap-2" aria-hidden="true">
+        {days.map((d, i) => (
+          <span key={i} className="flex-1 text-center font-mono text-[9px] text-ink-40">
+            {d}
+          </span>
+        ))}
+      </div>
+      <p className="mt-3 text-[11.5px] text-ink-60">
+        Reviews kept this week: <strong className="text-ink">₹13,300</strong>
+      </p>
+    </div>
+  );
+}
+
+/** Staff, roles and switches: the clinic's setup, not its day. */
+function AdminScreen({ tone }: { tone: RoleTone }) {
+  const staff = [
+    ['Asha Pawar', 'Front desk', '#3a4e9b'],
+    ['Dr. Kiran Rao', 'Doctor', '#6b3fa0'],
+    ['Anita Joseph', 'Nurse', '#a83a6e'],
+  ];
+  const switches = [
+    ['Two-factor for admins', true],
+    ['WhatsApp consent at registration', true],
+    ['Patient names on the TV', false],
+  ] as const;
+  return (
+    <div className="p-4">
+      <ScreenTitle title="Clinic settings" meta="14 staff · 2 screens" />
+      <ul className="mt-3 space-y-1.5">
+        {staff.map(([n, r, c]) => (
+          <li
+            key={n}
+            className="flex items-center gap-2.5 rounded-panel border border-ink/8 px-3 py-2"
+          >
+            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{n}</span>
+            <span
+              className="rounded-pill px-2 py-0.5 text-[10.5px] font-semibold text-white"
+              style={{ backgroundColor: c }}
+            >
+              {r}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <ul className="mt-3 space-y-2 rounded-panel bg-bg-soft p-3">
+        {switches.map(([label, on]) => (
+          <li key={label} className="flex items-center justify-between gap-3 text-[11.5px]">
+            {label}
+            <span
+              aria-hidden="true"
+              className="relative h-4 w-7 shrink-0 rounded-full transition-colors"
+              style={{
+                backgroundColor: on
+                  ? tone.color
+                  : isNight(tone)
+                    ? 'rgba(228,234,232,.22)'
+                    : 'rgba(22,24,28,.18)',
+              }}
+            >
+              <span
+                className="absolute top-0.5 h-3 w-3 rounded-full bg-white"
+                style={{ left: on ? '14px' : '2px' }}
+              />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -2606,7 +2970,7 @@ function DisplayShowcase() {
             <span aria-hidden="true" className="h-px flex-1 bg-white/15" />
           </p>
           <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
-            The token screen <span className="wl-serif text-[#5fd6c6]">in the waiting room.</span>
+            The token screen in the waiting room.
           </h2>
           <p className="mt-5 max-w-md text-[16px] leading-relaxed text-white/65">
             Pair any TV with a key from settings. It shows who each doctor is seeing and who&rsquo;s

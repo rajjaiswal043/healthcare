@@ -149,12 +149,29 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
           </section>
         )}
 
+        {/* The next visit in a box of its own (docs/10). It is the one thing on
+            this sheet the patient has to remember, and a line of body text is
+            how it got missed. Outlined, not filled, so it survives a mono
+            laser. */}
         {encounter.followUpDate && (
-          <p className="py-1 text-[12.5px]">
-            <strong>Review on</strong>{' '}
-            {new Date(encounter.followUpDate).toLocaleDateString('en-IN', { dateStyle: 'long' })}
-            {encounter.followUpNote ? ` — ${encounter.followUpNote}` : ''}
-          </p>
+          <div className="my-2 inline-block rounded border-[1.5px] border-ink px-3 py-1.5 text-[12.5px]">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em]">Next visit</p>
+            <p className="text-[14px] font-bold">
+              {new Date(encounter.followUpDate).toLocaleDateString('en-IN', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
+            {encounter.followUpNote && <p>{encounter.followUpNote}</p>}
+            {encounter.checkInIntervalDays && (
+              <p className="text-[11px] italic">
+                We will check on you on WhatsApp every {encounter.checkInIntervalDays} days until
+                then.
+              </p>
+            )}
+          </div>
         )}
 
         <footer className="mt-10 flex items-end justify-between">
@@ -162,8 +179,18 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
             signature, on the clinic's own letterhead. Full white-label took it
             off: the document belongs to the clinic. The draft warning stays —
             it stops an unsigned prescription being dispensed against. */}
-          <p className="text-[10.5px] italic">
-            {encounter.status === 'SIGNED' ? '' : 'DRAFT — this consultation has not been signed.'}
+          {/* A line from the doctor rather than from the software. Addressed
+              by first name, which is how the doctor spoke to them an hour ago. */}
+          <p className="text-[12px]">
+            {encounter.status === 'SIGNED' ? (
+              <span className="font-semibold">
+                Get well soon, {encounter.patient.name.trim().split(' ')[0]}.
+              </span>
+            ) : (
+              <span className="text-[10.5px] italic">
+                DRAFT — this consultation has not been signed.
+              </span>
+            )}
           </p>
           <div className="w-56 border-t border-ink pt-1 text-center text-[11px]">
             {practitioner.fullName}

@@ -67,6 +67,11 @@ const TABLES = [
   'invoice',
   'invoice_counter',
   'service',
+  // Patient journey (docs/10): all three reference patient, and two of them
+  // appointment or encounter.
+  'patient_link',
+  'outbound_message',
+  'recovery_checkin',
   'encounter_addendum',
   'prescription',
   'diagnosis',
@@ -181,6 +186,7 @@ export async function resetAppointments(): Promise<void> {
   const db = await owner();
   await db.query(
     `TRUNCATE receipt_print, receipt, promotion_application, payment, invoice_line, invoice,
+              patient_link, outbound_message, recovery_checkin,
               encounter_addendum, prescription, diagnosis, vitals_observation, encounter,
               appointment, queue_counter
      RESTART IDENTITY CASCADE`,

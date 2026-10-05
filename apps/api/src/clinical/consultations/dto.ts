@@ -92,6 +92,17 @@ export class UpdateEncounterDto {
   @IsString()
   @MaxLength(300)
   followUpNote?: string;
+
+  /**
+   * Ask the patient how they are every N days until the review — docs/10.
+   * Null switches it off. Scheduled at signing, not here, so a draft that
+   * changes its mind five times schedules nothing.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  checkInIntervalDays?: number | null;
 }
 
 /**

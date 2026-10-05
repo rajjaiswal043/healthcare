@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { readTextSize, type TextSize } from '@/components/text-size-toggle';
 import Link from 'next/link';
 import { Newsreader } from 'next/font/google';
 import { usePathname, useRouter } from 'next/navigation';
@@ -9,14 +10,7 @@ import { useAuth } from '@/components/auth-provider';
 import type { ClinicBrand } from '@/components/auth-shell';
 import { ClinicLogo } from '@/components/clinic-logo';
 import { ConsoleMark } from '@/components/console-mark';
-import {
-  HANDMADE_CSS,
-  HandArrow,
-  HandNote,
-  Stamp,
-  TokenSlip,
-  Underlined,
-} from '@/components/handmade';
+import { HANDMADE_CSS, HandArrow, HandNote, Stamp, TokenSlip } from '@/components/handmade';
 import {
   IconAlert,
   IconArrowLeft,
@@ -26,7 +20,6 @@ import {
   IconLock,
   IconMail,
   IconShield,
-  IconUsers,
 } from '@/components/icons';
 
 type Stage = 'credentials' | 'mfa-code' | 'mfa-enrol';
@@ -166,17 +159,6 @@ const SIGN_IN_HELP: ReadonlyArray<{ q: string; a: string }> = [
   },
 ];
 
-/**
- * Standard or larger text for the sign-in form, remembered per computer.
- *
- * Kept on the PC rather than the person because the PC is what differs: the
- * consultant's chamber PC is set large once and stays large for everyone who
- * signs in there, while the reception PC stays standard. Clearing the browser's
- * data puts it back to standard.
- */
-const TEXT_KEY = 'healthcloud.textSize';
-type TextSize = 'standard' | 'large';
-
 export default function LoginPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -219,10 +201,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     let saved: string | null = null;
-    let savedSize: string | null = null;
     try {
       saved = window.localStorage.getItem(LOOK_KEY);
-      savedSize = window.localStorage.getItem(TEXT_KEY);
     } catch {
       // No storage: fall through to the clock, and standard text.
     }
@@ -231,17 +211,9 @@ export default function LoginPage() {
       const h = new Date().getHours();
       if (h >= 22 || h < 5) setLook('night');
     }
-    if (savedSize === 'large') setTextSize('large');
+    // Set on the welcome page, beside the night switch.
+    setTextSize(readTextSize());
   }, []);
-
-  function chooseTextSize(next: TextSize) {
-    setTextSize(next);
-    try {
-      window.localStorage.setItem(TEXT_KEY, next);
-    } catch {
-      // Remembered for this visit only.
-    }
-  }
 
   function toggleLook() {
     const next: Look = look === 'night' ? 'light' : 'night';
@@ -449,30 +421,17 @@ export default function LoginPage() {
         </span>
       )}
 
-      {onCredentials && (
-        <p className="mb-1 h-5 text-[13.5px] font-medium text-ink-40">
-          {greeting ? greeting.date : ' '}
-        </p>
-      )}
       <h1 className="text-[clamp(28px,3.4vw,36px)] font-extrabold leading-[1.05] tracking-[-0.03em]">
         {onCredentials ? (
           greeting ? (
             <>
-              {greeting.hello.split(' ')[0]}{' '}
-              <span className="login-serif text-clinical">
-                {greeting.hello.split(' ').slice(1).join(' ')}
-              </span>
-              .
+              {greeting.hello.split(' ')[0]} {greeting.hello.split(' ').slice(1).join(' ')}.
             </>
           ) : (
-            <>
-              Welcome <span className="text-clinical">back</span>
-            </>
+            <>Welcome back</>
           )
         ) : (
-          <>
-            One more <span className="text-clinical">step</span>
-          </>
+          <>One more step</>
         )}
       </h1>
       <p className="mt-2 text-[14.5px] text-ink-60">
@@ -748,28 +707,15 @@ export default function LoginPage() {
         </button>
       </form>
 
-      {/* Most sign-ins happen at a desk PC that three people share. The
-          one habit that keeps patient records safe there is signing out,
-          so it is said here, once, where the session starts. */}
-      {onCredentials && (
-        <p className="mt-4 flex items-center justify-center gap-2 rounded-[10px] bg-amber-soft/60 px-3 py-2 text-[12.5px] text-amber-text">
-          <IconUsers size={14} />
-          Shared desk computer? Sign out whenever you step away.
-        </p>
-      )}
-
       {/* Staff help lives here, where the people who need it already are,
           rather than on the welcome page, which is for clinic owners. Closed
           by default so the page still fits one screen; the form column
           scrolls when it is opened on a short one. */}
-      <details className="group mt-4 rounded-[12px] border border-ink/10 bg-white/70 px-4 text-[13.5px]">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2.5 font-semibold text-ink-60 [&::-webkit-details-marker]:hidden">
+      <details className="group mt-5 text-[13.5px]">
+        <summary className="mx-auto flex w-fit cursor-pointer list-none items-center gap-1 font-semibold text-clinical-text hover:underline [&::-webkit-details-marker]:hidden">
           Trouble signing in?
-          <span className="text-ink-40 transition-transform group-open:rotate-180">
-            <ChevronGlyph />
-          </span>
         </summary>
-        <dl className="space-y-3 pb-4 leading-relaxed">
+        <dl className="mt-3 space-y-3 rounded-[12px] border border-ink/10 bg-white/70 p-4 leading-relaxed">
           {SIGN_IN_HELP.map((h) => (
             <div key={h.q}>
               <dt className="font-semibold text-ink">{h.q}</dt>
@@ -817,15 +763,9 @@ export default function LoginPage() {
                 </>
               )}
             </span>
-            <TextSizeToggle size={textSize} onChange={chooseTextSize} />
           </div>
 
           {formBlock}
-
-          <p className="mt-6 flex items-center gap-2 text-[12.5px] text-ink-40">
-            <IconLock size={13} />
-            Everything you change is recorded under your name.
-          </p>
         </div>
 
         <PopupArt clinic={clinic} />
@@ -892,7 +832,6 @@ export default function LoginPage() {
                 </>
               )}
             </span>
-            <TextSizeToggle size={textSize} onChange={chooseTextSize} />
             <LookToggle look={look} onToggle={toggleLook} />
           </span>
         </header>
@@ -900,11 +839,6 @@ export default function LoginPage() {
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-5 py-4 sm:px-8">
           {formBlock}
         </div>
-
-        <footer className="flex shrink-0 items-center justify-center gap-2 px-5 pb-4 text-[12.5px] text-ink-40 sm:px-8 sm:pb-6">
-          <IconLock size={13} />
-          Everything you change is recorded under your name.
-        </footer>
       </section>
     </main>
   );
@@ -998,7 +932,6 @@ const LARGE_TEXT_CSS = [
 const LOGIN_CSS = `
 ${NIGHT_CSS}
 ${LARGE_TEXT_CSS}
-.login-serif{font-family:var(--font-serif),Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.01em}
 @keyframes login-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .login-rise{animation:login-rise .6s cubic-bezier(.2,.7,.2,1) both}
 @keyframes login-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
@@ -1117,10 +1050,7 @@ function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
 
       <div>
         <h2 className="max-w-[460px] text-[clamp(30px,3vw,46px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
-          The whole OPD,{' '}
-          <Underlined color="#E8B23C" className="login-serif text-[#7fe0d2]">
-            on one screen.
-          </Underlined>
+          The whole OPD, on one screen.
         </h2>
         <p className="mt-4 max-w-[400px] text-[15px] leading-relaxed text-white/65">
           Registration, consultations, prescriptions and billing, right where you left them.
@@ -1271,7 +1201,7 @@ function PopupArt({ clinic }: { clinic: ClinicBrand | null }) {
       </span>
 
       <p className="absolute inset-x-8 bottom-8 text-[26px] font-extrabold leading-[1.08] tracking-[-0.03em]">
-        The whole OPD, <span className="login-serif text-[#7fe0d2]">on one screen.</span>
+        The whole OPD, on one screen.
       </p>
     </aside>
   );
@@ -1297,46 +1227,6 @@ function EyeGlyph() {
 }
 
 /** The sun/moon switch between the light and night looks. */
-/**
- * The two-part "Aa | Aa" switch: small A for standard, big A for larger text.
- * Each half says what it does to screen readers, and the current one is
- * marked pressed.
- */
-function TextSizeToggle({
-  size,
-  onChange,
-}: {
-  size: TextSize;
-  onChange: (next: TextSize) => void;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label="Text size"
-      className="inline-flex h-9 shrink-0 items-center gap-0.5 rounded-pill border border-ink/10 bg-white/70 p-0.5 shadow-sm backdrop-blur"
-    >
-      {(['standard', 'large'] as const).map((t) => {
-        const on = size === t;
-        return (
-          <button
-            key={t}
-            type="button"
-            onClick={() => onChange(t)}
-            aria-pressed={on}
-            aria-label={t === 'large' ? 'Larger text' : 'Standard text'}
-            title={t === 'large' ? 'Larger text' : 'Standard text'}
-            className={`grid h-8 min-w-[34px] place-items-center rounded-pill px-2 font-display font-bold leading-none transition-colors ${
-              t === 'large' ? 'text-[16.5px]' : 'text-[12.5px]'
-            } ${on ? 'bg-ink text-white' : 'text-ink-60 hover:text-ink'}`}
-          >
-            Aa
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function LookToggle({ look, onToggle }: { look: Look; onToggle: () => void }) {
   const night = look === 'night';
   return (
@@ -1386,24 +1276,6 @@ function SunGlyph() {
     >
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
-    </svg>
-  );
-}
-
-function ChevronGlyph() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M6 9l6 6 6-6" />
     </svg>
   );
 }

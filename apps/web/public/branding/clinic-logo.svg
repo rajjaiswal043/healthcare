@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Clinic logo">
+  <!-- The default mark for a clinic that has not uploaded its own: a sun rising
+       over the horizon behind a rounded medical cross. Two flat colours from the
+       product palette, no gradient, so it prints cleanly on a monochrome laser
+       and reads at 40 px on the waiting-room screen. Hand-written, no script:
+       see README.md beside it for why that matters. -->
+  <path d="M9 45 A23 23 0 0 1 55 45" fill="none" stroke="#E8B23C" stroke-width="5" stroke-linecap="round"/>
+  <rect x="27" y="14" width="10" height="28" rx="3.5" fill="#0F766E"/>
+  <rect x="18" y="23" width="28" height="10" rx="3.5" fill="#0F766E"/>
+  <path d="M5 52 H59" stroke="#0F766E" stroke-width="4.5" stroke-linecap="round"/>
+</svg>
