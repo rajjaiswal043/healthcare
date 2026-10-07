@@ -64,6 +64,8 @@ export type PatientMinAggregateOutputType = {
   state: string | null
   postalCode: string | null
   bloodGroup: $Enums.BloodGroup | null
+  allergies: string | null
+  allergiesReviewedAt: Date | null
   emergencyContactName: string | null
   emergencyContactMobile: string | null
   abhaNumber: string | null
@@ -90,6 +92,8 @@ export type PatientMaxAggregateOutputType = {
   state: string | null
   postalCode: string | null
   bloodGroup: $Enums.BloodGroup | null
+  allergies: string | null
+  allergiesReviewedAt: Date | null
   emergencyContactName: string | null
   emergencyContactMobile: string | null
   abhaNumber: string | null
@@ -116,6 +120,8 @@ export type PatientCountAggregateOutputType = {
   state: number
   postalCode: number
   bloodGroup: number
+  allergies: number
+  allergiesReviewedAt: number
   emergencyContactName: number
   emergencyContactMobile: number
   abhaNumber: number
@@ -152,6 +158,8 @@ export type PatientMinAggregateInputType = {
   state?: true
   postalCode?: true
   bloodGroup?: true
+  allergies?: true
+  allergiesReviewedAt?: true
   emergencyContactName?: true
   emergencyContactMobile?: true
   abhaNumber?: true
@@ -178,6 +186,8 @@ export type PatientMaxAggregateInputType = {
   state?: true
   postalCode?: true
   bloodGroup?: true
+  allergies?: true
+  allergiesReviewedAt?: true
   emergencyContactName?: true
   emergencyContactMobile?: true
   abhaNumber?: true
@@ -204,6 +214,8 @@ export type PatientCountAggregateInputType = {
   state?: true
   postalCode?: true
   bloodGroup?: true
+  allergies?: true
+  allergiesReviewedAt?: true
   emergencyContactName?: true
   emergencyContactMobile?: true
   abhaNumber?: true
@@ -317,6 +329,8 @@ export type PatientGroupByOutputType = {
   state: string | null
   postalCode: string | null
   bloodGroup: $Enums.BloodGroup
+  allergies: string | null
+  allergiesReviewedAt: Date | null
   emergencyContactName: string | null
   emergencyContactMobile: string | null
   abhaNumber: string | null
@@ -366,6 +380,8 @@ export type PatientWhereInput = {
   state?: Prisma.StringNullableFilter<"Patient"> | string | null
   postalCode?: Prisma.StringNullableFilter<"Patient"> | string | null
   bloodGroup?: Prisma.EnumBloodGroupFilter<"Patient"> | $Enums.BloodGroup
+  allergies?: Prisma.StringNullableFilter<"Patient"> | string | null
+  allergiesReviewedAt?: Prisma.DateTimeNullableFilter<"Patient"> | Date | string | null
   emergencyContactName?: Prisma.StringNullableFilter<"Patient"> | string | null
   emergencyContactMobile?: Prisma.StringNullableFilter<"Patient"> | string | null
   abhaNumber?: Prisma.StringNullableFilter<"Patient"> | string | null
@@ -399,6 +415,8 @@ export type PatientOrderByWithRelationInput = {
   state?: Prisma.SortOrderInput | Prisma.SortOrder
   postalCode?: Prisma.SortOrderInput | Prisma.SortOrder
   bloodGroup?: Prisma.SortOrder
+  allergies?: Prisma.SortOrderInput | Prisma.SortOrder
+  allergiesReviewedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   emergencyContactName?: Prisma.SortOrderInput | Prisma.SortOrder
   emergencyContactMobile?: Prisma.SortOrderInput | Prisma.SortOrder
   abhaNumber?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -436,6 +454,8 @@ export type PatientWhereUniqueInput = Prisma.AtLeast<{
   state?: Prisma.StringNullableFilter<"Patient"> | string | null
   postalCode?: Prisma.StringNullableFilter<"Patient"> | string | null
   bloodGroup?: Prisma.EnumBloodGroupFilter<"Patient"> | $Enums.BloodGroup
+  allergies?: Prisma.StringNullableFilter<"Patient"> | string | null
+  allergiesReviewedAt?: Prisma.DateTimeNullableFilter<"Patient"> | Date | string | null
   emergencyContactName?: Prisma.StringNullableFilter<"Patient"> | string | null
   emergencyContactMobile?: Prisma.StringNullableFilter<"Patient"> | string | null
   abhaNumber?: Prisma.StringNullableFilter<"Patient"> | string | null
@@ -469,6 +489,8 @@ export type PatientOrderByWithAggregationInput = {
   state?: Prisma.SortOrderInput | Prisma.SortOrder
   postalCode?: Prisma.SortOrderInput | Prisma.SortOrder
   bloodGroup?: Prisma.SortOrder
+  allergies?: Prisma.SortOrderInput | Prisma.SortOrder
+  allergiesReviewedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   emergencyContactName?: Prisma.SortOrderInput | Prisma.SortOrder
   emergencyContactMobile?: Prisma.SortOrderInput | Prisma.SortOrder
   abhaNumber?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -503,6 +525,8 @@ export type PatientScalarWhereWithAggregatesInput = {
   state?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
   postalCode?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
   bloodGroup?: Prisma.EnumBloodGroupWithAggregatesFilter<"Patient"> | $Enums.BloodGroup
+  allergies?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
+  allergiesReviewedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Patient"> | Date | string | null
   emergencyContactName?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
   emergencyContactMobile?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
   abhaNumber?: Prisma.StringNullableWithAggregatesFilter<"Patient"> | string | null
@@ -529,6 +553,8 @@ export type PatientCreateInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -562,6 +588,8 @@ export type PatientUncheckedCreateInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -595,6 +623,8 @@ export type PatientUpdateInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -628,6 +658,8 @@ export type PatientUncheckedUpdateInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -661,6 +693,8 @@ export type PatientCreateManyInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -687,6 +721,8 @@ export type PatientUpdateManyMutationInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -713,6 +749,8 @@ export type PatientUncheckedUpdateManyInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -744,6 +782,8 @@ export type PatientCountOrderByAggregateInput = {
   state?: Prisma.SortOrder
   postalCode?: Prisma.SortOrder
   bloodGroup?: Prisma.SortOrder
+  allergies?: Prisma.SortOrder
+  allergiesReviewedAt?: Prisma.SortOrder
   emergencyContactName?: Prisma.SortOrder
   emergencyContactMobile?: Prisma.SortOrder
   abhaNumber?: Prisma.SortOrder
@@ -774,6 +814,8 @@ export type PatientMaxOrderByAggregateInput = {
   state?: Prisma.SortOrder
   postalCode?: Prisma.SortOrder
   bloodGroup?: Prisma.SortOrder
+  allergies?: Prisma.SortOrder
+  allergiesReviewedAt?: Prisma.SortOrder
   emergencyContactName?: Prisma.SortOrder
   emergencyContactMobile?: Prisma.SortOrder
   abhaNumber?: Prisma.SortOrder
@@ -800,6 +842,8 @@ export type PatientMinOrderByAggregateInput = {
   state?: Prisma.SortOrder
   postalCode?: Prisma.SortOrder
   bloodGroup?: Prisma.SortOrder
+  allergies?: Prisma.SortOrder
+  allergiesReviewedAt?: Prisma.SortOrder
   emergencyContactName?: Prisma.SortOrder
   emergencyContactMobile?: Prisma.SortOrder
   abhaNumber?: Prisma.SortOrder
@@ -949,6 +993,8 @@ export type PatientCreateWithoutConsentsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -981,6 +1027,8 @@ export type PatientUncheckedCreateWithoutConsentsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1029,6 +1077,8 @@ export type PatientUpdateWithoutConsentsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1061,6 +1111,8 @@ export type PatientUncheckedUpdateWithoutConsentsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1093,6 +1145,8 @@ export type PatientCreateWithoutAppointmentsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1125,6 +1179,8 @@ export type PatientUncheckedCreateWithoutAppointmentsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1173,6 +1229,8 @@ export type PatientUpdateWithoutAppointmentsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1205,6 +1263,8 @@ export type PatientUncheckedUpdateWithoutAppointmentsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1237,6 +1297,8 @@ export type PatientCreateWithoutEncountersInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1269,6 +1331,8 @@ export type PatientUncheckedCreateWithoutEncountersInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1317,6 +1381,8 @@ export type PatientUpdateWithoutEncountersInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1349,6 +1415,8 @@ export type PatientUncheckedUpdateWithoutEncountersInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1381,6 +1449,8 @@ export type PatientCreateWithoutInvoicesInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1413,6 +1483,8 @@ export type PatientUncheckedCreateWithoutInvoicesInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1461,6 +1533,8 @@ export type PatientUpdateWithoutInvoicesInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1493,6 +1567,8 @@ export type PatientUncheckedUpdateWithoutInvoicesInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1525,6 +1601,8 @@ export type PatientCreateWithoutDocumentsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1557,6 +1635,8 @@ export type PatientUncheckedCreateWithoutDocumentsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1605,6 +1685,8 @@ export type PatientUpdateWithoutDocumentsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1637,6 +1719,8 @@ export type PatientUncheckedUpdateWithoutDocumentsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1669,6 +1753,8 @@ export type PatientCreateWithoutDiagnosticOrdersInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1701,6 +1787,8 @@ export type PatientUncheckedCreateWithoutDiagnosticOrdersInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1749,6 +1837,8 @@ export type PatientUpdateWithoutDiagnosticOrdersInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1781,6 +1871,8 @@ export type PatientUncheckedUpdateWithoutDiagnosticOrdersInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1813,6 +1905,8 @@ export type PatientCreateWithoutCorrectionsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1845,6 +1939,8 @@ export type PatientUncheckedCreateWithoutCorrectionsInput = {
   state?: string | null
   postalCode?: string | null
   bloodGroup?: $Enums.BloodGroup
+  allergies?: string | null
+  allergiesReviewedAt?: Date | string | null
   emergencyContactName?: string | null
   emergencyContactMobile?: string | null
   abhaNumber?: string | null
@@ -1893,6 +1989,8 @@ export type PatientUpdateWithoutCorrectionsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1925,6 +2023,8 @@ export type PatientUncheckedUpdateWithoutCorrectionsInput = {
   state?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   postalCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   bloodGroup?: Prisma.EnumBloodGroupFieldUpdateOperationsInput | $Enums.BloodGroup
+  allergies?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  allergiesReviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   emergencyContactName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   emergencyContactMobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   abhaNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2042,6 +2142,8 @@ export type PatientSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   state?: boolean
   postalCode?: boolean
   bloodGroup?: boolean
+  allergies?: boolean
+  allergiesReviewedAt?: boolean
   emergencyContactName?: boolean
   emergencyContactMobile?: boolean
   abhaNumber?: boolean
@@ -2076,6 +2178,8 @@ export type PatientSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   state?: boolean
   postalCode?: boolean
   bloodGroup?: boolean
+  allergies?: boolean
+  allergiesReviewedAt?: boolean
   emergencyContactName?: boolean
   emergencyContactMobile?: boolean
   abhaNumber?: boolean
@@ -2102,6 +2206,8 @@ export type PatientSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   state?: boolean
   postalCode?: boolean
   bloodGroup?: boolean
+  allergies?: boolean
+  allergiesReviewedAt?: boolean
   emergencyContactName?: boolean
   emergencyContactMobile?: boolean
   abhaNumber?: boolean
@@ -2128,6 +2234,8 @@ export type PatientSelectScalar = {
   state?: boolean
   postalCode?: boolean
   bloodGroup?: boolean
+  allergies?: boolean
+  allergiesReviewedAt?: boolean
   emergencyContactName?: boolean
   emergencyContactMobile?: boolean
   abhaNumber?: boolean
@@ -2137,7 +2245,7 @@ export type PatientSelectScalar = {
   updatedAt?: boolean
 }
 
-export type PatientOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "uhid" | "name" | "givenName" | "familyName" | "gender" | "birthDate" | "ageYears" | "mobile" | "email" | "addressLine" | "city" | "state" | "postalCode" | "bloodGroup" | "emergencyContactName" | "emergencyContactMobile" | "abhaNumber" | "abhaAddress" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["patient"]>
+export type PatientOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "uhid" | "name" | "givenName" | "familyName" | "gender" | "birthDate" | "ageYears" | "mobile" | "email" | "addressLine" | "city" | "state" | "postalCode" | "bloodGroup" | "allergies" | "allergiesReviewedAt" | "emergencyContactName" | "emergencyContactMobile" | "abhaNumber" | "abhaAddress" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["patient"]>
 export type PatientInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   consents?: boolean | Prisma.Patient$consentsArgs<ExtArgs>
   appointments?: boolean | Prisma.Patient$appointmentsArgs<ExtArgs>
@@ -2188,6 +2296,22 @@ export type $PatientPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     state: string | null
     postalCode: string | null
     bloodGroup: $Enums.BloodGroup
+    /**
+     * Known allergies, free text, as the patient described them.
+     * 
+     * Read with `allergiesReviewedAt`, never alone. Null here with a review date
+     * set means "no known allergies"; null with no review date means nobody has
+     * asked, and a doctor about to prescribe needs to know which it is. See the
+     * 20261007090000_patient_allergies migration for why this is text and not a
+     * coded allergen list.
+     */
+    allergies: string | null
+    /**
+     * When a human last confirmed the allergies — including confirming there are
+     * none. Set on save even when the field is left empty, because "I asked and
+     * there are none" is a finding, not an absence of data.
+     */
+    allergiesReviewedAt: Date | null
     emergencyContactName: string | null
     emergencyContactMobile: string | null
     /**
@@ -2647,6 +2771,8 @@ export interface PatientFieldRefs {
   readonly state: Prisma.FieldRef<"Patient", 'String'>
   readonly postalCode: Prisma.FieldRef<"Patient", 'String'>
   readonly bloodGroup: Prisma.FieldRef<"Patient", 'BloodGroup'>
+  readonly allergies: Prisma.FieldRef<"Patient", 'String'>
+  readonly allergiesReviewedAt: Prisma.FieldRef<"Patient", 'DateTime'>
   readonly emergencyContactName: Prisma.FieldRef<"Patient", 'String'>
   readonly emergencyContactMobile: Prisma.FieldRef<"Patient", 'String'>
   readonly abhaNumber: Prisma.FieldRef<"Patient", 'String'>

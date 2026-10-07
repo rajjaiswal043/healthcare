@@ -334,6 +334,20 @@ model Patient {
 
   bloodGroup BloodGroup @default(UNKNOWN) @map("blood_group")
 
+  /// Known allergies, free text, as the patient described them.
+  ///
+  /// Read with `allergiesReviewedAt`, never alone. Null here with a review date
+  /// set means "no known allergies"; null with no review date means nobody has
+  /// asked, and a doctor about to prescribe needs to know which it is. See the
+  /// 20261007090000_patient_allergies migration for why this is text and not a
+  /// coded allergen list.
+  allergies String? @db.VarChar(500)
+
+  /// When a human last confirmed the allergies — including confirming there are
+  /// none. Set on save even when the field is left empty, because "I asked and
+  /// there are none" is a finding, not an absence of data.
+  allergiesReviewedAt DateTime? @map("allergies_reviewed_at") @db.Timestamptz(6)
+
   emergencyContactName   String? @map("emergency_contact_name") @db.VarChar(200)
   emergencyContactMobile String? @map("emergency_contact_mobile") @db.VarChar(10)
 

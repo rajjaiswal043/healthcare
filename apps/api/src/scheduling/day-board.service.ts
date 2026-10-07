@@ -35,6 +35,12 @@ export interface DayBoardRow {
   time: string | null;
   visitFee: FeeTag;
   testFee: FeeTag;
+  /**
+   * How they actually paid, today, across every bill of theirs — usually one
+   * entry, two when a consultation went on a card and a test was settled in
+   * cash. Empty when nothing has been collected yet.
+   */
+  paymentMethods: string[];
 }
 
 export interface DayBoard {
@@ -145,7 +151,10 @@ export class DayBoardService {
         appointments.map((a) => a.id),
       );
 
-      return this.assemble({ day, tz, scope, appointments, orders, visitFees });
+      const patientIds = [...new Set([...appointments, ...orders].map((r) => r.patient.id))];
+      const paymentMethods = await this.paymentMethods(tx, patientIds, dayStart, dayEnd);
+
+      return this.assemble({ day, tz, scope, appointments, orders, visitFees, paymentMethods });
     });
   }
 
@@ -200,6 +209,47 @@ export class DayBoardService {
     return fees;
   }
 
+  /**
+   * How each patient paid today.
+   *
+   * Money IN only. A refund carries a mode too, and listing it here would read
+   * as a second way the patient paid rather than money going back to them.
+   *
+   * Keyed on the payment's own date rather than the invoice's: a bill raised
+   * yesterday and settled this morning is this morning's cash, which is the
+   * answer the desk and the day's collections both want.
+   */
+  private async paymentMethods(
+    tx: TenantClient,
+    patientIds: string[],
+    from: Date,
+    to: Date,
+  ): Promise<Map<string, string[]>> {
+    const byPatient = new Map<string, string[]>();
+    if (patientIds.length === 0) return byPatient;
+
+    const payments = await tx.payment.findMany({
+      where: {
+        direction: 'IN',
+        collectedAt: { gte: from, lt: to },
+        invoice: { patientId: { in: patientIds } },
+      },
+      select: { mode: true, invoice: { select: { patientId: true } } },
+      orderBy: { collectedAt: 'asc' },
+    });
+
+    for (const p of payments) {
+      const id = p.invoice.patientId;
+      const modes = byPatient.get(id) ?? [];
+      // Distinct, in the order they were taken: "Cash, UPI" reads as a story,
+      // "Cash, Cash, UPI" reads as a bug.
+      if (!modes.includes(p.mode)) modes.push(p.mode);
+      byPatient.set(id, modes);
+    }
+
+    return byPatient;
+  }
+
   private assemble(input: {
     day: string;
     tz: string;
@@ -222,8 +272,9 @@ export class DayBoardService {
       } & DiagnosticBillingInput
     >;
     visitFees: Map<string, FeeTag>;
+    paymentMethods: Map<string, string[]>;
   }): DayBoard {
-    const { day, tz, scope, appointments, orders, visitFees } = input;
+    const { day, tz, scope, appointments, orders, visitFees, paymentMethods } = input;
 
     /** Everything one patient has going on today, gathered before it is judged. */
     interface Accumulator {
@@ -305,6 +356,7 @@ export class DayBoardService {
         // because the desk's question is "is there money to collect", not
         // "which of the three".
         testFee: summariseTestFees(r.testFees),
+        paymentMethods: paymentMethods.get(r.patient.id) ?? [],
       }))
       .sort(byTimeThenName);
 

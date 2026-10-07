@@ -182,7 +182,7 @@ function DayBoardScreen() {
   const first = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const last = first + shown.length - 1;
 
-  const columns = active.bucket === null ? 8 : 7;
+  const columns = active.bucket === null ? 9 : 8;
   const notAttending = board?.counts.not_attending ?? 0;
 
   return (
@@ -298,6 +298,7 @@ function DayBoardScreen() {
                     <Th>With</Th>
                     <Th>Here for</Th>
                     <Th>Payment</Th>
+                    <Th className="w-[120px]">Method</Th>
                     {active.bucket === null && <Th className="w-[130px]">Stage</Th>}
                   </tr>
                 </thead>
@@ -358,6 +359,13 @@ function DayBoardScreen() {
                           )}
                         </span>
                       </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-ink-60">
+                        {r.paymentMethods.length === 0 ? (
+                          <span className="text-ink-20">—</span>
+                        ) : (
+                          r.paymentMethods.map(payMethodLabel).join(', ')
+                        )}
+                      </td>
                       {active.bucket === null && (
                         <td className="px-4 py-3">
                           <Chip tone={BUCKET_TONE[r.bucket]}>{BUCKET_LABEL[r.bucket]}</Chip>
@@ -407,6 +415,12 @@ function DayBoardScreen() {
       )}
     </div>
   );
+}
+
+/** CASH -> "Cash", BANK_TRANSFER -> "Bank transfer". */
+function payMethodLabel(mode: string): string {
+  const words = mode.toLowerCase().replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function emptyMessage(bucket: DayBucket | null): string {

@@ -117,6 +117,16 @@ export class CorrectPatientDto {
   @IsEnum(BloodGroupDto)
   bloodGroup?: BloodGroupDto;
 
+  /**
+   * Known allergies, free text. Saving this field at all — even empty — records
+   * that somebody asked, which is what separates "no known allergies" from
+   * "nobody has asked". See the patient_allergies migration.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  allergies?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(200)

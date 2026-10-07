@@ -20,12 +20,17 @@ import { PERMISSIONS } from '../../platform/auth/permissions.js';
 import { PatientsService, type RequestMeta } from './patients.service.js';
 import { RegisterPatientDto } from './dto/register-patient.dto.js';
 import { ListPatientsQueryDto } from './dto/list-patients.dto.js';
+import { TimelineQueryDto } from './dto/timeline.dto.js';
 import { CheckDuplicatesDto } from './dto/check-duplicates.dto.js';
 import { CorrectPatientDto } from './correct-patient.dto.js';
+import { Patient360Service } from './patient-360.service.js';
 
 @Controller('patients')
 export class PatientsController {
-  constructor(private readonly patients: PatientsService) {}
+  constructor(
+    private readonly patients: PatientsService,
+    private readonly view360: Patient360Service,
+  ) {}
 
   /** Live duplicate check as the receptionist types (FR-P36-03). */
   @Post('check-duplicates')
@@ -97,6 +102,50 @@ export class PatientsController {
     @Req() req: FastifyRequest,
   ) {
     return this.patients.correct(tenantId, id, { ...dto }, metaFrom(req, user));
+  }
+
+  /**
+   * Everything that has happened to this patient, newest first.
+   *
+   * Paged with a keyset cursor rather than a page number: the feed grows from
+   * the top, and an OFFSET would push a row the reader has not reached yet onto
+   * the next page the moment anything new arrives.
+   *
+   * Guarded only by `patient:read` — the SOURCES are gated individually inside
+   * the service, so a doctor's feed is built without the payment rows rather
+   * than having them removed afterwards.
+   */
+  @Get(':id/timeline')
+  @RequirePermissions(PERMISSIONS.PATIENT_READ)
+  async timeline(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Query() query: TimelineQueryDto,
+  ) {
+    const cursor =
+      query.cursorAt && query.cursorId
+        ? { at: new Date(query.cursorAt), id: query.cursorId }
+        : undefined;
+
+    return this.view360.timeline(tenantId, id, user, cursor);
+  }
+
+  /** What this patient owes, and the bills behind it. */
+  @Get(':id/billing')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async billing(@CurrentTenant() tenantId: string, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.view360.billing(tenantId, id);
+  }
+
+  /** Every test this patient has had. */
+  @Get(':id/diagnostics')
+  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_READ)
+  async diagnostics(
+    @CurrentTenant() tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.view360.diagnostics(tenantId, id);
   }
 
   /** What this record used to say. Administrators only. */

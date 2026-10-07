@@ -670,3 +670,124 @@ describe('a patient name has to be a name', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+/**
+ * Allergies, and the distinction the second column exists for.
+ *
+ * A blank allergy field means one of two completely different things — nobody
+ * has asked, or somebody asked and there are none — and the failure is
+ * one-directional: an unasked patient that reads as "no allergies" gets
+ * prescribed on. `allergiesReviewedAt` is what tells them apart, so every test
+ * here is really about that field rather than about the text.
+ */
+describe('a patient’s allergies', () => {
+  // Eight digits after the 98, because the rule is ten starting 6-9. Seven
+  // makes every registration fail on the phone number and every assertion
+  // below pass or fail for the wrong reason.
+  let mobile = 97000000;
+
+  function register(payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/patients',
+      headers: { cookie: frontDesk.cookie },
+      payload: {
+        name: 'Allergy Test',
+        gender: 'FEMALE',
+        ageYears: 30,
+        mobile: `98${mobile++}`,
+        confirmedNotDuplicate: true,
+        consentCareDelivery: true,
+        ...payload,
+      },
+    });
+  }
+
+  async function detail(id: string) {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/patients/${id}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json<{ allergies: string | null; allergiesReviewedAt: string | null }>();
+  }
+
+  it('is not recorded when nobody was asked', async () => {
+    const created = await register({});
+    expect(created.statusCode).toBe(201);
+
+    const d = await detail(created.json<{ patient: { id: string } }>().patient.id);
+
+    expect(d.allergies).toBeNull();
+    expect(d.allergiesReviewedAt).toBeNull();
+  });
+
+  it('records what the patient said', async () => {
+    const created = await register({ allergies: 'Penicillin, sulpha drugs' });
+
+    const d = await detail(created.json<{ patient: { id: string } }>().patient.id);
+
+    expect(d.allergies).toBe('Penicillin, sulpha drugs');
+    expect(d.allergiesReviewedAt).not.toBeNull();
+  });
+
+  /** The case the whole design exists for. */
+  it('separates "none known" from "nobody asked"', async () => {
+    const created = await register({ allergies: '' });
+
+    const d = await detail(created.json<{ patient: { id: string } }>().patient.id);
+
+    // No text, but somebody asked — and that is a finding, not an absence.
+    expect(d.allergies).toBeNull();
+    expect(d.allergiesReviewedAt).not.toBeNull();
+  });
+
+  it('can be corrected later, and the change is on the record', async () => {
+    const created = await register({ allergies: 'Penicillin' });
+    const id = created.json<{ patient: { id: string } }>().patient.id;
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/patients/${id}`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { allergies: 'Penicillin, latex' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    expect((await detail(id)).allergies).toBe('Penicillin, latex');
+
+    // Read straight from the table rather than through the corrections
+    // endpoint, which needs `audit:read` — a permission this file's sessions
+    // do not hold, and not what is under test here.
+    const rows = await ownerQuery<{ field: string; old_value: string | null }>(
+      fx.main.id,
+      `SELECT field, old_value FROM patient_correction WHERE patient_id = $1`,
+      [id],
+    );
+
+    expect(rows.map((r) => r.field)).toContain('allergies');
+    expect(rows.find((r) => r.field === 'allergies')?.old_value).toBe('Penicillin');
+  });
+
+  /**
+   * Confirming "still none" changes no text, so it writes no correction row —
+   * but it is exactly when the asking needs to be recorded.
+   */
+  it('counts the asking even when the answer has not changed', async () => {
+    const created = await register({});
+    const id = created.json<{ patient: { id: string } }>().patient.id;
+    expect((await detail(id)).allergiesReviewedAt).toBeNull();
+
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/patients/${id}`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { allergies: '' },
+    });
+
+    const d = await detail(id);
+    expect(d.allergies).toBeNull();
+    expect(d.allergiesReviewedAt).not.toBeNull();
+  });
+});

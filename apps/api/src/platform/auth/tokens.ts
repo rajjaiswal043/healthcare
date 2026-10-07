@@ -7,17 +7,43 @@ import { createHash, randomBytes, createHmac, timingSafeEqual } from 'node:crypt
  * sessionId and the user's permissions. Signed rather than looked up so the hot
  * path costs no database round trip.
  *
- * The trade-off, stated plainly: a permission change does not take effect until
- * the access token expires. With a 15-minute lifetime that window is acceptable;
- * revoking a *session* is immediate, because refresh is checked against the
- * database.
- *
  * Refresh token: opaque random bytes. Only its SHA-256 hash is stored, so a
  * database dump yields no usable tokens.
+ *
+ * ---------------------------------------------------------------------------
+ * SESSIONS DO NOT TIME OUT. Narveer's decision, 7 Oct 2026.
+ *
+ * These were 15 minutes and 7 days. The 15 minutes was the one people met: the
+ * browser has no refresh loop — `POST /auth/refresh` exists and the web app
+ * never calls it — so a quarter of an hour on one screen ended with the next
+ * click landing on the sign-in page. A clinic that signs in at nine should stay
+ * signed in until somebody signs out.
+ *
+ * WHAT THIS COSTS, so whoever reads this next does not have to work it out:
+ *
+ *   A permission change no longer takes effect until the person signs out. The
+ *   access token carries `perms` and is verified by signature alone — no
+ *   database lookup, which is what keeps the hot path free — so an edited role
+ *   reaches somebody only when they next sign in.
+ *
+ *   The same applies to revoking a session. `revokeSessionsForRole` still
+ *   writes `revoked_at`, and the refresh path still refuses a revoked session,
+ *   but nothing refreshes, so a revoked session keeps working. The roles screen
+ *   still says it signs people out; with this lifetime, it does not.
+ *
+ * Accepted because this clinic is not editing roles and the console runs on
+ * staff machines inside the practice. If role editing starts being used, or a
+ * console is ever reachable from outside the clinic, the fix is not to shorten
+ * this again on its own — it is to add refresh-and-retry in the browser, which
+ * gives unlimited sessions AND working revocation. The API half already exists.
+ * ---------------------------------------------------------------------------
  */
 
-export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
-export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+/** One year. Not Infinity: a token has to carry some `exp`, and a date that
+ *  cannot be represented is a different class of bug. Long enough that nobody
+ *  meets it; short enough to be a real number. */
+export const ACCESS_TOKEN_TTL_SECONDS = 365 * 24 * 60 * 60;
+export const REFRESH_TOKEN_TTL_SECONDS = 365 * 24 * 60 * 60;
 
 export interface AccessTokenClaims {
   /** user id */
