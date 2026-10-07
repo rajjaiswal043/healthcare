@@ -2942,10 +2942,7 @@ function Journey() {
 
 function DisplayShowcase() {
   return (
-    <section
-      id="display"
-      className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32"
-    >
+    <section id="display" className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
       <div className="mx-auto max-w-6xl">
         <Reveal className="grid items-end gap-6 lg:grid-cols-2 lg:gap-16">
           <div>
