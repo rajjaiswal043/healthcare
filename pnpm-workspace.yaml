@@ -45,9 +45,14 @@ overrides:
   #                 the API, which resizes clinic logos, and through next's image
   #                 optimiser. The bound was '>=0.35.0' and resolved 0.35.3, which
   #                 is still vulnerable — an open range is only as good as the
-  #                 floor you put under it.
-  sharp: '>=0.35.4'
+  #                 floor you put under it. Raised to 0.35.5 for CVE-2026-96889
+  #                 (GHSA-wq5f-xc86-pv6w), a flaw in the bundled librsvg.
+  sharp: '>=0.35.5'
   postcss: '>=8.5.18'
+  #   source-map-js — GHSA-68fv-2mgg-jv7q, fixed in 1.2.2. Build tooling only:
+  #                 reached through postcss under webpack, vite and @nestjs/cli.
+  #                 Caret, to stay in 1.x.
+  source-map-js: '^1.2.2'
   # Caret, not '>=': an open range resolved to nanoid 6, which is ESM-only and
   # not what postcss expects. The fix shipped in the 3.x line, so stay in it.
   nanoid: '^3.3.18'
