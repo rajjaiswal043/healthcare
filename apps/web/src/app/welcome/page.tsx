@@ -2944,58 +2944,39 @@ function DisplayShowcase() {
   return (
     <section
       id="display"
-      className="relative isolate scroll-mt-24 overflow-hidden bg-dark/[0.93] px-4 py-24 text-white sm:px-6 lg:py-32"
+      className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32"
     >
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-10 opacity-[0.08]"
-        style={{
-          backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-          backgroundSize: '26px 26px',
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -left-40 top-10 -z-10 h-[480px] w-[480px] rounded-full bg-clinical/40 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -right-40 bottom-0 -z-10 h-[420px] w-[420px] rounded-full bg-[#6b3fa0]/25 blur-3xl"
-      />
-
-      <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.85fr_1.15fr]">
-        <Reveal>
-          <p className="flex items-baseline gap-3 text-[14px] font-semibold">
-            <span className="text-white/60">Waiting room</span>
-            <span aria-hidden="true" className="h-px flex-1 bg-white/15" />
-          </p>
-          <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-white">
-            The token screen in the waiting room.
-          </h2>
-          <p className="mt-5 max-w-md text-[16px] leading-relaxed text-white/65">
+      <div className="mx-auto max-w-6xl">
+        <Reveal className="grid items-end gap-6 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <p className="flex items-baseline gap-3 text-[14px] font-semibold">
+              <span className="text-ink-60">Waiting room</span>
+              <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
+            </p>
+            <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-ink">
+              The token screen in the{' '}
+              <span className="wl-serif font-normal text-clinical-text">waiting room.</span>
+            </h2>
+          </div>
+          <p className="max-w-md text-[16px] leading-relaxed text-ink-60">
             Pair any TV with a key from settings. It shows who each doctor is seeing and who&rsquo;s
-            next, and updates on its own. Patients&rsquo; names never go on the wall, only token
-            numbers.
+            next, and updates on its own.
           </p>
-          <ul className="mt-8 space-y-3.5">
-            {[
-              'Any smart TV or browser, with nothing to install',
-              'One board per doctor, updated live',
-              'Shows tokens only, never names or details',
-            ].map((t) => (
-              <li key={t} className="flex items-center gap-3 text-[14.5px] text-white/85">
-                <span aria-hidden="true" className="text-[#5fd6c6]">
-                  &ndash;
-                </span>
-                {t}
-              </li>
-            ))}
-          </ul>
         </Reveal>
 
-        <Reveal delay={120}>
-          <div className="relative">
-            <div className="rounded-[26px] border border-white/10 bg-[#0b0c0e] p-2.5 shadow-[0_60px_120px_-40px_rgba(0,0,0,0.8)] sm:p-3.5">
+        {/* Bento: the TV gets the big tile, and each promise gets a small tile
+            that shows it rather than just saying it. */}
+        <div className="mt-10 grid gap-4 lg:grid-cols-[1.6fr_1fr] lg:grid-rows-3">
+          <Reveal
+            delay={120}
+            className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-gradient-to-br from-clinical-tint to-white to-65% p-4 sm:p-8 lg:row-span-3"
+          >
+            <div className="relative rounded-[26px] border border-black/40 bg-gradient-to-b from-[#24272c] to-[#0b0c0e] p-2.5 shadow-[0_50px_90px_-45px_rgba(22,24,28,0.55),0_0_0_1px_rgba(255,255,255,0.04)_inset] sm:p-3.5">
+              {/* Camera dot on the bezel */}
+              <span
+                aria-hidden="true"
+                className="absolute left-1/2 top-[5px] h-1 w-1 -translate-x-1/2 rounded-full bg-white/20 sm:top-[7px]"
+              />
               <div className="overflow-hidden rounded-[16px] bg-bg p-4 text-ink sm:p-6">
                 <div className="flex items-center justify-between gap-3 border-b border-ink/10 pb-4">
                   <span className="flex items-center gap-3">
@@ -3059,17 +3040,60 @@ function DisplayShowcase() {
                 </div>
               </div>
             </div>
-            {/* Stand */}
-            <div
-              aria-hidden="true"
-              className="mx-auto h-10 w-16 bg-gradient-to-b from-[#1d2024] to-[#0b0c0e]"
-            />
-            <div
-              aria-hidden="true"
-              className="mx-auto h-2.5 w-56 rounded-full bg-[#1d2024] shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
-            />
-          </div>
-        </Reveal>
+          </Reveal>
+
+          <Reveal delay={180} className="rounded-card-lg border border-ink/8 bg-white p-5">
+            <p className="mono-label">Pair in seconds</p>
+            <div aria-hidden="true" className="mt-3 flex gap-1.5">
+              {'K7P42Q'.split('').map((c, i) => (
+                <span
+                  key={i}
+                  className="grid h-10 w-8 place-items-center rounded-[9px] border border-ink/10 bg-bg-soft font-mono text-[17px] font-bold"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            <h3 className="mt-3 font-display text-[17px] font-bold tracking-[-0.015em]">
+              Any smart TV or browser
+            </h3>
+            <p className="mt-1 text-[13.5px] leading-snug text-ink-60">
+              Type the key from settings. Nothing to install.
+            </p>
+          </Reveal>
+
+          <Reveal delay={240} className="rounded-card-lg border border-ink/8 bg-white p-5">
+            <span className="flex items-center gap-2 font-mono text-[12px] text-clinical-text">
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 rounded-full bg-clinical shadow-[0_0_0_5px_rgba(15,118,110,0.15)]"
+              />
+              Updated 2s ago
+            </span>
+            <h3 className="mt-3 font-display text-[17px] font-bold tracking-[-0.015em]">
+              One board per doctor
+            </h3>
+            <p className="mt-1 text-[13.5px] leading-snug text-ink-60">
+              Moves on its own as the desk calls patients in.
+            </p>
+          </Reveal>
+
+          <Reveal delay={300} className="rounded-card-lg border border-ink/8 bg-white p-5">
+            <div aria-hidden="true" className="flex items-center gap-2.5">
+              <span className="text-[13px] text-ink-20 line-through">Meera Pillai</span>
+              <ArrowRight size={12} />
+              <span className="rounded-[8px] bg-clinical-soft px-2.5 py-0.5 font-mono text-[19px] font-bold text-clinical">
+                20
+              </span>
+            </div>
+            <h3 className="mt-3 font-display text-[17px] font-bold tracking-[-0.015em]">
+              Tokens only
+            </h3>
+            <p className="mt-1 text-[13.5px] leading-snug text-ink-60">
+              Patients&rsquo; names never go on the wall.
+            </p>
+          </Reveal>
+        </div>
       </div>
     </section>
   );
