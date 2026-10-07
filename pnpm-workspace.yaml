@@ -46,7 +46,11 @@ overrides:
   #                 optimiser. The bound was '>=0.35.0' and resolved 0.35.3, which
   #                 is still vulnerable — an open range is only as good as the
   #                 floor you put under it.
-  sharp: '>=0.35.4'
+  #                 7 Oct 2026: moved again, to 0.35.5 — GHSA-wq5f-xc86-pv6w.
+  #                 sharp decodes bytes a patient's clinic uploaded, so this is
+  #                 the one shipping dependency on this list where the
+  #                 vulnerable code path is plainly reachable.
+  sharp: '>=0.35.5'
   postcss: '>=8.5.18'
   # Caret, not '>=': an open range resolved to nanoid 6, which is ESM-only and
   # not what postcss expects. The fix shipped in the 3.x line, so stay in it.
@@ -93,3 +97,80 @@ overrides:
   #                 dev-only advisory that is fixed inside the 4.x line. Same
   #                 trap as nanoid above. The fix is 4.3.2; stay in 4.x.
   js-yaml: '^4.3.2'
+
+  # --- 7 Oct 2026 --------------------------------------------------------
+  #
+  #   fastify     — GHSA-667r-xxjv-c9mm and GHSA-p68q-wchp-6fh7, both fixed in
+  #                 5.12.2. This is the HTTP server itself, reached on every
+  #                 request, so it is the most exposed entry on the list.
+  #                 Overridden as well as bumped in apps/api, because
+  #                 @nestjs/platform-fastify carries its own copy.
+  fastify: '>=5.12.2'
+  #   brace-expansion — GHSA-qhr7-859c-m2p7 and GHSA-6j4f-fj2g-mc7p. THREE
+  #                 vulnerable ranges, and this tree resolves into all of them:
+  #                 1.x via eslint's minimatch, 2.x via @swc/cli, 4.x via
+  #                 typescript-eslint.
+  #
+  #                 NOT OVERRIDDEN, and the attempt is worth recording. Forcing
+  #                 '>=5.0.11' broke eslint outright — "TypeError: expand is not
+  #                 a function", because minimatch@3 does
+  #                 `require('brace-expansion')` expecting 1.x's CommonJS
+  #                 default export. Per-major selectors
+  #                 ('brace-expansion@1' and friends) did not bind either:
+  #                 minimatch@3 still resolved to 5.0.12.
+  #
+  #                 Every path is eslint, @swc/cli or typescript-eslint, so
+  #                 nothing here reaches a server. Ignored below rather than
+  #                 forced, because a toolchain broken to satisfy a gate is
+  #                 worse than an advisory that cannot be reached.
+  #   piscina     — GHSA-67c8-pqhq-4rmx, CRITICAL. Dev-only: @nestjs/cli >
+  #                 @swc/cli > piscina, so it compiles the API and never runs on
+  #                 a server. Fixed anyway to keep the pre-push gate honest.
+  piscina: '>=4.9.4'
+  #   @xhmikosr/decompress — GHSA-hrh2-vp3x-79xf, CRITICAL. Dev-only, same
+  #                 @nestjs/cli > @swc/cli chain: it unpacks the SWC binary at
+  #                 install time.
+  '@xhmikosr/decompress': '>=10.2.2'
+  #   http-cache-semantics — GHSA-ch52-4w7c-c8xp. Dev-only, same chain.
+  http-cache-semantics: '>=4.2.1'
+  #   source-map-js — GHSA-68fv-2mgg-jv7q. Dev-only, through the webpack type
+  #                 checker the Nest CLI runs in watch mode.
+  source-map-js: '>=1.2.2'
+
+# -----------------------------------------------------------------------------
+# IGNORED ADVISORIES
+#
+# pnpm 10 moved this out of package.json's `pnpm` field and into this file,
+# the same way it moved `overrides` above — it is silently ignored in
+# package.json, which looks exactly like the advisory being unsuppressable.
+#
+#   GHSA-vfj7-8cjw-p6xm — braces, ReDoS. Ignored on 7 Oct 2026 because THERE IS
+#     NO FIX: the advisory names 3.0.4 as patched and npm's latest braces is
+#     3.0.3. Nothing to upgrade to.
+#
+#     Reached only as tailwindcss > chokidar > braces, which is Tailwind's file
+#     watcher. It runs at build time against this repo's own glob patterns —
+#     never against anything a patient or a clinic sends — so the untrusted
+#     input a ReDoS needs cannot arrive. Escaping it entirely means Tailwind 4,
+#     which drops chokidar and is a major upgrade of the whole design system.
+#
+#     REVISIT when braces publishes a fix, or when Tailwind 4 is on the table.
+#     Remove this entry first and let the gate tell you whether it is still
+#     needed.
+#
+#   GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p — brace-expansion, ReDoS.
+#     Ignored on 7 Oct 2026. See the brace-expansion note in `overrides`
+#     above for why forcing the fixed version is not available here: it
+#     breaks eslint, and the per-major selectors do not bind.
+#
+#     All fourteen paths run through eslint, @swc/cli or typescript-eslint —
+#     build and lint tooling, none of it shipped. REVISIT when eslint's
+#     minimatch moves off 1.x, which removes the caller that cannot take the
+#     new major.
+# -----------------------------------------------------------------------------
+
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
+    - GHSA-qhr7-859c-m2p7
+    - GHSA-6j4f-fj2g-mc7p

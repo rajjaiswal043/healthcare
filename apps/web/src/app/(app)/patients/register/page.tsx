@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   api,
   ApiRequestError,
@@ -69,6 +70,21 @@ export default function RegisterPatientPage() {
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const router = useRouter();
+
+  /**
+   * Registration continues into booking, every time.
+   *
+   * It used to end on a success card offering "Register another" and "Find a
+   * patient" — a dead end in the one flow that always has a next step. A new
+   * patient at the desk is a patient who needs an appointment, and the
+   * receptionist was retyping the name they had just entered into a search box
+   * on another screen. Narveer's decision, 7 Oct 2026.
+   *
+   * `replace`, not `push`: Back from the booking screen should go wherever the
+   * registration was started from, not to a filled-in form for a patient who
+   * now exists.
+   */
   const [registered, setRegistered] = useState<PatientSummary | null>(null);
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
@@ -130,6 +146,7 @@ export default function RegisterPatientPage() {
     try {
       const { patient } = await api.registerPatient(payload);
       setRegistered(patient);
+      router.replace(`/appointments/new?patientId=${patient.id}&registered=1`);
       setForm(EMPTY);
       setDuplicates([]);
       setBlocking([]);
@@ -149,7 +166,22 @@ export default function RegisterPatientPage() {
     }
   }
 
-  if (registered) return <Success patient={registered} onAgain={() => setRegistered(null)} />;
+  // Held until the redirect lands, so a second submit is impossible and the
+  // form does not flash back to editable in between.
+  if (registered) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <div className="card p-8 text-center">
+          <p className="mono-label !text-clinical-text">Registered</p>
+          <p className="mt-3 font-mono text-[30px] font-bold leading-none text-clinical-text">
+            {registered.uhid}
+          </p>
+          <p className="mt-3 font-display text-[18px] font-bold">{registered.name}</p>
+          <p className="field-hint">Opening the booking screen…</p>
+        </div>
+      </div>
+    );
+  }
 
   const weak = duplicates.filter((d) => d.confidence === 'WEAK');
   const strong = duplicates.filter((d) => d.confidence === 'STRONG');
@@ -583,37 +615,6 @@ function DuplicateNotice({
             </li>
           ))}
         </ul>
-      </div>
-    </div>
-  );
-}
-
-function Success({ patient, onAgain }: { patient: PatientSummary; onAgain: () => void }) {
-  return (
-    <div className="mx-auto max-w-lg">
-      <div className="card overflow-hidden text-center">
-        <div className="bg-clinical-tint px-6 pb-6 pt-8">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-clinical text-white shadow">
-            <IconCheck size={26} />
-          </span>
-          <p className="mono-label mt-4 !text-clinical-text">Registered</p>
-          <p className="mt-3 font-mono text-[34px] font-bold leading-none tracking-tight text-clinical-text">
-            {patient.uhid}
-          </p>
-          <p className="mt-3 font-display text-[20px] font-bold">{patient.name}</p>
-          <p className="font-mono text-[13px] text-ink-60">{patient.mobile}</p>
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-3 p-6">
-          <button type="button" className="btn-primary" onClick={onAgain}>
-            <IconUserPlus size={16} />
-            Register another
-          </button>
-          <Link href="/patients" className="btn-secondary">
-            <IconSearch size={16} />
-            Find a patient
-          </Link>
-        </div>
       </div>
     </div>
   );

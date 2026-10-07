@@ -210,6 +210,8 @@ export interface DayBoardRow {
   time: string | null;
   visitFee: FeeTag;
   testFee: FeeTag;
+  /** How they paid today — empty when nothing has been collected. */
+  paymentMethods: string[];
 }
 
 export interface DayBoard {
@@ -227,6 +229,48 @@ export interface DayBoard {
     total: number;
   };
   rows: DayBoardRow[];
+}
+
+export interface TimelineEvent {
+  id: string;
+  kind:
+    | 'REGISTERED'
+    | 'APPOINTMENT'
+    | 'CONSULTATION'
+    | 'TEST'
+    | 'DOCUMENT'
+    | 'INVOICE'
+    | 'PAYMENT'
+    | 'CORRECTION';
+  at: string;
+  summary: string;
+  detail: string | null;
+}
+
+export interface PatientBilling {
+  outstandingPaise: number;
+  invoices: Array<{
+    id: string;
+    number: string;
+    status: string;
+    totalPaise: number;
+    balancePaise: number;
+    createdAt: string;
+  }>;
+}
+
+export interface PatientTest {
+  id: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  completedAt: string | null;
+  handedOverAt: string | null;
+  resultNote: string | null;
+  referralSource: string;
+  referrerName: string | null;
+  department: { name: string };
+  documents: Array<{ id: string; fileName: string; contentType: string }>;
 }
 
 export interface StaffUser {
@@ -385,6 +429,9 @@ export interface PatientDetail extends PatientSummary {
   state: string | null;
   postalCode: string | null;
   bloodGroup: string;
+  allergies: string | null;
+  /** Null means nobody has asked. Set with no `allergies` means "none known". */
+  allergiesReviewedAt: string | null;
   emergencyContactName: string | null;
   emergencyContactMobile: string | null;
   abhaAddress: string | null;
@@ -1745,6 +1792,21 @@ export const api = {
     request<ClinicRole & { signedOut: number }>(`/roles/${id}/reset`, { method: 'POST' }),
 
   deleteRole: (id: string) => request<{ id: string }>(`/roles/${id}`, { method: 'DELETE' }),
+
+  // --- the patient 360 ------------------------------------------------------
+
+  /** Everything that has happened to this patient, newest first, 20 at a time. */
+  patientTimeline: (id: string, cursor?: { at: string; id: string }) =>
+    request<{ events: TimelineEvent[]; nextCursor: { at: string; id: string } | null }>(
+      `/patients/${id}/timeline${
+        cursor ? `?cursorAt=${encodeURIComponent(cursor.at)}&cursorId=${cursor.id}` : ''
+      }`,
+    ),
+
+  /** Needs `invoice:read` — a doctor gets 403 and the tab is not drawn. */
+  patientBilling: (id: string) => request<PatientBilling>(`/patients/${id}/billing`),
+
+  patientTests: (id: string) => request<{ orders: PatientTest[] }>(`/patients/${id}/diagnostics`),
 
   // --- the day board --------------------------------------------------------
 

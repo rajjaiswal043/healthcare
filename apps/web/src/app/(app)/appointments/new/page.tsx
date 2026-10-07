@@ -55,6 +55,8 @@ export default function NewAppointmentPage() {
   const searchParams = useSearchParams();
 
   const [patient, setPatient] = useState<PatientSummary | null>(null);
+  /** Arrived straight from registration, so this screen says so. */
+  const [justRegistered, setJustRegistered] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState<string>('');
   const [doctors, setDoctors] = useState<Practitioner[]>([]);
@@ -102,6 +104,10 @@ export default function NewAppointmentPage() {
        * banner rendered from a query string would happily display whatever
        * somebody pasted into the address bar.
        */
+      // Set once, from the URL this screen was opened with. Reading the flag
+      // during render instead would keep the banner up after "Book another".
+      setJustRegistered(searchParams.get('registered') === '1');
+
       const preselected = searchParams.get('patientId');
       if (preselected) {
         try {
@@ -218,6 +224,7 @@ export default function NewAppointmentPage() {
               onClick={() => {
                 setBooked(null);
                 setPatient(null);
+                setJustRegistered(false);
                 setReason('');
                 setSlotStart('');
                 void loadAvailability();
@@ -268,6 +275,20 @@ export default function NewAppointmentPage() {
 
       {/* 1 — patient */}
       <section className="card p-5">
+        {justRegistered && patient && (
+          /* Registration lands here now, so this screen has to carry the
+             confirmation that used to be its own success card — above all the
+             patient's own UHID, which the receptionist reads out or writes on
+             a card. */
+          <p className="mb-3 flex flex-wrap items-center gap-2 rounded-panel border border-clinical/25 bg-clinical-tint px-3 py-2 text-[13px] text-clinical-text">
+            <IconCheck size={14} />
+            <span>
+              <strong>{patient.name}</strong> is registered as{' '}
+              <span className="font-mono font-semibold">{patient.uhid}</span>. Now book them in.
+            </span>
+          </p>
+        )}
+
         <p className="mono-label mb-3">1 · Patient</p>
         {patient ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-clinical/25 bg-clinical-tint px-4 py-3">

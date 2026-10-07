@@ -51,6 +51,7 @@ interface Row {
   withWhom: string | null;
   visitFee: string | null;
   testFee: string | null;
+  paymentMethods: string[];
 }
 
 interface Board {
@@ -363,4 +364,74 @@ describe('the money tag', () => {
 
     expect((await board()).rows[0]!.visitFee).toBe('PAID');
   });
+
+  it('shows how they paid, once they have', async () => {
+    await visit('BOOKED', 0);
+    const invoiceId = await billVisit();
+
+    expect((await board()).rows[0]!.paymentMethods).toEqual([]);
+
+    await pay(invoiceId, 'UPI', 50000);
+
+    expect((await board()).rows[0]!.paymentMethods).toEqual(['UPI']);
+  });
+
+  it('lists each method once, in the order the money came in', async () => {
+    // A consultation on a card and a test settled in cash is two methods for
+    // one patient. Two cash payments is still one method.
+    await visit('BOOKED', 0);
+    const invoiceId = await billVisit();
+
+    await pay(invoiceId, 'CARD', 20000);
+    await pay(invoiceId, 'CASH', 20000);
+    await pay(invoiceId, 'CASH', 10000);
+
+    expect((await board()).rows[0]!.paymentMethods).toEqual(['CARD', 'CASH']);
+  });
+
+  it('does not count a refund as a way the patient paid', async () => {
+    // A refund carries a mode too. Listing it would read as a second way they
+    // paid rather than money going back to them.
+    await visit('BOOKED', 0);
+    const invoiceId = await billVisit();
+
+    await pay(invoiceId, 'UPI', 50000);
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO payment (tenant_id, invoice_id, direction, mode, amount_paise,
+                            collected_by_user_id, correction_kind, reason)
+       VALUES ($1, $2, 'REFUND', 'CASH', 50000, $3, 'PATIENT_REFUND', 'Test refund')`,
+      [fx.main.id, invoiceId, orderedByUserId],
+    );
+
+    expect((await board()).rows[0]!.paymentMethods).toEqual(['UPI']);
+  });
+
+  /** The visit's invoice, unpaid. Returns its id. */
+  async function billVisit(): Promise<string> {
+    const [appt] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM appointment WHERE tenant_id = $1 AND start_at >= date_trunc('day', now())`,
+      [fx.main.id],
+    );
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, appointment_id, patient_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, updated_at)
+       VALUES ($1, $2, $3, 'PAY-' || floor(random() * 100000)::text, 'UNPAID', 50000, 0, 50000, now())
+       RETURNING id`,
+      [fx.main.id, appt!.id, fx.main.patientIds[0]],
+    );
+    return invoice!.id;
+  }
+
+  async function pay(invoiceId: string, mode: string, paise: number) {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO payment (tenant_id, invoice_id, direction, mode, amount_paise,
+                            collected_by_user_id)
+       VALUES ($1, $2, 'IN', $3::payment_mode, $4, $5)`,
+      [fx.main.id, invoiceId, mode, paise, orderedByUserId],
+    );
+  }
 });

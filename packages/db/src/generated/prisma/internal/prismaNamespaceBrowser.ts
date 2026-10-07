@@ -218,6 +218,8 @@ export const PatientScalarFieldEnum = {
   state: 'state',
   postalCode: 'postalCode',
   bloodGroup: 'bloodGroup',
+  allergies: 'allergies',
+  allergiesReviewedAt: 'allergiesReviewedAt',
   emergencyContactName: 'emergencyContactName',
   emergencyContactMobile: 'emergencyContactMobile',
   abhaNumber: 'abhaNumber',

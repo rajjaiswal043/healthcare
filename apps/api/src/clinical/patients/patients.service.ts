@@ -260,13 +260,33 @@ export class PatientsService {
       for (const [field, raw] of Object.entries(input)) {
         if (raw === undefined) continue;
 
-        const next = field === 'birthDate' && raw !== null ? new Date(String(raw)) : raw;
+        const next =
+          field === 'birthDate' && raw !== null
+            ? new Date(String(raw))
+            : // An allergy box submitted empty is "no known allergies", which is
+              // a finding. Stored as null so one absence means one thing, with
+              // the review stamp below carrying the fact that somebody asked.
+              field === 'allergies' && typeof raw === 'string'
+              ? raw.trim() || null
+              : raw;
         const previous = (before as Record<string, unknown>)[field];
 
         if (asText(previous) === asText(next)) continue;
 
         data[field] = next;
         corrections.push({ field, oldValue: asText(previous), newValue: asText(next) });
+      }
+
+      /**
+       * Asking counts, even when the answer does not change the text.
+       *
+       * A patient whose allergies were never recorded, confirmed today as
+       * having none, writes no correction row — nothing changed, both are
+       * empty — and yet something important did happen: the question was put.
+       * Stamped outside the loop so it lands whether or not the text moved.
+       */
+      if (input.allergies !== undefined) {
+        data['allergiesReviewedAt'] = new Date();
       }
 
       // Keep the two age representations from disagreeing. Whichever the caller
@@ -291,7 +311,21 @@ export class PatientsService {
         data['birthDate'] = null;
       }
 
-      if (corrections.length === 0) {
+      /**
+       * Nothing changed, nothing to write — with one exception.
+       *
+       * Confirming that a patient still has no known allergies changes no text,
+       * so it produces no correction row, and this return used to drop the
+       * review stamp with it. That is the one case where "no change" is itself
+       * the finding: the difference between a patient nobody has asked and a
+       * patient who was asked this morning is the whole reason the column
+       * exists.
+       *
+       * No correction row is written for it either way. `patient_correction`
+       * records an old value becoming a new one, and there is no such pair
+       * here — the timestamp is the record.
+       */
+      if (corrections.length === 0 && data['allergiesReviewedAt'] === undefined) {
         return { patient: toSummary(before), duplicatesWarned: [] };
       }
 
@@ -429,6 +463,15 @@ export class PatientsService {
             state: dto.state ?? null,
             postalCode: dto.postalCode ?? null,
             bloodGroup: dto.bloodGroup ?? 'UNKNOWN',
+            // `allergies` present in the payload at all means the desk asked —
+            // including when they typed nothing, which is the "none known"
+            // answer and a finding in its own right.
+            ...(dto.allergies === undefined
+              ? {}
+              : {
+                  allergies: dto.allergies.trim() || null,
+                  allergiesReviewedAt: new Date(),
+                }),
             emergencyContactName: dto.emergencyContactName ?? null,
             emergencyContactMobile: dto.emergencyContactMobile ?? null,
           },
@@ -770,6 +813,10 @@ export class PatientsService {
         state: patient.state,
         postalCode: patient.postalCode,
         bloodGroup: patient.bloodGroup,
+        allergies: patient.allergies,
+        // Sent alongside, never inferred from the text: null allergies with a
+        // review date means "none known", without one means nobody asked.
+        allergiesReviewedAt: patient.allergiesReviewedAt,
         emergencyContactName: patient.emergencyContactName,
         emergencyContactMobile: patient.emergencyContactMobile,
         abhaAddress: patient.abhaAddress,
