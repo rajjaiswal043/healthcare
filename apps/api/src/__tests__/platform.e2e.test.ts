@@ -20,11 +20,14 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
 import { promisify } from 'node:util';
 import {
+  acrossTotpBoundary,
   closeTestApp,
   createTestApp,
   login,
+  loginWithMfa,
   ownerQuery,
   seedFixtures,
+  totpCode,
   type Fixtures,
 } from './harness.js';
 
@@ -117,17 +120,17 @@ async function signInAsPlatform(): Promise<string> {
   const secret = challenge.json().enrolmentSecret as string;
   expect(secret).toBeTruthy();
 
-  const { generate } = await import('otplib');
-
-  const confirmed = await app.inject({
-    method: 'POST',
-    url: '/api/v1/platform/auth/mfa/confirm',
-    payload: {
-      email: PLATFORM_EMAIL,
-      password: PLATFORM_PASSWORD,
-      totpCode: await generate({ secret }),
-    },
-  });
+  const confirmed = await acrossTotpBoundary(async () =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/platform/auth/mfa/confirm',
+      payload: {
+        email: PLATFORM_EMAIL,
+        password: PLATFORM_PASSWORD,
+        totpCode: await totpCode(secret),
+      },
+    }),
+  );
 
   expect(confirmed.statusCode).toBe(200);
 
@@ -248,18 +251,26 @@ describe('onboarding a clinic', () => {
     expect(challenge.json().mfaRequired).toBe(true);
     expect(challenge.json().enrolmentSecret).toBeTruthy();
 
-    const { generate } = await import('otplib');
+    /**
+     * Retried across a TOTP step boundary. This confirm used to be one attempt,
+     * and failed about one full run in twenty with "expected 401 to be 200" —
+     * which reads as a broken onboarding and is really a code generated at
+     * 29.9s being verified at 30.1s. See `acrossTotpBoundary`.
+     */
+    const enrolmentSecret = challenge.json().enrolmentSecret as string;
 
-    const signedIn = await app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/mfa/confirm',
-      payload: {
-        tenantSlug: 'made-clinic',
-        email: 'owner@made.test',
-        password: temporaryPassword,
-        totpCode: await generate({ secret: challenge.json().enrolmentSecret as string }),
-      },
-    });
+    const signedIn = await acrossTotpBoundary(async () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/mfa/confirm',
+        payload: {
+          tenantSlug: 'made-clinic',
+          email: 'owner@made.test',
+          password: temporaryPassword,
+          totpCode: await totpCode(enrolmentSecret),
+        },
+      }),
+    );
 
     expect(signedIn.statusCode).toBe(200);
     // Still holding a password somebody else chose, so still gated.
@@ -807,5 +818,240 @@ describe('platform sets a clinic logo', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.actor_user_id).toBeNull();
+  });
+});
+
+/**
+ * Unlocking a clinic that has locked itself out.
+ *
+ * The case, 13 Oct 2026: the only account at a clinic holding `user:manage`
+ * forgets its password. There is no self-service reset and nothing here sends
+ * email, so without this the route was editing a password hash by hand.
+ *
+ * Two properties carry this block, and both are enforced in the database
+ * function rather than in the API — a rule the API enforces is a rule one new
+ * endpoint can forget:
+ *
+ * **Administrators only.** A platform operator who could reset any clinic
+ * account could take over a named DOCTOR, and that doctor's name is what prints
+ * on a signed prescription.
+ *
+ * **The clinic sees it happen.** The audit entry goes into THEIR log. Support
+ * reaching into a clinic's accounts invisibly is a backdoor into every patient
+ * record they hold.
+ */
+describe('resetting a locked-out clinic administrator', () => {
+  /**
+   * A throwaway administrator, created for this block and deleted after it.
+   *
+   * These tests CHANGE a password, and the fixture's own `admin@main.test` is
+   * what every other test in this file and the next signs in with. Resetting
+   * that one leaves the rest of the suite holding a password that no longer
+   * works — which is how the first draft of this block failed, several tests
+   * later and nowhere near the cause.
+   */
+  const EMAIL = 'resettable-admin@main.test';
+  let resettableId: string;
+
+  beforeAll(async () => {
+    /**
+     * Cleared first, because `afterAll` does not run when a test in this block
+     * throws — and the leftover row then fails the INSERT below on a unique
+     * email for every run afterwards. One failure became permanent, which is a
+     * far worse property than the failure itself: the suite stopped being able
+     * to tell anybody what was wrong.
+     */
+    await removeResettable();
+
+    const [created] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO app_user (tenant_id, email, full_name, password_hash, updated_at)
+       SELECT tenant_id, $2, 'Dr Locked Out', password_hash, now()
+         FROM app_user WHERE tenant_id = $1 LIMIT 1
+       RETURNING id`,
+      [fx.main.id, EMAIL],
+    );
+    resettableId = created!.id;
+
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO user_role (tenant_id, user_id, role_id)
+       SELECT $1, $2, id FROM role WHERE tenant_id = $1 AND key = 'administrator'`,
+      [fx.main.id, resettableId],
+    );
+  });
+
+  afterAll(removeResettable);
+
+  /** By email, so it works whether or not this run got as far as an id. */
+  async function removeResettable() {
+    const [existing] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      'SELECT id FROM app_user WHERE tenant_id = $1 AND email = $2',
+      [fx.main.id, EMAIL],
+    );
+    if (!existing) return;
+
+    await ownerQuery(fx.main.id, 'DELETE FROM session WHERE user_id = $1', [existing.id]);
+    await ownerQuery(fx.main.id, 'DELETE FROM audit_event WHERE resource_id = $1', [existing.id]);
+    await ownerQuery(fx.main.id, 'DELETE FROM user_role WHERE user_id = $1', [existing.id]);
+    await ownerQuery(fx.main.id, 'DELETE FROM app_user WHERE id = $1', [existing.id]);
+  }
+
+  function administrators(cookie = platformCookie) {
+    return app.inject({
+      method: 'GET',
+      url: `/api/v1/platform/clinics/${fx.main.id}/administrators`,
+      headers: { cookie },
+    });
+  }
+
+  function reset(userId: string, cookie = platformCookie) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/platform/clinics/${fx.main.id}/administrators/${userId}/reset-password`,
+      headers: { cookie },
+    });
+  }
+
+  async function userIdFor(email: string): Promise<string> {
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM app_user WHERE email = $1`,
+      [email],
+    );
+    if (!row) throw new Error(`No user ${email}`);
+    return row.id;
+  }
+
+  it('lists the clinic’s administrators, and nobody else', async () => {
+    const res = await administrators();
+    expect(res.statusCode).toBe(200);
+
+    const emails = res
+      .json<{ administrators: Array<{ email: string }> }>()
+      .administrators.map((a) => a.email);
+
+    expect(emails).toContain('admin@main.test');
+    // The list is for picking somebody to unlock, not for enumerating staff.
+    expect(emails).not.toContain('doctor@main.test');
+    expect(emails).not.toContain('frontdesk@main.test');
+  });
+
+  it('refuses a clinic session outright', async () => {
+    // The platform realm is separate on purpose: a clinic cookie is not a
+    // credential here, however senior the person holding it.
+    const clinicAdmin = await loginWithMfa(app, fx.main.slug, 'admin@main.test');
+
+    expect((await administrators(clinicAdmin.cookie)).statusCode).toBe(401);
+  });
+
+  it('issues a temporary password and forces a change at next sign-in', async () => {
+    const res = await reset(resettableId);
+    expect(res.statusCode).toBe(201);
+
+    const body = res.json<{ temporaryPassword: string; email: string }>();
+    expect(body.email).toBe(EMAIL);
+    expect(body.temporaryPassword.length).toBeGreaterThan(7);
+
+    const [row] = await ownerQuery<{ must_change_password: boolean; locked_until: Date | null }>(
+      fx.main.id,
+      `SELECT must_change_password, locked_until FROM app_user WHERE id = $1`,
+      [resettableId],
+    );
+    expect(row?.must_change_password).toBe(true);
+    // A forgotten password is usually several wrong attempts, so the account is
+    // often locked too. A password that does not work yet is not a reset.
+    expect(row?.locked_until).toBeNull();
+  });
+
+  it('the new password actually signs them in', async () => {
+    const { temporaryPassword } = (await reset(resettableId)).json<{ temporaryPassword: string }>();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        tenantSlug: fx.main.slug,
+        email: EMAIL,
+        password: temporaryPassword,
+      },
+    });
+
+    // 200 with a session, or an MFA challenge — either proves the password was
+    // accepted. What matters is that it is not a refusal.
+    expect([200, 201]).toContain(res.statusCode);
+  });
+
+  it('ends every session that account was holding', async () => {
+    // A live session, written directly rather than signed in for: an earlier
+    // test in this block has already reset this account's password, so the
+    // fixture one no longer works. What is under test is that a live session
+    // gets revoked, not how it came to exist.
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO session (tenant_id, user_id, refresh_token_hash, family_id, expires_at)
+       VALUES ($1, $2, repeat('a', 64), gen_random_uuid(), now() + interval '1 day')`,
+      [fx.main.id, resettableId],
+    );
+
+    await reset(resettableId);
+
+    const [live] = await ownerQuery<{ n: number }>(
+      fx.main.id,
+      `SELECT count(*)::int AS n FROM session WHERE user_id = $1 AND revoked_at IS NULL`,
+      [resettableId],
+    );
+    expect(live?.n).toBe(0);
+
+    const [why] = await ownerQuery<{ revoked_reason: string }>(
+      fx.main.id,
+      `SELECT revoked_reason FROM session
+        WHERE user_id = $1 AND revoked_at IS NOT NULL
+        ORDER BY revoked_at DESC LIMIT 1`,
+      [resettableId],
+    );
+    expect(why?.revoked_reason).toBe('platform_password_reset');
+  });
+
+  /** The rule. Enforced in the function, so no endpoint can route around it. */
+  it('refuses an account that does not manage users', async () => {
+    const res = await reset(await userIdFor('doctor@main.test'));
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('NOT_A_CLINIC_ADMINISTRATOR');
+  });
+
+  it('refuses a switched-off administrator', async () => {
+    await ownerQuery(fx.main.id, `UPDATE app_user SET is_active = false WHERE id = $1`, [
+      resettableId,
+    ]);
+
+    // Handing out a working password for a closed account would be a way to
+    // reopen one quietly.
+    const res = await reset(resettableId);
+    expect(res.statusCode).toBe(400);
+
+    await ownerQuery(fx.main.id, `UPDATE app_user SET is_active = true WHERE id = $1`, [
+      resettableId,
+    ]);
+  });
+
+  /**
+   * The one that makes this a support tool rather than a backdoor.
+   */
+  it('is visible in the clinic’s own audit trail, named as platform support', async () => {
+    await reset(resettableId);
+
+    const [event] = await ownerQuery<{ action: string; actor_label: string | null }>(
+      fx.main.id,
+      `SELECT action, actor_label FROM audit_event
+        WHERE resource_id = $1 AND action = 'user.reset_password.platform'
+        ORDER BY occurred_at DESC LIMIT 1`,
+      [resettableId],
+    );
+
+    expect(event).toBeDefined();
+    expect(event?.actor_label).toMatch(/^Platform support/);
   });
 });

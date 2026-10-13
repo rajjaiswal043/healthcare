@@ -13,8 +13,23 @@ import { clinicToday, instantToLocalTime, localToInstant } from './clinic-time.j
 export type DayBucket =
   'EXPECTED' | 'WAITING' | 'WITH_DOCTOR' | 'AT_DEPARTMENT' | 'DONE' | 'NOT_ATTENDING';
 
-/** Money as a tag, never a figure. Null when nothing was charged. */
+/** Where a bill stands, without saying how much. Null when nothing was charged. */
 export type FeeTag = 'PAID' | 'PENDING' | null;
+
+/**
+ * What a patient was charged today, and what is still owed.
+ *
+ * NULL FOR A CALLER WITHOUT `invoice:read`, which is most of the clinical
+ * staff. The tags above exist precisely because doctors and nurses read this
+ * board and deliberately do not hold that permission — Narveer's decision, 29
+ * Sep 2026 — so the figures are left out of the response rather than sent and
+ * hidden by the browser. A number omitted from the payload cannot leak.
+ */
+export interface RowMoney {
+  /** Every live bill behind this row. A cancelled one is not a charge. */
+  billedPaise: number;
+  duePaise: number;
+}
 
 export interface DayBoardRow {
   patient: {
@@ -25,6 +40,14 @@ export interface DayBoardRow {
     gender: string;
   };
   bucket: DayBucket;
+  /**
+   * The visit this row hangs off, when there is one.
+   *
+   * Null for a walk-in test patient, who has no appointment at all. Carried so
+   * the board can act on the visit — ordering a test from a row needs something
+   * to attach it to, and the row itself is keyed on the patient.
+   */
+  appointmentId: string | null;
   /** What they are here for. Both can be true; neither ever is. */
   hasVisit: boolean;
   hasTest: boolean;
@@ -41,6 +64,8 @@ export interface DayBoardRow {
    * cash. Empty when nothing has been collected yet.
    */
   paymentMethods: string[];
+  /** Null without `invoice:read`. See `RowMoney`. */
+  money: RowMoney | null;
 }
 
 export interface DayBoard {
@@ -49,6 +74,15 @@ export interface DayBoard {
   /** CLINIC for the desk and the administrator; OWN for a doctor. */
   scope: 'CLINIC' | 'OWN';
   counts: Record<Lowercase<DayBucket> | 'total', number>;
+  /**
+   * The day's money, over every row on the board. Null without `invoice:read`.
+   *
+   * Summed here rather than in the browser because the browser only ever holds
+   * the rows it was sent, and this has to be the day's figure whichever tab is
+   * open. `collectedPaise` is derived — billed minus due — so it cannot
+   * disagree with the other two.
+   */
+  money: { billedPaise: number; collectedPaise: number; duePaise: number } | null;
   rows: DayBoardRow[];
 }
 
@@ -146,15 +180,35 @@ export class DayBoardService {
         },
       });
 
-      const visitFees = await this.visitFees(
+      /**
+       * The figures are read only for somebody allowed to see them.
+       *
+       * `invoice:read` is the same permission the billing tab and the receipt
+       * endpoint sit behind. Without it the tags are still assembled — they
+       * come from the orders' own select and from this query's tag half — and
+       * the money is dropped before it reaches the response.
+       */
+      const mayReadMoney = user.permissions.includes('invoice:read');
+
+      const bills = await this.billsForDay(
         tx,
         appointments.map((a) => a.id),
+        orders.map((o) => o.id),
       );
 
       const patientIds = [...new Set([...appointments, ...orders].map((r) => r.patient.id))];
       const paymentMethods = await this.paymentMethods(tx, patientIds, dayStart, dayEnd);
 
-      return this.assemble({ day, tz, scope, appointments, orders, visitFees, paymentMethods });
+      return this.assemble({
+        day,
+        tz,
+        scope,
+        appointments,
+        orders,
+        visitFees: bills.visitTags,
+        money: mayReadMoney ? bills.byPatient : null,
+        paymentMethods,
+      });
     });
   }
 
@@ -182,17 +236,49 @@ export class DayBoardService {
     return self?.id ?? null;
   }
 
-  /** The consultation bill for each appointment, settled or not. */
-  private async visitFees(
+  /**
+   * Every bill behind today's board: the consultation tag, and the totals.
+   *
+   * ONE QUERY FOR BOTH, because they read the same invoices. The tag half used
+   * to be a query of its own keyed on `appointmentId`; adding a second read for
+   * the figures would have asked the same rows the same question twice.
+   *
+   * A bill reaches today's board three ways, which is why the OR has three
+   * arms: `appointmentId` when it IS the consultation bill,
+   * `visitAppointmentId` when it is the test bill raised during that visit, and
+   * through a LINE when the test was a walk-in and has no appointment anywhere.
+   * Missing the third arm would show a walk-in test patient as owing nothing,
+   * which is the one row on this board that exists only because money is owed.
+   *
+   * Summed per PATIENT rather than per invoice, because the board is one row
+   * per patient and several orders in one visit share a single test bill — a
+   * per-order sum would count that bill once for each test on it.
+   */
+  private async billsForDay(
     tx: TenantClient,
     appointmentIds: string[],
-  ): Promise<Map<string, FeeTag>> {
-    const fees = new Map<string, FeeTag>();
-    if (appointmentIds.length === 0) return fees;
+    orderIds: string[],
+  ): Promise<{ visitTags: Map<string, FeeTag>; byPatient: Map<string, RowMoney> }> {
+    const visitTags = new Map<string, FeeTag>();
+    const byPatient = new Map<string, RowMoney>();
+    if (appointmentIds.length === 0 && orderIds.length === 0) return { visitTags, byPatient };
 
     const invoices = await tx.invoice.findMany({
-      where: { appointmentId: { in: appointmentIds } },
+      where: {
+        OR: [
+          ...(appointmentIds.length > 0
+            ? [
+                { appointmentId: { in: appointmentIds } },
+                { visitAppointmentId: { in: appointmentIds } },
+              ]
+            : []),
+          ...(orderIds.length > 0
+            ? [{ lines: { some: { diagnosticOrder: { id: { in: orderIds } } } } }]
+            : []),
+        ],
+      },
       select: {
+        patientId: true,
         appointmentId: true,
         number: true,
         status: true,
@@ -202,11 +288,28 @@ export class DayBoardService {
     });
 
     for (const invoice of invoices) {
-      if (!invoice.appointmentId) continue;
-      fees.set(invoice.appointmentId, tagFor(invoiceSettlement(invoice)));
+      const state = invoiceSettlement(invoice);
+
+      if (invoice.appointmentId) visitTags.set(invoice.appointmentId, tagFor(state));
+
+      /**
+       * A CANCELLED bill is no longer a charge, so it is in neither figure.
+       *
+       * Its tag stays PENDING — see `tagFor`: somebody has to deal with it —
+       * and that pairing is deliberate. "Fee pending" beside a blank amount
+       * reads as a bill to sort out, which is what it is. Adding its total to
+       * the day would report the clinic as having charged for work it
+       * explicitly cancelled.
+       */
+      if (state.status === 'VOID') continue;
+
+      const money = byPatient.get(invoice.patientId) ?? { billedPaise: 0, duePaise: 0 };
+      money.billedPaise += invoice.totalPaise;
+      if (state.status === 'UNPAID') money.duePaise += state.balancePaise;
+      byPatient.set(invoice.patientId, money);
     }
 
-    return fees;
+    return { visitTags, byPatient };
   }
 
   /**
@@ -272,9 +375,11 @@ export class DayBoardService {
       } & DiagnosticBillingInput
     >;
     visitFees: Map<string, FeeTag>;
+    /** Null when the caller may not see figures. See `RowMoney`. */
+    money: Map<string, RowMoney> | null;
     paymentMethods: Map<string, string[]>;
   }): DayBoard {
-    const { day, tz, scope, appointments, orders, visitFees, paymentMethods } = input;
+    const { day, tz, scope, appointments, orders, visitFees, money, paymentMethods } = input;
 
     /** Everything one patient has going on today, gathered before it is judged. */
     interface Accumulator {
@@ -282,6 +387,7 @@ export class DayBoardService {
       buckets: Set<DayBucket>;
       hasVisit: boolean;
       hasTest: boolean;
+      appointmentId: string | null;
       token: number | null;
       doctor: string | null;
       department: string | null;
@@ -300,6 +406,7 @@ export class DayBoardService {
           buckets: new Set(),
           hasVisit: false,
           hasTest: false,
+          appointmentId: null,
           token: null,
           doctor: null,
           department: null,
@@ -320,6 +427,9 @@ export class DayBoardService {
       if (a.status !== 'CANCELLED' && a.status !== 'NO_SHOW') {
         row.hasVisit = true;
         row.doctor ??= a.practitioner?.fullName ?? null;
+        // The live visit, not a cancelled one: a test ordered from this row has
+        // to attach to the appointment the patient is actually here for.
+        row.appointmentId ??= a.id;
         row.token ??= a.tokenNumber;
         if (!row.earliest || a.startAt < row.earliest) row.earliest = a.startAt;
         // Only a live visit's bill is worth a tag; a cancelled one is not a
@@ -344,6 +454,7 @@ export class DayBoardService {
       .map((r) => ({
         patient: r.patient,
         bucket: PLACEMENT.find((b) => r.buckets.has(b)) ?? 'DONE',
+        appointmentId: r.appointmentId,
         hasVisit: r.hasVisit,
         hasTest: r.hasTest,
         token: r.token,
@@ -357,6 +468,12 @@ export class DayBoardService {
         // "which of the three".
         testFee: summariseTestFees(r.testFees),
         paymentMethods: paymentMethods.get(r.patient.id) ?? [],
+        /**
+         * Zeroes rather than null for a patient with no bill, so the column
+         * reads as "nothing charged" instead of "not allowed to know". The
+         * whole field is null when the caller may not see figures at all.
+         */
+        money: money ? (money.get(r.patient.id) ?? { billedPaise: 0, duePaise: 0 }) : null,
       }))
       .sort(byTimeThenName);
 
@@ -377,7 +494,27 @@ export class DayBoardService {
       if (row.bucket !== 'NOT_ATTENDING') counts.total += 1;
     }
 
-    return { date: day, timezone: tz, scope, counts, rows };
+    /**
+     * The day's totals, over every row including those not attending.
+     *
+     * A no-show's consultation bill is still live and still unpaid, and the
+     * desk chasing money at six o'clock wants it in the figure. A cancellation
+     * normally has its bill cancelled too, which `billsForDay` has already left
+     * out.
+     */
+    const dayMoney = money
+      ? rows.reduce(
+          (total, row) => ({
+            billedPaise: total.billedPaise + (row.money?.billedPaise ?? 0),
+            collectedPaise: 0,
+            duePaise: total.duePaise + (row.money?.duePaise ?? 0),
+          }),
+          { billedPaise: 0, collectedPaise: 0, duePaise: 0 },
+        )
+      : null;
+    if (dayMoney) dayMoney.collectedPaise = dayMoney.billedPaise - dayMoney.duePaise;
+
+    return { date: day, timezone: tz, scope, counts, money: dayMoney, rows };
   }
 }
 

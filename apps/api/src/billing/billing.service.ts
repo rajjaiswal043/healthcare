@@ -89,6 +89,32 @@ export function invoiceSettlement(invoice: InvoiceSettlementInput | null): Invoi
   return { status: 'UNPAID', invoiceNumber: invoice.number, balancePaise };
 }
 
+/**
+ * The emergency surcharge, by code.
+ *
+ * A PRICE-LIST SERVICE, not a column and not a rule. Three consequences, all
+ * of them wanted:
+ *
+ *   the clinic decides the amount, in Settings → Prices, like every other
+ *   charge — and a clinic that does not charge one simply never creates it,
+ *   which is why nothing here fails when the code is absent;
+ *
+ *   it lands on the bill as an ordinary line, so it prints on the receipt,
+ *   appears in the finance report and is refundable by the paths that already
+ *   exist;
+ *
+ *   it is ADDED BY SOMEBODY, never applied automatically. The queue's
+ *   EMERGENCY flag is set by whoever holds `queue:prioritise` — a nurse, often
+ *   — and raising a charge needs `invoice:write`. A flag that billed the
+ *   patient by itself would let the first permission spend the second, and it
+ *   would have to un-bill itself when the flag is cleared, which an invoice
+ *   with money on it cannot do.
+ *
+ * The desk is PROMPTED instead: `emergencyVisit` below tells the screen the
+ * queue already calls this an emergency, and the screen offers the charge.
+ */
+export const EMERGENCY_SURCHARGE_CODE = 'CONS-EMERG';
+
 /** What `diagnosticBillingState` needs loaded. Shared so the rule has one home. */
 export interface DiagnosticBillingInput {
   legacyUnbilled: boolean;
@@ -1133,6 +1159,34 @@ export class BillingService {
           reason: true,
           patient: { select: { id: true, name: true, uhid: true, mobile: true } },
           payments: { select: { direction: true, amountPaise: true } },
+
+          /**
+           * What the money is FOR, and who it belongs to.
+           *
+           * A desk chasing a bill is asked "what is this for?" before it is
+           * paid, and a number and an amount cannot answer that. The lines
+           * carry the description AS CHARGED — a consultation, an X-ray — and
+           * the appointment carries the doctor.
+           *
+           * Both links are read because a bill reaches a visit two ways:
+           * `appointmentId` when it IS the consultation bill, and
+           * `visitAppointmentId` when it is a test raised during that visit.
+           * The second exists precisely because the first is unique and a test
+           * bill cannot borrow it.
+           */
+          lines: { select: { description: true }, orderBy: { createdAt: 'asc' }, take: 4 },
+          appointment: { select: { practitioner: { select: { fullName: true } } } },
+          visitAppointment: { select: { practitioner: { select: { fullName: true } } } },
+
+          /**
+           * How many lines there really are, counted rather than inferred.
+           *
+           * `lines` above is capped at four, so the screen cannot tell a bill
+           * with exactly four charges from one with nine. Four descriptions and
+           * a count lets it say "and 5 more" instead of quietly presenting a
+           * truncated list as the whole bill.
+           */
+          _count: { select: { lines: true } },
         },
       });
 
@@ -1149,6 +1203,13 @@ export class BillingService {
             issuedAt: i.issuedAt,
             reason: i.reason,
             patient: i.patient,
+            items: i.lines.map((l) => l.description),
+            itemCount: i._count.lines,
+            // Null for a walk-in test, which belongs to no doctor.
+            doctor:
+              i.appointment?.practitioner?.fullName ??
+              i.visitAppointment?.practitioner?.fullName ??
+              null,
           };
         }),
       };
@@ -1344,6 +1405,7 @@ export class BillingService {
             startAt: true,
             status: true,
             externalTestNote: true,
+            priorityReasonCode: true,
             practitioner: { select: { fullName: true, prefix: true } },
           },
         },
@@ -1359,6 +1421,7 @@ export class BillingService {
             startAt: true,
             status: true,
             externalTestNote: true,
+            priorityReasonCode: true,
             practitioner: { select: { fullName: true, prefix: true } },
           },
         },
@@ -1434,6 +1497,20 @@ export class BillingService {
       settled:
         (SETTLED as readonly string[]).includes(invoice.status) ||
         invoice.totalPaise - (paidPaise - refundedPaise) <= 0,
+
+      /**
+       * The queue already calls this visit an emergency.
+       *
+       * A PROMPT, not a charge: the screen offers the surcharge, somebody with
+       * `invoice:write` decides. See `EMERGENCY_SURCHARGE_CODE` for why it is
+       * not applied automatically.
+       *
+       * Read from whichever link this bill has — the consultation's own visit,
+       * or for a test bill the visit it was raised during, which is the same
+       * emergency either way. False where there is no visit at all.
+       */
+      emergencyVisit:
+        (invoice.appointment ?? invoice.visitAppointment)?.priorityReasonCode === 'EMERGENCY',
     };
   }
 }

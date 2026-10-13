@@ -17,6 +17,8 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { ReceiptButton } from '@/components/receipt-button';
+import { PaymentDialog } from '@/components/payment-dialog';
+import { EmergencySurcharge, mayAddSurcharge } from '@/components/emergency-surcharge';
 import { formatAge, formatPaise, genderInitial, parseRupeesToPaise } from '@/lib/format';
 import {
   IconCheck,
@@ -116,6 +118,20 @@ export default function FinanceDeskPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
+
+  /**
+   * A bill opened from the list, settled in a dialog over it.
+   *
+   * Separate from `invoice`, which is the bill belonging to a visit this desk is
+   * in the middle of opening. Collecting an existing debt is not a step in that
+   * sequence — the desk is standing still, taking money for something that
+   * already happened — so it does not take the screen over.
+   *
+   * DECLARED UP HERE WITH THE REST. It used to sit further down, below the
+   * `paid && patient` early return, so the hook was skipped on the render that
+   * shows the finished state and React saw the hook count change.
+   */
+  const [collecting, setCollecting] = useState<Invoice | null>(null);
 
   const canBill = can('invoice:write');
   const canCollect = can('payment:collect');
@@ -276,22 +292,33 @@ export default function FinanceDeskPage() {
     })();
   }, [canWalkIn]);
 
-  useEffect(() => {
-    if (!patient) {
+  /**
+   * Every open bill in the clinic, loaded before anybody is searched for.
+   *
+   * This used to be fetched only once a patient had been found, and filtered to
+   * them — which meant the commonest job at this desk, "somebody is standing
+   * here who owes money", began by typing their name. The list IS the work, so
+   * it arrives first and the search is for the cases it does not cover: a new
+   * patient, or one with nothing outstanding yet.
+   *
+   * `reloadOutstanding` rather than an effect on `patient`, because taking a
+   * payment has to remove that bill from the list, and a dependency on the
+   * patient cannot see that happen.
+   */
+  const reloadOutstanding = useCallback(async () => {
+    try {
+      const { invoices } = await api.outstandingInvoices();
+      setOutstanding(invoices);
+    } catch {
+      // The rest of the desk works without this; a failure here must not stop
+      // somebody being registered and seen.
       setOutstanding([]);
-      return;
     }
-    void (async () => {
-      try {
-        const { invoices } = await api.outstandingInvoices();
-        setOutstanding(invoices.filter((i) => i.patient.id === patient.id));
-      } catch {
-        // The rest of the desk works without this; a failure here must not
-        // stop somebody being registered and seen.
-        setOutstanding([]);
-      }
-    })();
-  }, [patient]);
+  }, []);
+
+  useEffect(() => {
+    void reloadOutstanding();
+  }, [reloadOutstanding]);
 
   const refreshInvoice = useCallback(async (id: string) => {
     setInvoice(await api.invoice(id));
@@ -383,17 +410,20 @@ export default function FinanceDeskPage() {
    * doctor cards, off the bottom of the screen, and the Open button looks dead.
    */
   const settlingExistingBill = Boolean(invoice) && !appointmentId;
+  const outstandingTotal = outstanding.reduce((sum, o) => sum + o.balancePaise, 0);
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="eyebrow">Finance desk</p>
-        <h1 className="mt-2 font-display text-[30px] font-bold">
-          Take the <em className="accent-words">payment</em>
-        </h1>
-        <p className="mt-1 text-[14px] text-ink-60">
-          Find or register the patient, open today’s visit, raise the bill and collect — then send
-          them to the front desk.
+    <div className="space-y-4">
+      {/* One line instead of four. An eyebrow, a 30px heading and two lines of
+          prose cost about 110px above the list this desk works from all day. */}
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="font-display text-[24px] font-bold">Finance desk</h1>
+        <p className="text-[13.5px] text-ink-60">
+          {outstanding.length === 0
+            ? 'Nothing outstanding. Search for a patient to open today’s visit.'
+            : `${outstanding.length} ${
+                outstanding.length === 1 ? 'bill' : 'bills'
+              } to collect · ${formatPaise(outstandingTotal)} outstanding`}
         </p>
       </header>
 
@@ -434,54 +464,124 @@ export default function FinanceDeskPage() {
       </section>
 
       {/*
-        Bills this patient already owes.
-        
-        Everything else on this screen is about a visit the desk is opening RIGHT
-        NOW. A test bill is not that: the doctor raised it from inside a
-        consultation that started before the patient walked back out to the
-        counter, and until this section existed there was no screen anywhere
-        that could reach it. The patient would have been sent to pay for an
-        X-ray at a desk with no way to find the charge.
+        THE WORK, BEFORE ANY SEARCHING.
+
+        Every open bill in the clinic, as the landing state of this screen.
+        Everything else here is about a visit the desk is opening RIGHT NOW; a
+        test bill is not that — the doctor raised it from inside a consultation
+        that started before the patient walked back out to the counter, and
+        until this list existed no screen anywhere could reach it. The patient
+        would have been sent to pay for an X-ray at a desk with no way to find
+        the charge.
+
+        The commonest job at this desk is "somebody is standing here who owes
+        money", and that used to begin by typing their name into a search box to
+        reach a list the desk could have been shown outright.
+
+        A TABLE, with the same columns and treatment as the day board, because
+        the questions asked of it are comparative: whose bill is this, what for,
+        which doctor, how much. A stack of two-line rows answers them one at a
+        time.
       */}
-      {patient && outstanding.length > 0 && !appointmentId && (
-        <section className="card p-5">
-          <p className="mono-label mb-3">Already owing</p>
-          <ul className="space-y-2">
-            {outstanding.map((o) => (
-              <li
-                key={o.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-ink/10 px-3.5 py-2.5"
-              >
-                <span className="min-w-0">
-                  <span className="block font-mono text-[13px] text-ink-60">{o.number}</span>
-                  <span className="block text-[13px] text-ink-40">
-                    {new Date(o.issuedAt).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="font-mono text-[14px] font-semibold tabular-nums">
-                    {formatPaise(o.balancePaise)}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn-secondary !py-1.5"
-                    disabled={busy}
-                    onClick={() =>
-                      run(async () => {
-                        setInvoice(await api.invoice(o.id));
-                        setAppointmentId(null);
-                      }, 'Could not open that bill.')
-                    }
+      {!appointmentId && !invoice && outstanding.length > 0 && (
+        <section className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13.5px]">
+              <thead>
+                <tr className="border-b border-ink/8 bg-bg-soft text-left">
+                  <Th>Patient</Th>
+                  <Th>What for</Th>
+                  <Th className="w-[180px]">Doctor</Th>
+                  <Th className="w-[150px]">Bill</Th>
+                  <Th className="w-[110px] text-right">Balance</Th>
+                  <Th className="w-[104px]">
+                    <span className="sr-only">Actions</span>
+                  </Th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {outstanding.map((o) => (
+                  <tr
+                    key={o.id}
+                    className="border-b border-ink/6 transition-colors last:border-0 hover:bg-clinical-tint/60"
                   >
-                    Open
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/patients/${o.patient.id}`}
+                        className="font-semibold text-ink underline-offset-2 hover:text-clinical-text hover:underline"
+                      >
+                        {o.patient.name}
+                      </Link>
+                      <span className="block font-mono text-[11.5px] text-ink-40">
+                        {o.patient.uhid} · {o.patient.mobile}
+                      </span>
+                    </td>
+
+                    {/*
+                      WHAT THE MONEY IS FOR, as charged.
+
+                      The descriptions are copied onto the lines at billing
+                      time, so this reads the same in ten years after the
+                      catalogue has been repriced. Four at most come back from
+                      the server, and the count says how many are hidden rather
+                      than letting a truncated list pass as the whole bill.
+                    */}
+                    <td className="px-4 py-3 text-ink-60">
+                      {o.items.length === 0 ? (
+                        <span className="text-ink-20">—</span>
+                      ) : (
+                        <>
+                          {o.items.join(', ')}
+                          {o.itemCount > o.items.length &&
+                            ` and ${o.itemCount - o.items.length} more`}
+                        </>
+                      )}
+                      {/* Why they came, when the visit recorded one. */}
+                      {o.reason && (
+                        <span className="block text-[11.5px] text-ink-40">{o.reason}</span>
+                      )}
+                    </td>
+
+                    {/* Null for a walk-in test, which belongs to no doctor. */}
+                    <td className="px-4 py-3 text-ink-60">
+                      {o.doctor ?? <span className="text-ink-20">Walk-in test</span>}
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-3 text-ink-60">
+                      <span className="font-mono text-[12.5px]">{o.number}</span>
+                      <span className="block text-[11.5px] text-ink-40">
+                        {new Date(o.issuedAt).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                        {o.status === 'PARTIALLY_PAID' && ' · part paid'}
+                      </span>
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-semibold tabular-nums">
+                      {formatPaise(o.balancePaise)}
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        className="btn-primary !px-3.5 !py-1.5 !text-[12.5px]"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            setCollecting(await api.invoice(o.id));
+                          }, 'Could not open that bill.')
+                        }
+                      >
+                        Collect
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
@@ -981,6 +1081,41 @@ export default function FinanceDeskPage() {
                 </p>
               )}
 
+              {/*
+                THE EMERGENCY SURCHARGE.
+
+                Offered, not applied. The queue's EMERGENCY flag is set by
+                whoever holds `queue:prioritise` — often a nurse — and raising a
+                charge needs `invoice:write`; a flag that billed by itself would
+                let the first permission spend the second. So the desk is shown
+                the charge and decides.
+
+                Offered on ANY unpaid bill, not only a flagged one, because the
+                desk knows it is an emergency from the patient in front of them
+                rather than from the queue, and the money is usually taken
+                before anybody gets as far as flagging the queue at all. A visit
+                the queue HAS flagged says so, as a reminder.
+
+                Same two guards as adding any other charge: nothing may be added
+                once money is on the bill, and not at all under an applied
+                discount — `promotion_application` froze its figure and would
+                overstate what the clinic gave away.
+              */}
+              {mayAddSurcharge(canBill, invoice) && (
+                <div className="mt-4">
+                  <EmergencySurcharge
+                    invoice={invoice}
+                    services={services}
+                    busy={busy}
+                    onAdd={(input) =>
+                      run(async () => {
+                        setInvoice(await api.addInvoiceLine(invoice.id, input));
+                      }, 'Could not add the surcharge.')
+                    }
+                  />
+                </div>
+              )}
+
               {/* Same guard as removing: changing the charges under an applied
                   discount leaves promotion_application overstating what was
                   given. */}
@@ -1038,6 +1173,11 @@ export default function FinanceDeskPage() {
                   onCollect={(input) =>
                     run(async () => {
                       const updated = await api.collectPayment(invoice.id, input);
+                      // The list is the work, so it has to stop showing a bill
+                      // that has just been settled. Refreshed here rather than
+                      // on an effect, because nothing else changes to trigger
+                      // one.
+                      void reloadOutstanding();
                       setInvoice(updated);
                       if (updated.balancePaise <= 0) setPaid(true);
                     }, 'Could not record the payment.')
@@ -1062,11 +1202,34 @@ export default function FinanceDeskPage() {
       )}
 
       <p className="text-[12.5px] text-ink-40">Step {step} of 7.</p>
+      {collecting && (
+        /* The same dialog the queue uses to take a payment, rather than a
+           second one that would drift from it. */
+        <PaymentDialog
+          invoice={collecting}
+          onSettled={setCollecting}
+          onClose={() => {
+            setCollecting(null);
+            // Settled bills leave the list; a part payment stays on it with a
+            // smaller balance. Either way the list has to be re-read.
+            void reloadOutstanding();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // --- pieces -----------------------------------------------------------------
+
+/** The same column header as the day board, so the two tables read as one product. */
+function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <th scope="col" className={`mono-label px-4 py-2.5 ${className}`}>
+      {children}
+    </th>
+  );
+}
 
 /** Clinic-local today. The clinic runs on IST; the browser may not. */
 function clinicToday(): string {

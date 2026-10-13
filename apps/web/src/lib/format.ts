@@ -76,3 +76,15 @@ export function parseRupeesToPaise(input: string): number | null {
 export function doctorName(practitioner: { fullName: string } | null | undefined): string {
   return practitioner?.fullName ?? '';
 }
+
+/**
+ * CASH -> "Cash", BANK_TRANSFER -> "Bank transfer".
+ *
+ * Derived rather than mapped, so a payment mode added to the enum reads
+ * correctly on every screen the day it exists instead of falling through to a
+ * raw SHOUTING_CASE string.
+ */
+export function payMethodLabel(mode: string): string {
+  const words = mode.toLowerCase().replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

@@ -6,6 +6,7 @@ import { PlatformGuard } from './platform.guard.js';
 import { BrandingModule } from '../branding/branding.module.js';
 import { AuditService } from '../audit/audit.service.js';
 import { UhidFormatService } from './uhid-format.service.js';
+import { ClinicPasswordService } from './clinic-password.service.js';
 
 /**
  * doctorsdesk.in's own tier.
@@ -26,6 +27,7 @@ import { UhidFormatService } from './uhid-format.service.js';
     PlatformAuthService,
     OnboardingService,
     UhidFormatService,
+    ClinicPasswordService,
     AuditService,
     PlatformGuard,
   ],

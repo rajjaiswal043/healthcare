@@ -14,8 +14,9 @@ import {
   type TimelineEvent,
 } from '@/lib/api';
 import { PatientCorrectionDialog } from '@/components/patient-correction-dialog';
+import { PrintReceiptButton } from '@/components/receipt-button';
 import { useAuth } from '@/components/auth-provider';
-import { formatAge, formatPaise, genderInitial } from '@/lib/format';
+import { formatAge, formatPaise, genderInitial, payMethodLabel } from '@/lib/format';
 import { initialsOf } from '@/lib/role-signature';
 import { AllergyLine } from './allergy-line';
 import {
@@ -438,8 +439,8 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
       )}
 
       {tab === 'billing' && can('invoice:read') && (
-        <section className="card p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <section className="card overflow-hidden">
+          <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-ink/8 px-5 py-3.5">
             <h2 className="font-display text-[17px] font-bold">Bills</h2>
             {billing && billing.outstandingPaise > 0 && (
               <p className="text-[13px] font-semibold text-amber-text">
@@ -449,37 +450,115 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
           </div>
 
           {billing === null ? (
-            <p className="field-hint mt-2">Loading…</p>
+            <p className="field-hint px-5 py-4">Loading…</p>
           ) : billing.invoices.length === 0 ? (
-            <p className="field-hint mt-2">Nothing has been billed to this patient.</p>
+            <p className="field-hint px-5 py-4">Nothing has been billed to this patient.</p>
           ) : (
-            <ul className="mt-3 space-y-1.5">
-              {billing.invoices.map((inv) => (
-                <li
-                  key={inv.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-panel border border-ink/10 bg-white px-3 py-2"
-                >
-                  <span>
-                    <span className="font-mono text-[13px] font-semibold">{inv.number}</span>
-                    <span className="block text-[11.5px] text-ink-40">
-                      {new Date(inv.createdAt).toLocaleDateString('en-IN', {
-                        dateStyle: 'medium',
-                      })}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <span className="text-[13px] tabular-nums">{formatPaise(inv.totalPaise)}</span>
-                    <span
-                      className={`badge ${inv.balancePaise > 0 ? 'badge-amber' : 'badge-green'}`}
+            /*
+              A TABLE, WITH WHAT THE MONEY WAS FOR.
+
+              A number, a date and an amount could not answer the question this
+              tab exists for — what did we charge them for, and who saw them —
+              so the row now carries the charge descriptions as charged, the
+              doctor, and how it was settled.
+
+              Same columns and treatment as the day board and the finance desk,
+              because all three are read the same way: down a column, comparing.
+            */
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13.5px]">
+                <thead>
+                  <tr className="border-b border-ink/8 bg-bg-soft text-left">
+                    <Th className="w-[150px]">Bill</Th>
+                    <Th>What for</Th>
+                    <Th className="w-[170px]">Doctor</Th>
+                    <Th className="w-[110px] text-right">Amount</Th>
+                    <Th className="w-[150px]">Settled</Th>
+                    <Th className="w-[130px]">
+                      <span className="sr-only">Actions</span>
+                    </Th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {billing.invoices.map((inv) => (
+                    <tr
+                      key={inv.id}
+                      className="border-b border-ink/6 transition-colors last:border-0 hover:bg-clinical-tint/60"
                     >
-                      {inv.balancePaise > 0
-                        ? `${formatPaise(inv.balancePaise)} due`
-                        : inv.status.toLowerCase()}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span className="font-mono text-[12.5px] font-semibold">{inv.number}</span>
+                        <span className="block text-[11.5px] text-ink-40">
+                          {new Date(inv.createdAt).toLocaleDateString('en-IN', {
+                            dateStyle: 'medium',
+                          })}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 text-ink-60">
+                        {inv.items.length === 0 ? (
+                          <span className="text-ink-20">—</span>
+                        ) : (
+                          <>
+                            {inv.items.join(', ')}
+                            {/* Four descriptions come back at most. The count
+                                says how many are hidden rather than letting a
+                                truncated list pass as the whole bill. */}
+                            {inv.itemCount > inv.items.length &&
+                              ` and ${inv.itemCount - inv.items.length} more`}
+                          </>
+                        )}
+                      </td>
+
+                      {/* Null for a walk-in test, which belongs to no doctor. */}
+                      <td className="px-4 py-3 text-ink-60">
+                        {inv.doctor ?? <span className="text-ink-20">Walk-in test</span>}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-mono tabular-nums">
+                        {formatPaise(inv.totalPaise)}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={`badge ${inv.balancePaise > 0 ? 'badge-amber' : 'badge-green'}`}
+                        >
+                          {inv.balancePaise > 0
+                            ? `${formatPaise(inv.balancePaise)} due`
+                            : inv.status.toLowerCase().replace('_', ' ')}
+                        </span>
+                        {/* How it was actually paid, which is what somebody
+                            asking about a bill from March wants to know. */}
+                        {inv.paymentModes.length > 0 && (
+                          <span className="mt-0.5 block text-[11.5px] text-ink-40">
+                            {inv.paymentModes.map(payMethodLabel).join(', ')}
+                            {inv.refundedPaise > 0 &&
+                              ` · ${formatPaise(inv.refundedPaise)} refunded`}
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        {/* FR-RCP-01 from the record rather than the desk. A
+                            patient asking for a copy months later is the
+                            commonest reprint there is, and until now the only
+                            screen that could produce one was the payment dialog
+                            on a bill somebody had to go and find. Nothing to
+                            print when no money was ever taken. */}
+                        {inv.lastPaymentId && (
+                          <PrintReceiptButton
+                            paymentId={inv.lastPaymentId}
+                            className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+                            label="Receipt"
+                            iconSize={13}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       )}
@@ -803,6 +882,15 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
 }
 
 /** One figure on the band's strip. The gap between them is the background. */
+/** The same column header as the day board and the finance desk. */
+function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <th scope="col" className={`mono-label px-4 py-2.5 ${className}`}>
+      {children}
+    </th>
+  );
+}
+
 function Metric({
   label,
   value,

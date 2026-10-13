@@ -732,6 +732,152 @@ describe('changing a bill', () => {
 
 // --- the ledger is append-only ---------------------------------------------
 
+/**
+ * THE EMERGENCY SURCHARGE.
+ *
+ * A price-list service and an ordinary invoice line — there is no emergency
+ * column, no rule and no automatic charge. What the server contributes is one
+ * boolean: the queue already calls this visit an emergency, so the desk can be
+ * prompted rather than relying on somebody remembering.
+ *
+ * The charge is deliberately NOT applied by the flag. `queue:prioritise` sets
+ * the flag and `invoice:write` raises charges; a flag that billed by itself
+ * would let the first permission spend the second, and clearing the flag could
+ * not un-bill a patient whose money is already on the invoice.
+ */
+describe('the emergency surcharge', () => {
+  it('is an ordinary charge, added like any other', async () => {
+    const invoice = await invoiceFor(await book());
+    const surcharge = await service('CONS-EMERG');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/lines`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { serviceId: surcharge.id },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().totalPaise).toBe(CONSULT_FEE + 30000);
+    // Named as charged, so it prints on the receipt and reads the same in ten
+    // years after the catalogue has been repriced.
+    expect(res.json().lines[1].description).toBe('Emergency surcharge');
+    expect(res.json().lines[1].serviceId).toBe(surcharge.id);
+  });
+
+  /**
+   * The override the desk types in. An emergency is not one price — eleven at
+   * night is not two in the afternoon — so the panel pre-fills the clinic's
+   * figure and lets it be changed.
+   *
+   * The service still owns the NAME and the TAX RATE: only the price moves, and
+   * the tax is recomputed on what was actually charged. A line that kept the
+   * catalogue price while the patient paid something else would disagree with
+   * the receipt.
+   */
+  it('takes the price the desk typed, keeping the service’s name', async () => {
+    const invoice = await invoiceFor(await book());
+    const surcharge = await service('CONS-EMERG');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/lines`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { serviceId: surcharge.id, unitPricePaise: 75000 },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().totalPaise).toBe(CONSULT_FEE + 75000);
+    expect(res.json().lines[1].unitPricePaise).toBe(75000);
+    expect(res.json().lines[1].description).toBe('Emergency surcharge');
+    // Still the catalogue entry, which is what stops it being offered twice.
+    expect(res.json().lines[1].serviceId).toBe(surcharge.id);
+  });
+
+  it('is not flagged on an ordinary visit', async () => {
+    expect((await invoiceFor(await book())).emergencyVisit).toBe(false);
+  });
+
+  it('is flagged once the queue calls the visit an emergency', async () => {
+    const appointmentId = await book();
+    await flagAsEmergency(appointmentId);
+
+    expect((await invoiceFor(appointmentId)).emergencyVisit).toBe(true);
+  });
+
+  /**
+   * The flag prompts; it does not charge. A bill that grew a line by itself is
+   * a bill nobody at the desk can explain to the patient in front of them.
+   */
+  it('does not put itself on the bill when the queue is flagged', async () => {
+    const appointmentId = await book();
+    await flagAsEmergency(appointmentId);
+
+    const invoice = await invoiceFor(appointmentId);
+
+    expect(invoice.totalPaise).toBe(CONSULT_FEE);
+    expect(invoice.lines).toHaveLength(1);
+  });
+
+  /**
+   * A test bill reaches the visit only through `visit_appointment_id`, and an
+   * emergency is an emergency whichever of a visit's bills is open.
+   */
+  it('is flagged on a test bill raised during an emergency visit', async () => {
+    const appointmentId = await book();
+    await flagAsEmergency(appointmentId);
+
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, number, patient_id, visit_appointment_id,
+                            subtotal_paise, total_paise, updated_at)
+       VALUES ($1, 'INV-EMERG1', $2, $3, 45000, 45000, now()) RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0], appointmentId],
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/invoices/${invoice!.id}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().emergencyVisit).toBe(true);
+  });
+
+  async function service(code: string): Promise<{ id: string }> {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/services',
+      headers: { cookie: frontDesk.cookie },
+    });
+    const found = res.json().services.find((s: { code: string }) => s.code === code);
+    expect(found, `${code} is not priced in the fixture`).toBeTruthy();
+    return found;
+  }
+
+  /**
+   * Flagged in the database rather than through the endpoint, which requires
+   * the patient to be waiting. What is under test is the invoice's reading of
+   * the flag; `scheduling.e2e` owns how the flag gets set.
+   *
+   * All three columns together: `appointment_priority_is_attributed` refuses a
+   * reason with nobody and no time against it.
+   */
+  async function flagAsEmergency(appointmentId: string) {
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE appointment
+          SET priority_reason_code = 'EMERGENCY',
+              priority_set_at = now(),
+              priority_set_by_user_id = (SELECT id FROM app_user WHERE tenant_id = $2 LIMIT 1),
+              updated_at = now()
+        WHERE id = $1`,
+      [appointmentId, fx.main.id],
+    );
+  }
+});
+
 describe('the ledger', () => {
   it('does not let the application edit or delete a payment', async () => {
     // The service has no update path, but this asserts the grant — which is the

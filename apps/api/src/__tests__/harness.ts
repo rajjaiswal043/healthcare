@@ -469,39 +469,18 @@ export async function loginWithMfa(
     throw new Error(`${email} did not return an enrolment challenge.`);
   }
 
-  const { generate } = await import('otplib');
   const secret = body.enrolmentSecret;
 
-  /**
-   * Confirm across a TOTP step boundary without flaking.
-   *
-   * A code is generated for the current 30-second window. Generate one at
-   * 29.9s and the server verifies it at 30.1s, in the next window, and rejects
-   * a code that was correct when it was made. That is not a bug in either side
-   * — it is the protocol — and it surfaced as `billing.e2e` failing its
-   * beforeAll with "Invalid code" roughly one run in twenty, which is exactly
-   * often enough to be dismissed as noise and waste an afternoon later.
-   *
-   * So: wait out the boundary and try once more. Bounded at two attempts,
-   * because a third would be hiding a real failure rather than a timing one.
-   */
-  let res = await confirm(await generate({ secret }));
-
-  if (res.statusCode !== 200) {
-    await new Promise((r) => setTimeout(r, msUntilNextTotpWindow() + 250));
-    res = await confirm(await generate({ secret }));
-  }
+  const res = await acrossTotpBoundary(async () =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/confirm',
+      payload: { tenantSlug, email, password, totpCode: await totpCode(secret) },
+    }),
+  );
 
   if (res.statusCode !== 200) {
     throw new Error(`MFA confirm failed for ${email}: ${res.statusCode} ${res.payload}`);
-  }
-
-  function confirm(totpCode: string) {
-    return app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/mfa/confirm',
-      payload: { tenantSlug, email, password, totpCode },
-    });
   }
 
   const cookies = parseSetCookies(res.headers['set-cookie']);
@@ -517,6 +496,45 @@ export async function loginWithMfa(
     refreshToken,
     permissions: res.json<{ user: { permissions: string[] } }>().user.permissions,
   };
+}
+
+/** A code for the current 30-second window. */
+export async function totpCode(secret: string): Promise<string> {
+  const { generate } = await import('otplib');
+  return generate({ secret });
+}
+
+/**
+ * Run a TOTP-dependent request across a step boundary without flaking.
+ *
+ * A code is generated for the current 30-second window. Generate one at 29.9s
+ * and the server verifies it at 30.1s, in the next window, and rejects a code
+ * that was correct when it was made. That is not a bug in either side — it is
+ * the protocol — and it surfaced as `billing.e2e` failing its beforeAll with
+ * "Invalid code" roughly one run in twenty, which is exactly often enough to be
+ * dismissed as noise and waste an afternoon later.
+ *
+ * So: wait out the boundary and try once more. Bounded at two attempts, because
+ * a third would be hiding a real failure rather than a timing one.
+ *
+ * `attempt` MUST GENERATE THE CODE ITSELF, inside the callback — that is the
+ * whole point. Passing a code in would hand the second attempt the same expired
+ * one.
+ *
+ * Exported because `loginWithMfa` is not the only caller: the platform console
+ * has its own confirm endpoint with no tenant in it, and `platform.e2e` wrote
+ * both of its confirms out by hand with a single attempt. The clinic one came
+ * back as "expected 401 to be 200" on an onboarded clinic's first sign-in,
+ * which reads like a broken onboarding rather than a 30-second window.
+ */
+export async function acrossTotpBoundary<T extends { statusCode: number }>(
+  attempt: () => Promise<T>,
+): Promise<T> {
+  const first = await attempt();
+  if (first.statusCode === 200) return first;
+
+  await new Promise((r) => setTimeout(r, msUntilNextTotpWindow() + 250));
+  return attempt();
 }
 
 /**
@@ -619,7 +637,8 @@ export async function seedBilling(
       `INSERT INTO service (tenant_id, code, name, category, price_paise, updated_at)
        VALUES ($1, 'CONS-NEW', 'Consultation', 'CONSULTATION', $2, now()),
               ($1, 'CONS-FOLLOWUP', 'Follow-up', 'CONSULTATION', $3, now()),
-              ($1, 'PROC-DRESS', 'Dressing', 'PROCEDURE', 25000, now())
+              ($1, 'PROC-DRESS', 'Dressing', 'PROCEDURE', 25000, now()),
+              ($1, 'CONS-EMERG', 'Emergency surcharge', 'CONSULTATION', 30000, now())
        ON CONFLICT (tenant_id, code) DO UPDATE SET price_paise = EXCLUDED.price_paise`,
       [tenantId, consultation, followUp],
     );

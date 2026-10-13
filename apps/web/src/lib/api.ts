@@ -197,12 +197,26 @@ export interface ClinicRole {
 export type DayBucket =
   'EXPECTED' | 'WAITING' | 'WITH_DOCTOR' | 'AT_DEPARTMENT' | 'DONE' | 'NOT_ATTENDING';
 
-/** Money as a tag, never a figure. Null when nothing was charged. */
+/** Where a bill stands, without saying how much. Null when nothing was charged. */
 export type FeeTag = 'PAID' | 'PENDING' | null;
+
+/**
+ * What a patient was charged today. NULL FOR A CALLER WITHOUT `invoice:read`.
+ *
+ * The server leaves the figures out of the response rather than sending them
+ * for the browser to hide — doctors and nurses read this board and deliberately
+ * do not hold that permission, so the column is absent, not merely invisible.
+ */
+export interface RowMoney {
+  billedPaise: number;
+  duePaise: number;
+}
 
 export interface DayBoardRow {
   patient: { id: string; name: string; uhid: string; ageYears: number | null; gender: string };
   bucket: DayBucket;
+  /** The visit this row hangs off. Null for a walk-in test with no appointment. */
+  appointmentId: string | null;
   hasVisit: boolean;
   hasTest: boolean;
   token: number | null;
@@ -212,6 +226,8 @@ export interface DayBoardRow {
   testFee: FeeTag;
   /** How they paid today — empty when nothing has been collected. */
   paymentMethods: string[];
+  /** Null without `invoice:read`. See `RowMoney`. */
+  money: RowMoney | null;
 }
 
 export interface DayBoard {
@@ -228,6 +244,14 @@ export interface DayBoard {
     not_attending: number;
     total: number;
   };
+  /**
+   * The day's money over every row, summed server-side. Null without
+   * `invoice:read`.
+   *
+   * Not derived in the browser: it has to be the day's figure whichever tab is
+   * open, and the browser only holds what it was sent.
+   */
+  money: { billedPaise: number; collectedPaise: number; duePaise: number } | null;
   rows: DayBoardRow[];
 }
 
@@ -256,6 +280,18 @@ export interface PatientBilling {
     totalPaise: number;
     balancePaise: number;
     createdAt: string;
+    /** What was charged, as charged. Four at most — `itemCount` has the rest. */
+    items: string[];
+    itemCount: number;
+    /** Null for a walk-in test, which belongs to no doctor. */
+    doctor: string | null;
+    /** Net of money in and refunds out: what the patient is actually down. */
+    paidPaise: number;
+    refundedPaise: number;
+    /** How they paid. Two entries when a part payment changed method. */
+    paymentModes: string[];
+    /** The payment a receipt prints for, or null when nothing was taken. */
+    lastPaymentId: string | null;
   }>;
 }
 
@@ -981,6 +1017,8 @@ export interface FormularyItem {
  */
 export interface InvoiceLine {
   id: string;
+  /** The catalogue entry this came from. Null for a free-text charge. */
+  serviceId: string | null;
   description: string;
   quantity: number;
   unitPricePaise: number;
@@ -1057,7 +1095,24 @@ export interface Invoice {
     externalTestNote: string | null;
     practitioner: { fullName: string; prefix: string | null };
   } | null;
+  /**
+   * The queue already calls this visit an emergency.
+   *
+   * A prompt for the desk, never a charge in itself: the surcharge is added by
+   * somebody holding `invoice:write`, because the queue flag is set by whoever
+   * holds `queue:prioritise` and the two are deliberately different powers.
+   */
+  emergencyVisit: boolean;
 }
+
+/**
+ * The emergency surcharge, by code — mirrors `EMERGENCY_SURCHARGE_CODE` on the
+ * server.
+ *
+ * An ordinary price-list service, so a clinic that does not charge one never
+ * creates it and is never offered it.
+ */
+export const EMERGENCY_SURCHARGE_CODE = 'CONS-EMERG';
 
 /**
  * A discount the administrator has set up (FR-PRO-01).
@@ -1139,6 +1194,14 @@ export interface ReceiptPayload {
   };
   /** Null for a walk-in with no doctor. The sheet does not invent one. */
   doctor: { fullName: string; prefix: string | null } | null;
+  /**
+   * The queue token of the visit this bill belongs to.
+   *
+   * Null for a walk-in test, which never joins a queue and so has no number to
+   * be called by. Read live rather than frozen onto the receipt: a token is
+   * allocated with the visit and never renumbered.
+   */
+  token: number | null;
   lines: Array<{
     description: string;
     quantity: number;
@@ -1218,6 +1281,12 @@ export interface OutstandingInvoice {
   issuedAt: string;
   reason: string | null;
   patient: { id: string; name: string; uhid: string; mobile: string };
+  /** What is being charged for, as charged. Up to four lines. */
+  items: string[];
+  /** Every line on the bill, so a truncated `items` can say how many it hides. */
+  itemCount: number;
+  /** Null for a walk-in test, which belongs to no doctor. */
+  doctor: string | null;
 }
 
 export const api = {

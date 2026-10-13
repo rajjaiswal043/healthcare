@@ -43,6 +43,13 @@ const SERVICES = [
   ['CONS-NEW', 'Consultation — new patient', 'CONSULTATION', 50000, 0],
   ['CONS-FOLLOWUP', 'Consultation — follow-up', 'CONSULTATION', 30000, 0],
   ['CONS-TELE', 'Teleconsultation', 'CONSULTATION', 40000, 0],
+  /**
+   * The emergency surcharge, by the code the finance desk looks for —
+   * `EMERGENCY_SURCHARGE_CODE` in billing.service.ts. Seeded so the offer can
+   * be exercised; a real clinic sets its own price, or never creates it at all
+   * and is never offered the charge.
+   */
+  ['CONS-EMERG', 'Emergency / after-hours surcharge', 'CONSULTATION', 30000, 0],
   ['PROC-DRESS', 'Dressing', 'PROCEDURE', 25000, 0],
   ['PROC-INJ', 'Injection administration', 'PROCEDURE', 15000, 0],
   ['PROC-SUTURE', 'Suturing — minor', 'PROCEDURE', 120000, 0],
@@ -51,6 +58,25 @@ const SERVICES = [
   ['DIAG-BP', 'Blood pressure monitoring', 'DIAGNOSTIC', 5000, 0],
   ['DIAG-SUGAR', 'Random blood sugar', 'DIAGNOSTIC', 10000, 0],
   ['CONSUM-KIT', 'Dressing kit', 'CONSUMABLE', 8000, 1200],
+
+  /**
+   * Tests with a DEPARTMENT, added 13 Oct 2026.
+   *
+   * The sixth column is what makes these orderable. A diagnostic service with
+   * no department never appears in the catalogue a doctor picks from — which is
+   * why DIAG-ECG and friends above, priced since August, could not be ordered
+   * by anybody. The seed looked complete and the screen was empty.
+   *
+   * Departments come from seed:scheduling, so run that first. A name that does
+   * not resolve leaves the service unlinked rather than failing the seed: a
+   * clinic may genuinely not have an X-ray room.
+   */
+  ['XR-CHEST', 'X-ray — chest', 'DIAGNOSTIC', 45000, 0, 'X-ray'],
+  ['XR-KNEE', 'X-ray — knee', 'DIAGNOSTIC', 50000, 0, 'X-ray'],
+  ['XR-SPINE', 'X-ray — lumbar spine', 'DIAGNOSTIC', 60000, 0, 'X-ray'],
+  ['PATH-CBC', 'Complete blood count', 'DIAGNOSTIC', 30000, 0, 'Pathology'],
+  ['PATH-LIPID', 'Lipid profile', 'DIAGNOSTIC', 70000, 0, 'Pathology'],
+  ['PATH-HBA1C', 'HbA1c', 'DIAGNOSTIC', 55000, 0, 'Pathology'],
 ];
 
 /** Consultants in one clinic charge differently; a flat clinic fee is a fiction. */
@@ -78,19 +104,32 @@ try {
     await client.query('BEGIN');
     await client.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenant.id]);
 
-    for (const [code, name, category, pricePaise, taxRate] of SERVICES) {
+    for (const [code, name, category, pricePaise, taxRate, departmentName] of SERVICES) {
+      // Resolved by name, and null when there is no such department — a clinic
+      // without an X-ray room should still get the rest of the price list.
+      let departmentId = null;
+      if (departmentName) {
+        const { rows } = await client.query(
+          'SELECT id FROM department WHERE tenant_id = $1 AND name = $2',
+          [tenant.id, departmentName],
+        );
+        departmentId = rows[0]?.id ?? null;
+      }
+
       await client.query(
         `INSERT INTO service
-           (tenant_id, code, name, category, price_paise, tax_rate_basis_points, updated_at)
-         VALUES ($1, $2, $3, $4::service_category, $5, $6, now())
+           (tenant_id, code, name, category, price_paise, tax_rate_basis_points,
+            department_id, updated_at)
+         VALUES ($1, $2, $3, $4::service_category, $5, $6, $7, now())
          ON CONFLICT (tenant_id, code)
            DO UPDATE SET name        = EXCLUDED.name,
                          category    = EXCLUDED.category,
                          price_paise = EXCLUDED.price_paise,
                          tax_rate_basis_points = EXCLUDED.tax_rate_basis_points,
+                         department_id = EXCLUDED.department_id,
                          is_active   = true,
                          updated_at  = now()`,
-        [tenant.id, code, name, category, pricePaise, taxRate],
+        [tenant.id, code, name, category, pricePaise, taxRate, departmentId],
       );
     }
 
