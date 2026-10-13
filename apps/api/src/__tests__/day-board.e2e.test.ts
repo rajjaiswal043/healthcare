@@ -52,12 +52,15 @@ interface Row {
   visitFee: string | null;
   testFee: string | null;
   paymentMethods: string[];
+  /** Null for a caller without `invoice:read`. */
+  money: { billedPaise: number; duePaise: number } | null;
 }
 
 interface Board {
   date: string;
   scope: 'CLINIC' | 'OWN';
   counts: Record<string, number>;
+  money: { billedPaise: number; collectedPaise: number; duePaise: number } | null;
   rows: Row[];
 }
 
@@ -426,6 +429,172 @@ describe('the money tag', () => {
   }
 
   async function pay(invoiceId: string, mode: string, paise: number) {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO payment (tenant_id, invoice_id, direction, mode, amount_paise,
+                            collected_by_user_id)
+       VALUES ($1, $2, 'IN', $3::payment_mode, $4, $5)`,
+      [fx.main.id, invoiceId, mode, paise, orderedByUserId],
+    );
+  }
+});
+
+/**
+ * The figures beside the tags.
+ *
+ * The tags came first, and deliberately: doctors and nurses read this board and
+ * hold no `invoice:read`, so money was a tag and never a number. The amount
+ * column does not change that rule — it answers to it. The figures are left out
+ * of the RESPONSE for a caller who may not see them, rather than sent and
+ * hidden by the browser, which is what the first test here pins down.
+ */
+describe('the amount column', () => {
+  it('is left out entirely for a doctor, who holds no invoice:read', async () => {
+    await visit('ARRIVED', 0);
+    await bill(50000);
+
+    const b = await board(doctor);
+
+    // The row is theirs to see; the money on it is not.
+    expect(b.rows).toHaveLength(1);
+    expect(b.rows[0]!.visitFee).toBe('PENDING');
+    expect(b.rows[0]!.money).toBeNull();
+    expect(b.money).toBeNull();
+  });
+
+  it('reaches the front desk, which does', async () => {
+    await visit('ARRIVED', 0);
+    await bill(50000);
+
+    const b = await board(frontDesk);
+
+    expect(b.rows[0]!.money).toEqual({ billedPaise: 50000, duePaise: 50000 });
+  });
+
+  it('reads nothing charged as zero, not as refused', async () => {
+    // A clinic that has priced nothing raises no invoice. That is a different
+    // fact from "you may not know", and the column has to tell them apart.
+    await visit('BOOKED', 0);
+
+    expect((await board()).rows[0]!.money).toEqual({ billedPaise: 0, duePaise: 0 });
+  });
+
+  it('adds the day up: billed, collected, and what is still owed', async () => {
+    await visit('ARRIVED', 0);
+    const first = await bill(50000);
+    await payment(first, 'CASH', 50000);
+
+    await visit('ARRIVED', 1);
+    await bill(30000, 1);
+
+    const b = await board();
+
+    expect(b.money).toEqual({ billedPaise: 80000, collectedPaise: 50000, duePaise: 30000 });
+  });
+
+  it('leaves a part payment as the remainder', async () => {
+    await visit('ARRIVED', 0);
+    const invoiceId = await bill(50000);
+    await payment(invoiceId, 'UPI', 20000);
+
+    const b = await board();
+
+    expect(b.rows[0]!.money).toEqual({ billedPaise: 50000, duePaise: 30000 });
+    expect(b.money!.collectedPaise).toBe(20000);
+  });
+
+  /**
+   * The arm of the query that is easiest to leave out.
+   *
+   * A walk-in test has no appointment anywhere, so its bill is reached only
+   * through the LINE the order points at. Without that arm the one row on this
+   * board that exists purely because money is owed would read as owing nothing.
+   */
+  it('counts a walk-in test, whose bill hangs off a line rather than an appointment', async () => {
+    await walkInTest(30000, 0);
+
+    const b = await board(frontDesk);
+
+    expect(b.rows).toHaveLength(1);
+    expect(b.rows[0]!.money).toEqual({ billedPaise: 30000, duePaise: 30000 });
+  });
+
+  /**
+   * A cancelled bill is not a charge, and is in neither figure — while its tag
+   * stays PENDING, because somebody still has to deal with it. "Fee pending"
+   * beside a blank amount is the honest pairing; adding the total would report
+   * the clinic as having charged for work it explicitly cancelled.
+   */
+  it('keeps a cancelled bill out of the figures, and still flags it', async () => {
+    await visit('ARRIVED', 0);
+    const invoiceId = await bill(50000);
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE invoice
+          SET status = 'CANCELLED', cancelled_at = now(),
+              reason = 'Board test', authorised_by_user_id = $2
+        WHERE id = $1`,
+      [invoiceId, orderedByUserId],
+    );
+
+    const b = await board();
+
+    expect(b.rows[0]!.visitFee).toBe('PENDING');
+    expect(b.rows[0]!.money).toEqual({ billedPaise: 0, duePaise: 0 });
+    expect(b.money).toEqual({ billedPaise: 0, collectedPaise: 0, duePaise: 0 });
+  });
+
+  /** The consultation bill for today's visit, unpaid. Returns its id. */
+  async function bill(paise: number, patientIndex = 0): Promise<string> {
+    const [appt] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT a.id FROM appointment a
+        WHERE a.tenant_id = $1
+          AND a.patient_id = $2
+          AND a.start_at >= date_trunc('day', now())`,
+      [fx.main.id, fx.main.patientIds[patientIndex]],
+    );
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, appointment_id, patient_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, updated_at)
+       VALUES ($1, $2, $3, 'AMT-' || floor(random() * 1000000)::text, 'UNPAID', $4, 0, $4, now())
+       RETURNING id`,
+      [fx.main.id, appt!.id, fx.main.patientIds[patientIndex], paise],
+    );
+    return invoice!.id;
+  }
+
+  /** A walk-in test, billed: no appointment anywhere, reached through its line. */
+  async function walkInTest(paise: number, patientIndex = 0) {
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, patient_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, updated_at)
+       VALUES ($1, $2, 'WLK-' || floor(random() * 1000000)::text, 'UNPAID', $3, 0, $3, now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[patientIndex], paise],
+    );
+    const [line] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice_line (tenant_id, invoice_id, description, quantity,
+                                 unit_price_paise, discount_paise, tax_rate_basis_points,
+                                 tax_paise, total_paise)
+       VALUES ($1, $2, 'Knee X-ray', 1, $3, 0, 0, 0, $3)
+       RETURNING id`,
+      [fx.main.id, invoice!.id, paise],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO diagnostic_order (tenant_id, patient_id, department_id, ordered_by_user_id,
+                                     description, status, referral_source, legacy_unbilled,
+                                     invoice_line_id, updated_at)
+       VALUES ($1, $2, $3, $4, 'Knee X-ray', 'PENDING', 'SELF', false, $5, now())`,
+      [fx.main.id, fx.main.patientIds[patientIndex], departmentId, orderedByUserId, line!.id],
+    );
+  }
+
+  async function payment(invoiceId: string, mode: string, paise: number) {
     await ownerQuery(
       fx.main.id,
       `INSERT INTO payment (tenant_id, invoice_id, direction, mode, amount_paise,

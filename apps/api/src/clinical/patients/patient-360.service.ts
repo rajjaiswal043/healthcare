@@ -31,6 +31,18 @@ export interface PatientBilling {
     totalPaise: number;
     balancePaise: number;
     createdAt: Date;
+    /** What was charged, as charged. Four at most — `itemCount` has the rest. */
+    items: string[];
+    itemCount: number;
+    /** Null for a walk-in test, which belongs to no doctor. */
+    doctor: string | null;
+    /** Net of money in and refunds out: what the patient is actually down. */
+    paidPaise: number;
+    refundedPaise: number;
+    /** How they paid. Two entries when a part payment changed method. */
+    paymentModes: string[];
+    /** The payment a receipt prints for, or null when nothing was taken. */
+    lastPaymentId: string | null;
   }>;
 }
 
@@ -70,7 +82,37 @@ export class Patient360Service {
           status: true,
           totalPaise: true,
           createdAt: true,
-          payments: { select: { direction: true, amountPaise: true } },
+
+          /**
+           * Ordered oldest-first, and the id comes too.
+           *
+           * The LAST money in is what a receipt is printed for — the same rule
+           * the finance desk and the payment dialog use — so the order matters
+           * and an unordered read would hand back whichever row the planner
+           * felt like. `mode` says how they actually paid, which is the
+           * question asked of a settled bill months later.
+           */
+          payments: {
+            select: { id: true, direction: true, amountPaise: true, mode: true },
+            orderBy: { collectedAt: 'asc' },
+          },
+
+          /**
+           * What the bill was FOR, and whose patient they were.
+           *
+           * A number, a date and an amount cannot answer "what did we charge
+           * them for in March?", which is the whole reason somebody opens this
+           * tab. Descriptions are the ones copied onto the lines at billing
+           * time, so the row reads the same after the catalogue is repriced.
+           *
+           * Both appointment links are read because a bill reaches a visit two
+           * ways: `appointmentId` when it IS the consultation bill, and
+           * `visitAppointmentId` when it is a test raised during that visit.
+           */
+          lines: { select: { description: true }, orderBy: { createdAt: 'asc' }, take: 4 },
+          _count: { select: { lines: true } },
+          appointment: { select: { practitioner: { select: { fullName: true } } } },
+          visitAppointment: { select: { practitioner: { select: { fullName: true } } } },
         },
       });
 
@@ -84,6 +126,20 @@ export class Patient360Service {
         const balancePaise = state.status === 'UNPAID' ? state.balancePaise : 0;
         outstandingPaise += balancePaise;
 
+        /**
+         * Money IN only, for both the figure and the receipt.
+         *
+         * A refund is not a receipt — nothing was received — and printing one
+         * would put a document in a patient's hand saying they paid when in
+         * fact they were paid. The net of in and refunds is what they are
+         * actually out of pocket, so that is the number shown.
+         */
+        const paymentsIn = invoice.payments.filter((p) => p.direction === 'IN');
+        const received = paymentsIn.reduce((n, p) => n + p.amountPaise, 0);
+        const refunded = invoice.payments
+          .filter((p) => p.direction === 'REFUND')
+          .reduce((n, p) => n + p.amountPaise, 0);
+
         return {
           id: invoice.id,
           number: invoice.number,
@@ -91,6 +147,18 @@ export class Patient360Service {
           totalPaise: invoice.totalPaise,
           balancePaise,
           createdAt: invoice.createdAt,
+          items: invoice.lines.map((l) => l.description),
+          itemCount: invoice._count.lines,
+          // Null for a walk-in test, which belongs to no doctor.
+          doctor:
+            invoice.appointment?.practitioner?.fullName ??
+            invoice.visitAppointment?.practitioner?.fullName ??
+            null,
+          paidPaise: received - refunded,
+          refundedPaise: refunded,
+          paymentModes: [...new Set(paymentsIn.map((p) => p.mode as string))],
+          /** The payment a receipt prints for, or null when nothing was taken. */
+          lastPaymentId: paymentsIn[paymentsIn.length - 1]?.id ?? null,
         };
       });
 

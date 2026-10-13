@@ -95,6 +95,15 @@ export function ReceiptPrint({ receipt }: { receipt: ReceiptPayload }) {
               value={`${receipt.doctor.prefix ? `${receipt.doctor.prefix} ` : ''}${receipt.doctor.fullName}`}
             />
           )}
+          {/*
+            The number the patient will be called by.
+
+            Set a size larger than the fields around it, because on a paper slip
+            in a crowded waiting room this is the one line the patient reads from
+            a distance while a nurse calls it out. Absent for a walk-in test,
+            which joins no queue.
+          */}
+          {receipt.token !== null && <Field label="Token" value={`#${receipt.token}`} mono large />}
           <Field label="Bill" value={receipt.invoiceNumber} mono />
         </section>
 
@@ -166,11 +175,24 @@ export function ReceiptPrint({ receipt }: { receipt: ReceiptPayload }) {
   );
 }
 
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Field({
+  label,
+  value,
+  mono,
+  large,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  /** For the token, which is read across a waiting room rather than up close. */
+  large?: boolean;
+}) {
   return (
     <p>
       <span className="text-[10px] uppercase tracking-wider">{label} </span>
-      <span className={mono ? 'font-mono' : ''}>{value}</span>
+      <span className={[mono ? 'font-mono' : '', large ? 'text-[15px] font-bold' : ''].join(' ')}>
+        {value}
+      </span>
     </p>
   );
 }

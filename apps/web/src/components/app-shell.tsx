@@ -214,6 +214,20 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
+/**
+ * Screens that use the full width of the window.
+ *
+ * Tables and boards, where an answer is scanned across a row rather than read
+ * down a column. Everything else keeps the 1152px measure.
+ */
+const WIDE_ROUTES = ['/', '/finance', '/patients/all', '/queue', '/diagnostics'];
+
+function isWideRoute(pathname: string): boolean {
+  // A patient record is wide too — its timeline and tables earn the space — and
+  // it is the only one needing a prefix rather than an exact match.
+  return WIDE_ROUTES.includes(pathname) || /^\/patients\/[^/]+$/.test(pathname);
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { session, loading, can, signOut, signature } = useAuth();
   const pathname = usePathname();
@@ -724,7 +738,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-7 sm:px-6">{children}</main>
+        {/*
+          Most screens are READ, so they keep a measure: a registration form or
+          a role editor stretched across a 2000px monitor is harder to use, not
+          easier. The data-dense ones are SCANNED instead — a table with nine
+          columns wants every pixel, and capping it at 1152 leaves a third of a
+          clinic monitor empty.
+
+          A named list rather than a prop on each page, because the decision
+          belongs to the shell that owns the layout, and one place to look beats
+          a flag on twenty screens.
+        */}
+        <main
+          className={[
+            'w-full flex-1 px-4 py-5 sm:px-6',
+            isWideRoute(pathname) ? '' : 'mx-auto max-w-6xl',
+          ].join(' ')}
+        >
+          {children}
+        </main>
 
         {/* No footer. It used to read "Confidential patient data · Access is
             logged" on every screen — true, and still true, but a standing

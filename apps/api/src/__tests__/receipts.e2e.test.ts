@@ -447,6 +447,84 @@ describe('what the sheet carries', () => {
     expect(receipt.doctor?.fullName).toBe('Dr Asha Menon');
   });
 
+  /**
+   * The number the patient is called by, printed on the slip they walk away
+   * with. Read live from the visit rather than frozen onto the receipt: a token
+   * is allocated when the visit is created and is never renumbered.
+   */
+  it('prints the token of the visit it was paid for', async () => {
+    const { appointmentId, invoice } = await bookedVisit();
+    await pay(invoice.id, CONSULT_FEE);
+
+    const [appt] = await ownerQuery<{ token_number: number }>(
+      fx.main.id,
+      `SELECT token_number FROM appointment WHERE id = $1`,
+      [appointmentId],
+    );
+
+    const [paymentId] = await paymentIds(invoice.id);
+    const receipt = (await readReceipt(paymentId!)).json();
+
+    // The one the patient is holding, not a number this sheet invented.
+    expect(receipt.token).toBe(appt!.token_number);
+    expect(receipt.token).toBeGreaterThan(0);
+  });
+
+  it('carries the visit’s token on a test bill, which has no appointment_id', async () => {
+    // Same shape as the doctor case above: a test raised during a consultation
+    // reaches the visit through `visit_appointment_id` only, and the patient is
+    // still called by that visit's token when the film is ready.
+    const { appointmentId } = await bookedVisit();
+
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, number, patient_id, visit_appointment_id,
+                            subtotal_paise, total_paise, updated_at)
+       VALUES ($1, 'INV-TOKEN1', $2, $3, 45000, 45000, now()) RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0], appointmentId],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO invoice_line (tenant_id, invoice_id, description, quantity, unit_price_paise, total_paise)
+       VALUES ($1, $2, 'X-ray Knee', 1, 45000, 45000)`,
+      [fx.main.id, invoice!.id],
+    );
+
+    await pay(invoice!.id, 45000);
+    const [paymentId] = await paymentIds(invoice!.id);
+    const receipt = (await readReceipt(paymentId!)).json();
+
+    const [appt] = await ownerQuery<{ token_number: number }>(
+      fx.main.id,
+      `SELECT token_number FROM appointment WHERE id = $1`,
+      [appointmentId],
+    );
+
+    expect(receipt.token).toBe(appt!.token_number);
+  });
+
+  it('prints no token for a bill with no visit at all', async () => {
+    // A walk-in test joins no doctor's queue, so there is no number to be
+    // called by and the sheet leaves the line out rather than printing a dash.
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, number, patient_id, subtotal_paise, total_paise, updated_at)
+       VALUES ($1, 'INV-NOTOKEN', $2, 20000, 20000, now()) RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0]],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO invoice_line (tenant_id, invoice_id, description, quantity, unit_price_paise, total_paise)
+       VALUES ($1, $2, 'Blood sugar', 1, 20000, 20000)`,
+      [fx.main.id, invoice!.id],
+    );
+
+    await pay(invoice!.id, 20000);
+    const [paymentId] = await paymentIds(invoice!.id);
+
+    expect((await readReceipt(paymentId!)).json().token).toBeNull();
+  });
+
   it('names the doctor when there is one', async () => {
     const invoice = await walkInVisit();
     await pay(invoice.id, CONSULT_FEE);

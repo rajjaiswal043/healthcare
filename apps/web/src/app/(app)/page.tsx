@@ -3,10 +3,18 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { api, ApiRequestError, type DayBoard, type DayBucket, type FeeTag } from '@/lib/api';
+import {
+  api,
+  ApiRequestError,
+  type DayBoard,
+  type DayBoardRow,
+  type DayBucket,
+  type FeeTag,
+} from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { Pagination } from '@/components/pagination';
-import { formatAge, genderInitial } from '@/lib/format';
+import { SendForTestDialog } from '@/components/send-for-test-dialog';
+import { formatAge, formatPaise, genderInitial, payMethodLabel } from '@/lib/format';
 import { IconAlert, IconRefresh, IconSearch, IconUsers } from '@/components/icons';
 
 /** How often the board refreshes while somebody is actually looking at it. */
@@ -81,13 +89,22 @@ export default function HomePage() {
 }
 
 function DayBoardScreen() {
-  const { session } = useAuth();
+  const { can, session } = useAuth();
   const params = useSearchParams();
 
   const [board, setBoard] = useState<DayBoard | null>(null);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+
+  /**
+   * Sending somebody for a test from the row, without reopening the
+   * consultation. `notice` is held until dismissed: the sentence it carries
+   * says money has been added to a patient's bill, which is not something to
+   * flash past.
+   */
+  const [sendingFor, setSendingFor] = useState<DayBoardRow | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const tab: TabKey = TABS.find((t) => t.key === params.get('tab'))?.key ?? 'everyone';
   const pageParam = Number(params.get('page') ?? '1');
@@ -182,25 +199,69 @@ function DayBoardScreen() {
   const first = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const last = first + shown.length - 1;
 
-  const columns = active.bucket === null ? 9 : 8;
+  const mayOrderTests = can('diagnostic:order');
+
+  /**
+   * Figures, not permission, decide the column.
+   *
+   * `board.money` is null for a caller the server would not send amounts to, so
+   * the column simply does not exist for a doctor or a nurse rather than being
+   * rendered empty. Keyed on the payload instead of a second `can()` check, so
+   * there is one rule and it is the server's.
+   */
+  const showsMoney = board?.money != null;
+
+  /** What the current tab and search add up to, which is not the whole day. */
+  const shownMoney = showsMoney
+    ? filtered.reduce(
+        (total, row) => ({
+          billedPaise: total.billedPaise + (row.money?.billedPaise ?? 0),
+          duePaise: total.duePaise + (row.money?.duePaise ?? 0),
+        }),
+        { billedPaise: 0, duePaise: 0 },
+      )
+    : null;
+
+  const columns = (active.bucket === null ? 9 : 8) + (mayOrderTests ? 1 : 0) + (showsMoney ? 1 : 0);
   const notAttending = board?.counts.not_attending ?? 0;
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="eyebrow">{board?.scope === 'OWN' ? 'Your patients' : 'The clinic'}</p>
-          <h1 className="mt-2 font-display text-[30px] font-bold">
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        {/* One line instead of three. The eyebrow and the count each had a row
+            of their own, which cost about 60px above a table people open forty
+            times a day to scan. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="font-display text-[24px] font-bold">
             Today at {session?.tenant.name ?? 'the clinic'}
           </h1>
-          <p className="mt-1 text-[14px] text-ink-60">
+          <p className="text-[13.5px] text-ink-60">
             {board
               ? `${board.counts.total} ${
                   board.counts.total === 1 ? 'patient' : 'patients'
-                } expected today`
-              : 'Loading today…'}
+                } expected`
+              : 'Loading…'}
             {board?.scope === 'OWN' && ' · your list only'}
           </p>
+
+          {/* The day's money, over the whole board rather than the open tab.
+              Billed and collected are the two figures a clinic closes the day
+              on; what is still due is the one somebody has to act on, so it
+              only appears when there is some. */}
+          {board?.money && (
+            <p className="text-[13.5px] text-ink-60">
+              <span className="font-mono font-semibold tabular-nums text-ink">
+                {formatPaise(board.money.collectedPaise)}
+              </span>{' '}
+              collected of {formatPaise(board.money.billedPaise)}
+              {board.money.duePaise > 0 && (
+                <span className="font-semibold text-amber-text">
+                  {' · '}
+                  {formatPaise(board.money.duePaise)} due
+                </span>
+              )}
+            </p>
+          )}
         </div>
 
         <button
@@ -217,6 +278,20 @@ function DayBoardScreen() {
             : 'Refresh'}
         </button>
       </header>
+
+      {notice && (
+        <div className="flex items-start justify-between gap-3 rounded-card border border-clinical/30 bg-clinical-tint p-3 text-[13.5px]">
+          <span>{notice}</span>
+          <button
+            type="button"
+            className="shrink-0 text-ink-40 hover:text-ink"
+            aria-label="Dismiss"
+            onClick={() => setNotice(null)}
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {error && (
         <div
@@ -299,7 +374,13 @@ function DayBoardScreen() {
                     <Th>Here for</Th>
                     <Th>Payment</Th>
                     <Th className="w-[120px]">Method</Th>
+                    {showsMoney && <Th className="w-[112px] text-right">Amount</Th>}
                     {active.bucket === null && <Th className="w-[130px]">Stage</Th>}
+                    {mayOrderTests && (
+                      <Th className="w-[118px]">
+                        <span className="sr-only">Actions</span>
+                      </Th>
+                    )}
                   </tr>
                 </thead>
 
@@ -366,9 +447,48 @@ function DayBoardScreen() {
                           r.paymentMethods.map(payMethodLabel).join(', ')
                         )}
                       </td>
+                      {showsMoney && (
+                        <td className="whitespace-nowrap px-4 py-3 text-right">
+                          {r.money && r.money.billedPaise > 0 ? (
+                            <>
+                              <span className="font-mono font-semibold tabular-nums">
+                                {formatPaise(r.money.billedPaise)}
+                              </span>
+                              {/* Only what is still owed gets the colour. A
+                                  settled bill needs no second line. */}
+                              {r.money.duePaise > 0 && (
+                                <span className="block font-mono text-[11.5px] font-semibold tabular-nums text-amber-text">
+                                  {formatPaise(r.money.duePaise)} due
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            // Nothing charged, which is not the same as nothing
+                            // collected — a clinic that has priced nothing
+                            // raises no bill at all.
+                            <span className="text-ink-20">—</span>
+                          )}
+                        </td>
+                      )}
                       {active.bucket === null && (
                         <td className="px-4 py-3">
                           <Chip tone={BUCKET_TONE[r.bucket]}>{BUCKET_LABEL[r.bucket]}</Chip>
+                        </td>
+                      )}
+                      {mayOrderTests && (
+                        <td className="px-4 py-3 text-right">
+                          {/* Only for somebody actually here. Ordering a test
+                              for a patient who has not arrived raises a bill
+                              for a visit that may never happen. */}
+                          {r.appointmentId && SENDABLE.has(r.bucket) && (
+                            <button
+                              type="button"
+                              className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+                              onClick={() => setSendingFor(r)}
+                            >
+                              Send for a test
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -387,6 +507,39 @@ function DayBoardScreen() {
                     </tr>
                   )}
                 </tbody>
+
+                {/*
+                  THE TOTAL UNDER THE COLUMN, for everything the tab matches —
+                  not just the page on screen, which would make the figure
+                  change as somebody paged through it.
+
+                  The day's total is in the header above; this one answers "how
+                  much is sitting in the waiting room" and "what did we take off
+                  the people who have gone home", which is what the tabs are
+                  for.
+                */}
+                {shownMoney && shown.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-[1.5px] border-ink/10 bg-bg-soft">
+                      <td colSpan={8} className="px-4 py-2.5 text-[12.5px] text-ink-60">
+                        {active.label} — {filtered.length}{' '}
+                        {filtered.length === 1 ? 'patient' : 'patients'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <span className="font-mono font-semibold tabular-nums">
+                          {formatPaise(shownMoney.billedPaise)}
+                        </span>
+                        {shownMoney.duePaise > 0 && (
+                          <span className="block font-mono text-[11.5px] font-semibold tabular-nums text-amber-text">
+                            {formatPaise(shownMoney.duePaise)} due
+                          </span>
+                        )}
+                      </td>
+                      {/* The stage and action columns, left empty. */}
+                      {columns > 9 && <td colSpan={columns - 9} />}
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
@@ -413,15 +566,24 @@ function DayBoardScreen() {
           </div>
         </>
       )}
+
+      {sendingFor && (
+        <SendForTestDialog
+          row={sendingFor}
+          onClose={() => setSendingFor(null)}
+          onSent={(message) => {
+            setSendingFor(null);
+            setNotice(message);
+            void load();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** CASH -> "Cash", BANK_TRANSFER -> "Bank transfer". */
-function payMethodLabel(mode: string): string {
-  const words = mode.toLowerCase().replace(/_/g, ' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
+/** Buckets a patient can be sent for a test from — the ones who are here. */
+const SENDABLE = new Set<DayBucket>(['WITH_DOCTOR', 'WAITING', 'AT_DEPARTMENT']);
 
 function emptyMessage(bucket: DayBucket | null): string {
   switch (bucket) {

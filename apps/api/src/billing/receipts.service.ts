@@ -26,6 +26,14 @@ export interface RequestMeta {
  * rows copied the service name and unit price at billing time and never point at
  * the current price. A receipt reprinted in 2029 shows the ₹500 that was
  * actually charged, not the ₹800 the X-ray costs by then (FR-PRC-03).
+ *
+ * THE QUEUE TOKEN IS READ LIVE TOO, and is not stored on the receipt. A token is
+ * allocated when the visit is created — at booking, or in the same act as a
+ * walk-in registration — so it already exists by the time anybody pays, and
+ * nothing ever renumbers it: `appointments.service` says in as many words that
+ * renumbering would move a token out from under a patient already holding a slip
+ * with it printed. An immutable field does not need freezing, and storing it
+ * would have meant a column plus a backfill for every receipt already issued.
  */
 @Injectable()
 export class ReceiptsService {
@@ -207,6 +215,7 @@ export class ReceiptsService {
         appointment: {
           select: {
             locationId: true,
+            tokenNumber: true,
             practitioner: { select: { fullName: true, prefix: true } },
           },
         },
@@ -220,6 +229,7 @@ export class ReceiptsService {
         visitAppointment: {
           select: {
             locationId: true,
+            tokenNumber: true,
             practitioner: { select: { fullName: true, prefix: true } },
           },
         },
@@ -291,6 +301,18 @@ export class ReceiptsService {
        * one, and now names them: it is reached through `visitAppointment`.
        */
       doctor: doctor ? { fullName: doctor.fullName, prefix: doctor.prefix } : null,
+
+      /**
+       * The number the patient is called by, from the visit this bill belongs
+       * to — the consultation's own visit, or for a test bill the visit it was
+       * raised during, which is the same number the patient is holding.
+       *
+       * Null where there is genuinely no visit: a walk-in test, which never
+       * joins a doctor's queue and so is never called by a token. The sheet
+       * leaves the line out rather than printing a dash, exactly as it does for
+       * a missing doctor.
+       */
+      token: visit?.tokenNumber ?? null,
 
       lines: invoice.lines.map((l) => ({
         description: l.description,

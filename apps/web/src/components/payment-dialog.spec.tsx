@@ -12,6 +12,7 @@ import { BillSummary, showsPromotionPanel } from './payment-dialog';
 
 const line = (over: Record<string, unknown> = {}) => ({
   id: 'l-1',
+  serviceId: null,
   description: 'Consultation',
   quantity: 1,
   unitPricePaise: 60000,

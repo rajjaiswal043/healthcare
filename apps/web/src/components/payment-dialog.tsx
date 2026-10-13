@@ -1,11 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type Invoice, type Promotion } from '@/lib/api';
+import {
+  api,
+  ApiRequestError,
+  type ChargeableService,
+  type Invoice,
+  type Promotion,
+} from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { formatPaise, parseRupeesToPaise } from '@/lib/format';
 import { ReceiptButton } from './receipt-button';
 import { PromotionPanel } from './promotion-panel';
+import { EmergencySurcharge, mayAddSurcharge } from './emergency-surcharge';
 import { IconAlert, IconCheck, IconX } from './icons';
 
 const MODES = [
@@ -101,6 +108,22 @@ export function PaymentDialog({
   const [approvers, setApprovers] = useState<Array<{ id: string; fullName: string }>>([]);
   const [approversBlocked, setApproversBlocked] = useState(false);
 
+  /**
+   * The price list, for the emergency surcharge and nothing else.
+   *
+   * THIS DIALOG IS WHERE AN EMERGENCY ACTUALLY LANDS. The queue cannot be
+   * flagged until the patient is checked in, and check-in needs the
+   * consultation bill clear — so a flagged visit's unpaid bill is almost always
+   * one opened from the outstanding list, which opens here. Offering the
+   * surcharge only on the finance desk's own walk-in flow would have put it
+   * everywhere except where it is needed.
+   *
+   * Loaded only when it could be used, and a failure is not an error to shout
+   * about: billing is opt-in per clinic, and a clinic with no price list has no
+   * surcharge to offer.
+   */
+  const [services, setServices] = useState<ChargeableService[]>([]);
+
   useEffect(() => {
     if (!mayDiscount) return;
     let cancelled = false;
@@ -122,6 +145,22 @@ export function PaymentDialog({
       cancelled = true;
     };
   }, [mayDiscount]);
+
+  useEffect(() => {
+    if (!can('invoice:write') || initial.paidPaise > 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { services } = await api.services();
+        if (!cancelled) setServices(services);
+      } catch {
+        if (!cancelled) setServices([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [can, initial.paidPaise]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -313,6 +352,37 @@ export function PaymentDialog({
           )}
 
           <BillSummary invoice={invoice} />
+
+          {/* Above the discount, because the order on screen is the order it
+              happens in: everything that is being charged goes on the bill
+              first, then what comes off it. A discount applied before the
+              surcharge has to be taken off and re-applied — the server refuses
+              the charge underneath it, and `promotion_application` would
+              otherwise keep claiming the old figure. */}
+          {mayAddSurcharge(can('invoice:write'), invoice) && (
+            <EmergencySurcharge
+              invoice={invoice}
+              services={services}
+              busy={busy}
+              onAdd={(input) => {
+                setBusy(true);
+                setError(null);
+                void (async () => {
+                  try {
+                    apply(await api.addInvoiceLine(invoice.id, input));
+                  } catch (err) {
+                    setError(
+                      err instanceof ApiRequestError
+                        ? err.error.message
+                        : 'Could not add the surcharge.',
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              }}
+            />
+          )}
 
           {showsPromotionPanel(mayDiscount, invoice) && (
             <PromotionPanel
