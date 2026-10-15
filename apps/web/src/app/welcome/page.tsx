@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Newsreader } from 'next/font/google';
+import { Josefin_Sans } from 'next/font/google';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ConsoleMark } from '@/components/console-mark';
@@ -12,7 +12,7 @@ import {
   TextSizeToggle,
   type TextSize,
 } from '@/components/text-size-toggle';
-import { ScrollScene, SectionRail } from '@/components/scroll-scene';
+import { SectionRail } from '@/components/scroll-scene';
 import LoginPage from '../login/page';
 import {
   IconBell,
@@ -28,7 +28,6 @@ import {
   IconReceipt,
   IconSearch,
   IconShield,
-  IconStethoscope,
   IconUserPlus,
   IconUsers,
   IconX,
@@ -58,14 +57,15 @@ import {
  */
 
 /**
- * A real italic serif for accent words. Bricolage has no italic, and a sans
- * the browser has slanted is one of the quicker tells of an untypeset page.
+ * The page's one typeface. Geometric, set medium and tight for headings, with
+ * small labels in wide-spaced capitals. Only this page uses it: the console
+ * keeps its own fonts, and so does the sign-in pop-up, which is the real
+ * sign-in page.
  */
-const serif = Newsreader({
+const josefin = Josefin_Sans({
   subsets: ['latin'],
-  style: ['italic'],
-  weight: ['400', '500'],
-  variable: '--font-serif',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-josefin',
   display: 'swap',
 });
 
@@ -75,7 +75,18 @@ const CSS = `
    is unaffected; the global reduced-motion rule turns it back into a jump. */
 html{scroll-behavior:smooth}
 [data-text="large"] main{zoom:1.12}
-.wl-serif{font-family:var(--font-serif),Georgia,serif;font-style:italic;font-weight:400;letter-spacing:-.015em}
+/* Josefin for everything on this page except the sign-in pop-up (.wl-keep).
+   The mono font stays, for tokens, times and other data in the drawn screens. */
+.wl-root>:not(.wl-keep){--font-display:var(--font-josefin);--font-sans:var(--font-josefin);font-family:var(--font-josefin),"Helvetica Neue",Arial,sans-serif;letter-spacing:.019em}
+.wl-root>:not(.wl-keep) :is(h1,h2){font-weight:500;letter-spacing:-.05em}
+.wl-root>:not(.wl-keep) h3{font-weight:600;letter-spacing:-.01em}
+/* Accent words: same face and weight as the heading, set apart by colour. */
+.wl-serif{font-family:inherit;font-style:normal;font-weight:inherit}
+/* Josefin's letters sit high in the line box; nudging buttons down 3px
+   re-centres the text between their edges. */
+.wl-root .wl-btn{text-transform:uppercase;letter-spacing:.2em;font-size:13px;font-weight:500;padding-top:3px}
+.wl-root .wl-nav{text-transform:uppercase;letter-spacing:.2em;font-size:12px;font-weight:500;padding-top:calc(.5rem + 2px)}
+.wl-label{font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:.42em}
 @keyframes wl-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .wl-rise{animation:wl-rise .9s cubic-bezier(.2,.7,.2,1) both}
 @keyframes wl-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
@@ -89,15 +100,21 @@ html{scroll-behavior:smooth}
 .wl-fade{animation:wl-fade .25s ease-out both}
 @keyframes wl-pop{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:none}}
 .wl-pop{animation:wl-pop .38s cubic-bezier(.2,.8,.2,1) both}
+@keyframes wl-marquee{to{transform:translateX(-50%)}}
+.wl-marquee{animation:wl-marquee 45s linear infinite}
+.wl-marquee:hover{animation-play-state:paused}
+@media (prefers-reduced-motion: reduce){.wl-marquee{animation:none}}
+/* Clinic marks: their own colour by day, a lighter one at night. */
+.wl-mark{color:var(--mark)}
+[data-look="night"] .wl-mark{color:var(--mark-night)}
 `;
 
 /** Every section the side rail tracks, in page order. */
 const SECTIONS = [
   { id: 'top', label: 'Overview' },
-  { id: 'paper', label: 'What it replaces' },
+  { id: 'tour', label: 'Clinic tour' },
   { id: 'features', label: 'Features' },
   { id: 'roles', label: 'Roles' },
-  { id: 'workflow', label: 'How it works' },
   { id: 'display', label: 'Waiting room' },
   { id: 'security', label: 'Security' },
   { id: 'faq', label: 'FAQ' },
@@ -152,9 +169,6 @@ const BUSINESS = {
   statusUrl: '',
 };
 
-/** Any way at all for a clinic owner to reach a person. */
-const OWNER_CONTACT = Boolean(BUSINESS.email || BUSINESS.phone || BUSINESS.whatsapp);
-
 /**
  * Light or night. Shared with the sign-in page through the same key, so the
  * choice follows the person between them. Until somebody picks, the night look
@@ -166,24 +180,23 @@ type Look = 'light' | 'night';
 const NAV = [
   { href: '#features', label: 'Features' },
   { href: '#roles', label: 'Roles' },
-  { href: '#workflow', label: 'How it works' },
   { href: '#security', label: 'Security' },
   { href: '#faq', label: 'FAQ' },
 ];
+
+/** The header's "Book a demo": the console's dark pill, with the arrow chip. */
+const DEMO_BUTTON =
+  'wl-btn group hidden h-10 items-center gap-2 whitespace-nowrap rounded-pill bg-ink pl-4 pr-3 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-clinical-deep hover:shadow sm:inline-flex';
+
+/** The hero's main button: the big clinical pill, with the arrow chip. */
+const HERO_BUTTON =
+  'wl-btn group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px';
 
 export default function WelcomePage() {
   const { session, loading } = useAuth();
   const signedIn = !loading && !!session;
 
-  const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   const primary = signedIn
     ? { href: '/', label: 'Open console', short: 'Console' }
@@ -279,10 +292,9 @@ export default function WelcomePage() {
     <div
       data-look={look}
       data-text={textSize}
-      className={`${serif.variable} relative isolate min-h-screen overflow-x-clip`}
+      className={`${josefin.variable} wl-root relative isolate min-h-screen overflow-x-clip`}
     >
-      <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS + NIGHT_CSS }} />
-      <ScrollScene />
+      <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS + NIGHT_CSS + BAND_CSS }} />
       <SectionRail sections={SECTIONS} />
 
       {/* First Tab stop: jump past the header straight to the page. Invisible
@@ -296,13 +308,7 @@ export default function WelcomePage() {
 
       {/* ==== Header ======================================================= */}
       <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-4">
-        <div
-          className={`mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 rounded-pill border pl-3 pr-2 transition-all duration-300 sm:pl-4 ${
-            scrolled || menuOpen
-              ? 'border-ink/10 bg-white/80 shadow-[0_10px_30px_-14px_rgba(60,50,35,0.35)] backdrop-blur-xl'
-              : 'border-transparent bg-transparent'
-          }`}
-        >
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 rounded-pill border border-ink/10 bg-white/95 pl-3 pr-2 shadow-[0_10px_30px_-14px_rgba(11,79,73,0.45)] backdrop-blur-xl sm:pl-4">
           <Link
             href="/welcome"
             className="flex items-center gap-2"
@@ -314,12 +320,12 @@ export default function WelcomePage() {
             </span>
           </Link>
 
-          <nav className="hidden items-center md:flex" aria-label="Page sections">
+          <nav className="hidden items-center xl:flex" aria-label="Page sections">
             {NAV.map((n) => (
               <a
                 key={n.href}
                 href={n.href}
-                className="rounded-pill px-3.5 py-2 text-[13.5px] font-medium text-ink-60 transition-colors hover:bg-ink/5 hover:text-ink"
+                className="wl-nav rounded-pill px-3.5 py-2 text-[13.5px] font-medium text-ink-60 transition-colors hover:bg-ink/5 hover:text-ink"
               >
                 {n.label}
               </a>
@@ -331,25 +337,42 @@ export default function WelcomePage() {
               <TextSizeToggle size={textSize} onChange={chooseTextSize} />
             </span>
             <NightToggle look={look} onToggle={toggleLook} />
+            {/* Two doors, side by side: an outlined one for staff, a filled one
+                for the clinic owner. Signed-in staff only need the first. */}
             <Link
               href={primary.href}
               onClick={openSignIn}
-              className="group inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-pill bg-ink pl-4 pr-3 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-clinical-deep hover:shadow"
+              className="wl-btn inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-pill border border-ink/15 bg-white/70 px-4 text-[13.5px] font-semibold text-ink backdrop-blur transition-colors hover:border-clinical/30 hover:bg-white"
             >
               {!signedIn && (
-                <span className="hidden text-white/70 sm:inline-flex">
+                <span className="hidden text-ink-40 sm:inline-flex">
                   <IconLock size={14} />
                 </span>
               )}
-              <span className="sm:hidden">{primary.short}</span>
-              <span className="hidden sm:inline">{primary.label}</span>
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                <ArrowRight size={12} />
+              <span className="sm:hidden">{signedIn ? primary.short : 'Sign in'}</span>
+              <span className="hidden sm:inline">
+                {signedIn ? primary.label : 'Clinic sign-in'}
               </span>
             </Link>
+            {!signedIn &&
+              (BUSINESS.email ? (
+                <button type="button" onClick={() => setDemoOpen(true)} className={DEMO_BUTTON}>
+                  Book a demo
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                    <ArrowRight size={12} />
+                  </span>
+                </button>
+              ) : (
+                <a href="#faq" className={DEMO_BUTTON}>
+                  Book a demo
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                    <ArrowRight size={12} />
+                  </span>
+                </a>
+              ))}
             <button
               type="button"
-              className="grid h-10 w-10 place-items-center rounded-full text-ink-60 hover:bg-ink/5 md:hidden"
+              className="grid h-10 w-10 place-items-center rounded-full text-ink-60 hover:bg-ink/5 xl:hidden"
               aria-label={menuOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((o) => !o)}
@@ -361,7 +384,7 @@ export default function WelcomePage() {
 
         {menuOpen && (
           <nav
-            className="mx-auto mt-2 max-w-5xl rounded-card border border-ink/10 bg-white/95 p-2 shadow-lg backdrop-blur-xl md:hidden"
+            className="mx-auto mt-2 max-w-5xl rounded-card border border-ink/10 bg-white/95 p-2 shadow-lg backdrop-blur-xl xl:hidden"
             aria-label="Page sections"
           >
             {NAV.map((n) => (
@@ -383,102 +406,80 @@ export default function WelcomePage() {
 
       <main id="main" tabIndex={-1} className="outline-none">
         {/* ==== Hero ======================================================= */}
-        <section id="top" className="relative isolate px-4 pb-20 pt-32 sm:px-6 sm:pt-40 lg:pb-28">
-          <HeroBackdrop />
-
+        <section
+          id="top"
+          className="wl-green relative isolate px-4 pb-20 pt-32 sm:px-6 sm:pt-40 lg:pb-28"
+        >
           <div className="mx-auto max-w-6xl">
-            <a
-              href="#display"
-              className="wl-rise group inline-flex items-center gap-2 rounded-pill border border-ink/10 bg-white/75 py-1 pl-1 pr-3 text-[12.5px] font-medium text-ink-60 shadow-sm backdrop-blur transition-colors hover:border-clinical/30 hover:text-ink"
-            >
-              <span className="rounded-pill bg-clinical px-2 py-0.5 text-[11px] font-bold text-white">
-                New
-              </span>
-              Wait from home, recover with a WhatsApp check-in
-              <span className="text-ink-20 transition-transform group-hover:translate-x-0.5">
-                <ArrowRight size={12} />
-              </span>
-            </a>
+            {/* Two columns: the statement on the left, a queue you can work on
+                the right. Stacks on phones, statement first. */}
+            <div className="grid items-center gap-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
+              <div>
+                <p className="wl-rise wl-label text-clinical-text">
+                  OPD software for Indian clinics
+                </p>
 
-            <h1
-              className="wl-rise mt-7 max-w-4xl text-[clamp(42px,7.4vw,92px)] font-extrabold leading-[0.96] tracking-[-0.045em]"
-              style={{ animationDelay: '80ms' }}
-            >
-              {/* Static on purpose. It used to cycle through four roles, but a
-                  headline that changes while you read it is one more moving
-                  thing on a screen in a busy clinic, and screen readers only
-                  ever heard the first word anyway.
-
-                  Heavy sans for the statement, a real italic serif for the
-                  part that matters. */}
-              {/* The promise, not the feature list (docs/10). Most clinic
-                  software stops at the prescription; this is what happens
-                  either side of it. */}
-              Patients wait at home, and come back on time.
-            </h1>
-
-            <p
-              className="wl-rise mt-6 max-w-[560px] text-[clamp(16px,1.6vw,18.5px)] leading-relaxed text-ink-60"
-              style={{ animationDelay: '160ms' }}
-            >
-              A live token on WhatsApp, so the waiting room holds a few people instead of thirty.
-              Recovery check-ins between visits, so the doctor sees how the knee has been before the
-              patient sits down. And a list of every review that is due, so they actually come back.
-              Registration, prescriptions and billing are already here.
-            </p>
-
-            <div
-              className="wl-rise mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"
-              style={{ animationDelay: '240ms' }}
-            >
-              {/* This page is for the people who choose and pay for the
-                  software. Staff have the sign-in button in the header; once
-                  an owner can actually reach someone, the main button is theirs. */}
-              {OWNER_CONTACT && !signedIn ? (
-                <a
-                  href="#owners"
-                  className="group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px"
+                <h1
+                  className="wl-rise mt-6 text-[clamp(42px,6.2vw,80px)] font-extrabold leading-[0.98] tracking-[-0.045em]"
+                  style={{ animationDelay: '80ms' }}
                 >
-                  See it for your clinic
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                    <ArrowRight size={15} />
-                  </span>
-                </a>
-              ) : (
-                <Link
-                  href={primary.href}
-                  onClick={openSignIn}
-                  className="group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px"
+                  {/* Heavy sans for the statement, a real italic serif for the
+                      part that matters. Static on purpose: a headline that
+                      changes while you read it is one more moving thing on a
+                      screen in a busy clinic. */}
+                  One clinic day.{' '}
+                  <span className="wl-serif block text-clinical">One connected workspace.</span>
+                </h1>
+
+                <p
+                  className="wl-rise mt-7 max-w-[540px] text-[clamp(16px,1.6vw,19px)] leading-relaxed text-ink-60"
+                  style={{ animationDelay: '160ms' }}
                 >
-                  {signedIn ? 'Open your console' : 'Sign in to your clinic'}
-                  <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                    <ArrowRight size={15} />
-                  </span>
-                </Link>
-              )}
-              <a
-                href="#workflow"
-                className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill border-2 border-ink px-6 text-[15.5px] font-bold text-ink transition-colors hover:bg-ink hover:text-white"
-              >
-                Follow one patient through
-              </a>
+                  Register patients, run the queue, consult, order lab and X-ray tests, and bill,
+                  all in one browser tab.
+                </p>
+
+                <div
+                  className="wl-rise mt-9 flex flex-col items-stretch gap-5 sm:flex-row sm:items-center sm:gap-8"
+                  style={{ animationDelay: '240ms' }}
+                >
+                  {/* This page is for the people who choose and pay for the
+                      software. Staff have the sign-in button in the header. */}
+                  {signedIn ? (
+                    <Link href={primary.href} className={HERO_BUTTON}>
+                      Open your console
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                        <ArrowRight size={15} />
+                      </span>
+                    </Link>
+                  ) : BUSINESS.email ? (
+                    <button type="button" onClick={() => setDemoOpen(true)} className={HERO_BUTTON}>
+                      Book a demo
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                        <ArrowRight size={15} />
+                      </span>
+                    </button>
+                  ) : (
+                    <a href="#faq" className={HERO_BUTTON}>
+                      Book a demo
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                        <ArrowRight size={15} />
+                      </span>
+                    </a>
+                  )}
+                  <a
+                    href="#tour"
+                    className="wl-btn self-center text-[16px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical sm:self-auto"
+                  >
+                    See a clinic day
+                  </a>
+                </div>
+              </div>
+
+              <div className="wl-rise" style={{ animationDelay: '200ms' }}>
+                <QueueDemo />
+              </div>
             </div>
-
-            <p
-              className="wl-rise mt-6 max-w-[520px] text-[14px] leading-relaxed text-ink-40"
-              style={{ animationDelay: '320ms' }}
-            >
-              Runs in the browser you already use. Your clinic&rsquo;s own name and logo go on every
-              screen.{' '}
-              <a
-                href="#owners"
-                className="font-semibold text-clinical-text underline decoration-clinical/30 underline-offset-4 hover:decoration-clinical"
-              >
-                {BUSINESS.pricing.from
-                  ? `From ${BUSINESS.pricing.from} ${BUSINESS.pricing.per}.`
-                  : 'Run a clinic? See how it would work for yours.'}
-              </a>
-            </p>
 
             {/* The four beats of a visit, numbered along the foot of the hero. */}
             <ol
@@ -527,17 +528,35 @@ export default function WelcomePage() {
               <HandNote className="text-[26px]" rotate={-4}>
                 what the front desk sees at 9:30 am
               </HandNote>
-              <HandArrow className="-mb-8 h-12 w-16" color="#B23A22" />
+              <HandArrow className="-mb-8 h-12 w-16" />
             </span>
             <ProductWindow />
           </div>
         </section>
 
-        {/* ==== The paper it replaces ====================================== */}
-        <PaperTrail />
+        {/* ==== Clinic tour =============================================== */}
+        <section id="tour" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+          <div className="mx-auto max-w-6xl">
+            <Reveal>
+              <SectionHead
+                eyebrow="Clinic tour"
+                title={
+                  <>
+                    Follow token A-09{' '}
+                    <span className="wl-serif text-clinical">through the clinic.</span>
+                  </>
+                }
+                body="The screens reception, the doctor and billing use. Choose a stop to open one."
+              />
+            </Reveal>
+            <Reveal delay={100}>
+              <ClinicTour />
+            </Reveal>
+          </div>
+        </section>
 
         {/* ==== Features bento ============================================ */}
-        <section id="features" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section id="features" className="wl-green scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
@@ -551,10 +570,7 @@ export default function WelcomePage() {
         </section>
 
         {/* ==== Roles ====================================================== */}
-        <section
-          id="roles"
-          className="scroll-mt-24 border-y border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
-        >
+        <section id="roles" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
@@ -567,25 +583,11 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ==== Journey ==================================================== */}
-        <section id="workflow" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
-          <div className="mx-auto max-w-6xl">
-            <Reveal>
-              <SectionHead
-                eyebrow="How it works"
-                title={<>Anil Verma, 9:02 to 9:36.</>}
-                body="One patient, from the counter to the receipt. His details were typed in once, at registration, and went with him through the visit."
-              />
-            </Reveal>
-            <Journey />
-          </div>
-        </section>
-
         {/* ==== Waiting-room display ====================================== */}
         <DisplayShowcase />
 
         {/* ==== Security =================================================== */}
-        <section id="security" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section id="security" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
           <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.95fr_1.05fr]">
             <Reveal>
               <SectionHead
@@ -658,11 +660,11 @@ export default function WelcomePage() {
           </div>
         </section>
 
+        {/* ==== Logo preview ============================================== */}
+        <LogoStrip />
+
         {/* ==== FAQ ======================================================== */}
-        <section
-          id="faq"
-          className="scroll-mt-24 border-t border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
-        >
+        <section id="faq" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
           <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
             <Reveal className="lg:sticky lg:top-28 lg:self-start">
               <SectionHead
@@ -678,120 +680,8 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ==== Two doors ================================================= */}
-        {/* Everything above leads to "Sign in", which leaves a clinic owner who
-            is only curious with nowhere to go. So the page ends on two doors:
-            one for the people who work there, one for the person who runs it. */}
-        <section
-          id="owners"
-          aria-label="Get started"
-          className="scroll-mt-24 px-4 py-20 sm:px-6 lg:py-28"
-        >
-          <Reveal className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[1.15fr_1fr]">
-            <div className="relative isolate overflow-hidden rounded-[32px] bg-clinical-deep px-7 py-12 text-white shadow-lg sm:px-10 lg:py-16">
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 -z-10 opacity-[0.14]"
-                style={{
-                  backgroundImage:
-                    'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)',
-                  backgroundSize: '44px 44px',
-                  maskImage: 'radial-gradient(ellipse at 30% 40%, black 10%, transparent 70%)',
-                  WebkitMaskImage:
-                    'radial-gradient(ellipse at 30% 40%, black 10%, transparent 70%)',
-                }}
-              />
-              <div
-                aria-hidden="true"
-                className="absolute -right-24 -top-32 -z-10 h-96 w-96 rounded-full bg-[#18a092]/50 blur-3xl"
-              />
-              <p className="text-[14px] font-semibold text-white/60">I work at a clinic</p>
-              <h2 className="mt-3 text-[clamp(30px,4.4vw,52px)] font-extrabold leading-[1.02] tracking-[-0.035em] text-white">
-                Today&rsquo;s queue is waiting.
-              </h2>
-              <p className="mt-4 max-w-md text-[16px] leading-relaxed text-white/70">
-                Sign in with your clinic account. New to the team? Your clinic administrator will
-                set up your account.
-              </p>
-              <div className="mt-9">
-                <Link
-                  href={primary.href}
-                  onClick={openSignIn}
-                  className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-pill bg-white px-7 text-[15px] font-bold text-clinical-deep shadow-sm transition-all hover:bg-bg-soft"
-                >
-                  {signedIn ? 'Open console' : 'Staff sign-in'}
-                  <span className="transition-transform group-hover:translate-x-0.5">
-                    <ArrowRight size={16} />
-                  </span>
-                </Link>
-              </div>
-            </div>
-
-            <div className="flex flex-col rounded-[32px] border border-ink/10 bg-white/70 px-7 py-12 backdrop-blur-xl sm:px-10 lg:py-16">
-              <p className="text-[14px] font-semibold text-ink-40">I run a clinic</p>
-              <h2 className="wl-head mt-3 text-[clamp(28px,3.6vw,44px)] font-extrabold leading-[1.04] tracking-[-0.035em]">
-                See it with your own clinic in mind.
-              </h2>
-              <p className="mt-4 max-w-sm text-[16px] leading-relaxed text-ink-60">
-                A 20-minute call that walks through a morning at your front desk: registration, the
-                queue, the doctor&rsquo;s screen and the day&rsquo;s collections.
-              </p>
-              {BUSINESS.pricing.from && (
-                <p className="mt-6 text-[15px] text-ink">
-                  <span className="font-display text-[26px] font-extrabold tracking-[-0.02em]">
-                    {BUSINESS.pricing.from}
-                  </span>{' '}
-                  <span className="text-ink-60">{BUSINESS.pricing.per}</span>
-                  {BUSINESS.pricing.trial && (
-                    <span className="mt-1 block text-[14px] font-semibold text-clinical-text">
-                      {BUSINESS.pricing.trial}
-                    </span>
-                  )}
-                </p>
-              )}
-              <div className="mt-auto flex flex-wrap items-center gap-3 pt-9">
-                {BUSINESS.email && (
-                  <button
-                    type="button"
-                    onClick={() => setDemoOpen(true)}
-                    className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-pill border-2 border-ink px-7 text-[15px] font-bold text-ink transition-colors hover:bg-ink hover:text-white"
-                  >
-                    Book a demo
-                    <span className="transition-transform group-hover:translate-x-0.5">
-                      <ArrowRight size={16} />
-                    </span>
-                  </button>
-                )}
-                {BUSINESS.whatsapp && (
-                  <a
-                    href={`https://wa.me/${BUSINESS.whatsapp}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-12 items-center rounded-pill bg-[#1F8F55] px-6 text-[15px] font-bold text-white hover:bg-[#177544]"
-                  >
-                    WhatsApp us
-                  </a>
-                )}
-                {BUSINESS.phone && (
-                  <a
-                    href={`tel:${BUSINESS.phone.replace(/[^+\d]/g, '')}`}
-                    className="inline-flex h-12 items-center rounded-pill px-2 text-[15px] font-semibold text-clinical-text underline underline-offset-4"
-                  >
-                    Call {BUSINESS.phone}
-                  </a>
-                )}
-                {!OWNER_CONTACT && (
-                  <p className="inline-flex h-12 items-center rounded-pill border-2 border-dashed border-ink/15 px-6 text-[15px] font-semibold text-ink-40">
-                    Demo booking opens soon
-                  </p>
-                )}
-              </div>
-            </div>
-          </Reveal>
-        </section>
-
         {(BUSINESS.pilot.quote || BUSINESS.founder.story) && (
-          <section aria-label="Who is behind it" className="px-4 pb-24 sm:px-6">
+          <section aria-label="Who is behind it" className="wl-band-light px-4 pb-24 sm:px-6">
             <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2">
               {BUSINESS.pilot.quote && BUSINESS.pilot.name && (
                 <Reveal>
@@ -837,11 +727,11 @@ export default function WelcomePage() {
       </main>
 
       {/* ==== Footer ======================================================= */}
-      <footer className="border-t border-ink/8 bg-bg-soft px-4 sm:px-6">
+      <footer className="wl-green px-4 sm:px-6">
         <div className="mx-auto grid max-w-6xl gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
             <span className="flex items-center gap-2">
-              <ConsoleMark size={28} />
+              <ConsoleMark size={28} light />
               <span className="font-display text-[16px] font-extrabold tracking-display">
                 Clinic <span className="text-clinical">Console</span>
               </span>
@@ -914,11 +804,14 @@ function Modal({
   label,
   onClose,
   className = '',
+  keepAppFonts = false,
   children,
 }: {
   label: string;
   onClose: () => void;
   className?: string;
+  /** Leave the console's fonts in place, for content that is a real app screen. */
+  keepAppFonts?: boolean;
   children: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -959,7 +852,9 @@ function Modal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
+    <div
+      className={`fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6 ${keepAppFonts ? 'wl-keep' : ''}`}
+    >
       <div
         aria-hidden="true"
         onClick={onClose}
@@ -1000,7 +895,7 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
   return (
     // No overflow-hidden here: with larger text the form is taller than a
     // laptop screen, and the dialog has to be able to scroll to its button.
-    <Modal label="Staff sign-in" onClose={onClose} className="max-w-[1000px]">
+    <Modal label="Staff sign-in" onClose={onClose} className="max-w-[1000px]" keepAppFonts>
       <LoginPage />
     </Modal>
   );
@@ -1182,7 +1077,7 @@ function Reveal({
  * A section's opening: a numbered label row ruled across the width, then a big
  * heavy heading. 'wide' puts the body copy to the right of the heading on large
  * screens; 'left' stacks them, for heads that sit in a two-column section.
- * The heading's accent words (`text-clinical`) are set in the italic serif.
+ * The heading's accent words (`wl-serif text-clinical`) are set apart by colour.
  */
 function SectionHead({
   eyebrow,
@@ -1199,7 +1094,7 @@ function SectionHead({
   return (
     <div>
       <p className="flex items-baseline gap-3">
-        <span className="text-[14px] font-semibold text-ink-60">{eyebrow}</span>
+        <span className="wl-label text-clinical-text">{eyebrow}</span>
         <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
       </p>
       <div
@@ -1218,21 +1113,584 @@ function SectionHead({
   );
 }
 
-function HeroBackdrop() {
+/* -------------------------------------------------------------------------- */
+/*  Hero queue demo                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** Sample patients for the hero card. Illustrative, and labelled as such. */
+const DEMO_QUEUE = [
+  { token: 'A-07', name: 'Meena Raghavan', note: 'In consultation' },
+  { token: 'A-12', name: 'Imran Shaikh', note: 'Back from X-ray' },
+  { token: 'A-08', name: 'Suresh Pillai', note: 'Waiting · 6 min' },
+  { token: 'A-09', name: 'Kavya Nair', note: 'Booked by phone' },
+] as const;
+
+/** What each finished consultation adds to the day's collections. */
+const DEMO_FEE = 500;
+
+/**
+ * A small OPD queue the visitor can actually work: "Call next" finishes the
+ * patient in the chamber, moves everyone up, adds the fee to the day's total
+ * and moves the clock on. When the queue runs out it offers to start over.
+ */
+function QueueDemo() {
+  const [called, setCalled] = useState(0);
+  const rows = DEMO_QUEUE.slice(called);
+  const now = rows[0];
+
+  const minutes = 40 + called * 7;
+  const time = `${10 + Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')} a.m.`;
+  const collected = (14650 + called * DEMO_FEE).toLocaleString('en-IN');
+
   return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+    <figure className="relative mx-auto max-w-[540px]">
+      {/* The soft disc behind the card */}
       <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, rgba(22,24,28,0.055) 1px, transparent 1px), linear-gradient(to bottom, rgba(22,24,28,0.055) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-          maskImage: 'radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 100%)',
-          WebkitMaskImage:
-            'radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 100%)',
-        }}
+        aria-hidden="true"
+        className="absolute left-1/2 top-1/2 -z-10 aspect-square w-[118%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-clinical-tint/70"
       />
+
+      <div className="rounded-[28px] border border-ink/10 bg-white p-5 shadow-[0_30px_80px_-30px_rgba(40,50,45,0.35)] sm:p-6">
+        <span className="badge-amber">Interactive demo · Sample data</span>
+        <p className="mono-label mt-4">OPD queue · Dr. A. Kulkarni</p>
+        <p className="mt-1.5 text-[19px] font-extrabold tracking-[-0.02em] text-ink">
+          Tuesday, {time}
+        </p>
+
+        <ol className="mt-5 grid gap-2.5" aria-label="Today's queue">
+          {rows.map((p, i) => (
+            <li
+              key={p.token}
+              className={`wl-fade flex items-center gap-3.5 rounded-[16px] border p-3 ${
+                i === 0
+                  ? 'border-clinical/30 bg-clinical-tint'
+                  : i === 1
+                    ? 'border-ink/10 bg-bg-soft'
+                    : 'border-ink/8 bg-white'
+              }`}
+            >
+              <span
+                className={`grid h-12 w-[60px] shrink-0 place-items-center rounded-[12px] font-mono text-[15px] font-bold ${
+                  i === 0 ? 'bg-clinical text-white' : 'bg-ink/6 text-ink'
+                }`}
+              >
+                {p.token}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15.5px] font-bold text-ink">{p.name}</span>
+                <span className="block text-[13.5px] text-ink-60">
+                  {i === 0 ? 'In consultation' : p.note}
+                </span>
+              </span>
+              {i === 0 && <span className="badge-clinical">Now</span>}
+              {i === 1 && <span className="badge-amber">Next</span>}
+            </li>
+          ))}
+          {!now && (
+            <li className="wl-fade rounded-[16px] border border-dashed border-ink/15 p-6 text-center text-[14.5px] text-ink-60">
+              Queue clear. Everyone has been seen.
+            </li>
+          )}
+        </ol>
+
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-dashed border-ink/12 pt-4">
+          <span className="flex items-center gap-2 text-[14px] text-ink-60">
+            <span className="text-ink-40">
+              <IconReceipt size={16} />
+            </span>
+            ₹{collected} collected today
+          </span>
+          <button
+            type="button"
+            onClick={() => setCalled((c) => (now ? c + 1 : 0))}
+            className="inline-flex h-11 items-center gap-2 rounded-pill bg-clinical px-5 text-[14.5px] font-bold text-white transition-colors hover:bg-clinical-deep active:translate-y-px"
+          >
+            <IconBell size={15} />
+            {now ? 'Call next' : 'Start over'}
+          </button>
+        </div>
+
+        {/* Tells screen-reader users what "Call next" just did. */}
+        <p className="sr-only" aria-live="polite">
+          {now ? `Now serving ${now.token}, ${now.name}.` : 'Queue clear.'}
+        </p>
+      </div>
+
+      <figcaption className="mt-5 text-center text-[13.5px] text-ink-40">
+        Try &ldquo;Call next&rdquo;. Names and amounts are illustrative.
+      </figcaption>
+    </figure>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Clinic tour                                                                */
+/* -------------------------------------------------------------------------- */
+
+/** One labelled, read-only field in a tour card. */
+function TourField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mono-label">{label}</p>
+      <p className="mt-1.5 flex h-11 items-center rounded-[12px] border border-ink/10 bg-bg-soft px-3.5 text-[15px] text-ink">
+        {value}
+      </p>
     </div>
+  );
+}
+
+/** The sample screen each stop of the tour shows, wrapped in the same card. */
+function TourCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-[24px] border border-ink/10 bg-white shadow-[0_30px_80px_-34px_rgba(40,50,45,0.35)]">
+      <div className="flex items-center justify-between gap-3 border-b border-ink/8 bg-bg-soft px-5 py-3.5 sm:px-6">
+        <p className="text-[15.5px] font-bold text-ink">{title}</p>
+        <span className="badge-amber">Sample data</span>
+      </div>
+      <div className="p-5 sm:p-6">{children}</div>
+    </div>
+  );
+}
+
+/** A token chip with a line of text beside it: the "what just happened" row. */
+function TourResult({
+  token,
+  title,
+  sub,
+  aside,
+}: {
+  token: string;
+  title: string;
+  sub: string;
+  aside?: string;
+}) {
+  return (
+    <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[16px] bg-clinical-tint p-4">
+      <span className="grid h-12 w-[60px] place-items-center rounded-[12px] bg-clinical font-mono text-[15px] font-bold text-white">
+        {token}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-bold text-ink">{title}</span>
+        <span className="block font-mono text-[12.5px] text-ink-60">{sub}</span>
+      </span>
+      {aside && <span className="text-[14px] text-ink-60">{aside}</span>}
+    </div>
+  );
+}
+
+/**
+ * The three stops of one visit. Every bullet is something the console does:
+ * registration issues a UHID and a token together, tests are ordered and read
+ * inside the consultation, payments take cash, UPI, card or a mix of them.
+ */
+const TOUR_STEPS: {
+  stop: string;
+  time: string;
+  eyebrow: string;
+  title: string;
+  points: string[];
+  card: ReactNode;
+}[] = [
+  {
+    stop: 'Front desk',
+    time: '9:05',
+    eyebrow: 'Reception',
+    title: 'Registered before they sit down.',
+    points: [
+      'Name, mobile number and age are enough to register.',
+      'A UHID and a token for the chosen doctor are issued together.',
+      'Phone bookings arrive with their token already assigned.',
+    ],
+    card: (
+      <TourCard title="Register patient">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TourField label="Name" value="Kavya Nair" />
+          <TourField label="Mobile" value="98••• ••210" />
+          <TourField label="Age" value="34" />
+          <TourField label="Doctor" value="Dr. A. Kulkarni" />
+        </div>
+        <TourResult
+          token="A-09"
+          title="Token issued"
+          sub="UHID CL-10482"
+          aside="3rd in Dr. Kulkarni’s queue"
+        />
+      </TourCard>
+    ),
+  },
+  {
+    stop: 'Doctor',
+    time: '9:20',
+    eyebrow: 'Consultation',
+    title: 'One screen for the whole consult.',
+    points: [
+      'Vitals, complaints and past visits sit on the same panel.',
+      'Medicines go in as structured rows, not a paragraph of free text.',
+      'An X-ray or lab test is ordered here, and read here when it is back.',
+    ],
+    card: (
+      <TourCard title="Consultation · Kavya Nair, 34 F">
+        <div className="grid grid-cols-3 gap-2.5">
+          {[
+            ['BP', '118/76'],
+            ['Pulse', '82'],
+            ['SpO₂', '99%'],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-[12px] bg-bg-soft px-3 py-2.5">
+              <p className="mono-label">{k}</p>
+              <p className="mt-1 font-mono text-[16px] font-bold text-ink">{v}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mono-label mt-5">Prescription</p>
+        <ul className="mt-2 divide-y divide-ink/8 rounded-[12px] border border-ink/10">
+          {[
+            ['Tab. Paracetamol 650 mg', '1-0-1 · 3 days'],
+            ['Tab. Pantoprazole 40 mg', '1-0-0 · 5 days'],
+          ].map(([drug, dose]) => (
+            <li key={drug} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+              <span className="text-[14.5px] font-semibold text-ink">{drug}</span>
+              <span className="font-mono text-[12.5px] text-ink-60">{dose}</span>
+            </li>
+          ))}
+        </ul>
+        <TourResult
+          token="A-09"
+          title="X-ray chest PA ordered"
+          sub="Sent to the X-ray room"
+          aside="Back in ~20 min"
+        />
+      </TourCard>
+    ),
+  },
+  {
+    stop: 'Checkout',
+    time: '10:10',
+    eyebrow: 'Billing',
+    title: 'Paid, printed and on their way.',
+    points: [
+      'The consultation and the test are already on the bill.',
+      'Cash, UPI or card, or part of each.',
+      'Receipt and prescription print with your clinic’s name.',
+    ],
+    card: (
+      <TourCard title="Bill · Kavya Nair">
+        <ul className="divide-y divide-ink/8">
+          {[
+            ['Consultation · Dr. A. Kulkarni', '₹500'],
+            ['X-ray chest PA', '₹400'],
+          ].map(([item, amt]) => (
+            <li key={item} className="flex items-center justify-between gap-3 py-2.5 text-[14.5px]">
+              <span className="text-ink-60">{item}</span>
+              <span className="font-mono font-semibold text-ink">{amt}</span>
+            </li>
+          ))}
+          <li className="flex items-center justify-between gap-3 py-3 text-[16px] font-bold text-ink">
+            Total
+            <span className="font-mono">₹900</span>
+          </li>
+        </ul>
+        <div className="mt-2 flex gap-2">
+          {['Cash', 'UPI', 'Card'].map((m) => (
+            <span
+              key={m}
+              className={`rounded-pill px-4 py-1.5 text-[13.5px] font-semibold ${
+                m === 'UPI' ? 'bg-clinical text-white' : 'border border-ink/12 text-ink-60'
+              }`}
+            >
+              {m}
+            </span>
+          ))}
+        </div>
+        <TourResult token="A-09" title="Payment recorded" sub="Receipt R-1043 · ₹900" />
+      </TourCard>
+    ),
+  },
+];
+
+/**
+ * Three stops along a dashed line, with the token riding on the current one,
+ * and the screen for that stop underneath. Back, next, or click any stop.
+ */
+function ClinicTour() {
+  const [step, setStep] = useState(0);
+  const current = TOUR_STEPS[step]!;
+  const next = TOUR_STEPS[step + 1];
+
+  return (
+    <div className="mt-14">
+      <ol className="relative grid grid-cols-3" aria-label="Stops in the visit">
+        <span
+          aria-hidden="true"
+          className="absolute left-[16.66%] right-[16.66%] top-[54px] border-t-2 border-dashed border-ink/15"
+        />
+        {TOUR_STEPS.map((s, i) => {
+          const active = i === step;
+          return (
+            <li key={s.stop} className="relative flex justify-center">
+              <button
+                type="button"
+                onClick={() => setStep(i)}
+                aria-current={active ? 'step' : undefined}
+                className="group flex flex-col items-center rounded-card px-2 pb-2 text-center"
+              >
+                <span
+                  className={`mb-2 h-7 rounded-[8px] px-2.5 font-mono text-[13px] font-bold leading-7 text-white transition-opacity ${
+                    active ? 'bg-clinical opacity-100' : 'opacity-0'
+                  }`}
+                  aria-hidden={!active}
+                >
+                  A-09
+                </span>
+                <span
+                  className={`relative grid h-9 w-9 place-items-center rounded-full font-mono text-[14px] font-bold transition-colors ${
+                    active
+                      ? 'bg-clinical text-white ring-4 ring-clinical/20'
+                      : i < step
+                        ? 'bg-clinical-tint text-clinical-text'
+                        : 'border-2 border-ink/15 bg-bg-soft text-ink-60 group-hover:border-clinical/30'
+                  }`}
+                >
+                  {i < step ? <IconCheck size={15} /> : i + 1}
+                </span>
+                <span
+                  className={`mt-3 text-[clamp(15px,1.6vw,18px)] font-bold ${
+                    active ? 'text-clinical-text' : 'text-ink'
+                  }`}
+                >
+                  {s.stop}
+                </span>
+                <span className="mt-1 whitespace-nowrap font-mono text-[11px] text-ink-40 sm:text-[12.5px]">
+                  Step {i + 1} · {s.time}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div
+        key={step}
+        className="wl-fade mt-12 grid items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16"
+      >
+        <div>
+          <p className="wl-label text-clinical-text">{current.eyebrow}</p>
+          <h3 className="mt-4 text-[clamp(26px,3.2vw,38px)] font-extrabold leading-[1.05] tracking-[-0.03em]">
+            {current.title}
+          </h3>
+          <ul className="mt-7 divide-y divide-ink/8 border-y border-ink/10">
+            {current.points.map((p) => (
+              <li key={p} className="py-4 text-[16px] leading-relaxed text-ink-60">
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+        {current.card}
+      </div>
+
+      <div className="mt-12 flex items-center justify-between gap-4 border-t border-ink/10 pt-6">
+        <button
+          type="button"
+          onClick={() => setStep((s) => s - 1)}
+          className={`text-[14.5px] font-semibold text-ink-60 hover:text-ink ${step === 0 ? 'invisible' : ''}`}
+        >
+          ← Back
+        </button>
+        {/* Not shown; tells screen-reader users which stop just opened. */}
+        <p className="sr-only" aria-live="polite">
+          Step {step + 1} of {TOUR_STEPS.length}: {current.stop}
+        </p>
+        <button
+          type="button"
+          onClick={() => setStep(next ? step + 1 : 0)}
+          className="wl-btn group inline-flex h-11 items-center gap-2 rounded-pill bg-clinical px-5 text-[14.5px] font-bold text-white transition-colors hover:bg-clinical-deep"
+        >
+          {next ? `Next: ${next.stop}` : 'Start again'}
+          <span className="transition-transform group-hover:translate-x-0.5">
+            <ArrowRight size={14} />
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Logo preview                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Six made-up clinics, to show how a row of clinic marks will sit on the page.
+ * None of them is a client, and the heading says so: no invented customers.
+ * Swap in real logos, with permission, once there are some.
+ */
+const PREVIEW_CLINICS: {
+  name: string;
+  kind: string;
+  color: string;
+  night: string;
+  mark: ReactNode;
+}[] = [
+  {
+    name: 'Neemgrove',
+    kind: 'Clinic',
+    color: '#0F5E57',
+    night: '#4CC3B3',
+    mark: (
+      <>
+        <path d="M6 26C6 13 15 6 28 6c0 13-7 22-20 22Z" fill="currentColor" />
+        <path d="M9 24 22 11" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
+      </>
+    ),
+  },
+  {
+    name: 'Tulsivan',
+    kind: 'Children’s care',
+    color: '#6E8B3D',
+    night: '#9DBB66',
+    mark: (
+      <>
+        <path d="M17 8c4 6 7 10 7 14a7 7 0 0 1-14 0c0-4 3-8 7-14Z" fill="currentColor" />
+        <path
+          d="M14 23a3 3 0 0 0 3 3"
+          stroke="#fff"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          fill="none"
+        />
+      </>
+    ),
+  },
+  {
+    name: 'Saffron Hill',
+    kind: 'Eye centre',
+    color: '#A8792B',
+    night: '#D9A94F',
+    mark: (
+      <>
+        <circle cx="17" cy="17" r="5.5" fill="currentColor" />
+        <path
+          d="M17 3v5M17 26v5M3 17h5M26 17h5M7 7l3.5 3.5M23.5 23.5 27 27M7 27l3.5-3.5M23.5 10.5 27 7"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        />
+      </>
+    ),
+  },
+  {
+    name: 'Ridgeway',
+    kind: 'Family health',
+    color: '#B4615E',
+    night: '#E08F8B',
+    mark: (
+      <path
+        d="M3 27 12 13l5 7 5-9 9 16Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinejoin="round"
+      />
+    ),
+  },
+  {
+    name: 'Monsoon Street',
+    kind: 'Diagnostics',
+    color: '#45698C',
+    night: '#8FB3D6',
+    mark: (
+      <>
+        <path
+          d="M10 19a5 5 0 0 1 1-9.9A7 7 0 0 1 24.5 10 4.5 4.5 0 0 1 24 19Z"
+          fill="currentColor"
+        />
+        <path
+          d="M12 23l-1.5 4M18 23l-1.5 4M24 23l-1.5 4"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
+      </>
+    ),
+  },
+  {
+    name: 'Pebble Bay',
+    kind: 'Dental',
+    color: '#6B4A6B',
+    night: '#C49AC4',
+    mark: (
+      <path
+        d="M11 6c-4 0-6 3-6 7 0 5 2 7 3 13 .4 2.5 3.4 2.5 4 0l1.6-6c.5-2 3.3-2 3.8 0l1.6 6c.6 2.5 3.6 2.5 4 0 1-6 3-8 3-13 0-4-2-7-6-7-2.5 0-3.5 1.5-4.5 1.5S13.5 6 11 6Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+      />
+    ),
+  },
+];
+
+/** The clinic marks, drifting sideways and fading out at both edges. */
+function LogoStrip() {
+  const row = (hidden: boolean) => (
+    <ul className="flex shrink-0" aria-hidden={hidden || undefined}>
+      {PREVIEW_CLINICS.map((c) => (
+        <li
+          key={c.name}
+          className="flex w-[220px] shrink-0 flex-col items-center text-center sm:w-[280px]"
+        >
+          <svg
+            viewBox="0 0 34 34"
+            width="44"
+            height="44"
+            className="wl-mark"
+            style={{ '--mark': c.color, '--mark-night': c.night } as React.CSSProperties}
+            aria-hidden="true"
+          >
+            {c.mark}
+          </svg>
+          <span className="mt-5 font-display text-[19px] font-extrabold tracking-[-0.02em] text-ink">
+            {c.name}
+          </span>
+          <span className="mt-1.5 font-mono text-[11.5px] uppercase tracking-label text-ink-60">
+            {c.kind}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+
+  return (
+    <section aria-labelledby="logo-preview" className="wl-green px-4 py-24 sm:px-6 lg:py-28">
+      <div className="mx-auto max-w-6xl text-center">
+        <p className="flex items-center justify-center gap-5">
+          <span aria-hidden="true" className="h-px w-12 bg-ink/15 sm:w-20" />
+          <span id="logo-preview" className="wl-label text-clinical-text">
+            Illustrative clinic logo preview
+          </span>
+          <span aria-hidden="true" className="h-px w-12 bg-ink/15 sm:w-20" />
+        </p>
+        <p className="mt-3 text-[15.5px] text-ink-60">
+          Fictional clinics, shown for design only, not our clients. Client logos coming soon.
+        </p>
+      </div>
+
+      <div
+        className="mx-auto mt-14 max-w-6xl overflow-hidden"
+        style={{
+          maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+        }}
+      >
+        {/* Two copies back to back; sliding by half loops without a seam. */}
+        <div className="wl-marquee flex w-max">
+          {row(false)}
+          {row(true)}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1592,201 +2050,6 @@ function ProductWindow() {
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/*  The paper it replaces                                                      */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Four things on every OPD desk in India, sketched in pen, each pointing at the
- * part of the console that takes its job. Every "now" line names a feature that
- * exists; nothing here is aspirational.
- *
- * The sketches are deliberately a little crooked — drawn, not rendered — and
- * the cards sit at slightly different angles, like index cards pinned to a
- * board.
- */
-function PaperTrail() {
-  const items = [
-    {
-      sketch: <SketchTokenRoll />,
-      was: 'the token roll',
-      now: 'A live queue, and token numbers on the waiting-room TV.',
-      href: '#display',
-    },
-    {
-      sketch: <SketchRegister />,
-      was: 'the big register',
-      now: 'Find any patient by name, mobile, UHID or ABHA in one box.',
-      href: '#features',
-    },
-    {
-      sketch: <SketchReceiptBook />,
-      was: 'the carbon receipt book',
-      now: 'One bill for consultation and tests, and a receipt in a click.',
-      href: '#features',
-    },
-    {
-      sketch: <SketchRxPad />,
-      was: 'the Rx pad',
-      now: 'Prescriptions printed on your own letterhead.',
-      href: '#features',
-    },
-  ];
-
-  return (
-    <section
-      id="paper"
-      aria-label="What it replaces"
-      className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-28"
-    >
-      <div className="mx-auto max-w-6xl">
-        <Reveal>
-          <SectionHead
-            eyebrow="What it replaces"
-            title={<>What goes in the drawer.</>}
-            body="Most OPDs run on the same four things: a token roll, a thick register, a carbon receipt book and an Rx pad. Each one has a screen here that does its job."
-          />
-        </Reveal>
-
-        <ul className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {items.map((it, i) => (
-            <li key={it.was}>
-              <Reveal delay={i * 90} className="h-full">
-                <a
-                  href={it.href}
-                  className="group flex h-full flex-col rounded-card border border-ink/10 bg-[#FFFDF8] p-5 shadow-sm transition-shadow duration-300 hover:border-clinical/30 hover:shadow-lg"
-                >
-                  <div
-                    className="grid h-36 place-items-center rounded-[14px] text-ink-60"
-                    style={{
-                      backgroundImage:
-                        'repeating-linear-gradient(to bottom, transparent 0 23px, rgba(58,78,155,0.09) 23px 24px)',
-                    }}
-                  >
-                    {it.sketch}
-                  </div>
-                  <HandNote className="mt-4 text-[24px] text-ink-60" rotate={0}>
-                    <span className="line-through decoration-coral decoration-2">{it.was}</span>
-                  </HandNote>
-                  <p className="mt-3 flex-1 text-[14.5px] font-medium leading-snug text-ink">
-                    {it.now}
-                  </p>
-                  <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-clinical-text">
-                    See how
-                    <span className="transition-transform group-hover:translate-x-0.5">
-                      <ArrowRight size={13} />
-                    </span>
-                  </span>
-                </a>
-              </Reveal>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-/** Shared pen settings for the sketches: one ink, one nib. */
-function Sketch({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 160 110"
-      className="h-28 w-40"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {children}
-    </svg>
-  );
-}
-
-function SketchTokenRoll() {
-  return (
-    <Sketch>
-      {/* A strip of four tear-off tickets, drawn square. */}
-      <rect x="12" y="32" width="136" height="46" rx="2" />
-      <path d="M46 32v46M80 32v46M114 32v46" strokeDasharray="2.4 3.4" />
-      <path d="M20 42h18M54 42h18M88 42h18M122 42h18" />
-      {[
-        { x: 29, n: '21' },
-        { x: 63, n: '22' },
-        { x: 97, n: '23' },
-        { x: 131, n: '24' },
-      ].map((t) => (
-        <text
-          key={t.n}
-          x={t.x}
-          y="67"
-          textAnchor="middle"
-          fontFamily="var(--font-display), sans-serif"
-          fontSize="17"
-          fontWeight="800"
-          stroke="none"
-          fill="currentColor"
-        >
-          {t.n}
-        </text>
-      ))}
-    </Sketch>
-  );
-}
-
-function SketchRegister() {
-  return (
-    <Sketch>
-      <rect x="18" y="18" width="62" height="76" rx="2" />
-      <rect x="80" y="18" width="62" height="76" rx="2" />
-      <path d="M28 34h42M28 45h42M28 56h42M28 67h42M28 78h30" />
-      <path d="M90 34h42M90 45h42M90 56h42M90 67h34" />
-      <path d="M42 28v58" strokeDasharray="2 4" />
-    </Sketch>
-  );
-}
-
-function SketchReceiptBook() {
-  return (
-    <Sketch>
-      <path d="M41 21h88v68" opacity="0.55" />
-      <rect x="36" y="26" width="88" height="69" rx="2" />
-      <path d="M36 38h88" strokeDasharray="4 3.2" />
-      <text
-        x="48"
-        y="33.5"
-        fontFamily="var(--font-mono), monospace"
-        fontSize="8"
-        stroke="none"
-        fill="currentColor"
-      >
-        No. 0417
-      </text>
-      <path d="M48 52h54M48 63h44M48 74h62" />
-      <path d="M106 52h7M98 63h15" />
-      <path d="M92 85h20" />
-    </Sketch>
-  );
-}
-
-function SketchRxPad() {
-  return (
-    <Sketch>
-      <rect x="43" y="15" width="74" height="84" rx="2" />
-      <path d="M52 10v9M64 10v9M76 10v9M88 10v9M100 10v9M112 10v9" />
-      <path d="M54 28h42" />
-      <path d="M56 45v18M56 45h7.5c5 0 7.5 2.2 7.5 5s-2.5 5-7.5 5H56m7.5 0 9.5 11M73 57l-8.5 9.5" />
-      <path d="M80 50h30M80 60h25M56 76h49M56 86h35" />
-    </Sketch>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Marquee                                                                    */
-/* -------------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------------------- */
 /*  Feature bento                                                              */
@@ -2861,93 +3124,17 @@ function AdminScreen({ tone }: { tone: RoleTone }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Journey                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function Journey() {
-  const steps = [
-    {
-      time: '09:02',
-      icon: <IconUserPlus size={20} />,
-      title: 'Arrives',
-      body: 'Registered at the desk. The UHID is issued the moment the form is saved.',
-      tag: 'UH-24-0871',
-    },
-    {
-      time: '09:04',
-      icon: <IconClock size={20} />,
-      title: 'Queued',
-      body: 'A token is issued, the doctor is assigned and the waiting-room screen updates itself.',
-      tag: 'Token 19 · Dr. Rao',
-    },
-    {
-      time: '09:31',
-      icon: <IconStethoscope size={20} />,
-      title: 'Consulted',
-      body: 'Vitals, notes and the prescription on a single panel, printed on the way out.',
-      tag: 'Rx printed',
-    },
-    {
-      time: '09:36',
-      icon: <IconReceipt size={20} />,
-      title: 'Paid',
-      body: 'Consultation and tests billed together. Receipt in hand, record complete.',
-      tag: '₹850 · R-1042',
-    },
-  ];
-
-  return (
-    <div className="relative mt-16">
-      <div
-        aria-hidden="true"
-        className="absolute left-[12.5%] right-[12.5%] top-7 hidden border-t-2 border-dashed border-clinical/25 lg:block"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute bottom-10 left-7 top-7 border-l-2 border-dashed border-clinical/25 lg:hidden"
-      />
-      <ol className="relative grid gap-6 lg:grid-cols-4 lg:gap-5">
-        {steps.map((s, i) => (
-          <li key={s.title}>
-            <Reveal
-              delay={i * 110}
-              className="flex gap-5 lg:flex-col lg:items-center lg:text-center"
-            >
-              <span className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-clinical text-white shadow-[0_0_0_8px_#EFECE6,0_10px_24px_-8px_rgba(15,118,110,0.7)]">
-                {s.icon}
-              </span>
-              <div className="flex-1 rounded-card border border-ink/8 bg-white/65 backdrop-blur-xl p-5 shadow-sm lg:mt-6 lg:w-full">
-                <p className="font-mono text-[11.5px] font-semibold text-clinical-text">{s.time}</p>
-                <h3 className="mt-1 text-[19px] font-bold">{s.title}</h3>
-                <p className="mt-2 text-[14px] leading-relaxed text-ink-60">{s.body}</p>
-                <span className="badge-neutral mt-4">{s.tag}</span>
-              </div>
-            </Reveal>
-          </li>
-        ))}
-      </ol>
-      <Reveal delay={400}>
-        <p className="mt-12 text-center text-[15px] text-ink-60">
-          <span className="font-semibold text-ink">34 minutes from arrival to receipt,</span> with
-          his details entered once at the front desk.
-        </p>
-      </Reveal>
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*  Waiting-room display                                                       */
 /* -------------------------------------------------------------------------- */
 
 function DisplayShowcase() {
   return (
-    <section id="display" className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+    <section id="display" className="wl-green relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
       <div className="mx-auto max-w-6xl">
         <Reveal className="grid items-end gap-6 lg:grid-cols-2 lg:gap-16">
           <div>
-            <p className="flex items-baseline gap-3 text-[14px] font-semibold">
-              <span className="text-ink-60">Waiting room</span>
+            <p className="flex items-baseline gap-3">
+              <span className="wl-label text-clinical-text">Waiting room</span>
               <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
             </p>
             <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-ink">
@@ -3412,10 +3599,79 @@ const NIGHT_CSS =
     '.bg-\\[\\#FFFDF8\\]': 'background-color:#1C2426',
     '.bg-\\[\\#e2e6f6\\]': 'background-color:rgba(143,160,230,.18)',
     '.text-\\[\\#2b3a75\\]': 'color:#B9C4F0',
-    // The workflow nodes wear a ring of the page colour to cut the track.
-    '[class*="0_0_0_8px_#EFECE6"]':
-      'box-shadow:0 0 0 8px #0E1315,0 10px 24px -8px rgba(15,118,110,.7)',
   });
+
+/**
+ * Section bands, the way kalaghoda.ca alternates near-black and white: every
+ * section is one flat, full-width band, deep clinical green or warm white, in
+ * turn down the page.
+ *
+ * Inside a green band, text, rules and accents turn light. A surface — a white
+ * card or a drawn app screen, recognised by its background class — keeps its
+ * own dark-on-light colours, and so does everything inside it.
+ */
+/** A Tailwind class as a CSS selector: `bg-white/65` → `.bg-white\/65`. */
+const cls = (c: string) => '.' + c.replace(/[/:]/g, '\\$&');
+
+const SURFACES = [
+  'bg-white',
+  'bg-white/65',
+  'bg-white/70',
+  'bg-white/75',
+  'bg-white/80',
+  'bg-white/90',
+  'bg-white/95',
+  'bg-card',
+  'bg-bg',
+  'bg-bg-soft',
+  'from-clinical-tint',
+]
+  .map(cls)
+  .join(',');
+
+/** Rules for things sitting on the green itself, never inside a surface. */
+function onGreen(rules: [classes: string[], decl: string][]): string {
+  return rules
+    .map(
+      ([classes, decl]) =>
+        `.wl-green :is(${classes.map(cls).join(',')}):not(:is(${SURFACES}), :is(${SURFACES}) *){${decl}}`,
+    )
+    .join('\n');
+}
+
+const BAND_CSS =
+  `
+.wl-band-light{background:#FBFAF7}
+.wl-green{background:#0B4F49;color:#fff}
+.wl-green :is(${SURFACES}){color:#16181C}
+.wl-green .wl-mark{color:var(--mark-night)}
+/* Glassy cards would pick up the green; on a band they are solid white. */
+.wl-green :is(${['bg-white/65', 'bg-white/70', 'bg-white/75', 'bg-white/80'].map(cls).join(',')}){background-color:#fff;backdrop-filter:none}
+.wl-green .hover\\:text-ink:hover:not(:is(${SURFACES}) *){color:#fff}
+.wl-green .hover\\:bg-clinical-deep:hover:not(:is(${SURFACES}) *){background-color:#D6EDE9}
+${NIGHT} .wl-band-light{background:#0E1315}
+${NIGHT} .wl-green{background:#0B2E2B}
+${NIGHT} .wl-green :is(${SURFACES}){color:#E4EAE8}
+${NIGHT} .wl-green :is(${['bg-white/65', 'bg-white/70', 'bg-white/75', 'bg-white/80'].map(cls).join(',')}){background-color:#1A2224}
+` +
+  onGreen([
+    [['text-ink'], 'color:#fff'],
+    [['text-ink-60'], 'color:rgba(255,255,255,.78)'],
+    [['text-ink-40', 'mono-label'], 'color:rgba(255,255,255,.62)'],
+    [['text-ink-20'], 'color:rgba(255,255,255,.38)'],
+    [['text-clinical', 'text-clinical-text', 'text-clinical-deep', 'eyebrow'], 'color:#8EE3D5'],
+    [['text-coral-text'], 'color:#F6B3A3'],
+    [
+      ['border-ink/8', 'border-ink/10', 'border-ink/12', 'border-ink/15'],
+      'border-color:rgba(255,255,255,.16)',
+    ],
+    [['bg-ink/12', 'bg-ink/15'], 'background-color:rgba(255,255,255,.2)'],
+    [['decoration-clinical/30'], 'text-decoration-color:rgba(142,227,213,.45)'],
+    [['bg-clinical-tint/70'], 'background-color:rgba(255,255,255,.06)'],
+    [['bg-clinical/25'], 'background-color:rgba(0,0,0,.25)'],
+    // The main button turns white on green, so it still stands out.
+    [['wl-btn.bg-clinical'], 'background-color:#fff;color:#0B4F49'],
+  ]);
 
 /** The header's sun/moon switch between the light and night looks. */
 function NightToggle({ look, onToggle }: { look: Look; onToggle: () => void }) {
