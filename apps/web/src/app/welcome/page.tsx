@@ -12,7 +12,7 @@ import {
   TextSizeToggle,
   type TextSize,
 } from '@/components/text-size-toggle';
-import { SectionRail } from '@/components/scroll-scene';
+import { ScrollScene, SectionRail } from '@/components/scroll-scene';
 import LoginPage from '../login/page';
 import {
   IconBell,
@@ -196,7 +196,15 @@ export default function WelcomePage() {
   const { session, loading } = useAuth();
   const signedIn = !loading && !!session;
 
+  const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const primary = signedIn
     ? { href: '/', label: 'Open console', short: 'Console' }
@@ -294,7 +302,8 @@ export default function WelcomePage() {
       data-text={textSize}
       className={`${josefin.variable} wl-root relative isolate min-h-screen overflow-x-clip`}
     >
-      <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS + NIGHT_CSS + BAND_CSS }} />
+      <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS + NIGHT_CSS }} />
+      <ScrollScene />
       <SectionRail sections={SECTIONS} />
 
       {/* First Tab stop: jump past the header straight to the page. Invisible
@@ -308,7 +317,13 @@ export default function WelcomePage() {
 
       {/* ==== Header ======================================================= */}
       <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-4">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 rounded-pill border border-ink/10 bg-white/95 pl-3 pr-2 shadow-[0_10px_30px_-14px_rgba(11,79,73,0.45)] backdrop-blur-xl sm:pl-4">
+        <div
+          className={`mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 rounded-pill border pl-3 pr-2 transition-all duration-300 sm:pl-4 ${
+            scrolled || menuOpen
+              ? 'border-ink/10 bg-white/80 shadow-[0_10px_30px_-14px_rgba(60,50,35,0.35)] backdrop-blur-xl'
+              : 'border-transparent bg-transparent'
+          }`}
+        >
           <Link
             href="/welcome"
             className="flex items-center gap-2"
@@ -406,10 +421,8 @@ export default function WelcomePage() {
 
       <main id="main" tabIndex={-1} className="outline-none">
         {/* ==== Hero ======================================================= */}
-        <section
-          id="top"
-          className="wl-green relative isolate px-4 pb-20 pt-32 sm:px-6 sm:pt-40 lg:pb-28"
-        >
+        <section id="top" className="relative isolate px-4 pb-20 pt-32 sm:px-6 sm:pt-40 lg:pb-28">
+          <HeroBackdrop />
           <div className="mx-auto max-w-6xl">
             {/* Two columns: the statement on the left, a queue you can work on
                 the right. Stacks on phones, statement first. */}
@@ -528,14 +541,17 @@ export default function WelcomePage() {
               <HandNote className="text-[26px]" rotate={-4}>
                 what the front desk sees at 9:30 am
               </HandNote>
-              <HandArrow className="-mb-8 h-12 w-16" />
+              <HandArrow className="-mb-8 h-12 w-16" color="#B23A22" />
             </span>
             <ProductWindow />
           </div>
         </section>
 
         {/* ==== Clinic tour =============================================== */}
-        <section id="tour" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section
+          id="tour"
+          className="scroll-mt-24 border-y border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
+        >
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
@@ -556,7 +572,7 @@ export default function WelcomePage() {
         </section>
 
         {/* ==== Features bento ============================================ */}
-        <section id="features" className="wl-green scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section id="features" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
@@ -570,7 +586,10 @@ export default function WelcomePage() {
         </section>
 
         {/* ==== Roles ====================================================== */}
-        <section id="roles" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section
+          id="roles"
+          className="scroll-mt-24 border-y border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
+        >
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
@@ -587,7 +606,7 @@ export default function WelcomePage() {
         <DisplayShowcase />
 
         {/* ==== Security =================================================== */}
-        <section id="security" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section id="security" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
           <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.95fr_1.05fr]">
             <Reveal>
               <SectionHead
@@ -664,7 +683,10 @@ export default function WelcomePage() {
         <LogoStrip />
 
         {/* ==== FAQ ======================================================== */}
-        <section id="faq" className="wl-band-light scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section
+          id="faq"
+          className="scroll-mt-24 border-t border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
+        >
           <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
             <Reveal className="lg:sticky lg:top-28 lg:self-start">
               <SectionHead
@@ -681,7 +703,7 @@ export default function WelcomePage() {
         </section>
 
         {(BUSINESS.pilot.quote || BUSINESS.founder.story) && (
-          <section aria-label="Who is behind it" className="wl-band-light px-4 pb-24 sm:px-6">
+          <section aria-label="Who is behind it" className="px-4 pb-24 sm:px-6">
             <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2">
               {BUSINESS.pilot.quote && BUSINESS.pilot.name && (
                 <Reveal>
@@ -727,11 +749,11 @@ export default function WelcomePage() {
       </main>
 
       {/* ==== Footer ======================================================= */}
-      <footer className="wl-green px-4 sm:px-6">
+      <footer className="border-t border-ink/8 bg-bg-soft px-4 sm:px-6">
         <div className="mx-auto grid max-w-6xl gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
             <span className="flex items-center gap-2">
-              <ConsoleMark size={28} light />
+              <ConsoleMark size={28} />
               <span className="font-display text-[16px] font-extrabold tracking-display">
                 Clinic <span className="text-clinical">Console</span>
               </span>
@@ -1109,6 +1131,24 @@ function SectionHead({
           {body}
         </p>
       </div>
+    </div>
+  );
+}
+
+function HeroBackdrop() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, rgba(22,24,28,0.055) 1px, transparent 1px), linear-gradient(to bottom, rgba(22,24,28,0.055) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+          maskImage: 'radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 100%)',
+          WebkitMaskImage:
+            'radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 100%)',
+        }}
+      />
     </div>
   );
 }
@@ -1662,7 +1702,7 @@ function LogoStrip() {
   );
 
   return (
-    <section aria-labelledby="logo-preview" className="wl-green px-4 py-24 sm:px-6 lg:py-28">
+    <section aria-labelledby="logo-preview" className="px-4 pb-24 pt-8 sm:px-6 lg:pb-28">
       <div className="mx-auto max-w-6xl text-center">
         <p className="flex items-center justify-center gap-5">
           <span aria-hidden="true" className="h-px w-12 bg-ink/15 sm:w-20" />
@@ -3129,12 +3169,12 @@ function AdminScreen({ tone }: { tone: RoleTone }) {
 
 function DisplayShowcase() {
   return (
-    <section id="display" className="wl-green relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+    <section id="display" className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
       <div className="mx-auto max-w-6xl">
         <Reveal className="grid items-end gap-6 lg:grid-cols-2 lg:gap-16">
           <div>
-            <p className="flex items-baseline gap-3">
-              <span className="wl-label text-clinical-text">Waiting room</span>
+            <p className="flex items-baseline gap-3 text-[14px] font-semibold">
+              <span className="text-ink-60">Waiting room</span>
               <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
             </p>
             <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-ink">
@@ -3600,78 +3640,6 @@ const NIGHT_CSS =
     '.bg-\\[\\#e2e6f6\\]': 'background-color:rgba(143,160,230,.18)',
     '.text-\\[\\#2b3a75\\]': 'color:#B9C4F0',
   });
-
-/**
- * Section bands, the way kalaghoda.ca alternates near-black and white: every
- * section is one flat, full-width band, deep clinical green or warm white, in
- * turn down the page.
- *
- * Inside a green band, text, rules and accents turn light. A surface — a white
- * card or a drawn app screen, recognised by its background class — keeps its
- * own dark-on-light colours, and so does everything inside it.
- */
-/** A Tailwind class as a CSS selector: `bg-white/65` → `.bg-white\/65`. */
-const cls = (c: string) => '.' + c.replace(/[/:]/g, '\\$&');
-
-const SURFACES = [
-  'bg-white',
-  'bg-white/65',
-  'bg-white/70',
-  'bg-white/75',
-  'bg-white/80',
-  'bg-white/90',
-  'bg-white/95',
-  'bg-card',
-  'bg-bg',
-  'bg-bg-soft',
-  'from-clinical-tint',
-]
-  .map(cls)
-  .join(',');
-
-/** Rules for things sitting on the green itself, never inside a surface. */
-function onGreen(rules: [classes: string[], decl: string][]): string {
-  return rules
-    .map(
-      ([classes, decl]) =>
-        `.wl-green :is(${classes.map(cls).join(',')}):not(:is(${SURFACES}), :is(${SURFACES}) *){${decl}}`,
-    )
-    .join('\n');
-}
-
-const BAND_CSS =
-  `
-.wl-band-light{background:#FBFAF7}
-.wl-green{background:#0B4F49;color:#fff}
-.wl-green :is(${SURFACES}){color:#16181C}
-.wl-green .wl-mark{color:var(--mark-night)}
-/* Glassy cards would pick up the green; on a band they are solid white. */
-.wl-green :is(${['bg-white/65', 'bg-white/70', 'bg-white/75', 'bg-white/80'].map(cls).join(',')}){background-color:#fff;backdrop-filter:none}
-.wl-green .hover\\:text-ink:hover:not(:is(${SURFACES}) *){color:#fff}
-.wl-green .hover\\:bg-clinical-deep:hover:not(:is(${SURFACES}) *){background-color:#D6EDE9}
-${NIGHT} .wl-band-light{background:#0E1315}
-${NIGHT} .wl-green{background:#0B2E2B}
-${NIGHT} .wl-green :is(${SURFACES}){color:#E4EAE8}
-${NIGHT} .wl-green :is(${['bg-white/65', 'bg-white/70', 'bg-white/75', 'bg-white/80'].map(cls).join(',')}){background-color:#1A2224}
-` +
-  onGreen([
-    [['text-ink'], 'color:#fff'],
-    [['text-ink-60'], 'color:rgba(255,255,255,.78)'],
-    [['text-ink-40', 'mono-label'], 'color:rgba(255,255,255,.62)'],
-    [['text-ink-20'], 'color:rgba(255,255,255,.38)'],
-    [['text-clinical', 'text-clinical-text', 'text-clinical-deep', 'eyebrow'], 'color:#8EE3D5'],
-    [['text-coral-text'], 'color:#F6B3A3'],
-    [
-      ['border-ink/8', 'border-ink/10', 'border-ink/12', 'border-ink/15'],
-      'border-color:rgba(255,255,255,.16)',
-    ],
-    [['bg-ink/12', 'bg-ink/15'], 'background-color:rgba(255,255,255,.2)'],
-    [['decoration-clinical/30'], 'text-decoration-color:rgba(142,227,213,.45)'],
-    [['bg-clinical-tint/70'], 'background-color:rgba(255,255,255,.06)'],
-    [['bg-clinical/25'], 'background-color:rgba(0,0,0,.25)'],
-    // The main button turns white on green, so it still stands out.
-    [['wl-btn.bg-clinical'], 'background-color:#fff;color:#0B4F49'],
-  ]);
 
 /** The header's sun/moon switch between the light and night looks. */
 function NightToggle({ look, onToggle }: { look: Look; onToggle: () => void }) {
