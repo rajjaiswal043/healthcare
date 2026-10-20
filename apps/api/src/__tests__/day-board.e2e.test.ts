@@ -54,6 +54,14 @@ interface Row {
   paymentMethods: string[];
   /** Null for a caller without `invoice:read`. */
   money: { billedPaise: number; duePaise: number } | null;
+  nextSteps: Array<{
+    kind: string;
+    invoiceId?: string;
+    appointmentId?: string;
+    orderId?: string;
+    paymentId?: string;
+    duePaise?: number;
+  }>;
 }
 
 interface Board {
@@ -100,6 +108,15 @@ afterEach(async () => {
   // than "at least", and an exact count is the only kind that catches a patient
   // being listed twice.
   await ownerQuery(fx.main.id, 'DELETE FROM diagnostic_order WHERE tenant_id = $1', [fx.main.id]);
+  // Receipts before payments: `receipt_payment_fkey` is RESTRICT, so money that
+  // had a receipt cut for it cannot be deleted until the receipt goes — and the
+  // print log holds the receipt the same way.
+  await ownerQuery(
+    fx.main.id,
+    `DELETE FROM receipt_print WHERE receipt_id IN (SELECT id FROM receipt WHERE tenant_id = $1)`,
+    [fx.main.id],
+  );
+  await ownerQuery(fx.main.id, 'DELETE FROM receipt WHERE tenant_id = $1', [fx.main.id]);
   await ownerQuery(
     fx.main.id,
     `DELETE FROM payment WHERE invoice_id IN (SELECT id FROM invoice WHERE tenant_id = $1)`,
@@ -601,6 +618,237 @@ describe('the amount column', () => {
                             collected_by_user_id)
        VALUES ($1, $2, 'IN', $3::payment_mode, $4, $5)`,
       [fx.main.id, invoiceId, mode, paise, orderedByUserId],
+    );
+  }
+});
+
+/**
+ * WHAT THIS PATIENT NEEDS NEXT.
+ *
+ * The board stopped being a list and became the screen people work from, so
+ * each row carries the steps the patient is waiting on, most blocking first.
+ * Who may perform which of them is decided where the buttons are drawn and
+ * enforced again by each endpoint — what is pinned down here is the ORDER, and
+ * that money comes before the thing it gates.
+ */
+describe('what a row says to do next', () => {
+  const kinds = (row: Row) => row.nextSteps.map((s) => s.kind);
+
+  it('asks for the money before the check-in, because the gate refuses it anyway', async () => {
+    await visit('BOOKED', 0);
+    await bill(50000);
+
+    const [row] = (await board()).rows;
+
+    // Not CHECK_IN first: `blockingReason` would refuse that check-in, and a
+    // button the server refuses is worse than no button.
+    expect(kinds(row!)).toEqual(['COLLECT']);
+    expect(row!.nextSteps[0]!.duePaise).toBe(50000);
+  });
+
+  it('asks for the check-in once the bill is clear', async () => {
+    await visit('BOOKED', 0);
+    const invoiceId = await bill(50000);
+    await payment(invoiceId, 'CASH', 50000);
+
+    const [row] = (await board()).rows;
+
+    expect(kinds(row!)).toEqual(['CHECK_IN']);
+    expect(row!.nextSteps[0]!.appointmentId).toBeTruthy();
+  });
+
+  it('asks the doctor to start once they are waiting', async () => {
+    await visit('ARRIVED', 0);
+
+    expect(kinds((await board()).rows[0]!)).toEqual(['START']);
+  });
+
+  /**
+   * The row that makes a LIST necessary rather than a single step.
+   *
+   * Sitting with the doctor, and just sent for a test they have not paid for.
+   * The desk's next move is the money; the doctor's is to carry on. Both are
+   * true, so both are sent, and each screen takes the first it can act on.
+   */
+  it('asks for both when the desk and the doctor want different things', async () => {
+    await visit('IN_PROGRESS', 0);
+    await bill(50000);
+
+    // FINISH trails them both: the money is blocking, opening the consultation
+    // is what the doctor wants, and closing the visit is the one that cannot be
+    // undone.
+    expect(kinds((await board()).rows[0]!)).toEqual(['COLLECT', 'RESUME', 'FINISH']);
+  });
+
+  /**
+   * The doctor closes the OPD from the board. Offered after RESUME so that
+   * opening the consultation stays the harmless default — a finished visit
+   * cannot be unfinished.
+   */
+  it('offers finishing the visit, behind opening it', async () => {
+    await visit('IN_PROGRESS', 0);
+
+    expect(kinds((await board()).rows[0]!)).toEqual(['RESUME', 'FINISH']);
+  });
+
+  it('does not offer finishing a visit nobody has started', async () => {
+    // The server only moves IN_PROGRESS to FULFILLED, so anywhere else the
+    // button would be a refusal waiting to happen.
+    await visit('ARRIVED', 0);
+    expect(kinds((await board()).rows[0]!)).not.toContain('FINISH');
+
+    await ownerQuery(fx.main.id, 'DELETE FROM appointment WHERE tenant_id = $1', [fx.main.id]);
+
+    await visit('FULFILLED', 0);
+    expect(kinds((await board()).rows[0]!)).not.toContain('FINISH');
+  });
+
+  it('offers the department its test only once that test is paid for', async () => {
+    await visit('AWAITING_TESTS', 0);
+    const orderId = await billedTest(0);
+
+    // Unpaid: the result cannot be released, so the row asks for the money and
+    // says nothing about recording anything.
+    expect(kinds((await board()).rows[0]!)).toEqual(['COLLECT']);
+
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT i.id FROM invoice i
+         JOIN invoice_line l ON l.invoice_id = i.id
+         JOIN diagnostic_order o ON o.invoice_line_id = l.id
+        WHERE o.id = $1`,
+      [orderId],
+    );
+    await payment(invoice!.id, 'CASH', 30000);
+
+    const after = (await board()).rows[0]!;
+    expect(kinds(after)).toEqual(['RECORD_RESULT']);
+    expect(after.nextSteps[0]!.orderId).toBe(orderId);
+  });
+
+  /**
+   * A RECEIPT, NOT MERELY A PAYMENT.
+   *
+   * Money can exist without a receipt: `collectPayment` writes one, and
+   * anything recorded another way — a seeded clinic, or a payment taken before
+   * receipts shipped — has none. The button used to be offered for any money
+   * in, and printing then answered "No receipt for that payment" with a patient
+   * waiting at the counter for the paper.
+   */
+  it('offers no receipt for money that never had one', async () => {
+    await visit('FULFILLED', 0);
+    const invoiceId = await bill(50000);
+    await payment(invoiceId, 'CASH', 50000);
+
+    expect(kinds((await board()).rows[0]!)).not.toContain('RECEIPT');
+  });
+
+  it('offers a receipt once the visit is finished and the money has one', async () => {
+    await visit('FULFILLED', 0);
+    const invoiceId = await bill(50000);
+    const paymentId = await payment(invoiceId, 'CASH', 50000);
+    await receiptFor(paymentId, invoiceId, 50000);
+
+    const row = (await board()).rows[0]!;
+
+    expect(kinds(row)).toEqual(['RECEIPT']);
+    expect(row.nextSteps[0]!.paymentId).toBe(paymentId);
+  });
+
+  /**
+   * COLLECT carries a figure, so it answers to the same rule as the amount
+   * column: a caller who may not see money is not sent it at all. Nothing is
+   * lost — every role that may collect also holds `invoice:read`.
+   */
+  it('never sends the money step to somebody who may not see money', async () => {
+    await visit('BOOKED', 0);
+    await bill(50000);
+
+    const row = (await board(doctor)).rows[0]!;
+
+    expect(kinds(row)).not.toContain('COLLECT');
+    expect(row.money).toBeNull();
+  });
+
+  it('asks nothing of a patient who did not come, beyond their bill', async () => {
+    await visit('NO_SHOW', 0);
+    await bill(50000);
+
+    // The money is still owed. Nobody is chasing them around the clinic.
+    expect(kinds((await board()).rows[0]!)).toEqual(['COLLECT']);
+  });
+
+  /** The visit's bill, unpaid. Returns its id. */
+  async function bill(paise: number, patientIndex = 0): Promise<string> {
+    const [appt] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM appointment
+        WHERE tenant_id = $1 AND patient_id = $2 AND start_at >= date_trunc('day', now())`,
+      [fx.main.id, fx.main.patientIds[patientIndex]],
+    );
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, appointment_id, patient_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, updated_at)
+       VALUES ($1, $2, $3, 'STEP-' || floor(random() * 1000000)::text, 'UNPAID', $4, 0, $4, now())
+       RETURNING id`,
+      [fx.main.id, appt!.id, fx.main.patientIds[patientIndex], paise],
+    );
+    return invoice!.id;
+  }
+
+  /** A pending test with a charge of its own. Returns the order id. */
+  async function billedTest(patientIndex = 0): Promise<string> {
+    const [invoice] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, patient_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, updated_at)
+       VALUES ($1, $2, 'TST-' || floor(random() * 1000000)::text, 'UNPAID', 30000, 0, 30000, now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[patientIndex]],
+    );
+    const [line] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice_line (tenant_id, invoice_id, description, quantity,
+                                 unit_price_paise, discount_paise, tax_rate_basis_points,
+                                 tax_paise, total_paise)
+       VALUES ($1, $2, 'Knee X-ray', 1, 30000, 0, 0, 0, 30000)
+       RETURNING id`,
+      [fx.main.id, invoice!.id],
+    );
+    const [order] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO diagnostic_order (tenant_id, patient_id, department_id, ordered_by_user_id,
+                                     description, status, referral_source, legacy_unbilled,
+                                     invoice_line_id, updated_at)
+       VALUES ($1, $2, $3, $4, 'Knee X-ray', 'PENDING', 'SELF', false, $5, now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[patientIndex], departmentId, orderedByUserId, line!.id],
+    );
+    return order!.id;
+  }
+
+  async function payment(invoiceId: string, mode: string, paise: number): Promise<string> {
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO payment (tenant_id, invoice_id, direction, mode, amount_paise,
+                            collected_by_user_id)
+       VALUES ($1, $2, 'IN', $3::payment_mode, $4, $5)
+       RETURNING id`,
+      [fx.main.id, invoiceId, mode, paise, orderedByUserId],
+    );
+    return row!.id;
+  }
+
+  /** The receipt `collectPayment` would have written for that money. */
+  async function receiptFor(paymentId: string, invoiceId: string, paise: number) {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO receipt
+         (tenant_id, payment_id, invoice_id, number, total_charged_paise,
+          discount_paise, tax_paise, payable_paise, paid_now_paise, balance_paise)
+       VALUES ($1, $2, $3, 'RCT-' || floor(random() * 1000000)::text, $4, 0, 0, $4, $4, 0)`,
+      [fx.main.id, paymentId, invoiceId, paise],
     );
   }
 });

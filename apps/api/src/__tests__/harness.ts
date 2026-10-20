@@ -514,12 +514,20 @@ export async function totpCode(secret: string): Promise<string> {
  * "Invalid code" roughly one run in twenty, which is exactly often enough to be
  * dismissed as noise and waste an afternoon later.
  *
- * So: wait out the boundary and try once more. Bounded at two attempts, because
- * a third would be hiding a real failure rather than a timing one.
+ * So: try once more with a FRESH code. Bounded at two attempts, because a third
+ * would be hiding a real failure rather than a timing one.
  *
  * `attempt` MUST GENERATE THE CODE ITSELF, inside the callback — that is the
- * whole point. Passing a code in would hand the second attempt the same expired
- * one.
+ * whole point, and it is also why the retry needs no real wait. The first
+ * attempt failing is itself the proof that the clock has crossed into the new
+ * window: a code made now belongs to the window the server is already in. The
+ * short pause is margin, not mechanism.
+ *
+ * IT USED TO WAIT OUT THE REST OF THE WINDOW — up to thirty whole seconds — and
+ * that turned a rare "Invalid code" into a rare TIMEOUT, because
+ * `vitest` caps a test at thirty seconds and several tests call `loginWithMfa`
+ * inside the body rather than in a hook. The symptom moved from an error naming
+ * MFA to "Test timed out", which is considerably harder to read.
  *
  * Exported because `loginWithMfa` is not the only caller: the platform console
  * has its own confirm endpoint with no tenant in it, and `platform.e2e` wrote
@@ -533,7 +541,7 @@ export async function acrossTotpBoundary<T extends { statusCode: number }>(
   const first = await attempt();
   if (first.statusCode === 200) return first;
 
-  await new Promise((r) => setTimeout(r, msUntilNextTotpWindow() + 250));
+  await new Promise((r) => setTimeout(r, 1200));
   return attempt();
 }
 
@@ -704,7 +712,3 @@ export function clinicDate(days = 7, timeZone = 'Asia/Kolkata'): string {
 }
 
 /** Milliseconds remaining in the current 30-second TOTP step. */
-function msUntilNextTotpWindow(): number {
-  const STEP_MS = 30_000;
-  return STEP_MS - (Date.now() % STEP_MS);
-}

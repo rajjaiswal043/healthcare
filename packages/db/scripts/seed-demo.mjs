@@ -20,22 +20,14 @@ import { config as loadEnv } from 'dotenv';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { requireSeedableDatabase } from './seed-guard.mjs';
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = resolve(PKG_ROOT, '..', '..');
 loadEnv({ path: resolve(REPO_ROOT, '.env') });
 
 const ownerUrl = process.env.MIGRATION_DATABASE_URL;
-if (!ownerUrl) {
-  console.error('MIGRATION_DATABASE_URL is not set. Run `pnpm preflight`.');
-  process.exit(1);
-}
-
-const dbName = new URL(ownerUrl).pathname.replace(/^\//, '');
-if (!dbName.startsWith('healthcloud')) {
-  console.error(`Refusing to seed "${dbName}" — not a HealthCloud database.`);
-  process.exit(1);
-}
+requireSeedableDatabase(ownerUrl, 'seed-demo');
 
 // --- Name pools. Deliberately spread across regions, and including the kind of
 // --- near-duplicate spellings that make fuzzy matching worth having.

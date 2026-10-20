@@ -1255,7 +1255,45 @@ const ORDER_SELECT = {
    */
   invoiceLineId: true,
   ...DIAGNOSTIC_BILLING_SELECT,
-  patient: { select: { id: true, name: true, uhid: true, gender: true, ageYears: true } },
+  /**
+   * The patient, as the person at the machine needs them.
+   *
+   * MOBILE, because the commonest problem in a department is a patient who
+   * wandered off between paying and being called, and the fix is a phone call
+   * rather than a search of the corridor.
+   *
+   * ALLERGIES, because a radiographer about to give contrast is exactly who
+   * this field was captured for. Two columns, and both matter: `allergies` with
+   * nothing in it and `allergiesReviewedAt` set means somebody asked and the
+   * answer was none, which is a different fact from never having asked. See the
+   * patient_allergies migration.
+   *
+   * This is the line the file's header draws — enough to run the machine
+   * safely, and no diagnosis, prescription or history.
+   */
+  patient: {
+    select: {
+      id: true,
+      name: true,
+      uhid: true,
+      gender: true,
+      ageYears: true,
+      mobile: true,
+      allergies: true,
+      allergiesReviewedAt: true,
+    },
+  },
+  /**
+   * The visit this came out of, when it came out of one.
+   *
+   * `tokenNumber` so the department calls the patient by the number they are
+   * holding rather than shouting a name across a waiting room, and
+   * `reasonForVisit` so a request that reads "X-ray — left wrist" carries the
+   * "fell off a scooter" that makes sense of it.
+   *
+   * Null for a walk-in test, which has no visit and no token.
+   */
+  appointment: { select: { tokenNumber: true, reasonForVisit: true } },
   orderedBy: { select: { id: true, fullName: true } },
   completedBy: { select: { id: true, fullName: true } },
   /** Whether the patient has actually been given the report (FR-DIA-13). */

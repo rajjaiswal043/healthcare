@@ -15,7 +15,7 @@
  * exists, before anybody looks at the header.
  */
 
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -36,6 +36,17 @@ function routesUnder(dir: string, prefix = ''): string[] {
 
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isFile() && entry.name === 'page.tsx') {
+      /**
+       * A page that only redirects is never landed on, so it needs no crumb.
+       *
+       * `/patients/all` is one: the list and the search became a single screen,
+       * and that route survives purely so the bookmarks and browser history
+       * that predate the merge still arrive somewhere sensible. Demanding a
+       * breadcrumb for it would be demanding a label for a screen nobody sees.
+       */
+      const source = readFileSync(join(dir, entry.name), 'utf-8');
+      if (source.includes('redirect(')) continue;
+
       found.push(prefix === '' ? '/' : prefix);
       continue;
     }
@@ -121,7 +132,9 @@ describe('resolving a pathname', () => {
     expect(breadcrumbFor('/patients/register')).toBe('Register a patient');
     // The newest literal under /patients — also exactly the shape of
     // /patients/[id], and must not be read as a patient record.
-    expect(breadcrumbFor('/patients/all')).toBe('All patients');
+    // `/patients/all` only redirects now — the list and the search are one
+    // screen, and a crumb for a route nobody lands on would never be drawn.
+    expect(breadcrumbFor('/patients')).toBe('Patients');
   });
 
   it('does not match across a different number of segments', () => {

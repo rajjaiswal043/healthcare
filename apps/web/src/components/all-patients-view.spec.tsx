@@ -87,7 +87,7 @@ describe('the all-patients screen', () => {
 
     expect(html).toContain('There is no page 99');
     expect(html).toContain('The last page is 9');
-    expect(html).toContain('href="/patients/all?page=9"');
+    expect(html).toContain('href="/patients?page=9"');
     // Not a table of nothing, and not an error.
     expect(html).not.toContain('<table');
     expect(html).not.toContain('role="alert"');
@@ -106,8 +106,8 @@ describe('the all-patients screen', () => {
 
 describe('where each page lives', () => {
   it('is the bare route for page 1 and ?page=N after it', () => {
-    expect(allPatientsHref(1)).toBe('/patients/all');
-    expect(allPatientsHref(2)).toBe('/patients/all?page=2');
-    expect(allPatientsHref(40)).toBe('/patients/all?page=40');
+    expect(allPatientsHref(1)).toBe('/patients');
+    expect(allPatientsHref(2)).toBe('/patients?page=2');
+    expect(allPatientsHref(40)).toBe('/patients?page=40');
   });
 });

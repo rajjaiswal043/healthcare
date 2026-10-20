@@ -183,6 +183,26 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
     })();
   }, [tab, id, events, billing, tests, can]);
 
+  /**
+   * Open a film or a report.
+   *
+   * THE URL IS FETCHED AT CLICK TIME and expires in five minutes, which is why
+   * this is a button and not an anchor with an href: a link rendered when the
+   * page loaded would be dead by the time somebody came back to it, and a dead
+   * link to a patient's X-ray reads as a lost X-ray.
+   *
+   * Same path the consultation screen and the worklist use — one way to reach a
+   * clinical document, with one audit trail behind it.
+   */
+  async function openDocument(documentId: string) {
+    try {
+      const { url } = await api.documentUrl(documentId);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not open that file.');
+    }
+  }
+
   async function loadMore() {
     if (!cursor) return;
     setLoadingMore(true);
@@ -539,13 +559,26 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                       </td>
 
                       <td className="px-4 py-3 text-right">
-                        {/* FR-RCP-01 from the record rather than the desk. A
-                            patient asking for a copy months later is the
-                            commonest reprint there is, and until now the only
-                            screen that could produce one was the payment dialog
-                            on a bill somebody had to go and find. Nothing to
-                            print when no money was ever taken. */}
-                        {inv.lastPaymentId && (
+                        {/*
+                          FR-RCP-01 from the record rather than the desk. A
+                          patient asking for a copy months later is the
+                          commonest reprint there is, and until now the only
+                          screen that could produce one was the payment dialog
+                          on a bill somebody had to go and find. Nothing to
+                          print when no money was ever taken.
+
+                          BEHIND `payment:collect`, NOT `invoice:read`, which is
+                          what gates the tab around it. Printing is not reading:
+                          it writes a row to the print log, and that log is what
+                          decides whether the NEXT copy comes out stamped
+                          DUPLICATE. The Owner role holds `invoice:read` for
+                          oversight and collects no money — an owner glancing
+                          through a patient's bills could otherwise cause the
+                          patient's own copy to print as a duplicate, which is a
+                          control for catching missing cash quietly firing on
+                          somebody who was only looking.
+                        */}
+                        {inv.lastPaymentId && can('payment:collect') && (
                           <PrintReceiptButton
                             paymentId={inv.lastPaymentId}
                             className="btn-ghost !px-2.5 !py-1 !text-[12px]"
@@ -660,15 +693,36 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                       {t.referrerName && (
                         <span className="text-[11.5px] text-ink-40">ref. {t.referrerName}</span>
                       )}
-                      {t.documents.length > 0 && (
-                        <span className="text-[11.5px] text-ink-40">
-                          {t.documents.length} file{t.documents.length === 1 ? '' : 's'}
-                        </span>
-                      )}
                     </span>
 
+                    {/* What the test SHOWED, in the technician's words. First,
+                        because it is the answer the doctor came for — the film
+                        is the evidence behind it. */}
                     {t.resultNote && (
-                      <span className="mt-1 block text-[12.5px] text-ink-60">{t.resultNote}</span>
+                      <span className="mt-1.5 block text-[12.5px] text-ink-60">{t.resultNote}</span>
+                    )}
+
+                    {/*
+                      THE FILMS, OPENABLE.
+
+                      This used to read "2 files" in grey text, which told a
+                      doctor that an X-ray existed and gave them no way to look
+                      at it — so the one screen built to hold a patient's whole
+                      record sent them to the worklist to see the picture.
+                    */}
+                    {t.documents.length > 0 && (
+                      <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                        {t.documents.map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => void openDocument(d.id)}
+                            className="text-[12.5px] font-semibold text-clinical-text underline underline-offset-2"
+                          >
+                            {d.fileName}
+                          </button>
+                        ))}
+                      </span>
                     )}
                   </li>
                 ))}

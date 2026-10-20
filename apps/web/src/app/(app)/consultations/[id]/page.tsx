@@ -2,7 +2,8 @@
 
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApiRequestError, type Encounter } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { api, ApiRequestError, type Appointment, type Encounter } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { formatAge, genderInitial } from '@/lib/format';
 import {
@@ -14,7 +15,14 @@ import {
 import { PrescriptionPrint } from '@/components/prescription-print';
 import { DiagnosticOrdersPanel } from '@/components/diagnostic-orders-panel';
 import { PreviousVisitsPanel } from '@/components/previous-visits-panel';
-import { IconAlert, IconArrowLeft, IconCheckCircle, IconClock, IconLock } from '@/components/icons';
+import {
+  IconAlert,
+  IconArrowLeft,
+  IconCallNext,
+  IconCheckCircle,
+  IconClock,
+  IconLock,
+} from '@/components/icons';
 
 /** Narrative fields, saved on blur rather than on every keystroke. */
 /**
@@ -61,6 +69,8 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
 
   const mayWrite = can('consultation:write');
 
+  const router = useRouter();
+
   const applyEncounter = useCallback((e: Encounter) => {
     setEncounter(e);
     setNarrative({
@@ -89,6 +99,70 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
   }, [id, applyEncounter]);
 
   const editable = encounter?.status === 'IN_PROGRESS' && mayWrite;
+
+  /**
+   * The next patient waiting for THIS doctor.
+   *
+   * Signing already ends the visit — see `signEncounter`, which sets the
+   * appointment to FULFILLED — so the only thing left pulling a doctor back to
+   * the queue screen was finding out who is next. Fetched once the note is
+   * signed rather than on load: offering the next patient while this one is
+   * still in the room is an invitation to hurry them out.
+   */
+  const [nextUp, setNextUp] = useState<Appointment | null>(null);
+  const [callingNext, setCallingNext] = useState(false);
+
+  // `signed` is declared below, after the null guard; this effect runs before
+  // that point in the file, so it reads the status directly.
+  const isSigned = encounter?.status === 'SIGNED';
+  const practitionerId = encounter?.practitioner.id ?? null;
+
+  useEffect(() => {
+    if (!isSigned || !practitionerId || !mayWrite) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const queue = await api.queue(practitionerId);
+        // First in the waiting list — the queue is already in the order the
+        // clinic serves, priority flags and all, so taking the top of it is
+        // taking the clinic's own answer rather than inventing a second one.
+        if (!cancelled) setNextUp(queue.waiting[0] ?? null);
+      } catch {
+        // A doctor who cannot read the queue simply gets no shortcut. The
+        // board is one click away and says the same thing.
+        if (!cancelled) setNextUp(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSigned, practitionerId, mayWrite]);
+
+  /**
+   * Call them in and open their note, in one press.
+   *
+   * The two calls the queue screen makes, in the order it makes them: the
+   * patient is called (which is what the waiting-room display reads) and then
+   * the consultation is opened or resumed.
+   */
+  async function seeNext() {
+    if (!nextUp) return;
+    setCallingNext(true);
+    setError(null);
+
+    try {
+      await api.callPatient(nextUp.id);
+      const next = await api.openEncounter(nextUp.id);
+      router.push(`/consultations/${next.id}`);
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError ? err.error.message : 'Could not call the next patient.',
+      );
+      setCallingNext(false);
+    }
+  }
 
   /**
    * Save one narrative field on blur.
@@ -268,6 +342,39 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 <IconCheckCircle size={16} />
                 {signing ? 'Signing…' : 'Sign and finish'}
               </button>
+            )}
+
+            {/*
+              STRAIGHT ON TO THE NEXT PATIENT.
+
+              Signing already ended this visit, so the only thing that used to
+              pull a doctor back to the queue screen was finding out who was
+              next — twice per patient, all morning. Shown only once the note
+              is signed: offering it while this patient is still in the room is
+              an invitation to hurry them out.
+
+              Named, not just "Next": a doctor about to call somebody in should
+              see who they are calling before they press it.
+            */}
+            {signed && nextUp && (
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={callingNext}
+                onClick={() => void seeNext()}
+              >
+                <IconCallNext size={16} />
+                {callingNext
+                  ? 'Calling…'
+                  : `Next — ${nextUp.tokenNumber === null ? '' : `#${nextUp.tokenNumber} `}${nextUp.patient.name}`}
+              </button>
+            )}
+
+            {/* The honest empty state. Without it, a doctor who finished the
+                last patient of the morning would be left looking for a button
+                that is not there. */}
+            {signed && !nextUp && mayWrite && (
+              <span className="text-[13px] text-ink-40">Nobody else is waiting.</span>
             )}
           </div>
         </header>

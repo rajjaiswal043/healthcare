@@ -31,6 +31,35 @@ export interface RowMoney {
   duePaise: number;
 }
 
+/**
+ * What this patient needs next, most blocking first.
+ *
+ * A LIST, NOT ONE STEP, and the reason is a patient sitting with the doctor who
+ * has just been sent for an X-ray: the desk's next move is to take the money,
+ * the doctor's is to carry on with the consultation. Both are true at once.
+ * Each screen shows the FIRST step its user is allowed to perform, so the desk
+ * sees Collect, the doctor sees Resume, and somebody holding every permission
+ * sees Collect — money first, because an unpaid bill blocks everything after
+ * it.
+ *
+ * Ordering is the patient's journey, with money ahead of each stage it gates:
+ * nothing can be checked in while the consultation is unpaid, and no department
+ * may start while the test is unpaid. See `blockingReason`.
+ *
+ * THE LIST IS WHAT IS POSSIBLE, NOT WHAT IS PERMITTED. Every one of these
+ * endpoints enforces its own permission; this only decides which button to
+ * draw. The single exception is COLLECT, which carries a figure and so is left
+ * out entirely for a caller who may not see money — the same rule as `money`.
+ */
+export type NextStep =
+  | { kind: 'COLLECT'; invoiceId: string; duePaise: number }
+  | { kind: 'CHECK_IN'; appointmentId: string }
+  | { kind: 'START'; appointmentId: string }
+  | { kind: 'RESUME'; appointmentId: string }
+  | { kind: 'FINISH'; appointmentId: string }
+  | { kind: 'RECORD_RESULT'; orderId: string }
+  | { kind: 'RECEIPT'; paymentId: string };
+
 export interface DayBoardRow {
   patient: {
     id: string;
@@ -66,6 +95,8 @@ export interface DayBoardRow {
   paymentMethods: string[];
   /** Null without `invoice:read`. See `RowMoney`. */
   money: RowMoney | null;
+  /** What to do with this patient next, most blocking first. See `NextStep`. */
+  nextSteps: NextStep[];
 }
 
 export interface DayBoard {
@@ -207,6 +238,9 @@ export class DayBoardService {
         orders,
         visitFees: bills.visitTags,
         money: mayReadMoney ? bills.byPatient : null,
+        // Carries a figure, so it follows the same rule as `money`: left out
+        // entirely for a caller who may not see amounts.
+        unpaid: mayReadMoney ? bills.unpaid : null,
         paymentMethods,
       });
     });
@@ -258,10 +292,18 @@ export class DayBoardService {
     tx: TenantClient,
     appointmentIds: string[],
     orderIds: string[],
-  ): Promise<{ visitTags: Map<string, FeeTag>; byPatient: Map<string, RowMoney> }> {
+  ): Promise<{
+    visitTags: Map<string, FeeTag>;
+    byPatient: Map<string, RowMoney>;
+    unpaid: Map<string, { invoiceId: string; duePaise: number }>;
+  }> {
     const visitTags = new Map<string, FeeTag>();
     const byPatient = new Map<string, RowMoney>();
-    if (appointmentIds.length === 0 && orderIds.length === 0) return { visitTags, byPatient };
+    /** The bill Collect opens: the oldest one still owing. */
+    const unpaid = new Map<string, { invoiceId: string; duePaise: number }>();
+    if (appointmentIds.length === 0 && orderIds.length === 0) {
+      return { visitTags, byPatient, unpaid };
+    }
 
     const invoices = await tx.invoice.findMany({
       where: {
@@ -277,7 +319,11 @@ export class DayBoardService {
             : []),
         ],
       },
+      // Oldest first, so the bill Collect opens is the one that has been owed
+      // longest rather than whichever the planner returned first.
+      orderBy: { issuedAt: 'asc' },
       select: {
+        id: true,
         patientId: true,
         appointmentId: true,
         number: true,
@@ -305,11 +351,19 @@ export class DayBoardService {
 
       const money = byPatient.get(invoice.patientId) ?? { billedPaise: 0, duePaise: 0 };
       money.billedPaise += invoice.totalPaise;
-      if (state.status === 'UNPAID') money.duePaise += state.balancePaise;
+      if (state.status === 'UNPAID') {
+        money.duePaise += state.balancePaise;
+        if (!unpaid.has(invoice.patientId)) {
+          unpaid.set(invoice.patientId, {
+            invoiceId: invoice.id,
+            duePaise: state.balancePaise,
+          });
+        }
+      }
       byPatient.set(invoice.patientId, money);
     }
 
-    return { visitTags, byPatient };
+    return { visitTags, byPatient, unpaid };
   }
 
   /**
@@ -327,8 +381,8 @@ export class DayBoardService {
     patientIds: string[],
     from: Date,
     to: Date,
-  ): Promise<Map<string, string[]>> {
-    const byPatient = new Map<string, string[]>();
+  ): Promise<Map<string, { modes: string[]; lastPaymentId: string | null }>> {
+    const byPatient = new Map<string, { modes: string[]; lastPaymentId: string | null }>();
     if (patientIds.length === 0) return byPatient;
 
     const payments = await tx.payment.findMany({
@@ -337,17 +391,33 @@ export class DayBoardService {
         collectedAt: { gte: from, lt: to },
         invoice: { patientId: { in: patientIds } },
       },
-      select: { mode: true, invoice: { select: { patientId: true } } },
+      /**
+       * The id comes too: a receipt prints for the LAST money in, which this
+       * ordering makes the last row seen.
+       *
+       * `receipt` with it, because not every payment has one — money recorded
+       * outside `collectPayment`, in a seed or before receipts shipped, has
+       * none, and the Receipt button would offer a sheet the server cannot
+       * produce.
+       */
+      select: {
+        id: true,
+        mode: true,
+        receipt: { select: { id: true } },
+        invoice: { select: { patientId: true } },
+      },
       orderBy: { collectedAt: 'asc' },
     });
 
     for (const p of payments) {
       const id = p.invoice.patientId;
-      const modes = byPatient.get(id) ?? [];
+      const entry = byPatient.get(id) ?? { modes: [], lastPaymentId: null };
       // Distinct, in the order they were taken: "Cash, UPI" reads as a story,
       // "Cash, Cash, UPI" reads as a bug.
-      if (!modes.includes(p.mode)) modes.push(p.mode);
-      byPatient.set(id, modes);
+      if (!entry.modes.includes(p.mode)) entry.modes.push(p.mode);
+      // Only a payment that HAS a receipt can print one.
+      if (p.receipt) entry.lastPaymentId = p.id;
+      byPatient.set(id, entry);
     }
 
     return byPatient;
@@ -367,6 +437,7 @@ export class DayBoardService {
     }>;
     orders: Array<
       {
+        id: string;
         status: string;
         createdAt: Date;
         appointmentId: string | null;
@@ -377,9 +448,13 @@ export class DayBoardService {
     visitFees: Map<string, FeeTag>;
     /** Null when the caller may not see figures. See `RowMoney`. */
     money: Map<string, RowMoney> | null;
-    paymentMethods: Map<string, string[]>;
+    /** The bill Collect opens. Null when the caller may not see figures. */
+    unpaid: Map<string, { invoiceId: string; duePaise: number }> | null;
+    /** `lastPaymentId` is null unless that payment actually has a receipt. */
+    paymentMethods: Map<string, { modes: string[]; lastPaymentId: string | null }>;
   }): DayBoard {
-    const { day, tz, scope, appointments, orders, visitFees, money, paymentMethods } = input;
+    const { day, tz, scope, appointments, orders, visitFees, money, unpaid, paymentMethods } =
+      input;
 
     /** Everything one patient has going on today, gathered before it is judged. */
     interface Accumulator {
@@ -394,6 +469,16 @@ export class DayBoardService {
       earliest: Date | null;
       visitFee: FeeTag;
       testFees: FeeTag[];
+      /**
+       * A test waiting to be done, and whether its bill is clear.
+       *
+       * The FIRST pending order, because the department works one at a time and
+       * the row offers one button. `blocked` mirrors the gate in
+       * `blockingReasonForOrder`: an unpaid test cannot be started, so the row
+       * must offer the money rather than the work.
+       */
+      pendingOrderId: string | null;
+      pendingOrderBlocked: boolean;
     }
 
     const byPatient = new Map<string, Accumulator>();
@@ -413,6 +498,8 @@ export class DayBoardService {
           earliest: null,
           visitFee: null,
           testFees: [],
+          pendingOrderId: null,
+          pendingOrderBlocked: false,
         };
         byPatient.set(patient.id, row);
       }
@@ -446,35 +533,60 @@ export class DayBoardService {
         row.hasTest = true;
         row.department ??= o.department.name;
         if (!row.earliest || o.createdAt < row.earliest) row.earliest = o.createdAt;
-        row.testFees.push(tagFor(diagnosticBillingState(o)));
+
+        const state = diagnosticBillingState(o);
+        row.testFees.push(tagFor(state));
+
+        if (o.status === 'PENDING' && row.pendingOrderId === null) {
+          row.pendingOrderId = o.id;
+          // The same two states that stop a result being released.
+          row.pendingOrderBlocked = state.status === 'UNPAID' || state.status === 'VOID';
+        }
       }
     }
 
     const rows: DayBoardRow[] = [...byPatient.values()]
-      .map((r) => ({
-        patient: r.patient,
-        bucket: PLACEMENT.find((b) => r.buckets.has(b)) ?? 'DONE',
-        appointmentId: r.appointmentId,
-        hasVisit: r.hasVisit,
-        hasTest: r.hasTest,
-        token: r.token,
-        // A patient with a doctor is described by their doctor; a test-only
-        // patient by the department holding them.
-        withWhom: r.doctor ?? r.department,
-        time: r.earliest ? instantToLocalTime(r.earliest, tz) : null,
-        visitFee: r.visitFee,
-        // One tag for all their tests: anything outstanding reads as pending,
-        // because the desk's question is "is there money to collect", not
-        // "which of the three".
-        testFee: summariseTestFees(r.testFees),
-        paymentMethods: paymentMethods.get(r.patient.id) ?? [],
-        /**
-         * Zeroes rather than null for a patient with no bill, so the column
-         * reads as "nothing charged" instead of "not allowed to know". The
-         * whole field is null when the caller may not see figures at all.
-         */
-        money: money ? (money.get(r.patient.id) ?? { billedPaise: 0, duePaise: 0 }) : null,
-      }))
+      .map((r) => {
+        // Worked out once. The row's stage and the steps offered against it
+        // have to be the same fact — two copies of this expression is two
+        // places for them to drift apart.
+        const bucket = PLACEMENT.find((b) => r.buckets.has(b)) ?? 'DONE';
+        const paid = paymentMethods.get(r.patient.id);
+
+        return {
+          patient: r.patient,
+          bucket,
+          appointmentId: r.appointmentId,
+          hasVisit: r.hasVisit,
+          hasTest: r.hasTest,
+          token: r.token,
+          // A patient with a doctor is described by their doctor; a test-only
+          // patient by the department holding them.
+          withWhom: r.doctor ?? r.department,
+          time: r.earliest ? instantToLocalTime(r.earliest, tz) : null,
+          visitFee: r.visitFee,
+          // One tag for all their tests: anything outstanding reads as pending,
+          // because the desk's question is "is there money to collect", not
+          // "which of the three".
+          testFee: summariseTestFees(r.testFees),
+          paymentMethods: paid?.modes ?? [],
+          /**
+           * Zeroes rather than null for a patient with no bill, so the column
+           * reads as "nothing charged" instead of "not allowed to know". The
+           * whole field is null when the caller may not see figures at all.
+           */
+          money: money ? (money.get(r.patient.id) ?? { billedPaise: 0, duePaise: 0 }) : null,
+          nextSteps: stepsFor({
+            bucket,
+            appointmentId: r.appointmentId,
+            owed: unpaid?.get(r.patient.id) ?? null,
+            visitFeePending: r.visitFee === 'PENDING',
+            pendingOrderId: r.pendingOrderId,
+            pendingOrderBlocked: r.pendingOrderBlocked,
+            lastPaymentId: paid?.lastPaymentId ?? null,
+          }),
+        };
+      })
       .sort(byTimeThenName);
 
     const counts = {
@@ -516,6 +628,102 @@ export class DayBoardService {
 
     return { date: day, timezone: tz, scope, counts, money: dayMoney, rows };
   }
+}
+
+/**
+ * What this patient needs next, most blocking first.
+ *
+ * ONE FUNCTION, no permissions in it. Every screen asks the same question and
+ * gets the same answer; who may act on which part of it is decided where the
+ * buttons are drawn, and enforced again by each endpoint. Mixing the two here
+ * would mean the board's idea of "what is going on with this patient" changed
+ * depending on who was looking at it.
+ *
+ * MONEY COMES FIRST, at every stage it gates. An unpaid consultation stops the
+ * check-in, an unpaid test stops the department — those are the real rules in
+ * `blockingReason` and `blockingReasonForOrder`, and a board that offered Check
+ * in on an unpaid visit would be offering a button the server refuses.
+ *
+ * `owed` is null for a caller who may not see figures, which quietly removes
+ * COLLECT for them. That is correct rather than convenient: they could not have
+ * collected it anyway.
+ */
+function stepsFor(row: {
+  bucket: DayBucket;
+  appointmentId: string | null;
+  owed: { invoiceId: string; duePaise: number } | null;
+  /** This VISIT'S own bill, which is the one the check-in gate reads. */
+  visitFeePending: boolean;
+  pendingOrderId: string | null;
+  pendingOrderBlocked: boolean;
+  lastPaymentId: string | null;
+}): NextStep[] {
+  const steps: NextStep[] = [];
+
+  // Nobody is chasing a cancellation or a no-show around the clinic. Their bill
+  // may still be owed, so the money step stands and nothing else does.
+  const attending = row.bucket !== 'NOT_ATTENDING';
+
+  if (row.owed) {
+    steps.push({
+      kind: 'COLLECT',
+      invoiceId: row.owed.invoiceId,
+      duePaise: row.owed.duePaise,
+    });
+  }
+
+  if (attending && row.appointmentId) {
+    /**
+     * CHECK IN ONLY WHEN THE VISIT'S OWN BILL IS CLEAR.
+     *
+     * `blockingReason` refuses a check-in against an unpaid consultation, so
+     * offering the button would be offering a refusal. Keyed on the VISIT's
+     * fee rather than on anything owed at all, because that is exactly what
+     * the gate reads: a patient who owes for something else entirely is not
+     * blocked from arriving, and hiding their button would strand the desk.
+     */
+    if (row.bucket === 'EXPECTED') {
+      if (!row.visitFeePending) {
+        steps.push({ kind: 'CHECK_IN', appointmentId: row.appointmentId });
+      }
+    } else if (row.bucket === 'WAITING') {
+      steps.push({ kind: 'START', appointmentId: row.appointmentId });
+    } else if (row.bucket === 'WITH_DOCTOR') {
+      steps.push({ kind: 'RESUME', appointmentId: row.appointmentId });
+      /**
+       * CLOSING THE OPD, from the board.
+       *
+       * After RESUME, so a doctor's one button stays "open the consultation" —
+       * finishing a visit cannot be undone, and it should not be the thing a
+       * misplaced click does. The front desk, holding no `consultation:write`,
+       * skips RESUME and lands on this: they are who closes visits today.
+       *
+       * The server only moves IN_PROGRESS to FULFILLED, which is exactly this
+       * bucket, so the step is never offered where it would be refused.
+       */
+      steps.push({ kind: 'FINISH', appointmentId: row.appointmentId });
+    }
+  }
+
+  // The department's own work, offered only once its bill is clear — the same
+  // gate that decides whether the result may be released at all.
+  if (attending && row.pendingOrderId && !row.pendingOrderBlocked) {
+    steps.push({ kind: 'RECORD_RESULT', orderId: row.pendingOrderId });
+  }
+
+  /**
+   * A receipt, for somebody who has finished and paid.
+   *
+   * Last, and only on a finished visit: offering it beside a live step would
+   * put "print something" in front of "see the patient". It is the one step
+   * that still makes sense on a day long past, which is most of the point of
+   * being able to look at one.
+   */
+  if (row.bucket === 'DONE' && row.lastPaymentId) {
+    steps.push({ kind: 'RECEIPT', paymentId: row.lastPaymentId });
+  }
+
+  return steps;
 }
 
 function bucketForAppointment(status: string): DayBucket {

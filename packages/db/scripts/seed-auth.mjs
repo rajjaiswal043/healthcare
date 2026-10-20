@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
 import { promisify } from 'node:util';
 import pg from 'pg';
+import { requireSeedableDatabase } from './seed-guard.mjs';
 
 const scrypt = promisify(scryptCallback);
 
@@ -23,10 +24,7 @@ const REPO_ROOT = resolve(PKG_ROOT, '..', '..');
 loadEnv({ path: resolve(REPO_ROOT, '.env') });
 
 const ownerUrl = process.env.MIGRATION_DATABASE_URL;
-if (!ownerUrl || !new URL(ownerUrl).pathname.includes('healthcloud')) {
-  console.error('MIGRATION_DATABASE_URL must point at a HealthCloud database.');
-  process.exit(1);
-}
+requireSeedableDatabase(ownerUrl, 'seed-auth');
 
 // Must match apps/api/src/platform/auth/password.ts exactly, or seeded users
 // cannot log in.
