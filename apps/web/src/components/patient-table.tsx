@@ -22,7 +22,52 @@ import { formatAge, genderInitial } from '@/lib/format';
 export function PatientTable({ patients }: { patients: PatientSummary[] }) {
   return (
     <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
+      {/*
+        PHONE FIRST, THEN THE TABLE.
+
+        Six columns in a sideways scroll is a poor way to find a person on a
+        390px screen, and finding a person is the entire job of this component.
+        Below `md` each patient is a card, and the WHOLE card is the link — a
+        name is a small target for a thumb, and the row already means "open
+        this patient".
+
+        The table's markup is unchanged and simply hidden, so a desk renders
+        exactly what it rendered before. Both halves read the same `patients`
+        array, which is what keeps the promise this file is named for.
+      */}
+      <ul className="divide-y divide-ink/6 md:hidden">
+        {patients.map((p) => (
+          <li key={p.id}>
+            <Link
+              href={`/patients/${p.id}`}
+              className="flex items-start justify-between gap-3 px-4 py-3.5 transition-colors active:bg-clinical-tint"
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-semibold text-ink">{p.name}</span>
+                <span className="mt-0.5 block text-[12.5px] text-ink-40">
+                  <span className="font-mono">{p.uhid}</span>
+                  {' · '}
+                  {formatAge(p)} {genderInitial(p.gender)}
+                </span>
+                <span className="mt-0.5 block text-[12.5px] text-ink-60">
+                  <span className="font-mono">{p.mobile}</span>
+                  {p.city ? ` · ${p.city}` : ''}
+                </span>
+              </span>
+
+              <span className="shrink-0">
+                {p.abhaNumber ? (
+                  <span className="badge-clinical">linked</span>
+                ) : (
+                  <span className="badge-neutral">not linked</span>
+                )}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="border-b border-ink/8 bg-bg-soft text-left">

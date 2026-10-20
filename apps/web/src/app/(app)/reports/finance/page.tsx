@@ -337,42 +337,68 @@ function Line({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Wide content scrolls inside its own box rather than the page. */
+/**
+ * Wide content scrolls inside its own box rather than the page — and on a
+ * phone it stops being a table at all.
+ *
+ * GENERIC, SO ONE CHANGE COVERS EVERY TABLE ON THIS PAGE. Each row becomes a
+ * small block: the first cell is the thing being reported on, and the rest are
+ * its figures with the column heading as the label. A six-column revenue table
+ * read sideways on a phone is a table nobody reads.
+ */
 function Table({ head, rows, empty }: { head: string[]; rows: string[][]; empty: string }) {
   if (rows.length === 0) return <p className="field-hint mt-2">{empty}</p>;
 
   return (
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr>
-            {head.map((h, i) => (
-              <th
-                key={h}
-                className={`mono-label border-b border-ink/10 pb-1.5 ${i === 0 ? 'text-left' : 'text-right'}`}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, r) => (
-            <tr key={r}>
-              {row.map((cell, i) => (
-                <td
-                  key={i}
-                  className={`border-b border-ink/6 py-2 ${
-                    i === 0 ? 'text-left' : 'text-right font-mono tabular-nums'
-                  }`}
+    <>
+      <ul className="mt-3 divide-y divide-ink/8 md:hidden">
+        {rows.map((row, r) => (
+          <li key={r} className="py-2.5 first:pt-0">
+            <p className="text-[13.5px] font-semibold text-ink">{row[0]}</p>
+            <dl className="mt-1 space-y-0.5 text-[12.5px]">
+              {row.slice(1).map((cell, i) => (
+                <div key={head[i + 1] ?? i} className="flex items-center justify-between gap-3">
+                  <dt className="text-ink-40">{head[i + 1]}</dt>
+                  <dd className="font-mono tabular-nums text-ink">{cell}</dd>
+                </div>
+              ))}
+            </dl>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3 hidden overflow-x-auto md:block">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr>
+              {head.map((h, i) => (
+                <th
+                  key={h}
+                  className={`mono-label border-b border-ink/10 pb-1.5 ${i === 0 ? 'text-left' : 'text-right'}`}
                 >
-                  {cell}
-                </td>
+                  {h}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((row, r) => (
+              <tr key={r}>
+                {row.map((cell, i) => (
+                  <td
+                    key={i}
+                    className={`border-b border-ink/6 py-2 ${
+                      i === 0 ? 'text-left' : 'text-right font-mono tabular-nums'
+                    }`}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

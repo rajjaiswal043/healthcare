@@ -99,12 +99,12 @@ export function SendForTestDialog({
       role="dialog"
       aria-modal="true"
       aria-label={`Send ${row.patient.name} for a test`}
-      className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="card flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden">
+      <div className="card flex max-h-[85vh] w-full max-sm:rounded-b-none max-w-lg flex-col overflow-hidden">
         <div className="border-b border-ink/8 px-6 py-4">
           <p className="mono-label">Send for a test</p>
           <h2 className="mt-1 font-display text-[20px] font-bold">{row.patient.name}</h2>

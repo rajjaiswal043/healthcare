@@ -485,81 +485,157 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
               Same columns and treatment as the day board and the finance desk,
               because all three are read the same way: down a column, comparing.
             */
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13.5px]">
-                <thead>
-                  <tr className="border-b border-ink/8 bg-bg-soft text-left">
-                    <Th className="w-[150px]">Bill</Th>
-                    <Th>What for</Th>
-                    <Th className="w-[170px]">Doctor</Th>
-                    <Th className="w-[110px] text-right">Amount</Th>
-                    <Th className="w-[150px]">Settled</Th>
-                    <Th className="w-[130px]">
-                      <span className="sr-only">Actions</span>
-                    </Th>
-                  </tr>
-                </thead>
+            <>
+              {/*
+                PHONE FIRST, THEN THE TABLE.
 
-                <tbody>
-                  {billing.invoices.map((inv) => (
-                    <tr
-                      key={inv.id}
-                      className="border-b border-ink/6 transition-colors last:border-0 hover:bg-clinical-tint/60"
-                    >
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span className="font-mono text-[12.5px] font-semibold">{inv.number}</span>
-                        <span className="block text-[11.5px] text-ink-40">
+                Six columns of billing history is a sideways scroll on a phone,
+                and this tab is most often opened to answer one question —
+                "what did we charge them for, and did they pay?" A card answers
+                it without moving.
+
+                The table's markup is unchanged and hidden, so a desk renders
+                what it rendered before. Both halves read the same
+                `billing.invoices`.
+              */}
+              <ul className="divide-y divide-ink/6 md:hidden">
+                {billing.invoices.map((inv) => (
+                  <li key={inv.id} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="block font-mono text-[12.5px] font-semibold">
+                          {inv.number}
+                        </span>
+                        <span className="mt-0.5 block text-[11.5px] text-ink-40">
                           {new Date(inv.createdAt).toLocaleDateString('en-IN', {
                             dateStyle: 'medium',
                           })}
+                          {' · '}
+                          {inv.doctor ?? 'Walk-in test'}
                         </span>
-                      </td>
+                      </div>
+                      <span className="shrink-0 font-mono text-[15px] font-bold tabular-nums">
+                        {formatPaise(inv.totalPaise)}
+                      </span>
+                    </div>
 
-                      <td className="px-4 py-3 text-ink-60">
-                        {inv.items.length === 0 ? (
-                          <span className="text-ink-20">—</span>
-                        ) : (
-                          <>
-                            {inv.items.join(', ')}
-                            {/* Four descriptions come back at most. The count
+                    <p className="mt-1.5 text-[12.5px] text-ink-60">
+                      {inv.items.length === 0 ? (
+                        <span className="text-ink-20">—</span>
+                      ) : (
+                        <>
+                          {inv.items.join(', ')}
+                          {inv.itemCount > inv.items.length &&
+                            ` and ${inv.itemCount - inv.items.length} more`}
+                        </>
+                      )}
+                    </p>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span
+                        className={`badge ${inv.balancePaise > 0 ? 'badge-amber' : 'badge-green'}`}
+                      >
+                        {inv.balancePaise > 0
+                          ? `${formatPaise(inv.balancePaise)} due`
+                          : inv.status.toLowerCase().replace('_', ' ')}
+                      </span>
+                      {inv.paymentModes.length > 0 && (
+                        <span className="text-[11.5px] text-ink-40">
+                          {inv.paymentModes.map(payMethodLabel).join(', ')}
+                          {inv.refundedPaise > 0 && ` · ${formatPaise(inv.refundedPaise)} refunded`}
+                        </span>
+                      )}
+
+                      {inv.lastPaymentId && can('payment:collect') && (
+                        <PrintReceiptButton
+                          paymentId={inv.lastPaymentId}
+                          className="btn-secondary ml-auto !px-3 !py-1.5 !text-[12.5px]"
+                          label="Receipt"
+                          iconSize={13}
+                        />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-[13.5px]">
+                  <thead>
+                    <tr className="border-b border-ink/8 bg-bg-soft text-left">
+                      <Th className="w-[150px]">Bill</Th>
+                      <Th>What for</Th>
+                      <Th className="w-[170px]">Doctor</Th>
+                      <Th className="w-[110px] text-right">Amount</Th>
+                      <Th className="w-[150px]">Settled</Th>
+                      <Th className="w-[130px]">
+                        <span className="sr-only">Actions</span>
+                      </Th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {billing.invoices.map((inv) => (
+                      <tr
+                        key={inv.id}
+                        className="border-b border-ink/6 transition-colors last:border-0 hover:bg-clinical-tint/60"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span className="font-mono text-[12.5px] font-semibold">
+                            {inv.number}
+                          </span>
+                          <span className="block text-[11.5px] text-ink-40">
+                            {new Date(inv.createdAt).toLocaleDateString('en-IN', {
+                              dateStyle: 'medium',
+                            })}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3 text-ink-60">
+                          {inv.items.length === 0 ? (
+                            <span className="text-ink-20">—</span>
+                          ) : (
+                            <>
+                              {inv.items.join(', ')}
+                              {/* Four descriptions come back at most. The count
                                 says how many are hidden rather than letting a
                                 truncated list pass as the whole bill. */}
-                            {inv.itemCount > inv.items.length &&
-                              ` and ${inv.itemCount - inv.items.length} more`}
-                          </>
-                        )}
-                      </td>
+                              {inv.itemCount > inv.items.length &&
+                                ` and ${inv.itemCount - inv.items.length} more`}
+                            </>
+                          )}
+                        </td>
 
-                      {/* Null for a walk-in test, which belongs to no doctor. */}
-                      <td className="px-4 py-3 text-ink-60">
-                        {inv.doctor ?? <span className="text-ink-20">Walk-in test</span>}
-                      </td>
+                        {/* Null for a walk-in test, which belongs to no doctor. */}
+                        <td className="px-4 py-3 text-ink-60">
+                          {inv.doctor ?? <span className="text-ink-20">Walk-in test</span>}
+                        </td>
 
-                      <td className="whitespace-nowrap px-4 py-3 text-right font-mono tabular-nums">
-                        {formatPaise(inv.totalPaise)}
-                      </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-mono tabular-nums">
+                          {formatPaise(inv.totalPaise)}
+                        </td>
 
-                      <td className="px-4 py-3">
-                        <span
-                          className={`badge ${inv.balancePaise > 0 ? 'badge-amber' : 'badge-green'}`}
-                        >
-                          {inv.balancePaise > 0
-                            ? `${formatPaise(inv.balancePaise)} due`
-                            : inv.status.toLowerCase().replace('_', ' ')}
-                        </span>
-                        {/* How it was actually paid, which is what somebody
-                            asking about a bill from March wants to know. */}
-                        {inv.paymentModes.length > 0 && (
-                          <span className="mt-0.5 block text-[11.5px] text-ink-40">
-                            {inv.paymentModes.map(payMethodLabel).join(', ')}
-                            {inv.refundedPaise > 0 &&
-                              ` · ${formatPaise(inv.refundedPaise)} refunded`}
+                        <td className="px-4 py-3">
+                          <span
+                            className={`badge ${inv.balancePaise > 0 ? 'badge-amber' : 'badge-green'}`}
+                          >
+                            {inv.balancePaise > 0
+                              ? `${formatPaise(inv.balancePaise)} due`
+                              : inv.status.toLowerCase().replace('_', ' ')}
                           </span>
-                        )}
-                      </td>
+                          {/* How it was actually paid, which is what somebody
+                            asking about a bill from March wants to know. */}
+                          {inv.paymentModes.length > 0 && (
+                            <span className="mt-0.5 block text-[11.5px] text-ink-40">
+                              {inv.paymentModes.map(payMethodLabel).join(', ')}
+                              {inv.refundedPaise > 0 &&
+                                ` · ${formatPaise(inv.refundedPaise)} refunded`}
+                            </span>
+                          )}
+                        </td>
 
-                      <td className="px-4 py-3 text-right">
-                        {/*
+                        <td className="px-4 py-3 text-right">
+                          {/*
                           FR-RCP-01 from the record rather than the desk. A
                           patient asking for a copy months later is the
                           commonest reprint there is, and until now the only
@@ -578,20 +654,21 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                           control for catching missing cash quietly firing on
                           somebody who was only looking.
                         */}
-                        {inv.lastPaymentId && can('payment:collect') && (
-                          <PrintReceiptButton
-                            paymentId={inv.lastPaymentId}
-                            className="btn-ghost !px-2.5 !py-1 !text-[12px]"
-                            label="Receipt"
-                            iconSize={13}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          {inv.lastPaymentId && can('payment:collect') && (
+                            <PrintReceiptButton
+                              paymentId={inv.lastPaymentId}
+                              className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+                              label="Receipt"
+                              iconSize={13}
+                            />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}

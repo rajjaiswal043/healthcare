@@ -555,7 +555,8 @@ export default function DiagnosticsPage() {
 
                     <button
                       type="button"
-                      className="btn-secondary !py-1.5 !text-[13px]"
+                      // Thumb height on a phone; unchanged under a mouse.
+                      className="btn-secondary !py-2 !text-[13px] md:!py-1.5"
                       onClick={() => void openDetail(o.id)}
                     >
                       {o.status === 'PENDING' && mayResult ? 'Attach result' : 'Open'}
@@ -690,7 +691,7 @@ export default function DiagnosticsPage() {
                     id="resultNote"
                     rows={4}
                     maxLength={2000}
-                    className="field-input text-[13.5px]"
+                    className="field-input text-[16px] md:text-[13.5px]"
                     placeholder="No fracture. Mild effusion."
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
