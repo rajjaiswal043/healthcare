@@ -19,16 +19,14 @@ import { config as loadEnv } from 'dotenv';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { requireSeedableDatabase } from './seed-guard.mjs';
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = resolve(PKG_ROOT, '..', '..');
 loadEnv({ path: resolve(REPO_ROOT, '.env') });
 
 const ownerUrl = process.env.MIGRATION_DATABASE_URL;
-if (!ownerUrl || !new URL(ownerUrl).pathname.includes('healthcloud')) {
-  console.error('MIGRATION_DATABASE_URL must point at a HealthCloud database.');
-  process.exit(1);
-}
+requireSeedableDatabase(ownerUrl, 'seed-scheduling');
 
 /** Deterministic PRNG so the demo dataset is identical on every reseed. */
 function makeRandom(seed) {
@@ -143,14 +141,24 @@ function localToInstant(dateStr, hhmm, offset = '+05:30') {
   return new Date(`${dateStr}T${hhmm}:00${offset}`);
 }
 
-/** Today, as a clinic-local YYYY-MM-DD. */
-function clinicToday(timeZone = 'Asia/Kolkata') {
+/**
+ * A clinic-local date, `YYYY-MM-DD`, this many days back. `clinicDate(0)` is
+ * today.
+ *
+ * Stepped in whole days against UTC midday rather than by subtracting
+ * milliseconds from now, so a clinic in a zone with daylight saving cannot land
+ * on the same date twice or skip one. India has none; the timezone is a column.
+ */
+function clinicDate(daysAgo, timeZone = 'Asia/Kolkata') {
+  const at = new Date();
+  at.setUTCHours(12, 0, 0, 0);
+  at.setUTCDate(at.getUTCDate() - daysAgo);
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(at);
 }
 
 /** First row of a result, or undefined. Saves a `.rows[0]` at every call site. */
@@ -310,12 +318,32 @@ async function seedTenant(tenant, doctors) {
 }
 
 /**
- * Seeds today's queue for one doctor, spread across every state so the board
- * shows a plausible mid-morning clinic: some finished, one in the room, some
- * waiting with tokens, and some yet to arrive.
+ * Seeds one day's queue for one doctor.
+ *
+ * TODAY is a plausible mid-morning clinic: some finished, one in the room, some
+ * waiting with tokens, and some yet to arrive — every state the board has a tab
+ * for, so the screen is worth looking at the moment it loads.
+ *
+ * A PAST DAY is a day that finished. Everybody was seen and went home, the
+ * tests came back, and the money was taken — except for the one or two who left
+ * owing, which is the whole reason anybody looks back at a past day. There is
+ * no point seeding a Tuesday with three people still waiting: Tuesday is over,
+ * and a board that says otherwise is a board nobody can trust.
+ *
+ * Different patients each day, stepped through the list by `daysAgo`, so the
+ * same twelve people are not apparently living at the clinic.
  */
-async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnosticDeptIds) {
-  const today = clinicToday();
+async function seedTodaysQueue(
+  tenant,
+  practitioner,
+  locationId,
+  deptId,
+  diagnosticDeptIds,
+  daysAgo = 0,
+  doctorIndex = 0,
+) {
+  const today = clinicDate(daysAgo);
+  const isToday = daysAgo === 0;
 
   // Tenant context FIRST. `patient` is under FORCE row-level security, so a read
   // before set_config returns zero rows — not an error, just silently nothing,
@@ -350,18 +378,50 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnos
   // arrive. AWAITING_TESTS is the patient the doctor sent for an X-ray
   // mid-consultation: same visit, same token, same bill — out of the room and
   // out of the waiting list until they come back.
-  const plan = [
-    ...Array(4).fill('FULFILLED'),
-    'IN_PROGRESS',
-    ...Array(2).fill('AWAITING_TESTS'),
-    ...Array(3).fill('ARRIVED'),
-    ...Array(4).fill('BOOKED'),
-  ];
+  //
+  // A past day has none of those middle states. It finished: nine seen, two
+  // sent for tests that came back, and one who never turned up — because a
+  // no-show still owes nothing and still has to be explicable on the day-end
+  // report.
+  const plan = isToday
+    ? [
+        ...Array(4).fill('FULFILLED'),
+        'IN_PROGRESS',
+        ...Array(2).fill('AWAITING_TESTS'),
+        ...Array(3).fill('ARRIVED'),
+        ...Array(4).fill('BOOKED'),
+      ]
+    : [...Array(9).fill('FULFILLED'), ...Array(2).fill('AWAITING_TESTS'), 'NO_SHOW'];
+
+  /**
+   * Who walked out still owing, on a past day.
+   *
+   * Two of them, and they are the point of being able to look back at all: the
+   * desk's question about a Tuesday is "who owes us from Tuesday", and a seeded
+   * past day where everybody paid cannot answer it. Pay-first is the rule, not
+   * a law of physics — a patient seen as a favour, or a bill raised after they
+   * left, lands exactly here.
+   */
+  const leftOwing = new Set(isToday ? [] : [2, 7]);
 
   let created = 0;
   let token = 0;
 
   for (const [i, status] of plan.entries()) {
+    /**
+     * A different twelve people for every doctor, every day.
+     *
+     * Both doctors used to walk the same slice, so one patient held two
+     * appointments on one morning with two different doctors — and the board,
+     * which is one row per PATIENT, merged them into a single row. The day read
+     * as half the size it was, which is a poor way to find out whether a busy
+     * board is usable.
+     *
+     * Wraps rather than running out, which only shows on a clinic seeded with
+     * few patients.
+     */
+    const slice = (daysAgo * 2 + doctorIndex) * plan.length;
+    const patient = patients[(i + slice) % patients.length];
     const startHHmm = addMinutes(session.start, i * slot);
     const startAt = localToInstant(today, startHHmm);
     const endAt = localToInstant(today, addMinutes(startHHmm, slot));
@@ -386,7 +446,7 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnos
        RETURNING id`,
         [
           tenant.id,
-          patients[i].id,
+          patient.id,
           practitioner.id,
           locationId,
           deptId,
@@ -435,6 +495,9 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnos
      * paying would misrepresent the workflow on the demo's very first screen.
      * The ones still to arrive are left UNPAID on purpose: that is where the
      * check-in gate becomes visible, and it is the whole point of the module.
+     *
+     * On a past day, the two in `leftOwing` are finished AND unpaid — the row
+     * the desk goes looking for when it steps back a day.
      */
     const invoiceRow = rows0(
       await client.query(`SELECT next_invoice_number($1::uuid) AS number`, [tenant.id]),
@@ -461,9 +524,9 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnos
         [
           tenant.id,
           invoiceRow.number,
-          patients[i].id,
+          patient.id,
           appointmentId,
-          arrived ? 'PAID' : 'UNPAID',
+          arrived && !leftOwing.has(i) ? 'PAID' : 'UNPAID',
           feePaise,
         ],
       ),
@@ -485,37 +548,87 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnos
      * workable rather than a wall of unpaid tests nobody can clear.
      */
     if (status === 'AWAITING_TESTS' && frontDeskUserId) {
+      /**
+       * A past day's film has been read and handed over. Leaving it PENDING
+       * would park a patient under "At a department" on a day the clinic
+       * closed, and put work on a technician's board that nobody can do.
+       *
+       * `diagnostic_order_completion_is_attributed` wants the time AND the
+       * person together, so both go or neither does.
+       */
+      const done = !isToday;
+
       await client.query(
         `INSERT INTO diagnostic_order
            (tenant_id, appointment_id, patient_id, department_id, ordered_by_user_id,
-            description, status, referral_source, legacy_unbilled, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,'PENDING','INTERNAL',true,$7, now())`,
+            description, status, referral_source, legacy_unbilled, result_note,
+            completed_at, completed_by_user_id, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::diagnostic_order_status,'INTERNAL',true,$8,
+                 $9::timestamptz,$10::uuid,$11, now())`,
         [
           tenant.id,
           appointmentId,
-          patients[i].id,
+          patient.id,
           i % 2 === 0 ? diagnosticDeptIds.xray : diagnosticDeptIds.pathology,
           frontDeskUserId,
           i % 2 === 0 ? 'X-ray — right knee, AP and lateral' : 'Complete blood count',
+          done ? 'COMPLETED' : 'PENDING',
+          done
+            ? i % 2 === 0
+              ? 'No fracture seen. Mild degenerative change in the medial compartment.'
+              : 'Haemoglobin 12.8, counts within normal limits.'
+            : null,
+          done ? new Date(startAt.getTime() + 40 * 60000) : null,
+          done ? frontDeskUserId : null,
           new Date(startAt.getTime() + 5 * 60000),
         ],
       );
     }
 
-    if (arrived) {
+    if (arrived && !leftOwing.has(i)) {
+      const payment = rows0(
+        await client.query(
+          `INSERT INTO payment
+             (tenant_id, invoice_id, direction, mode, amount_paise, collected_by_user_id, collected_at)
+           VALUES ($1, $2, 'IN', $3::payment_mode, $4, $5,
+                   $6::timestamptz - interval '12 minutes')
+           RETURNING id`,
+          [
+            tenant.id,
+            invoice.id,
+            pick(['CASH', 'UPI', 'UPI', 'CARD']),
+            feePaise,
+            frontDeskUserId,
+            startAt,
+          ],
+        ),
+      );
+
+      /**
+       * A receipt for the money, because the app writes one for every payment
+       * it takes.
+       *
+       * Without this the seed produced payments that no receipt could be
+       * printed for — and the Receipt button, which asks only whether money
+       * came in, offered a sheet the server then refused with "No receipt for
+       * that payment". The screens now check for the receipt rather than the
+       * payment, and the seed stopped being the odd one out.
+       *
+       * The money block is frozen here exactly as `collectPayment` freezes it:
+       * a receipt records what a document said, not what the invoice says
+       * today.
+       */
+      const receiptNumber = rows0(
+        await client.query(`SELECT next_receipt_number($1::uuid) AS number`, [tenant.id]),
+      );
+
       await client.query(
-        `INSERT INTO payment
-           (tenant_id, invoice_id, direction, mode, amount_paise, collected_by_user_id, collected_at)
-         VALUES ($1, $2, 'IN', $3::payment_mode, $4, $5,
+        `INSERT INTO receipt
+           (tenant_id, payment_id, invoice_id, number, total_charged_paise,
+            discount_paise, tax_paise, payable_paise, paid_now_paise, balance_paise, issued_at)
+         VALUES ($1, $2, $3, $4, $5, 0, 0, $5, $5, 0,
                  $6::timestamptz - interval '12 minutes')`,
-        [
-          tenant.id,
-          invoice.id,
-          pick(['CASH', 'UPI', 'UPI', 'CARD']),
-          feePaise,
-          frontDeskUserId,
-          startAt,
-        ],
+        [tenant.id, payment.id, invoice.id, receiptNumber.number, feePaise, startAt],
       );
     }
   }
@@ -534,7 +647,9 @@ async function seedTodaysQueue(tenant, practitioner, locationId, deptId, diagnos
    * each clinic — a walk-in belongs to the clinic, not to a doctor, so seeding
    * them once per doctor would multiply them.
    */
-  if (frontDeskUserId && practitioner.isFirst && patients.length >= 20) {
+  // Today only: a walk-in test that is still pending is work in progress, and
+  // a day that is over has none.
+  if (isToday && frontDeskUserId && practitioner.isFirst && patients.length >= 20) {
     const walkIns = [
       { offset: 1, status: 'PENDING', dept: 'xray', what: 'X-ray — chest, PA view' },
       { offset: 2, status: 'PENDING', dept: 'pathology', what: 'Lipid profile, fasting' },
@@ -598,20 +713,42 @@ try {
     const doctors = tenant.slug === 'lotus-polyclinic' ? LOTUS_DOCTORS : DOCTORS;
     const { practitioners, locations, deptIds } = await seedTenant(tenant, doctors);
 
-    let appts = 0;
-    for (const [index, p] of practitioners.slice(0, 2).entries()) {
-      // Walk-in tests belong to the clinic, not to a doctor, so they are seeded
-      // once — on the first doctor's pass — rather than once per doctor.
-      p.isFirst = index === 0;
-      appts += await seedTodaysQueue(tenant, p, locations[0].id, deptIds[p.dept], {
-        xray: deptIds['X-ray'],
-        pathology: deptIds['Pathology'],
-      });
+    /**
+     * Today, and the two days before it.
+     *
+     * The board can be stepped back a day at a time, and a date picker with
+     * nothing behind it is a feature nobody can try. Two days is enough to tell
+     * "yesterday" from "a past day" — the arrows, the calendar, the Today
+     * button and the read-only rule all have something to act on — without
+     * seeding a month nobody will look at.
+     */
+    let today = 0;
+    let earlier = 0;
+
+    for (const daysAgo of [0, 1, 2]) {
+      for (const [index, p] of practitioners.slice(0, 2).entries()) {
+        // Walk-in tests belong to the clinic, not to a doctor, so they are
+        // seeded once — on the first doctor's pass — rather than once per
+        // doctor.
+        p.isFirst = index === 0;
+        const made = await seedTodaysQueue(
+          tenant,
+          p,
+          locations[0].id,
+          deptIds[p.dept],
+          { xray: deptIds['X-ray'], pathology: deptIds['Pathology'] },
+          daysAgo,
+          index,
+        );
+        if (daysAgo === 0) today += made;
+        else earlier += made;
+      }
     }
 
     console.log(
       `  ${tenant.name.padEnd(20)} ${DEPARTMENTS.length} departments, ` +
-        `${practitioners.length} doctors, ${appts} appointments today`,
+        `${practitioners.length} doctors, ${today} appointments today, ` +
+        `${earlier} over the two days before`,
     );
   }
 

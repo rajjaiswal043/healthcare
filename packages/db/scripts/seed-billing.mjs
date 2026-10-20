@@ -20,16 +20,14 @@ import { config as loadEnv } from 'dotenv';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { requireSeedableDatabase } from './seed-guard.mjs';
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = resolve(PKG_ROOT, '..', '..');
 loadEnv({ path: resolve(REPO_ROOT, '.env') });
 
 const ownerUrl = process.env.MIGRATION_DATABASE_URL;
-if (!ownerUrl || !new URL(ownerUrl).pathname.includes('healthcloud')) {
-  console.error('MIGRATION_DATABASE_URL must point at a HealthCloud database.');
-  process.exit(1);
-}
+requireSeedableDatabase(ownerUrl, 'seed-billing');
 
 /**
  * [code, name, category, pricePaise, taxRateBasisPoints]

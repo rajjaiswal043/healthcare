@@ -212,6 +212,28 @@ export interface RowMoney {
   duePaise: number;
 }
 
+/**
+ * What a patient needs next, most blocking first.
+ *
+ * A LIST, because more than one thing can be true at once: a patient sitting
+ * with the doctor who has just been sent for an X-ray needs the money taking
+ * AND the consultation carrying on. Each screen shows the first step the
+ * signed-in person is allowed to perform — so the desk sees Collect, the doctor
+ * sees Resume, and somebody holding every permission sees Collect, because an
+ * unpaid bill blocks everything after it.
+ *
+ * COLLECT is absent entirely for a caller who may not see money, the same rule
+ * as `money`.
+ */
+export type NextStep =
+  | { kind: 'COLLECT'; invoiceId: string; duePaise: number }
+  | { kind: 'CHECK_IN'; appointmentId: string }
+  | { kind: 'START'; appointmentId: string }
+  | { kind: 'RESUME'; appointmentId: string }
+  | { kind: 'FINISH'; appointmentId: string }
+  | { kind: 'RECORD_RESULT'; orderId: string }
+  | { kind: 'RECEIPT'; paymentId: string };
+
 export interface DayBoardRow {
   patient: { id: string; name: string; uhid: string; ageYears: number | null; gender: string };
   bucket: DayBucket;
@@ -228,6 +250,8 @@ export interface DayBoardRow {
   paymentMethods: string[];
   /** Null without `invoice:read`. See `RowMoney`. */
   money: RowMoney | null;
+  /** What to do with this patient next, most blocking first. See `NextStep`. */
+  nextSteps: NextStep[];
 }
 
 export interface DayBoard {
@@ -597,7 +621,24 @@ export interface DiagnosticOrder {
    * LEGACY and NOT_BILLED are shown for information and never block.
    */
   billing: DiagnosticBillingState;
-  patient: { id: string; name: string; uhid: string; gender: string; ageYears: number | null };
+  /**
+   * The patient, as the person at the machine needs them: enough to call them,
+   * phone them if they wander off, and give contrast safely.
+   */
+  patient: {
+    id: string;
+    name: string;
+    uhid: string;
+    gender: string;
+    ageYears: number | null;
+    mobile: string;
+    /** Null means nothing recorded — see `allergiesReviewedAt` for which kind. */
+    allergies: string | null;
+    /** Set and `allergies` empty means somebody asked and the answer was none. */
+    allergiesReviewedAt: string | null;
+  };
+  /** The visit this came out of. Null for a walk-in test, which has no token. */
+  appointment: { tokenNumber: number | null; reasonForVisit: string | null } | null;
   orderedBy: { id: string; fullName: string };
   completedBy: { id: string; fullName: string } | null;
   /** Set once the patient has actually been given the report (FR-DIA-13). */

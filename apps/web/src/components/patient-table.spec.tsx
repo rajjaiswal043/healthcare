@@ -73,27 +73,30 @@ describe('a patient row', () => {
   });
 });
 
-describe('one table, two screens', () => {
-  const read = (route: string) =>
-    readFileSync(
-      fileURLToPath(new URL(`../app/(app)/${route}/page.tsx`, import.meta.url)),
-      'utf-8',
-    );
+/**
+ * One table, both halves of one screen.
+ *
+ * This used to check two separate pages. They are one now — the register and
+ * the search over it — and the rule it was protecting is unchanged: whichever
+ * half you are looking at, a patient row is defined in exactly one place.
+ */
+describe('one table, one screen', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('../app/(app)/patients/page.tsx', import.meta.url)),
+    'utf-8',
+  );
 
-  const screens = {
-    'Find a patient': read('patients'),
-    'All patients': read('patients/all'),
-  };
+  it('renders search results through PatientTable', () => {
+    expect(source).toMatch(/PatientTable/);
+  });
 
-  for (const [name, source] of Object.entries(screens)) {
-    it(`${name} renders patients through PatientTable`, () => {
-      expect(source).toMatch(/PatientTable/);
-    });
+  it('renders the register through the same table, via AllPatientsView', () => {
+    expect(source).toMatch(/AllPatientsView/);
+  });
 
-    it(`${name} has no patient table of its own`, () => {
-      // A second <table> on either screen is a second definition of what a
-      // patient row is — the thing this component exists to prevent.
-      expect(source).not.toMatch(/<table[\s>]/);
-    });
-  }
+  it('has no patient table of its own', () => {
+    // A second <table> here is a second definition of what a patient row is —
+    // the thing this component exists to prevent.
+    expect(source).not.toMatch(/<table[\s>]/);
+  });
 });

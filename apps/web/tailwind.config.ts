@@ -54,6 +54,27 @@ export default {
           soft: '#DCEFE1',
           text: '#1F5531',
         },
+
+        /**
+         * Finished — a visit that is over, a patient who has left.
+         *
+         * Its own hue because GREEN ALREADY MEANS MONEY HERE: a paid bill, a
+         * settled fee, "nothing outstanding". Using it for a completed visit
+         * overloaded it, and on the day board the two landed on the same row —
+         * where it also sat beside `clinical`, which is itself a teal-green, so
+         * "finished" and "with the doctor" were two greens a metre from a
+         * doctor's eyes.
+         *
+         * Muted to sit with the rest of the palette rather than the saturated
+         * indigo of every framework default. Named for the flower, not the
+         * colour, because every plain colour name is taken by Tailwind's own
+         * scale and overriding one breaks it everywhere else.
+         */
+        iris: {
+          DEFAULT: '#5B5EA6',
+          soft: '#E3E4F3',
+          text: '#3F4280',
+        },
       },
 
       fontFamily: {

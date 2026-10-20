@@ -93,7 +93,24 @@ export class Patient360Service {
            * question asked of a settled bill months later.
            */
           payments: {
-            select: { id: true, direction: true, amountPaise: true, mode: true },
+            select: {
+              id: true,
+              direction: true,
+              amountPaise: true,
+              mode: true,
+              /**
+               * Whether a receipt was ever cut for this payment.
+               *
+               * NOT EVERY PAYMENT HAS ONE. A receipt is written by
+               * `collectPayment`; money recorded any other way — a seeded
+               * clinic, or a payment taken before receipts existed at all —
+               * has none, and asking to print one answers "No receipt for that
+               * payment". Offering the button and then failing is worse than
+               * not offering it, because the desk finds out with a patient
+               * waiting for a piece of paper.
+               */
+              receipt: { select: { id: true } },
+            },
             orderBy: { collectedAt: 'asc' },
           },
 
@@ -157,8 +174,13 @@ export class Patient360Service {
           paidPaise: received - refunded,
           refundedPaise: refunded,
           paymentModes: [...new Set(paymentsIn.map((p) => p.mode as string))],
-          /** The payment a receipt prints for, or null when nothing was taken. */
-          lastPaymentId: paymentsIn[paymentsIn.length - 1]?.id ?? null,
+          /**
+           * The payment a receipt prints for.
+           *
+           * The last one that HAS a receipt, not simply the last one — see the
+           * note on `receipt` above. Null when there is none to print.
+           */
+          lastPaymentId: [...paymentsIn].reverse().find((p) => p.receipt !== null)?.id ?? null,
         };
       });
 

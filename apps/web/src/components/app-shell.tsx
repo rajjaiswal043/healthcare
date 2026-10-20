@@ -66,19 +66,14 @@ const SECTIONS: NavSection[] = [
     title: 'Patients',
     items: [
       {
+        // One entry where there were two. "Find a patient" opened an empty box
+        // and "All patients" listed everyone; they are one screen now, because
+        // somebody arriving at the menu does not yet know which of those two
+        // questions they have.
         key: 'patients',
-        label: 'Find a patient',
+        label: 'Patients',
         href: '/patients',
         icon: <IconUsers size={16} />,
-        permission: 'patient:read',
-      },
-      {
-        key: 'all-patients',
-        label: 'All patients',
-        href: '/patients/all',
-        icon: <IconClock size={16} />,
-        // Same permission as search: both are reads of the patient list, and a
-        // role that may search it may page through it.
         permission: 'patient:read',
       },
       {
@@ -220,7 +215,7 @@ const SECTIONS: NavSection[] = [
  * Tables and boards, where an answer is scanned across a row rather than read
  * down a column. Everything else keeps the 1152px measure.
  */
-const WIDE_ROUTES = ['/', '/finance', '/patients/all', '/queue', '/diagnostics'];
+const WIDE_ROUTES = ['/', '/finance', '/patients', '/queue', '/diagnostics'];
 
 function isWideRoute(pathname: string): boolean {
   // A patient record is wide too — its timeline and tables earn the space — and
