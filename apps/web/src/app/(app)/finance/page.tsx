@@ -485,7 +485,80 @@ export default function FinanceDeskPage() {
       */}
       {!appointmentId && !invoice && outstanding.length > 0 && (
         <section className="card overflow-hidden">
-          <div className="overflow-x-auto">
+          {/*
+            PHONE FIRST, THEN THE TABLE.
+
+            Six columns of bill is a sideways scroll on a 390px screen, on the
+            list this desk works from all day. Below `md` each bill is a card
+            with the amount where the eye lands and Collect full width beneath.
+
+            The table's markup is unchanged and hidden, so a desk renders what
+            it rendered before. Both halves read the same `outstanding` array.
+          */}
+          <ul className="divide-y divide-ink/6 md:hidden">
+            {outstanding.map((o) => (
+              <li key={o.id} className="px-4 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/patients/${o.patient.id}`}
+                      className="block truncate text-[15px] font-semibold text-ink"
+                    >
+                      {o.patient.name}
+                    </Link>
+                    <span className="mt-0.5 block font-mono text-[11.5px] text-ink-40">
+                      {o.patient.uhid} · {o.patient.mobile}
+                    </span>
+                  </div>
+
+                  {/* The figure, large and to the right — it is what the desk
+                      is about to ask the patient for. */}
+                  <span className="shrink-0 font-mono text-[16px] font-bold tabular-nums">
+                    {formatPaise(o.balancePaise)}
+                  </span>
+                </div>
+
+                <p className="mt-1.5 text-[12.5px] text-ink-60">
+                  {o.items.length === 0 ? (
+                    <span className="text-ink-20">—</span>
+                  ) : (
+                    <>
+                      {o.items.join(', ')}
+                      {o.itemCount > o.items.length && ` and ${o.itemCount - o.items.length} more`}
+                    </>
+                  )}
+                  {o.reason ? ` · ${o.reason}` : ''}
+                </p>
+
+                <p className="mt-0.5 text-[11.5px] text-ink-40">
+                  {o.doctor ?? 'Walk-in test'}
+                  {' · '}
+                  <span className="font-mono">{o.number}</span>
+                  {' · '}
+                  {new Date(o.issuedAt).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
+                  {o.status === 'PARTIALLY_PAID' && ' · part paid'}
+                </p>
+
+                <button
+                  type="button"
+                  className="btn-primary mt-3 w-full !py-2 !text-[13px]"
+                  disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      setCollecting(await api.invoice(o.id));
+                    }, 'Could not open that bill.')
+                  }
+                >
+                  Collect {formatPaise(o.balancePaise)}
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-[13.5px]">
               <thead>
                 <tr className="border-b border-ink/8 bg-bg-soft text-left">

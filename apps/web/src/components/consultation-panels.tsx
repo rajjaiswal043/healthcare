@@ -149,7 +149,7 @@ export function VitalsPanel({ encounter, onSaved, onError, editable }: PanelProp
                   type="number"
                   step={step ?? '1'}
                   inputMode="decimal"
-                  className="field-input mt-1 !py-1.5 text-[13px]"
+                  className="field-input mt-1 !py-1.5 text-[16px] md:text-[13px]"
                   value={draft[key] ?? ''}
                   onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
                 />
@@ -527,19 +527,19 @@ export function PrescriptionsPanel({ encounter, onSaved, onError, editable }: Pa
 
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <input
-              className="field-input !py-1.5 text-[13px]"
+              className="field-input !py-1.5 text-[16px] md:text-[13px]"
               placeholder="Strength"
               value={row.strength}
               onChange={(e) => setRow({ ...row, strength: e.target.value })}
             />
             <input
-              className="field-input !py-1.5 text-[13px]"
+              className="field-input !py-1.5 text-[16px] md:text-[13px]"
               placeholder="Dose"
               value={row.dose}
               onChange={(e) => setRow({ ...row, dose: e.target.value })}
             />
             <input
-              className="field-input !py-1.5 font-mono text-[13px]"
+              className="field-input !py-1.5 font-mono text-[16px] md:text-[13px]"
               placeholder="1-0-1"
               value={row.frequency}
               onChange={(e) => setRow({ ...row, frequency: e.target.value })}
@@ -548,7 +548,7 @@ export function PrescriptionsPanel({ encounter, onSaved, onError, editable }: Pa
               type="number"
               min={1}
               max={365}
-              className="field-input !py-1.5 text-[13px]"
+              className="field-input !py-1.5 text-[16px] md:text-[13px]"
               placeholder="Days"
               value={row.durationDays}
               onChange={(e) => setRow({ ...row, durationDays: e.target.value })}
@@ -574,7 +574,7 @@ export function PrescriptionsPanel({ encounter, onSaved, onError, editable }: Pa
           </div>
 
           <input
-            className="field-input mt-2 !py-1.5 text-[13px]"
+            className="field-input mt-2 !py-1.5 text-[16px] md:text-[13px]"
             placeholder="Instructions — after food, at bedtime"
             value={row.instructions}
             onChange={(e) => setRow({ ...row, instructions: e.target.value })}
@@ -660,7 +660,7 @@ export function AddendaPanel({
           </div>
 
           <textarea
-            className="field-input mt-2 min-h-[80px] text-[13.5px]"
+            className="field-input mt-2 min-h-[80px] text-[16px] md:text-[13.5px]"
             placeholder="What needs correcting or adding?"
             value={text}
             onChange={(e) => setText(e.target.value)}

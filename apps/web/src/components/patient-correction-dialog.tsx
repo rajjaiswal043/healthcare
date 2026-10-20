@@ -154,12 +154,12 @@ export function PatientCorrectionDialog({
       role="dialog"
       aria-modal="true"
       aria-label={`Correct ${patient.name}`}
-      className="fixed inset-0 z-[60] !m-0 grid place-items-center bg-ink/40 p-4"
+      className="fixed inset-0 z-[60] !m-0 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="card max-h-[88vh] w-full max-w-2xl overflow-y-auto p-6">
+      <div className="card max-h-[88vh] w-full max-w-2xl overflow-y-auto p-5 max-sm:rounded-b-none sm:p-6">
         <p className="mono-label">Correct a record</p>
         <h2 className="mt-1 font-display text-[21px] font-bold">{patient.name}</h2>
         <p className="field-hint">

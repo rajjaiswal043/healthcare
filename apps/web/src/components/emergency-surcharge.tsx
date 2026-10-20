@@ -110,7 +110,7 @@ export function EmergencySurcharge({
               onChange={(e) => setTyped(e.target.value)}
               inputMode="decimal"
               aria-label="Surcharge amount in rupees"
-              className="field-input !w-[108px] !py-1.5 !pl-6 text-right font-mono text-[13px] tabular-nums"
+              className="field-input !w-[108px] !py-1.5 !pl-6 text-right font-mono text-[16px] md:text-[13px] tabular-nums"
             />
           </label>
 

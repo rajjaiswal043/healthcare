@@ -514,7 +514,7 @@ function DayBoardScreen() {
             on the 3rd" is a jump, and "take me back to the live board" is the
             one people need most and should never have to think about.
           */}
-          <div className="flex items-center gap-1 rounded-pill border border-ink/12 bg-white p-0.5">
+          <div className="flex flex-1 items-center gap-1 rounded-pill border border-ink/12 bg-white p-0.5 md:flex-none">
             <button
               type="button"
               className="btn-ghost !rounded-pill !px-2 !py-1"
@@ -542,7 +542,7 @@ function DayBoardScreen() {
                 type="date"
                 value={shownDate}
                 onChange={(e) => e.target.value && goToDay(e.target.value)}
-                className="w-[150px] rounded-pill border-0 bg-transparent py-1 pl-7 pr-2 font-mono text-[12.5px] tabular-nums text-ink focus:outline-none"
+                className="w-full rounded-pill border-0 bg-transparent py-1 pl-7 pr-2 font-mono text-[16px] tabular-nums text-ink focus:outline-none md:w-[150px] md:text-[12.5px]"
               />
             </label>
 
@@ -676,7 +676,9 @@ function DayBoardScreen() {
           })}
         </nav>
 
-        <label className="relative ml-auto">
+        {/* Its own full-width row on a phone — 230px beside six tabs is how a
+            390px screen ends up scrolling sideways. Unchanged from md up. */}
+        <label className="relative ml-auto w-full md:w-auto">
           <span className="sr-only">Find someone on this list</span>
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-20">
             <IconSearch size={14} />
@@ -686,7 +688,7 @@ function DayBoardScreen() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Name, UHID or token"
-            className="field-input !w-[230px] !py-1.5 !pl-9 text-[13px]"
+            className="field-input !w-full !py-2 !pl-9 text-[16px] md:!w-[230px] md:!py-1.5 md:text-[13px]"
           />
         </label>
       </div>
@@ -696,7 +698,61 @@ function DayBoardScreen() {
       ) : (
         <>
           <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
+            {/*
+              PHONE FIRST, THEN THE TABLE.
+
+              Ten columns inside a sideways scroll means reading a name and
+              swiping right to reach its button — on the screen the whole clinic
+              lands on. Below `md` each patient is a card instead.
+
+              THE TABLE'S MARKUP IS UNTOUCHED, and hidden rather than rebuilt
+              responsively. A desk at 1280px must render exactly what it
+              rendered yesterday, and the only way to be certain of that is for
+              its markup to be the same markup. The cost is the rows appearing
+              in two places; the rule that keeps that honest is that both read
+              the same `shown` array and the same helpers — `Fee`, `Chip`,
+              `ROW_TONE`, `NextStepAction` — so a fee tag is still defined once.
+            */}
+            <ul className="divide-y divide-ink/6 md:hidden">
+              {shown.map((r) => (
+                <DayBoardCard
+                  key={r.patient.id}
+                  row={r}
+                  showsStage={active.bucket === null}
+                  showsMoney={showsMoney}
+                  can={can}
+                  isToday={isToday}
+                  busy={acting === r.patient.id}
+                  onDo={(step) => void doStep(r, step)}
+                  onSendForTest={
+                    showsSendForTest && r.appointmentId && SENDABLE.has(r.bucket)
+                      ? () => setSendingFor(r)
+                      : null
+                  }
+                  onFinish={
+                    mayAct &&
+                    can('appointment:write') &&
+                    r.bucket === 'WITH_DOCTOR' &&
+                    r.appointmentId &&
+                    firstDoableStep(r.nextSteps, can, isToday)?.kind !== 'FINISH'
+                      ? () => void doStep(r, { kind: 'FINISH', appointmentId: r.appointmentId! })
+                      : null
+                  }
+                />
+              ))}
+
+              {shown.length === 0 && (
+                <li className="px-4 py-12 text-center text-[13.5px] text-ink-40">
+                  {query.trim()
+                    ? `Nobody on this list matches “${query.trim()}”.`
+                    : isToday
+                      ? emptyMessage(active.bucket)
+                      : `Nothing on this list for ${dayLabel(shownDate)}.`}
+                </li>
+              )}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-[13.5px]">
                 <thead>
                   <tr className="border-b border-ink/8 bg-bg-soft text-left">
@@ -1109,6 +1165,167 @@ function NextStepAction({
         <span className="font-mono tabular-nums"> {formatPaise(step.duePaise)}</span>
       )}
     </button>
+  );
+}
+
+/**
+ * One patient, as a card, for a phone.
+ *
+ * The same facts as the table row, ordered by what somebody standing up reads
+ * first: who it is, then where they are, then what is owed, then the one thing
+ * to do about it. The token keeps the prominence it has on the worklist — it is
+ * what the patient is called by.
+ *
+ * Tinted by stage with `ROW_TONE`, exactly as the row is, so the two layouts
+ * say the same thing in the same colours.
+ *
+ * The action is full width at the bottom. A 26px button in a table cell is fine
+ * under a mouse; under a thumb, on the screen that takes the clinic's money, it
+ * is not.
+ */
+function DayBoardCard({
+  row,
+  showsStage,
+  showsMoney,
+  can,
+  isToday,
+  busy,
+  onDo,
+  onSendForTest,
+  onFinish,
+}: {
+  row: DayBoardRow;
+  showsStage: boolean;
+  showsMoney: boolean;
+  can: (permission: string) => boolean;
+  isToday: boolean;
+  busy: boolean;
+  onDo: (step: NextStep) => void;
+  /** Null when this row may not be sent for a test. */
+  onSendForTest: (() => void) | null;
+  /** Null when Done is not an extra action here — see the table's note. */
+  onFinish: (() => void) | null;
+}) {
+  const step = firstDoableStep(row.nextSteps, can, isToday);
+  const hasExtra = onSendForTest !== null || onFinish !== null;
+
+  return (
+    <li className={`px-4 py-3.5 ${ROW_TONE[row.bucket] ?? ''}`}>
+      <div className="flex items-start gap-3">
+        {/* The number they are called by, and the time they are here for. */}
+        <div className="w-[52px] shrink-0 text-center">
+          {row.token === null ? (
+            <span className="mono-label block !text-ink-20">walk-in</span>
+          ) : (
+            <span className="block font-mono text-[19px] font-bold leading-none tabular-nums">
+              #{row.token}
+            </span>
+          )}
+          {row.time && (
+            <span className="mt-1 block font-mono text-[11px] tabular-nums text-ink-40">
+              {row.time}
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/patients/${row.patient.id}`}
+            className="block truncate text-[15px] font-semibold text-ink"
+          >
+            {row.patient.name}
+          </Link>
+
+          <p className="mt-0.5 text-[12px] text-ink-40">
+            <span className="font-mono">{row.patient.uhid}</span>
+            {row.patient.ageYears !== null && (
+              <>
+                {' · '}
+                {formatAge({ ageYears: row.patient.ageYears, birthDate: null })}{' '}
+                {genderInitial(row.patient.gender)}
+              </>
+            )}
+            {row.withWhom ? ` · ${row.withWhom}` : ''}
+          </p>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {showsStage && <Chip tone={BUCKET_TONE[row.bucket]}>{BUCKET_LABEL[row.bucket]}</Chip>}
+            {row.hasVisit && <Chip tone="bg-clinical-soft text-clinical-text">Doctor visit</Chip>}
+            {row.hasTest && <Chip tone="bg-clinical-tint text-clinical-text">Test</Chip>}
+            <Fee label="Fee" state={row.visitFee} />
+            <Fee label="Tests" state={row.testFee} />
+          </div>
+
+          {/* Money on its own line, right where the eye lands after the tags. */}
+          {showsMoney && row.money && row.money.billedPaise > 0 && (
+            <p className="mt-1.5 font-mono text-[12.5px] tabular-nums text-ink-60">
+              {formatPaise(row.money.billedPaise)}
+              {row.money.duePaise > 0 && (
+                <span className="font-semibold text-amber-text">
+                  {' · '}
+                  {formatPaise(row.money.duePaise)} due
+                </span>
+              )}
+              {row.paymentMethods.length > 0 && (
+                <span className="text-ink-40">
+                  {' '}
+                  · {row.paymentMethods.map(payMethodLabel).join(', ')}
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Full width, thumb height. The primary action first, the extras after. */}
+      {(step || hasExtra) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {step &&
+            (step.kind === 'RECEIPT' ? (
+              <PrintReceiptButton
+                paymentId={step.paymentId}
+                className="btn-secondary flex-1 !py-2 !text-[13px]"
+                label="Receipt"
+                iconSize={14}
+              />
+            ) : (
+              <button
+                type="button"
+                className="btn-primary flex-1 !py-2 !text-[13px]"
+                disabled={busy}
+                onClick={() => onDo(step)}
+              >
+                {busy ? '…' : stepLabel(step)}
+                {step.kind === 'COLLECT' && !busy && (
+                  <span className="font-mono tabular-nums"> {formatPaise(step.duePaise)}</span>
+                )}
+              </button>
+            ))}
+
+          {onFinish && (
+            <button
+              type="button"
+              className="btn-secondary !py-2 !text-[13px]"
+              disabled={busy}
+              onClick={onFinish}
+            >
+              Done
+            </button>
+          )}
+
+          {onSendForTest && (
+            <button
+              type="button"
+              className="btn-secondary !py-2 !text-[13px]"
+              disabled={busy}
+              onClick={onSendForTest}
+            >
+              Send for a test
+            </button>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
 

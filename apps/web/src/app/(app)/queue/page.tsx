@@ -255,7 +255,10 @@ export default function QueuePage() {
 
       {queue && (
         <>
-          <div className="grid gap-3 sm:grid-cols-5">
+          {/* Two across on a phone rather than five stacked tiles, which
+              pushed the queue itself below the fold on the one screen whose
+              point is who is waiting. Unchanged from `sm` up. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <Stat label="In the queue" value={String(queue.stats.inQueue)} />
             <Stat label="Waiting" value={String(queue.stats.waiting)} tone="amber" />
             <Stat label="Away for tests" value={String(queue.stats.awayForTests)} />

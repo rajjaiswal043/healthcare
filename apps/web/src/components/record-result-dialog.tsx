@@ -129,12 +129,12 @@ export function RecordResultDialog({
       role="dialog"
       aria-modal="true"
       aria-label={`Record a result for ${row.patient.name}`}
-      className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget && !working) onClose();
       }}
     >
-      <div className="card flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden">
+      <div className="card flex max-h-[85vh] w-full max-sm:rounded-b-none max-w-md flex-col overflow-hidden">
         <div className="border-b border-ink/8 px-6 py-4">
           <p className="mono-label">Record a result</p>
           <h2 className="mt-1 font-display text-[20px] font-bold">{row.patient.name}</h2>

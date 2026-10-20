@@ -43,7 +43,9 @@ export function Pagination({
 
   const items = pageWindow(page, totalPages);
   const cell =
-    'inline-flex h-9 min-w-9 items-center justify-center rounded-tiny px-2 text-[13.5px] font-semibold tabular-nums';
+    // 44px under a thumb, 36px under a mouse. Page numbers sit 6px apart, so
+    // an undersized target here is a mis-tap onto the wrong page.
+    'inline-flex h-11 min-w-11 items-center justify-center rounded-tiny px-2 text-[13.5px] font-semibold tabular-nums md:h-9 md:min-w-9';
   const link = `${cell} border border-ink/10 bg-white text-ink transition-colors hover:border-ink/25 hover:bg-bg-soft`;
   const disabled = `${cell} border border-ink/8 bg-bg-soft text-ink-20`;
 

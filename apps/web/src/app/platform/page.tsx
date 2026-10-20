@@ -871,7 +871,7 @@ export default function PlatformConsole() {
                   id="formatReason"
                   rows={2}
                   maxLength={300}
-                  className="field-input text-[13.5px]"
+                  className="field-input text-[16px] md:text-[13.5px]"
                   placeholder="Dr Vivek asked on the phone — wants DRVIV- instead of DRV"
                   value={formatReason}
                   onChange={(e) => setFormatReason(e.target.value)}

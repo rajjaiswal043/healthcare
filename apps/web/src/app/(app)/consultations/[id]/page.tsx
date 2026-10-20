@@ -466,7 +466,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                     <textarea
                       id={field.key}
                       rows={field.rows}
-                      className="field-input mt-1.5 text-[13.5px]"
+                      className="field-input mt-1.5 text-[16px] md:text-[13.5px]"
                       placeholder={field.placeholder}
                       value={narrative[field.key] ?? ''}
                       onChange={(e) => setNarrative({ ...narrative, [field.key]: e.target.value })}
@@ -488,7 +488,8 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   <input
                     id="followUpDate"
                     type="date"
-                    className="field-input mt-1.5 block max-w-[200px] text-[13.5px]"
+                    // 16px on a phone or iOS zooms the page when this takes focus.
+                    className="field-input mt-1.5 block max-w-[200px] text-[16px] md:text-[13.5px]"
                     value={narrative.followUpDate ?? ''}
                     onChange={(e) => setNarrative({ ...narrative, followUpDate: e.target.value })}
                     onBlur={(e) => void saveField('followUpDate', e.target.value)}
@@ -554,7 +555,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   id="prescriptionNote"
                   rows={3}
                   maxLength={NOTE_MAX_LENGTH}
-                  className="field-input mt-1.5 text-[13.5px]"
+                  className="field-input mt-1.5 text-[16px] md:text-[13.5px]"
                   placeholder="Physiotherapy, precautions, instructions for the pharmacy"
                   value={narrative.prescriptionNote ?? ''}
                   onChange={(e) => setNarrative({ ...narrative, prescriptionNote: e.target.value })}
