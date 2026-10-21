@@ -783,7 +783,7 @@ export default function LoginPage() {
    *
    * The brand panel keeps the white-label rule from auth-shell.tsx: once the
    * slug resolves it wears the CLINIC's logo and name, and before that only the
-   * neutral "Clinic Console" mark.
+   * product "DoctorDesk" mark.
    */
   return (
     <main
@@ -1042,7 +1042,7 @@ function BrandPanel({ clinic }: { clinic: ClinicBrand | null }) {
           <>
             <ConsoleMark size={36} light />
             <span className="font-display text-[20px] font-extrabold tracking-display">
-              Clinic Console
+              DoctorDesk
             </span>
           </>
         )}

@@ -1,5 +1,5 @@
 /**
- * The Clinic Console mark: a pulse line in a rounded tile.
+ * The DoctorDesk mark: a pulse line in a rounded tile.
  *
  * Used on the public front page and the sign-in page before a clinic is known.
  * Deliberately not doctorsdesk.in's `LogoMark` — a clinic's staff never meet

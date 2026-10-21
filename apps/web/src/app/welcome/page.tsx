@@ -1,18 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Josefin_Sans } from 'next/font/google';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { ConsoleMark } from '@/components/console-mark';
 import { HANDMADE_CSS, HandArrow, HandNote } from '@/components/handmade';
-import {
-  readTextSize,
-  saveTextSize,
-  TextSizeToggle,
-  type TextSize,
-} from '@/components/text-size-toggle';
-import { ScrollScene, SectionRail } from '@/components/scroll-scene';
+import { SectionRail } from '@/components/scroll-scene';
 import LoginPage from '../login/page';
 import {
   IconBell,
@@ -37,11 +30,11 @@ import {
  * The public front page.
  *
  * What somebody sees before they have a session: what the console does, and
- * one obvious door — "Staff sign-in", top right — into `/login`. A visitor who
- * already has a session gets "Open console" in the same place instead, so the
- * page never asks a signed-in receptionist to sign in again.
+ * Staff can sign in from the header, while clinic owners can explore the
+ * product and request a demo when contact details are configured. A visitor
+ * who already has a session gets "Open console" instead.
  *
- * Written in the product's own voice ("Clinic Console") and with a mark drawn
+ * Written in the product's own voice ("DoctorDesk") and with a mark drawn
  * here, not doctorsdesk.in's: the white-label rule in auth-shell.tsx still
  * holds, and a clinic that sends its staff here never meets our name.
  *
@@ -56,37 +49,18 @@ import {
  * otherwise leave content hidden have an explicit fallback.
  */
 
-/**
- * The page's one typeface. Geometric, set medium and tight for headings, with
- * small labels in wide-spaced capitals. Only this page uses it: the console
- * keeps its own fonts, and so does the sign-in pop-up, which is the real
- * sign-in page.
- */
-const josefin = Josefin_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-josefin',
-  display: 'swap',
-});
-
 const CSS = `
 /* In-page links (nav, section rail, hero buttons) glide to their section
    instead of jumping. Only present while this page is mounted, so the console
    is unaffected; the global reduced-motion rule turns it back into a jump. */
 html{scroll-behavior:smooth}
-[data-text="large"] main{zoom:1.12}
-/* Josefin for everything on this page except the sign-in pop-up (.wl-keep).
-   The mono font stays, for tokens, times and other data in the drawn screens. */
-.wl-root>:not(.wl-keep){--font-display:var(--font-josefin);--font-sans:var(--font-josefin);font-family:var(--font-josefin),"Helvetica Neue",Arial,sans-serif;letter-spacing:.019em}
-.wl-root>:not(.wl-keep) :is(h1,h2){font-weight:500;letter-spacing:-.05em}
+.wl-root>:not(.wl-keep){font-family:var(--font-sans),ui-sans-serif,system-ui,sans-serif}
+.wl-root>:not(.wl-keep) :is(h1,h2){font-family:var(--font-display),ui-sans-serif,system-ui,sans-serif;font-weight:700;letter-spacing:-.04em}
 .wl-root>:not(.wl-keep) h3{font-weight:600;letter-spacing:-.01em}
-/* Accent words: same face and weight as the heading, set apart by colour. */
-.wl-serif{font-family:inherit;font-style:normal;font-weight:inherit}
-/* Josefin's letters sit high in the line box; nudging buttons down 3px
-   re-centres the text between their edges. */
-.wl-root .wl-btn{text-transform:uppercase;letter-spacing:.2em;font-size:13px;font-weight:500;padding-top:3px}
-.wl-root .wl-nav{text-transform:uppercase;letter-spacing:.2em;font-size:12px;font-weight:500;padding-top:calc(.5rem + 2px)}
-.wl-label{font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:.42em}
+.wl-serif{font-family:inherit;font-style:normal;font-weight:700}
+.wl-root .wl-btn{text-transform:none;letter-spacing:0;font-size:14px;font-weight:600;padding-top:0}
+.wl-root .wl-nav{text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;padding-top:.5rem}
+.wl-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.14em}
 @keyframes wl-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .wl-rise{animation:wl-rise .9s cubic-bezier(.2,.7,.2,1) both}
 @keyframes wl-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
@@ -104,15 +78,13 @@ html{scroll-behavior:smooth}
 .wl-marquee{animation:wl-marquee 45s linear infinite}
 .wl-marquee:hover{animation-play-state:paused}
 @media (prefers-reduced-motion: reduce){.wl-marquee{animation:none}}
-/* Clinic marks: their own colour by day, a lighter one at night. */
-.wl-mark{color:var(--mark)}
-[data-look="night"] .wl-mark{color:var(--mark-night)}
+/* Clinic marks retain a consistent accent on the light landing page. */
 `;
 
 /** Every section the side rail tracks, in page order. */
 const SECTIONS = [
   { id: 'top', label: 'Overview' },
-  { id: 'tour', label: 'Clinic tour' },
+  { id: 'workflow', label: 'How it works' },
   { id: 'features', label: 'Features' },
   { id: 'roles', label: 'Roles' },
   { id: 'display', label: 'Waiting room' },
@@ -169,42 +141,28 @@ const BUSINESS = {
   statusUrl: '',
 };
 
-/**
- * Light or night. Shared with the sign-in page through the same key, so the
- * choice follows the person between them. Until somebody picks, the night look
- * comes on by itself between 10 pm and 5 am.
- */
-const LOOK_KEY = 'healthcloud.look';
-type Look = 'light' | 'night';
-
 const NAV = [
   { href: '#features', label: 'Features' },
+  { href: '#workflow', label: 'How it works' },
   { href: '#roles', label: 'Roles' },
   { href: '#security', label: 'Security' },
   { href: '#faq', label: 'FAQ' },
 ];
 
-/** The header's "Book a demo": the console's dark pill, with the arrow chip. */
+/** The header's "Book a demo", with a small arrow chip. */
 const DEMO_BUTTON =
-  'wl-btn group hidden h-10 items-center gap-2 whitespace-nowrap rounded-pill bg-ink pl-4 pr-3 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-clinical-deep hover:shadow sm:inline-flex';
+  'wl-btn group hidden h-10 items-center gap-2 whitespace-nowrap rounded-pill bg-clinical pl-4 pr-3 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-clinical-text hover:shadow sm:inline-flex';
 
 /** The hero's main button: the big clinical pill, with the arrow chip. */
 const HERO_BUTTON =
-  'wl-btn group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-[0_10px_30px_-10px_rgba(15,118,110,0.7)] transition-all hover:bg-clinical-deep active:translate-y-px';
+  'wl-btn group inline-flex h-[52px] items-center justify-center gap-2.5 rounded-pill bg-clinical px-7 text-[15.5px] font-bold text-white shadow-sm transition-colors hover:bg-clinical-deep active:translate-y-px';
 
 export default function WelcomePage() {
   const { session, loading } = useAuth();
   const signedIn = !loading && !!session;
 
-  const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const primary = signedIn
     ? { href: '/', label: 'Open console', short: 'Console' }
@@ -231,40 +189,18 @@ export default function WelcomePage() {
   const [demoOpen, setDemoOpen] = useState(false);
   const closeDemo = useCallback(() => setDemoOpen(false), []);
 
-  const [look, setLook] = useState<Look>('light');
-
-  /** Standard or larger text, for this page and the sign-in form alike. */
-  const [textSize, setTextSize] = useState<TextSize>('standard');
-  useEffect(() => setTextSize(readTextSize()), []);
-
-  function chooseTextSize(next: TextSize) {
-    setTextSize(next);
-    saveTextSize(next);
-  }
-
   useEffect(() => {
-    let saved: string | null = null;
-    try {
-      saved = window.localStorage.getItem(LOOK_KEY);
-    } catch {
-      // No storage: fall through to the clock.
-    }
-    if (saved === 'light' || saved === 'night') setLook(saved);
-    else {
-      const h = new Date().getHours();
-      if (h >= 22 || h < 5) setLook('night');
-    }
-  }, []);
+    if (!menuOpen) return;
 
-  function toggleLook() {
-    const next: Look = look === 'night' ? 'light' : 'night';
-    setLook(next);
-    try {
-      window.localStorage.setItem(LOOK_KEY, next);
-    } catch {
-      // Remembered for this visit only.
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
     }
-  }
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [menuOpen]);
 
   /**
    * In-page links scroll to their section without touching the address.
@@ -297,13 +233,8 @@ export default function WelcomePage() {
   }, []);
 
   return (
-    <div
-      data-look={look}
-      data-text={textSize}
-      className={`${josefin.variable} wl-root relative isolate min-h-screen overflow-x-clip`}
-    >
+    <div data-look="light" className="wl-root relative isolate min-h-screen overflow-x-clip">
       <style dangerouslySetInnerHTML={{ __html: CSS + HANDMADE_CSS + NIGHT_CSS }} />
-      <ScrollScene />
       <SectionRail sections={SECTIONS} />
 
       {/* First Tab stop: jump past the header straight to the page. Invisible
@@ -316,31 +247,25 @@ export default function WelcomePage() {
       </a>
 
       {/* ==== Header ======================================================= */}
-      <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-4">
-        <div
-          className={`mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 rounded-pill border pl-3 pr-2 transition-all duration-300 sm:pl-4 ${
-            scrolled || menuOpen
-              ? 'border-ink/10 bg-white/80 shadow-[0_10px_30px_-14px_rgba(60,50,35,0.35)] backdrop-blur-xl'
-              : 'border-transparent bg-transparent'
-          }`}
-        >
+      <header className="sticky top-0 z-50 border-b border-ink/8 bg-white/95 px-4 py-2 shadow-sm backdrop-blur sm:px-6">
+        <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-2 sm:h-14 sm:gap-3">
           <Link
             href="/welcome"
-            className="flex items-center gap-2"
-            aria-label="Clinic Console home"
+            className="flex items-center gap-2 text-ink"
+            aria-label="DoctorDesk home"
           >
             <ConsoleMark size={30} />
             <span className="whitespace-nowrap font-display text-[16.5px] font-extrabold tracking-display">
-              Clinic <span className="text-clinical">Console</span>
+              DoctorDesk
             </span>
           </Link>
 
-          <nav className="hidden items-center xl:flex" aria-label="Page sections">
+          <nav className="hidden items-center lg:flex" aria-label="Page sections">
             {NAV.map((n) => (
               <a
                 key={n.href}
                 href={n.href}
-                className="wl-nav rounded-pill px-3.5 py-2 text-[13.5px] font-medium text-ink-60 transition-colors hover:bg-ink/5 hover:text-ink"
+                className="wl-nav rounded-pill px-3.5 py-2 text-[14px] font-medium text-ink-60 transition-colors hover:bg-ink/5 hover:text-ink"
               >
                 {n.label}
               </a>
@@ -348,16 +273,12 @@ export default function WelcomePage() {
           </nav>
 
           <div className="flex items-center gap-1.5">
-            <span className="hidden sm:inline-flex">
-              <TextSizeToggle size={textSize} onChange={chooseTextSize} />
-            </span>
-            <NightToggle look={look} onToggle={toggleLook} />
             {/* Two doors, side by side: an outlined one for staff, a filled one
                 for the clinic owner. Signed-in staff only need the first. */}
             <Link
               href={primary.href}
               onClick={openSignIn}
-              className="wl-btn inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-pill border border-ink/15 bg-white/70 px-4 text-[13.5px] font-semibold text-ink backdrop-blur transition-colors hover:border-clinical/30 hover:bg-white"
+              className="wl-btn inline-flex h-10 items-center gap-2 whitespace-nowrap px-3 text-[14px] font-semibold text-ink-60 transition-colors hover:text-ink"
             >
               {!signedIn && (
                 <span className="hidden text-ink-40 sm:inline-flex">
@@ -378,7 +299,7 @@ export default function WelcomePage() {
                   </span>
                 </button>
               ) : (
-                <a href="#faq" className={DEMO_BUTTON}>
+                <a href="#contact" className={DEMO_BUTTON}>
                   Book a demo
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
                     <ArrowRight size={12} />
@@ -386,9 +307,11 @@ export default function WelcomePage() {
                 </a>
               ))}
             <button
+              ref={menuButtonRef}
               type="button"
-              className="grid h-10 w-10 place-items-center rounded-full text-ink-60 hover:bg-ink/5 xl:hidden"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink-60 transition-colors hover:bg-ink/5 focus-visible:outline-clinical lg:hidden"
               aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-controls="welcome-mobile-menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((o) => !o)}
             >
@@ -399,7 +322,8 @@ export default function WelcomePage() {
 
         {menuOpen && (
           <nav
-            className="mx-auto mt-2 max-w-5xl rounded-card border border-ink/10 bg-white/95 p-2 shadow-lg backdrop-blur-xl xl:hidden"
+            id="welcome-mobile-menu"
+            className="mx-auto mt-2 max-w-5xl rounded-card border border-ink/10 bg-white/95 p-2 shadow-lg backdrop-blur-xl lg:hidden"
             aria-label="Page sections"
           >
             {NAV.map((n) => (
@@ -415,41 +339,62 @@ export default function WelcomePage() {
                 </span>
               </a>
             ))}
+            {!signedIn &&
+              (BUSINESS.email ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setDemoOpen(true);
+                  }}
+                  className="flex min-h-11 w-full items-center justify-between rounded-panel px-4 py-3 text-left text-[15px] font-semibold text-clinical-text hover:bg-clinical-tint"
+                >
+                  Book a demo
+                  <ArrowRight size={14} />
+                </button>
+              ) : (
+                <a
+                  href="#contact"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex min-h-11 items-center justify-between rounded-panel px-4 py-3 text-[15px] font-semibold text-clinical-text hover:bg-clinical-tint"
+                >
+                  Book a demo
+                  <ArrowRight size={14} />
+                </a>
+              ))}
           </nav>
         )}
       </header>
 
       <main id="main" tabIndex={-1} className="outline-none">
         {/* ==== Hero ======================================================= */}
-        <section id="top" className="relative isolate px-4 pb-20 pt-32 sm:px-6 sm:pt-40 lg:pb-28">
-          <HeroBackdrop />
+        <section
+          id="top"
+          className="relative isolate bg-clinical-tint px-4 pb-14 pt-10 text-ink sm:px-6 sm:pb-20 sm:pt-14 lg:pb-24"
+        >
           <div className="mx-auto max-w-6xl">
             {/* Two columns: the statement on the left, a queue you can work on
                 the right. Stacks on phones, statement first. */}
-            <div className="grid items-center gap-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
+            <div className="grid items-start gap-8 md:grid-cols-[1fr_0.9fr] lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
               <div>
                 <p className="wl-rise wl-label text-clinical-text">
                   OPD software for Indian clinics
                 </p>
 
                 <h1
-                  className="wl-rise mt-6 text-[clamp(42px,6.2vw,80px)] font-extrabold leading-[0.98] tracking-[-0.045em]"
+                  className="wl-rise mt-5 max-w-[12ch] text-[clamp(38px,5.4vw,68px)] font-bold leading-[1.02] tracking-[-0.04em]"
                   style={{ animationDelay: '80ms' }}
                 >
-                  {/* Heavy sans for the statement, a real italic serif for the
-                      part that matters. Static on purpose: a headline that
-                      changes while you read it is one more moving thing on a
-                      screen in a busy clinic. */}
-                  One clinic day.{' '}
-                  <span className="wl-serif block text-clinical">One connected workspace.</span>
+                  More time for patients.{' '}
+                  <span className="wl-serif block text-clinical">Less to juggle.</span>
                 </h1>
 
                 <p
                   className="wl-rise mt-7 max-w-[540px] text-[clamp(16px,1.6vw,19px)] leading-relaxed text-ink-60"
                   style={{ animationDelay: '160ms' }}
                 >
-                  Register patients, run the queue, consult, order lab and X-ray tests, and bill,
-                  all in one browser tab.
+                  Register patients, run the queue, consult, order lab and X-ray tests, and bill, all
+                  in one browser tab.
                 </p>
 
                 <div
@@ -473,7 +418,7 @@ export default function WelcomePage() {
                       </span>
                     </button>
                   ) : (
-                    <a href="#faq" className={HERO_BUTTON}>
+                    <a href="#contact" className={HERO_BUTTON}>
                       Book a demo
                       <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
                         <ArrowRight size={15} />
@@ -481,10 +426,10 @@ export default function WelcomePage() {
                     </a>
                   )}
                   <a
-                    href="#tour"
+                    href="#workflow"
                     className="wl-btn self-center text-[16px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical sm:self-auto"
                   >
-                    See a clinic day
+                    See how it works
                   </a>
                 </div>
               </div>
@@ -533,29 +478,26 @@ export default function WelcomePage() {
           </div>
 
           <div
-            className="wl-rise relative mx-auto mt-16 max-w-6xl sm:mt-24"
+            className="wl-rise relative mx-auto mt-12 max-w-6xl sm:mt-16"
             style={{ animationDelay: '420ms' }}
           >
             {/* A margin note, as if someone had marked up a printout. */}
             <span className="absolute -top-16 left-[3%] hidden items-end gap-1 text-coral-text lg:flex">
               <HandNote className="text-[26px]" rotate={-4}>
-                what the front desk sees at 9:30 am
+                A clearer view of the day
               </HandNote>
-              <HandArrow className="-mb-8 h-12 w-16" color="#B23A22" />
+              <HandArrow className="-mb-8 h-12 w-16" />
             </span>
             <ProductWindow />
           </div>
         </section>
 
         {/* ==== Clinic tour =============================================== */}
-        <section
-          id="tour"
-          className="scroll-mt-24 border-y border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
-        >
+        <section id="workflow" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
-                eyebrow="Clinic tour"
+                eyebrow="How it works"
                 title={
                   <>
                     Follow token A-09{' '}
@@ -572,7 +514,10 @@ export default function WelcomePage() {
         </section>
 
         {/* ==== Features bento ============================================ */}
-        <section id="features" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section
+          id="features"
+          className="scroll-mt-24 bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
+        >
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
@@ -581,15 +526,15 @@ export default function WelcomePage() {
                 body="The first patient is easy. By the fortieth the queue is long, the doctor is running late and someone wants a receipt reprinted. Every screen here was drawn with that hour in mind."
               />
             </Reveal>
+            <p className="mt-4 text-[13.5px] text-ink-60">
+              Interface previews use fictional patient names, health details, tokens and amounts.
+            </p>
             <FeatureBento />
           </div>
         </section>
 
         {/* ==== Roles ====================================================== */}
-        <section
-          id="roles"
-          className="scroll-mt-24 border-y border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
-        >
+        <section id="roles" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <SectionHead
@@ -598,7 +543,7 @@ export default function WelcomePage() {
                 body="Front desk, doctor, nurse, owner and admin sign in at the same place and land on what their job needs. Each role has its own colour, so anyone walking past can see whose session is open."
               />
             </Reveal>
-            <RolesShowcase night={look === 'night'} />
+            <RolesShowcase night={false} />
           </div>
         </section>
 
@@ -606,7 +551,7 @@ export default function WelcomePage() {
         <DisplayShowcase />
 
         {/* ==== Security =================================================== */}
-        <section id="security" className="scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+        <section id="security" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.95fr_1.05fr]">
             <Reveal>
               <SectionHead
@@ -683,10 +628,7 @@ export default function WelcomePage() {
         <LogoStrip />
 
         {/* ==== FAQ ======================================================== */}
-        <section
-          id="faq"
-          className="scroll-mt-24 border-t border-ink/8 bg-white/25 px-4 py-24 sm:px-6 lg:py-32"
-        >
+        <section id="faq" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
             <Reveal className="lg:sticky lg:top-28 lg:self-start">
               <SectionHead
@@ -703,7 +645,7 @@ export default function WelcomePage() {
         </section>
 
         {(BUSINESS.pilot.quote || BUSINESS.founder.story) && (
-          <section aria-label="Who is behind it" className="px-4 pb-24 sm:px-6">
+          <section aria-label="Who is behind it" className="bg-white px-4 pb-16 sm:px-6 lg:pb-24">
             <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2">
               {BUSINESS.pilot.quote && BUSINESS.pilot.name && (
                 <Reveal>
@@ -746,16 +688,73 @@ export default function WelcomePage() {
             </div>
           </section>
         )}
+
+        <section id="contact" className="scroll-mt-24 bg-clinical-tint px-4 py-14 sm:px-6 lg:py-20">
+          <div className="mx-auto grid max-w-6xl items-center gap-7 rounded-card-lg border border-ink/8 bg-white p-6 shadow-sm sm:p-9 lg:grid-cols-[1fr_auto] lg:p-12">
+            <div>
+              <p className="eyebrow">A better clinic day starts here</p>
+              <h2 className="mt-3 max-w-2xl text-[clamp(28px,4vw,44px)] font-bold leading-tight tracking-display">
+                See how DoctorDesk can fit your clinic.
+              </h2>
+              <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-60 sm:text-[16px]">
+                {BUSINESS.email || BUSINESS.phone
+                  ? 'Explore the workflow, or get in touch using the contact details below.'
+                  : 'Explore the workflow or get demo information.'}
+              </p>
+              {(BUSINESS.email || BUSINESS.phone) && (
+                <p className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[14px] font-semibold">
+                  {BUSINESS.email && (
+                    <a
+                      className="text-clinical-text underline underline-offset-4"
+                      href={`mailto:${BUSINESS.email}`}
+                    >
+                      {BUSINESS.email}
+                    </a>
+                  )}
+                  {BUSINESS.phone && (
+                    <a
+                      className="text-clinical-text underline underline-offset-4"
+                      href={`tel:${BUSINESS.phone.replace(/[^\d+]/g, '')}`}
+                    >
+                      {BUSINESS.phone}
+                    </a>
+                  )}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+              {!signedIn &&
+                (BUSINESS.email ? (
+                  <button
+                    type="button"
+                    onClick={() => setDemoOpen(true)}
+                    className="btn-primary min-h-11 whitespace-nowrap"
+                  >
+                    Book a demo
+                    <ArrowRight size={15} />
+                  </button>
+                ) : (
+                  <a href="#faq" className="btn-primary min-h-11 whitespace-nowrap">
+                    Book a demo
+                    <ArrowRight size={15} />
+                  </a>
+                ))}
+              <a href="#workflow" className="btn-secondary min-h-11 whitespace-nowrap">
+                See how it works
+              </a>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* ==== Footer ======================================================= */}
-      <footer className="border-t border-ink/8 bg-bg-soft px-4 sm:px-6">
+      <footer className="bg-clinical-tint px-4 text-ink sm:px-6">
         <div className="mx-auto grid max-w-6xl gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
             <span className="flex items-center gap-2">
               <ConsoleMark size={28} />
               <span className="font-display text-[16px] font-extrabold tracking-display">
-                Clinic <span className="text-clinical">Console</span>
+                DoctorDesk
               </span>
             </span>
             <p className="mt-4 max-w-xs text-[13.5px] leading-relaxed text-ink-40">
@@ -767,8 +766,22 @@ export default function WelcomePage() {
                   <span className="block font-semibold text-ink">{BUSINESS.companyName}</span>
                 )}
                 {BUSINESS.address && <span className="block">{BUSINESS.address}</span>}
-                {BUSINESS.phone && <span className="block select-all">{BUSINESS.phone}</span>}
-                {BUSINESS.email && <span className="block select-all">{BUSINESS.email}</span>}
+                {BUSINESS.phone && (
+                  <a
+                    className="block select-all hover:text-clinical-text"
+                    href={`tel:${BUSINESS.phone.replace(/[^\d+]/g, '')}`}
+                  >
+                    {BUSINESS.phone}
+                  </a>
+                )}
+                {BUSINESS.email && (
+                  <a
+                    className="block select-all hover:text-clinical-text"
+                    href={`mailto:${BUSINESS.email}`}
+                  >
+                    {BUSINESS.email}
+                  </a>
+                )}
               </address>
             )}
           </div>
@@ -783,7 +796,7 @@ export default function WelcomePage() {
         </div>
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 border-t border-ink/8 py-6 sm:flex-row">
           <p className="text-[12.5px] text-ink-40">
-            © {new Date().getFullYear()} {BUSINESS.companyName || 'Clinic Console'}
+            © {new Date().getFullYear()} {BUSINESS.companyName || 'DoctorDesk'}
           </p>
           <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12.5px] text-ink-40">
             {BUSINESS.privacyUrl && (
@@ -880,7 +893,7 @@ function Modal({
       <div
         aria-hidden="true"
         onClick={onClose}
-        className="wl-fade absolute inset-0 bg-[#0c1a19]/45 backdrop-blur-md"
+        className="wl-fade absolute inset-0 bg-ink/45 backdrop-blur-md"
       />
       <div
         ref={panelRef}
@@ -1135,24 +1148,6 @@ function SectionHead({
   );
 }
 
-function HeroBackdrop() {
-  return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, rgba(22,24,28,0.055) 1px, transparent 1px), linear-gradient(to bottom, rgba(22,24,28,0.055) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-          maskImage: 'radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 100%)',
-          WebkitMaskImage:
-            'radial-gradient(ellipse 70% 55% at 50% 0%, black 30%, transparent 100%)',
-        }}
-      />
-    </div>
-  );
-}
-
 /* -------------------------------------------------------------------------- */
 /*  Hero queue demo                                                            */
 /* -------------------------------------------------------------------------- */
@@ -1185,12 +1180,7 @@ function QueueDemo() {
   return (
     <figure className="relative mx-auto max-w-[540px]">
       {/* The soft disc behind the card */}
-      <div
-        aria-hidden="true"
-        className="absolute left-1/2 top-1/2 -z-10 aspect-square w-[118%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-clinical-tint/70"
-      />
-
-      <div className="rounded-[28px] border border-ink/10 bg-white p-5 shadow-[0_30px_80px_-30px_rgba(40,50,45,0.35)] sm:p-6">
+      <div className="rounded-card border border-ink/10 bg-white p-5 shadow-sm sm:p-6">
         <span className="badge-amber">Interactive demo · Sample data</span>
         <p className="mono-label mt-4">OPD queue · Dr. A. Kulkarni</p>
         <p className="mt-1.5 text-[19px] font-extrabold tracking-[-0.02em] text-ink">
@@ -1257,7 +1247,8 @@ function QueueDemo() {
       </div>
 
       <figcaption className="mt-5 text-center text-[13.5px] text-ink-40">
-        Try &ldquo;Call next&rdquo;. Names and amounts are illustrative.
+        Try &ldquo;Call next&rdquo; — it changes only this preview. Names and amounts are
+        illustrative.
       </figcaption>
     </figure>
   );
@@ -1319,13 +1310,14 @@ function TourResult({
 }
 
 /**
- * The three stops of one visit. Every bullet is something the console does:
+ * Four stops of one visit. Every bullet is something the console does:
  * registration issues a UHID and a token together, tests are ordered and read
  * inside the consultation, payments take cash, UPI, card or a mix of them.
  */
 const TOUR_STEPS: {
   stop: string;
   time: string;
+  icon: ReactNode;
   eyebrow: string;
   title: string;
   points: string[];
@@ -1334,6 +1326,7 @@ const TOUR_STEPS: {
   {
     stop: 'Front desk',
     time: '9:05',
+    icon: <IconUserPlus size={16} />,
     eyebrow: 'Reception',
     title: 'Registered before they sit down.',
     points: [
@@ -1359,8 +1352,22 @@ const TOUR_STEPS: {
     ),
   },
   {
+    stop: 'Queue',
+    time: '9:12',
+    icon: <IconClock size={16} />,
+    eyebrow: 'Queue management',
+    title: 'Everyone knows who is next.',
+    points: [
+      'Reception can see the line for each doctor.',
+      'Call the next token without changing a patient record.',
+      'The sample controls on this page only change this preview.',
+    ],
+    card: <QueueDemo />,
+  },
+  {
     stop: 'Doctor',
     time: '9:20',
+    icon: <IconCalendar size={16} />,
     eyebrow: 'Consultation',
     title: 'One screen for the whole consult.',
     points: [
@@ -1406,6 +1413,7 @@ const TOUR_STEPS: {
   {
     stop: 'Checkout',
     time: '10:10',
+    icon: <IconReceipt size={16} />,
     eyebrow: 'Billing',
     title: 'Paid, printed and on their way.',
     points: [
@@ -1449,7 +1457,7 @@ const TOUR_STEPS: {
 ];
 
 /**
- * Three stops along a dashed line, with the token riding on the current one,
+ * Four stops along a dashed line, with the token riding on the current one,
  * and the screen for that stop underneath. Back, next, or click any stop.
  */
 function ClinicTour() {
@@ -1459,10 +1467,10 @@ function ClinicTour() {
 
   return (
     <div className="mt-14">
-      <ol className="relative grid grid-cols-3" aria-label="Stops in the visit">
+      <ol className="relative grid grid-cols-4" aria-label="Steps in a clinic visit">
         <span
           aria-hidden="true"
-          className="absolute left-[16.66%] right-[16.66%] top-[54px] border-t-2 border-dashed border-ink/15"
+          className="absolute left-[12.5%] right-[12.5%] top-[54px] border-t-2 border-dashed border-ink/15"
         />
         {TOUR_STEPS.map((s, i) => {
           const active = i === step;
@@ -1472,7 +1480,9 @@ function ClinicTour() {
                 type="button"
                 onClick={() => setStep(i)}
                 aria-current={active ? 'step' : undefined}
-                className="group flex flex-col items-center rounded-card px-2 pb-2 text-center"
+                aria-label={`${s.stop}, step ${i + 1} of ${TOUR_STEPS.length}`}
+                aria-controls="workflow-preview"
+                className="group flex min-w-0 flex-col items-center rounded-card px-0 pb-2 text-center sm:px-2"
               >
                 <span
                   className={`mb-2 h-7 rounded-[8px] px-2.5 font-mono text-[13px] font-bold leading-7 text-white transition-opacity ${
@@ -1483,7 +1493,7 @@ function ClinicTour() {
                   A-09
                 </span>
                 <span
-                  className={`relative grid h-9 w-9 place-items-center rounded-full font-mono text-[14px] font-bold transition-colors ${
+                  className={`relative grid h-9 w-9 place-items-center rounded-full transition-colors ${
                     active
                       ? 'bg-clinical text-white ring-4 ring-clinical/20'
                       : i < step
@@ -1491,16 +1501,16 @@ function ClinicTour() {
                         : 'border-2 border-ink/15 bg-bg-soft text-ink-60 group-hover:border-clinical/30'
                   }`}
                 >
-                  {i < step ? <IconCheck size={15} /> : i + 1}
+                  {i < step ? <IconCheck size={15} /> : s.icon}
                 </span>
                 <span
-                  className={`mt-3 text-[clamp(15px,1.6vw,18px)] font-bold ${
+                  className={`mt-3 max-w-full text-[12px] font-bold leading-tight sm:text-[16px] ${
                     active ? 'text-clinical-text' : 'text-ink'
                   }`}
                 >
                   {s.stop}
                 </span>
-                <span className="mt-1 whitespace-nowrap font-mono text-[11px] text-ink-40 sm:text-[12.5px]">
+                <span className="mt-1 text-[9px] leading-tight text-ink-40 sm:text-[12px]">
                   Step {i + 1} · {s.time}
                 </span>
               </button>
@@ -1511,6 +1521,10 @@ function ClinicTour() {
 
       <div
         key={step}
+        id="workflow-preview"
+        role="region"
+        aria-label={`${current.stop} preview`}
+        aria-live="polite"
         className="wl-fade mt-12 grid items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16"
       >
         <div>
@@ -1568,15 +1582,11 @@ function ClinicTour() {
 const PREVIEW_CLINICS: {
   name: string;
   kind: string;
-  color: string;
-  night: string;
   mark: ReactNode;
 }[] = [
   {
     name: 'Neemgrove',
     kind: 'Clinic',
-    color: '#0F5E57',
-    night: '#4CC3B3',
     mark: (
       <>
         <path d="M6 26C6 13 15 6 28 6c0 13-7 22-20 22Z" fill="currentColor" />
@@ -1587,8 +1597,6 @@ const PREVIEW_CLINICS: {
   {
     name: 'Tulsivan',
     kind: 'Children’s care',
-    color: '#6E8B3D',
-    night: '#9DBB66',
     mark: (
       <>
         <path d="M17 8c4 6 7 10 7 14a7 7 0 0 1-14 0c0-4 3-8 7-14Z" fill="currentColor" />
@@ -1605,8 +1613,6 @@ const PREVIEW_CLINICS: {
   {
     name: 'Saffron Hill',
     kind: 'Eye centre',
-    color: '#A8792B',
-    night: '#D9A94F',
     mark: (
       <>
         <circle cx="17" cy="17" r="5.5" fill="currentColor" />
@@ -1622,8 +1628,6 @@ const PREVIEW_CLINICS: {
   {
     name: 'Ridgeway',
     kind: 'Family health',
-    color: '#B4615E',
-    night: '#E08F8B',
     mark: (
       <path
         d="M3 27 12 13l5 7 5-9 9 16Z"
@@ -1637,8 +1641,6 @@ const PREVIEW_CLINICS: {
   {
     name: 'Monsoon Street',
     kind: 'Diagnostics',
-    color: '#45698C',
-    night: '#8FB3D6',
     mark: (
       <>
         <path
@@ -1657,8 +1659,6 @@ const PREVIEW_CLINICS: {
   {
     name: 'Pebble Bay',
     kind: 'Dental',
-    color: '#6B4A6B',
-    night: '#C49AC4',
     mark: (
       <path
         d="M11 6c-4 0-6 3-6 7 0 5 2 7 3 13 .4 2.5 3.4 2.5 4 0l1.6-6c.5-2 3.3-2 3.8 0l1.6 6c.6 2.5 3.6 2.5 4 0 1-6 3-8 3-13 0-4-2-7-6-7-2.5 0-3.5 1.5-4.5 1.5S13.5 6 11 6Z"
@@ -1684,8 +1684,7 @@ function LogoStrip() {
             viewBox="0 0 34 34"
             width="44"
             height="44"
-            className="wl-mark"
-            style={{ '--mark': c.color, '--mark-night': c.night } as React.CSSProperties}
+            className="text-clinical"
             aria-hidden="true"
           >
             {c.mark}
@@ -1702,7 +1701,10 @@ function LogoStrip() {
   );
 
   return (
-    <section aria-labelledby="logo-preview" className="px-4 pb-24 pt-8 sm:px-6 lg:pb-28">
+    <section
+      aria-labelledby="logo-preview"
+      className="bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
+    >
       <div className="mx-auto max-w-6xl text-center">
         <p className="flex items-center justify-center gap-5">
           <span aria-hidden="true" className="h-px w-12 bg-ink/15 sm:w-20" />
@@ -1858,7 +1860,7 @@ function ProductWindow() {
             </span>
             <span className="mx-auto flex max-w-xs flex-1 items-center justify-center gap-1.5 truncate rounded-pill border border-ink/8 bg-white px-3 py-1 font-mono text-[10.5px] text-ink-40">
               <IconLock size={10} />
-              sunrise-clinic · queue
+              Sunrise Clinic · sample data
             </span>
             <span className="w-10" />
           </div>
@@ -3169,12 +3171,15 @@ function AdminScreen({ tone }: { tone: RoleTone }) {
 
 function DisplayShowcase() {
   return (
-    <section id="display" className="relative scroll-mt-24 px-4 py-24 sm:px-6 lg:py-32">
+    <section
+      id="display"
+      className="relative scroll-mt-24 bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
+    >
       <div className="mx-auto max-w-6xl">
         <Reveal className="grid items-end gap-6 lg:grid-cols-2 lg:gap-16">
           <div>
-            <p className="flex items-baseline gap-3 text-[14px] font-semibold">
-              <span className="text-ink-60">Waiting room</span>
+            <p className="flex items-baseline gap-3">
+              <span className="wl-label text-clinical-text">Waiting room</span>
               <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
             </p>
             <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-ink">
@@ -3208,7 +3213,7 @@ function DisplayShowcase() {
                       SC
                     </span>
                     <span>
-                      <span className="eyebrow">Now serving</span>
+                      <span className="eyebrow">Sample display · now serving</span>
                       <span className="block font-display text-[clamp(18px,2.4vw,26px)] font-bold leading-tight tracking-display">
                         Sunrise Clinic
                       </span>
@@ -3405,6 +3410,12 @@ function AuditLog() {
  * the people who need it already are.
  */
 const FAQ: ReadonlyArray<{ q: string; a: string }> = [
+  {
+    q: 'How can I book a demo?',
+    a: BUSINESS.email
+      ? `Use any “Book a demo” button to prepare a request for ${BUSINESS.email}.`
+      : 'Demo contact details have not been configured on this page yet. Once an email or phone number is added, you can use the contact links here to arrange a demo.',
+  },
   {
     q: 'Do we need to install anything?',
     a: 'No. It runs in any modern browser (Chrome, Edge, Firefox or Safari) on the desk PCs, laptops or tablets you already have. A waiting-room TV only needs a browser too.',
@@ -3640,48 +3651,3 @@ const NIGHT_CSS =
     '.bg-\\[\\#e2e6f6\\]': 'background-color:rgba(143,160,230,.18)',
     '.text-\\[\\#2b3a75\\]': 'color:#B9C4F0',
   });
-
-/** The header's sun/moon switch between the light and night looks. */
-function NightToggle({ look, onToggle }: { look: Look; onToggle: () => void }) {
-  const night = look === 'night';
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={night}
-      aria-label={night ? 'Switch to the light look' : 'Switch to the night look'}
-      title={night ? 'Light look' : 'Night look'}
-      className="grid h-10 w-10 place-items-center rounded-full border border-ink/10 bg-white/80 text-ink-60 backdrop-blur transition-colors hover:border-ink/20 hover:text-ink"
-    >
-      {night ? (
-        <svg
-          width="17"
-          height="17"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.9}
-          strokeLinecap="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
-        </svg>
-      ) : (
-        <svg
-          width="17"
-          height="17"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.9}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
-        </svg>
-      )}
-    </button>
-  );
-}
