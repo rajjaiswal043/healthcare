@@ -393,8 +393,8 @@ export default function WelcomePage() {
                   className="wl-rise mt-7 max-w-[540px] text-[clamp(16px,1.6vw,19px)] leading-relaxed text-ink-60"
                   style={{ animationDelay: '160ms' }}
                 >
-                  Register patients, run the queue, consult, order lab and X-ray tests, and bill, all
-                  in one browser tab.
+                  Register patients, run the queue, consult, order lab and X-ray tests, and bill,
+                  all in one browser tab.
                 </p>
 
                 <div
