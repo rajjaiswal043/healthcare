@@ -108,7 +108,6 @@ async function book(
       patientId: fx.main.patientIds[options.patientIndex ?? 0],
       practitionerId: fx.main.practitionerId,
       locationId: fx.main.locationId,
-      departmentId: fx.main.departmentId,
       startAt,
       reasonForVisit: 'Fever for three days',
     },
@@ -1233,11 +1232,11 @@ describe('whose queue you may read', () => {
     const [row] = await ownerQuery<{ id: string }>(
       fx.main.id,
       `INSERT INTO practitioner
-         (tenant_id, full_name, registration_number, specialty, department_id,
+         (tenant_id, full_name, registration_number, specialty,
           overbook_per_session, updated_at)
-       VALUES ($1, 'Dr Second Opinion', 'TEST-0002', 'Dermatology', $2, 0, now())
+       VALUES ($1, 'Dr Second Opinion', 'TEST-0002', 'Dermatology', 0, now())
        RETURNING id`,
-      [fx.main.id, fx.main.departmentId],
+      [fx.main.id],
     );
     return row!.id;
   }

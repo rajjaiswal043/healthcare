@@ -137,6 +137,18 @@ overrides:
   #                 checker the Nest CLI runs in watch mode.
   source-map-js: '>=1.2.2'
 
+  # --- 22 Oct 2026 -------------------------------------------------------
+  #
+  #   vite        — GHSA-587h-7wmj-h5pm, launch-editor's `fs.existsSync()`
+  #                 existence check. Fixed in 8.2.4; the tree held 8.2.0.
+  #                 Dev-only: all six paths are vitest > @vitest/mocker > vite,
+  #                 so this is the test runner's bundler and nothing ships it.
+  #
+  #                 CARET, NOT '>='. This file already records two open ranges
+  #                 that jumped a major and broke their caller — nanoid to 6,
+  #                 js-yaml to 5. The fix is inside 8.x; stay in it.
+  vite: '^8.2.4'
+
 # -----------------------------------------------------------------------------
 # IGNORED ADVISORIES
 #

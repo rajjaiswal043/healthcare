@@ -28,6 +28,8 @@ const CHECK_IN: NextStep = { kind: 'CHECK_IN', appointmentId: 'appt-1' };
 const START: NextStep = { kind: 'START', appointmentId: 'appt-1' };
 const RESUME: NextStep = { kind: 'RESUME', appointmentId: 'appt-1' };
 const FINISH: NextStep = { kind: 'FINISH', appointmentId: 'appt-1' };
+const BRING_BACK: NextStep = { kind: 'BRING_BACK', appointmentId: 'appt-1' };
+const CLOSE_VISIT: NextStep = { kind: 'CLOSE_VISIT', appointmentId: 'appt-1' };
 const RECORD: NextStep = { kind: 'RECORD_RESULT', orderId: 'ord-1' };
 const RECEIPT: NextStep = { kind: 'RECEIPT', paymentId: 'pay-1' };
 
@@ -112,8 +114,34 @@ describe('the words on the button', () => {
     expect(stepLabel(CHECK_IN)).toBe('Check in');
     expect(stepLabel(START)).toBe('Start');
     expect(stepLabel(RESUME)).toBe('Open');
-    expect(stepLabel(FINISH)).toBe('Done');
+    // Named for what it finishes: a test can also be done, and a visit can
+    // also be closed, so a bare "Done" meant one of three things depending on
+    // where you were looking.
+    expect(stepLabel(FINISH)).toBe('OPD done');
     expect(stepLabel(RECORD)).toBe('Record result');
     expect(stepLabel(RECEIPT)).toBe('Receipt');
+
+    // The two halves of the 22 Oct split. Both are the desk moving a patient
+    // on rather than anything clinical, which is why both read as instructions
+    // to a receptionist.
+    expect(stepLabel(BRING_BACK)).toBe('Bring back in');
+    expect(stepLabel(CLOSE_VISIT)).toBe('Close visit');
+  });
+
+  it('keeps both new steps with the desk, not the doctor', () => {
+    // Bringing somebody back from a department and sending them home are
+    // movements through the clinic. A doctor holding no `appointment:write`
+    // must not be offered either.
+    expect(firstDoableStep([BRING_BACK], DESK, true)).toEqual(BRING_BACK);
+    expect(firstDoableStep([CLOSE_VISIT], DESK, true)).toEqual(CLOSE_VISIT);
+    expect(firstDoableStep([BRING_BACK], DOCTOR, true)).toBeNull();
+    expect(firstDoableStep([CLOSE_VISIT], DOCTOR, true)).toBeNull();
+  });
+
+  it('will not move a patient through a day that has already happened', () => {
+    // Closing a visit from last Tuesday would record today's decision against
+    // a patient who left days ago.
+    expect(firstDoableStep([BRING_BACK], DESK, false)).toBeNull();
+    expect(firstDoableStep([CLOSE_VISIT], DESK, false)).toBeNull();
   });
 });

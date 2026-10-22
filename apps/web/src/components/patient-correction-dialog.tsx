@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import { IconAlert, IconCheck } from '@/components/icons';
 import { looksLikeAPersonName } from '@/lib/person-name';
+import { INDIAN_STATES } from '@/lib/india';
 
 const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNKNOWN'] as const;
 /**
@@ -254,7 +255,12 @@ export function PatientCorrectionDialog({
 
           <Field label="Address" value={form.addressLine} onChange={(v) => set('addressLine', v)} />
           <Field label="City" value={form.city} onChange={(v) => set('city', v)} />
-          <Field label="State" value={form.state} onChange={(v) => set('state', v)} />
+          <Field
+            label="State"
+            value={form.state}
+            onChange={(v) => set('state', v)}
+            options={INDIAN_STATES}
+          />
           <Field
             label="PIN"
             value={form.postalCode}
@@ -315,12 +321,15 @@ function Field({
   onChange,
   type = 'text',
   hint,
+  options,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   hint?: string;
+  /** A fixed set of answers. Given these, the field becomes a list. */
+  options?: readonly string[];
 }) {
   const id = label.toLowerCase().replace(/\s+/g, '-');
 
@@ -329,13 +338,35 @@ function Field({
       <label htmlFor={id} className="field-label">
         {label}
       </label>
-      <input
-        id={id}
-        type={type}
-        className="field-input !py-2"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {options ? (
+        /* A correction screen that lets somebody type a state by hand undoes
+           the dropdown on the registration screen — the register ends up with
+           both "Uttar Pradesh" and "U.P." and no report can group by either.
+           The blank option matters: a patient registered before this field
+           existed has no state, and the dialog must be able to show that
+           without silently inventing one. */
+        <select
+          id={id}
+          className="field-input !py-2"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Not recorded</option>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          id={id}
+          type={type}
+          className="field-input !py-2"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
       {hint && <span className="field-hint block">{hint}</span>}
     </div>
   );

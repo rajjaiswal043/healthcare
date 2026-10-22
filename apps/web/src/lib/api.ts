@@ -136,6 +136,11 @@ export interface CurrentSession {
    * a choice it would then refuse.
    */
   practitionerId: string | null;
+  /**
+   * The room this person works in — set for the diagnostics role and null for
+   * everybody else. The test worklist opens on it.
+   */
+  department: { id: string; name: string } | null;
 }
 
 /**
@@ -195,7 +200,16 @@ export interface ClinicRole {
 }
 
 export type DayBucket =
-  'EXPECTED' | 'WAITING' | 'WITH_DOCTOR' | 'AT_DEPARTMENT' | 'DONE' | 'NOT_ATTENDING';
+  | 'EXPECTED'
+  | 'WAITING'
+  | 'WITH_DOCTOR'
+  | 'AT_DEPARTMENT'
+  /** Their test is back and the doctor has not seen it. They are in the corridor. */
+  | 'BACK_FROM_TESTS'
+  /** The doctor has finished; nobody has said the visit is over. Still here. */
+  | 'READY_TO_CLOSE'
+  | 'DONE'
+  | 'NOT_ATTENDING';
 
 /** Where a bill stands, without saying how much. Null when nothing was charged. */
 export type FeeTag = 'PAID' | 'PENDING' | null;
@@ -230,7 +244,9 @@ export type NextStep =
   | { kind: 'CHECK_IN'; appointmentId: string }
   | { kind: 'START'; appointmentId: string }
   | { kind: 'RESUME'; appointmentId: string }
+  | { kind: 'BRING_BACK'; appointmentId: string }
   | { kind: 'FINISH'; appointmentId: string }
+  | { kind: 'CLOSE_VISIT'; appointmentId: string }
   | { kind: 'RECORD_RESULT'; orderId: string }
   | { kind: 'RECEIPT'; paymentId: string };
 
@@ -241,6 +257,10 @@ export interface DayBoardRow {
   appointmentId: string | null;
   hasVisit: boolean;
   hasTest: boolean;
+  /** The doctor has finished — "OPD done". True whether or not the visit is closed. */
+  opdDone: boolean;
+  /** The department that finished their tests — "X-ray done". Null while any is pending. */
+  testsDoneIn: string | null;
   token: number | null;
   withWhom: string | null;
   time: string | null;
@@ -263,6 +283,8 @@ export interface DayBoard {
     expected: number;
     waiting: number;
     with_doctor: number;
+    back_from_tests: number;
+    ready_to_close: number;
     at_department: number;
     done: number;
     not_attending: number;
@@ -346,6 +368,8 @@ export interface StaffUser {
   mfaEnrolled: boolean;
   createdAt: string;
   roles: Array<{ key: string; name: string }>;
+  /** Which room they work in. Set for the diagnostics role, null otherwise. */
+  department: { id: string; name: string } | null;
 }
 
 export interface WeeklySession {
@@ -374,7 +398,6 @@ export interface SetupPractitioner {
   followUpFeePaise: number | null;
   overbookPerSession: number;
   isActive: boolean;
-  department: { id: string; name: string } | null;
   schedules: WeeklySession[];
   /**
    * What decides whether this doctor can be deleted: any appointment, of any
@@ -617,6 +640,12 @@ export interface DiagnosticOrder {
   /** The charge raised for it. Null for a free-text order and for legacy ones. */
   invoiceLineId: string | null;
   /**
+   * What this one test was charged, in paise — the line's total, not the
+   * invoice's. Null when nothing was charged. This is what the requisition slip
+   * prints, which is why it is the charged amount and not the list price.
+   */
+  chargedPaise: number | null;
+  /**
    * Where this test stands with the money. UNPAID and VOID block the result;
    * LEGACY and NOT_BILLED are shown for information and never block.
    */
@@ -778,11 +807,35 @@ export interface ClinicalDocument {
 export interface Department {
   id: string;
   name: string;
-  /**
-   * X-ray, pathology. Absent from the booking list entirely, so this is only
-   * ever set on departments read through `setupDepartments`.
-   */
-  isDiagnostic?: boolean;
+  displayOrder?: number;
+  isActive?: boolean;
+}
+
+/** A test priced inside the department that performs it. */
+export interface DepartmentTest {
+  id: string;
+  /** Generated, permanent, and what reports group by. Shown, never edited. */
+  code: string;
+  name: string;
+  pricePaise: number;
+  taxRateBasisPoints: number;
+  isActive: boolean;
+}
+
+/**
+ * A department as Settings → Departments sees it: the room, who works in it and
+ * what it does.
+ *
+ * The three arrive together because they are one screen's worth of a single
+ * question — "what is this room for" — and splitting them across endpoints is
+ * what let a department exist with no tests and no staff and nothing on any
+ * screen to say so.
+ */
+export interface ManagedDepartment extends Department {
+  staff: Array<{ id: string; fullName: string }>;
+  tests: DepartmentTest[];
+  /** Orders ever sent here — what retiring it would strand. */
+  orderCount: number;
 }
 
 /**
@@ -819,7 +872,6 @@ export interface Practitioner {
    * `consultationPrice` on the finance desk.
    */
   consultationFeePaise: number | null;
-  department: { id: string; name: string } | null;
 }
 
 export interface ClinicLocation {
@@ -1331,10 +1383,42 @@ export interface OutstandingInvoice {
 }
 
 export const api = {
-  departments: () => request<{ departments: Department[] }>('/departments'),
+  /**
+   * Every department, retired ones included — the settings screen's list.
+   *
+   * Each one carries its staff and its tests. Callers that only need a picker
+   * read `id` and `name` and ignore the rest; `ManagedDepartment` extends
+   * `Department`, so they need no change.
+   */
+  setupDepartments: async (): Promise<{
+    departments: ManagedDepartment[];
+    /** Priced tests attached to no department, which cannot be ordered. */
+    unassignedTests: DepartmentTest[];
+  }> => {
+    const { departments, unassignedTests } = await request<{
+      departments: Array<
+        Department & {
+          staff?: Array<{ id: string; fullName: string }>;
+          services?: DepartmentTest[];
+          _count?: { diagnosticOrders: number };
+        }
+      >;
+      unassignedTests?: DepartmentTest[];
+    }>('/setup/departments');
 
-  /** Setup's view — includes diagnostic departments, which booking hides. */
-  setupDepartments: () => request<{ departments: Department[] }>('/setup/departments'),
+    /* `services` on the wire, `tests` on the screen: the table is called one
+       thing and the clinic calls it the other. Renamed here, once, rather than
+       in every component that draws a row. */
+    return {
+      departments: departments.map((d) => ({
+        ...d,
+        staff: d.staff ?? [],
+        tests: d.services ?? [],
+        orderCount: d._count?.diagnosticOrders ?? 0,
+      })),
+      unassignedTests: unassignedTests ?? [],
+    };
+  },
 
   /** The clinic's patient ID format. Read-only — changing it is the platform's job. */
   patientIdFormat: () => request<PatientIdFormat>('/settings/patient-ids'),
@@ -1369,14 +1453,26 @@ export const api = {
       `/diagnostics/catalogue${departmentId ? `?departmentId=${departmentId}` : ''}`,
     ),
 
+  /**
+   * The department's work.
+   *
+   * `date` absent means EVERY day, not today — a test ordered yesterday
+   * evening is still waiting this morning, and a to-do list that hid it would
+   * lose the patient who came back for it.
+   */
   diagnosticWorklist: (
-    params: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' | 'DECLINED' } = {},
+    params: {
+      departmentId?: string;
+      status?: 'PENDING' | 'COMPLETED' | 'DECLINED';
+      date?: string;
+    } = {},
   ) => {
     const query = new URLSearchParams();
     if (params.departmentId) query.set('departmentId', params.departmentId);
     if (params.status) query.set('status', params.status);
+    if (params.date) query.set('date', params.date);
     const suffix = query.toString();
-    return request<{ orders: DiagnosticOrder[] }>(
+    return request<{ orders: DiagnosticOrder[]; date: string | null }>(
       `/diagnostics/orders${suffix ? `?${suffix}` : ''}`,
     );
   },
@@ -1395,6 +1491,14 @@ export const api = {
     departmentId: string;
     serviceId?: string;
     description?: string;
+    /**
+     * What to charge for this one, when it is not the list price.
+     *
+     * Omitted means the catalogue price. Send it only when somebody actually
+     * changed the amount — an order that accepted the default should not be
+     * recorded as one that was priced by hand.
+     */
+    pricePaise?: number;
     referralSource?: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
     referrerName?: string;
     referrerClinic?: string;
@@ -1939,7 +2043,14 @@ export const api = {
     request<{ approvers: Array<{ id: string; fullName: string }> }>('/users/approvers'),
 
   /** The temporary password comes back ONCE. */
-  createStaff: (input: { email: string; fullName: string; mobile?: string; roleKeys: string[] }) =>
+  createStaff: (input: {
+    email: string;
+    fullName: string;
+    mobile?: string;
+    roleKeys: string[];
+    /** Required when `roleKeys` includes diagnostics; the server enforces it. */
+    departmentId?: string;
+  }) =>
     request<{ id: string; email: string; fullName: string; temporaryPassword: string }>('/users', {
       method: 'POST',
       body: JSON.stringify(input),
@@ -1957,10 +2068,45 @@ export const api = {
    * `mobile: null` clears a stored number. The form sends '' for that and the
    * server maps it; see `UpdateUserDto`.
    */
-  updateStaff: (id: string, input: { fullName?: string; mobile?: string | null }) =>
+  /**
+   * Correct a staff record.
+   *
+   * `departmentId` is the room a diagnostics member of staff works in. Omitted
+   * leaves it alone; the server refuses a diagnostics login that would be left
+   * without one, and clears it for anybody whose diagnostics role is withdrawn.
+   */
+  updateStaff: (
+    id: string,
+    input: { fullName?: string; mobile?: string | null; departmentId?: string },
+  ) =>
     request<StaffUser>(`/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(input),
+    }),
+
+  /**
+   * Their tests are back — put them in the waiting list for the doctor.
+   *
+   * `seeNext` because they have already waited once: `returnFromTests` stamps
+   * a BACK_FROM_TESTS priority so they go in front of people who have not been
+   * seen at all, rather than to the back of the queue they already sat in.
+   */
+  bringBackFromTests: (appointmentId: string) =>
+    request<{ id: string; status: string }>(`/appointments/${appointmentId}/return`, {
+      method: 'PATCH',
+      body: JSON.stringify({ seeNext: true }),
+    }),
+
+  /**
+   * Say the visit is over.
+   *
+   * Distinct from the doctor finishing: this is the desk sending the patient
+   * home. Allowed with money still owed — the bill stays open and the finance
+   * desk keeps chasing it — but refused while a test is still out.
+   */
+  closeVisit: (appointmentId: string) =>
+    request<{ id: string; status: string }>(`/appointments/${appointmentId}/close`, {
+      method: 'PATCH',
     }),
 
   setStaffActive: (id: string, isActive: boolean) =>
@@ -1976,10 +2122,41 @@ export const api = {
       '/setup/practitioners',
     ),
 
-  createDepartment: (name: string, isDiagnostic = false) =>
+  createDepartment: (name: string) =>
     request<Department>('/departments', {
       method: 'POST',
-      body: JSON.stringify({ name, isDiagnostic }),
+      body: JSON.stringify({ name }),
+    }),
+
+  /**
+   * Rename, reorder or retire a department.
+   *
+   * Every field optional: the settings screen sends only what changed, so a
+   * rename cannot accidentally reset the order and a reorder cannot rename.
+   */
+  updateDepartment: (
+    id: string,
+    input: { name?: string; displayOrder?: number; isActive?: boolean },
+  ) =>
+    request<Department>(`/departments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  /**
+   * Price a test inside a department.
+   *
+   * No code and no category: the server generates the one and knows the other.
+   * A price CHANGE goes through `upsertService` like any other price, keyed on
+   * the code this returns.
+   */
+  addDepartmentTest: (
+    departmentId: string,
+    input: { name: string; pricePaise: number; taxRateBasisPoints?: number },
+  ) =>
+    request<DepartmentTest>(`/departments/${departmentId}/tests`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
 
   createPractitioner: (input: {
@@ -2085,7 +2262,18 @@ export const api = {
       '/setup/services',
     ),
 
-  /** Switch a service off, or back on. There is no delete — FR-PRC-03. */
+  /**
+   * Delete a service outright. Refused with `SERVICE_IN_USE` once anything has
+   * been billed or ordered against it — switch those off instead.
+   */
+  deleteService: (id: string) =>
+    request<{ id: string; name: string }>(`/setup/services/${id}`, { method: 'DELETE' }),
+
+  /**
+   * Switch a service off, or back on. The usual way to retire one: it keeps
+   * every past bill and report explainable, which a delete cannot once the
+   * service has been used.
+   */
   setServiceActive: (id: string, isActive: boolean) =>
     request<PricedService>(`/setup/services/${id}/active`, {
       method: 'PATCH',

@@ -510,8 +510,19 @@ model User {
   failedLoginCount Int       @default(0) @map("failed_login_count")
   lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(6)
 
+  /// Which room this member of staff works in.
+  ///
+  /// For the diagnostics role: the X-ray technician is not the pathology
+  /// technician, and their worklist should open on their own department. Null
+  /// for every other role — a receptionist belongs to no department, and the
+  /// rule that diagnostics staff need one is enforced in `UsersService`, where
+  /// the roles are known.
+  departmentId String? @map("department_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull, map: "app_user_department_fkey")
 
   roles    UserRole[]
   uploadedDocuments ClinicalDocument[]
@@ -527,6 +538,9 @@ model User {
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
+  /// Answers "who works in this department", which is what the department
+  /// screen asks for every row it draws.
+  @@index([tenantId, departmentId], map: "app_user_department_idx")
   @@map("app_user")
 }
 
@@ -663,18 +677,20 @@ model Department {
   tenantId String @map("tenant_id") @db.Uuid
 
   name String @db.VarChar(120)
-  /// X-ray, pathology. No appointment slots, absent from booking: nobody books
-  /// an appointment with radiology, a doctor sends them there mid-visit.
-  isDiagnostic Boolean @default(false) @map("is_diagnostic")
-  /// Sort order on the booking screen â€” clinics want their busiest first.
+  /// Sort order in the pickers — clinics want their busiest first.
   displayOrder Int     @default(0) @map("display_order")
   isActive     Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  practitioners Practitioner[]
-  appointments  Appointment[]
+  /// A department is a place that does TESTS. It no longer holds doctors or
+  /// appointments — `specialty` describes a doctor, and nobody books an
+  /// appointment with radiology. See the departments_do_tests_only migration.
+  ///
+  /// It does hold the STAFF who work in it, which is a different claim: a
+  /// technician works in a room, a doctor does not.
+  staff         User[]
   diagnosticOrders DiagnosticOrder[]
   services      Service[]
 
@@ -683,7 +699,7 @@ model Department {
   @@map("department")
 }
 
-/// A doctor. FHIR: Practitioner (+ PractitionerRole for the department link).
+/// A doctor. FHIR: Practitioner.
 ///
 /// registrationNumber is not optional in spirit: the Telemedicine Guidelines and
 /// the Drugs rules both require a doctor's registration number on prescriptions
@@ -704,9 +720,10 @@ model Practitioner {
   hprId              String? @map("hpr_id") @db.VarChar(64)
 
   qualification String? @db.VarChar(200)
+  /// What this doctor does — "Orthopaedics", "Physician". THE one answer:
+  /// there used to be a `departmentId` beside it saying the same thing in a
+  /// second place, and the screens that mattered already preferred this.
   specialty     String? @db.VarChar(120)
-
-  departmentId String? @map("department_id") @db.Uuid
 
   /// Set when the doctor also signs in â€” lets "my day list" resolve without a
   /// separate mapping table. Null for doctors who never use the software.
@@ -732,7 +749,6 @@ model Practitioner {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   schedules    PractitionerSchedule[]
   exceptions   ScheduleException[]
@@ -740,7 +756,6 @@ model Practitioner {
   encounters   Encounter[]
 
   @@index([tenantId, isActive])
-  @@index([tenantId, departmentId])
   @@map("practitioner")
 }
 
@@ -903,7 +918,6 @@ model Appointment {
   patientId      String  @map("patient_id") @db.Uuid
   practitionerId String  @map("practitioner_id") @db.Uuid
   locationId     String  @map("location_id") @db.Uuid
-  departmentId   String? @map("department_id") @db.Uuid
 
   startAt DateTime @map("start_at") @db.Timestamptz(6)
   endAt   DateTime @map("end_at") @db.Timestamptz(6)
@@ -959,6 +973,21 @@ model Appointment {
   calledAt    DateTime? @map("called_at") @db.Timestamptz(6)
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
 
+  /// When somebody said this visit was over, and who.
+  ///
+  /// NOT the same fact as FULFILLED, which says the DOCTOR has finished. A
+  /// patient can be fulfilled and still in the building: waiting on a film,
+  /// waiting to pay, waiting to be sent on their way. "Done" on the board used
+  /// to mean both, and the front desk needs the second one.
+  ///
+  /// Set by a press rather than derived — Narveer's call, 22 Oct 2026 — so
+  /// every closed visit carries a person and a time rather than an inference.
+  /// Null means still open, which is what the board's "Ready to close" queue
+  /// counts. Null closer on a non-null time means the 22 Oct migration closed
+  /// it: every visit from before that day was already over.
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(6)
+  closedByUserId String?   @map("closed_by_user_id") @db.Uuid
+
   // --- lifecycle ---------------------------------------------------------
   cancelledAt       DateTime? @map("cancelled_at") @db.Timestamptz(6)
   cancelReason      String?   @map("cancel_reason") @db.VarChar(300)
@@ -977,7 +1006,6 @@ model Appointment {
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
   practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
-  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   encounter    Encounter?
   /// Tests the patient needs that this centre does not perform (decision (b)).
   ///
@@ -1004,6 +1032,8 @@ model Appointment {
   @@index([tenantId, patientId, startAt])
   @@index([tenantId, practitionerId, queueDate, status])
   @@index([tenantId, practitionerId, queueDate, prioritySetAt, readyAt], map: "appointment_queue_order_idx")
+  /// "What is still open", which the board asks on every load.
+  @@index([tenantId, closedAt], map: "appointment_open_idx")
   diagnosticOrders DiagnosticOrder[]
 
   @@map("appointment")

@@ -63,15 +63,95 @@ export class ClinicSetupService {
   async listDepartments(tenantId: string) {
     const departments = await this.prisma.forTenant(tenantId, (tx) =>
       tx.department.findMany({
-        where: { isActive: true },
-        orderBy: [{ isDiagnostic: 'asc' }, { displayOrder: 'asc' }, { name: 'asc' }],
-        select: { id: true, name: true, isDiagnostic: true },
+        /**
+         * RETIRED ONES INCLUDED. This is the list the settings screen manages,
+         * and a screen that hides what it switched off is a screen that cannot
+         * switch it back on. Callers that need a picker filter to `isActive`
+         * themselves, at the point where the choice is offered.
+         */
+        orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          displayOrder: true,
+          isActive: true,
+          /**
+           * WHO WORKS IN THIS ROOM. Switched-off logins left out: the question
+           * the screen asks is "who covers X-ray", and a member of staff who
+           * has left does not.
+           */
+          staff: {
+            where: { isActive: true },
+            orderBy: { fullName: 'asc' },
+            select: { id: true, fullName: true },
+          },
+
+          /**
+           * WHAT THIS ROOM DOES, AND WHAT IT COSTS.
+           *
+           * A department is a place that does tests, so its tests are not a
+           * detail an administrator goes elsewhere to find — they are the
+           * contents of the room. Withdrawn ones included, for the same reason
+           * the retired departments are: a list that hides what it switched off
+           * cannot switch it back on.
+           */
+          services: {
+            orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              pricePaise: true,
+              taxRateBasisPoints: true,
+              isActive: true,
+            },
+          },
+
+          /**
+           * What retiring it would strand. The test count used to live here too
+           * and no longer needs to — the tests themselves are in the row.
+           */
+          _count: { select: { diagnosticOrders: true } },
+        },
       }),
     );
-    return { departments };
+
+    /**
+     * TESTS THAT BELONG TO NO ROOM.
+     *
+     * A test is only orderable if its service names a department, so these can
+     * be billed and never ordered — and now that tests are managed on the
+     * department rather than on the price list, they would have no screen at
+     * all. Returned alongside so the one screen that owns tests can say they
+     * exist and offer them a room.
+     *
+     * Not a migration's job: which room an ECG is done in is a question about
+     * the clinic, and guessing it in SQL would put tests somewhere nobody
+     * chose.
+     */
+    const unassignedTests = await this.prisma.forTenant(tenantId, (tx) =>
+      tx.service.findMany({
+        where: { departmentId: null, category: 'DIAGNOSTIC' },
+        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          pricePaise: true,
+          taxRateBasisPoints: true,
+          isActive: true,
+        },
+      }),
+    );
+
+    return { departments, unassignedTests };
   }
 
-  async createDepartment(tenantId: string, name: string, meta: RequestMeta, isDiagnostic = false) {
+  /**
+   * A new department. There is no "kind" to choose any more — every department
+   * is a place that does tests, so the only state it has is open or retired.
+   */
+  async createDepartment(tenantId: string, name: string, meta: RequestMeta) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const clash = await tx.department.findFirst({ where: { name: name.trim() } });
       if (clash) {
@@ -82,8 +162,8 @@ export class ClinicSetupService {
       }
 
       const created = await tx.department.create({
-        data: { tenantId, name: name.trim(), isDiagnostic },
-        select: { id: true, name: true, displayOrder: true, isActive: true, isDiagnostic: true },
+        data: { tenantId, name: name.trim() },
+        select: { id: true, name: true, displayOrder: true, isActive: true },
       });
 
       await this.audit.record(tx, tenantId, {
@@ -101,7 +181,7 @@ export class ClinicSetupService {
   async updateDepartment(
     tenantId: string,
     id: string,
-    input: { name?: string; displayOrder?: number; isActive?: boolean; isDiagnostic?: boolean },
+    input: { name?: string; displayOrder?: number; isActive?: boolean },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
@@ -113,7 +193,6 @@ export class ClinicSetupService {
         data: {
           ...(input.name === undefined ? {} : { name: input.name.trim() }),
           ...(input.displayOrder === undefined ? {} : { displayOrder: input.displayOrder }),
-          ...(input.isDiagnostic === undefined ? {} : { isDiagnostic: input.isDiagnostic }),
           ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
         },
         select: { id: true, name: true, displayOrder: true, isActive: true },
@@ -145,14 +224,12 @@ export class ClinicSetupService {
           registrationNumber: true,
           qualification: true,
           specialty: true,
-          departmentId: true,
           userId: true,
           previousUserId: true,
           consultationFeePaise: true,
           followUpFeePaise: true,
           overbookPerSession: true,
           isActive: true,
-          department: { select: { id: true, name: true } },
           schedules: {
             where: { isActive: true },
             orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
@@ -226,7 +303,6 @@ export class ClinicSetupService {
       registrationNumber?: string;
       qualification?: string;
       specialty?: string;
-      departmentId?: string;
       userId?: string;
       consultationFeePaise?: number;
       followUpFeePaise?: number;
@@ -248,7 +324,6 @@ export class ClinicSetupService {
           registrationNumber: input.registrationNumber ?? null,
           qualification: input.qualification ?? null,
           specialty: input.specialty ?? null,
-          departmentId: input.departmentId ?? null,
           userId: input.userId ?? null,
           consultationFeePaise: input.consultationFeePaise ?? null,
           followUpFeePaise: input.followUpFeePaise ?? null,
@@ -775,6 +850,95 @@ export class ClinicSetupService {
   }
 
   /**
+   * Price a test inside the department that performs it (FR-PRC-01).
+   *
+   * THE SAME `service` TABLE, REACHED THE WAY AN ADMINISTRATOR THINKS ABOUT IT.
+   * A test is a priced service whose department says where it is done — that is
+   * what makes it orderable at all. Asking for it on the price list meant
+   * choosing a category and a department correctly, and getting either wrong
+   * produced a test that could be billed but never ordered, or a catalogue that
+   * looked empty. Here the department is the screen you are on and the category
+   * is not a question.
+   *
+   * THE CODE IS GENERATED, NOT ASKED FOR. Reports group by it and it never
+   * changes, which is exactly why nobody pricing an X-ray should have to invent
+   * one. It is derived from the room and the test, and a collision takes a
+   * numeric suffix rather than silently upserting over somebody else's price —
+   * `upsertService` keys on the code, so a clash there would overwrite.
+   */
+  async addDepartmentTest(
+    tenantId: string,
+    departmentId: string,
+    input: { name: string; pricePaise: number; taxRateBasisPoints?: number },
+    meta: RequestMeta,
+  ) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const department = await tx.department.findUnique({
+        where: { id: departmentId },
+        select: { id: true, name: true, isActive: true },
+      });
+      if (!department) throw new NotFoundException('That department does not exist.');
+
+      if (!department.isActive) {
+        throw new BadRequestException({
+          code: 'DEPARTMENT_INACTIVE',
+          message: `“${department.name}” is retired. Bring it back before pricing tests in it.`,
+        });
+      }
+
+      const name = input.name.trim();
+
+      /* Two tests with one name in one room is a slip, not a catalogue: the
+         person ordering would be choosing between identical lines. Checked
+         case-insensitively, because "X-ray knee" and "X-Ray Knee" are the same
+         mistake. */
+      const clash = await tx.service.findFirst({
+        where: { departmentId: department.id, name: { equals: name, mode: 'insensitive' } },
+        select: { id: true, isActive: true },
+      });
+      if (clash) {
+        throw new ConflictException({
+          code: 'TEST_EXISTS',
+          message: clash.isActive
+            ? `“${name}” is already priced in ${department.name}.`
+            : `“${name}” exists in ${department.name} but is switched off. Switch it back on instead.`,
+        });
+      }
+
+      const service = await tx.service.create({
+        data: {
+          tenantId,
+          code: await freeServiceCode(tx, department.name, name),
+          name,
+          /* Not a choice. A department does tests; that is the whole concept. */
+          category: 'DIAGNOSTIC' as never,
+          pricePaise: input.pricePaise,
+          taxRateBasisPoints: input.taxRateBasisPoints ?? 0,
+          departmentId: department.id,
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          pricePaise: true,
+          taxRateBasisPoints: true,
+          isActive: true,
+        },
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'service.upsert',
+        resourceType: 'Service',
+        resourceId: service.id,
+        changedFields: ['name', 'pricePaise', 'departmentId', 'category'],
+        ...meta,
+      });
+
+      return service;
+    });
+  }
+
+  /**
    * Create a service, or change one that exists.
    *
    * **`isActive` is not touched unless the caller says so**, and that is a fix
@@ -856,6 +1020,73 @@ export class ClinicSetupService {
       });
 
       return service;
+    });
+  }
+
+  /**
+   * Delete a service outright — but only one nothing has used.
+   *
+   * FR-PRC-03 SAYS SWITCH OFF, NEVER DELETE, AND THAT STILL HOLDS for anything
+   * that has been billed or ordered: reporting groups by service, and a deleted
+   * one makes last month's figures unexplainable. What makes this safe is the
+   * narrowness of what it will touch.
+   *
+   * THE DANGER IS QUIETER THAN A FAILED DELETE. `invoice_line.service_id` and
+   * `diagnostic_order.service_id` are both ON DELETE SET NULL, so the database
+   * would not stop this — it would accept it and silently cut every past line
+   * and order loose from the service that explains it. The bill itself stays
+   * readable, because an invoice line copies the name and price as charged, but
+   * the reporting link is gone and nothing on any screen would say so. So the
+   * references are counted first and a used service is refused.
+   *
+   * What is left is the case this exists for: a test priced by mistake, or
+   * named wrongly and re-added, that nobody has been charged for and nobody has
+   * been sent for. Switching that off leaves a row an administrator has to keep
+   * scrolling past forever.
+   */
+  async deleteService(tenantId: string, id: string, meta: RequestMeta) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const service = await tx.service.findUnique({
+        where: { id },
+        select: { id: true, name: true, code: true },
+      });
+      if (!service) throw new NotFoundException('Service not found');
+
+      /* Sequential, not Promise.all: both run on the one transaction client,
+         which cannot have two queries in flight. */
+      const billed = await tx.invoiceLine.count({ where: { serviceId: id } });
+      const ordered = await tx.diagnosticOrder.count({ where: { serviceId: id } });
+
+      if (billed > 0 || ordered > 0) {
+        const used = [
+          billed > 0 ? `${billed} ${billed === 1 ? 'bill' : 'bills'}` : null,
+          ordered > 0 ? `${ordered} ${ordered === 1 ? 'order' : 'orders'}` : null,
+        ]
+          .filter(Boolean)
+          .join(' and ');
+
+        throw new ConflictException({
+          code: 'SERVICE_IN_USE',
+          message:
+            `“${service.name}” is on ${used}. Switch it off instead — ` +
+            'deleting it would cut those records loose from what they were for.',
+        });
+      }
+
+      await tx.service.delete({ where: { id } });
+
+      /* Recorded BEFORE the row is gone is impossible inside one statement, so
+         the audit carries the name and code: after this commits they are the
+         only trace left of what was removed. */
+      await this.audit.record(tx, tenantId, {
+        action: 'service.delete',
+        resourceType: 'Service',
+        resourceId: id,
+        changedFields: [service.code, service.name],
+        ...meta,
+      });
+
+      return { id, name: service.name };
     });
   }
 
@@ -1131,4 +1362,42 @@ function isUniqueViolation(err: unknown): boolean {
   } | null;
   const pg = e?.meta?.driverAdapterError?.cause;
   return (pg?.code ?? pg?.originalCode) === '23505' || e?.code === 'P2002';
+}
+
+/**
+ * A code for a test priced inside its department — `XRAY-KNEE`, derived.
+ *
+ * The code is the permanent handle: `upsertService` keys on it and reports group
+ * by it, which is why an administrator must never have to think one up and why a
+ * generated one must never land on an existing row. The room goes in the prefix
+ * because the test name alone is not distinct — "Knee" is an X-ray and an MRI,
+ * and in two rooms that would be one code.
+ *
+ * A collision still takes a suffix. The checked clash is per department, so two
+ * rooms with names that slug the same ("X-Ray" and "X Ray") can reach the same
+ * candidate; a `-2` is worth having over an upsert that overwrites a price
+ * somebody set.
+ */
+async function freeServiceCode(
+  tx: TenantClient,
+  departmentName: string,
+  testName: string,
+): Promise<string> {
+  const slug = (text: string): string =>
+    text
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  const base = `${slug(departmentName).slice(0, 12)}-${slug(testName)}`.slice(0, 40) || 'TEST';
+
+  for (let n = 1; n <= 50; n += 1) {
+    const candidate = n === 1 ? base : `${base}-${n}`;
+    const taken = await tx.service.findFirst({ where: { code: candidate }, select: { id: true } });
+    if (!taken) return candidate;
+  }
+
+  /* Fifty rooms' worth of the same name is not a clinic; it is a loop. A random
+     tail is still a usable code and beats failing the save. */
+  return `${base.slice(0, 36)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }

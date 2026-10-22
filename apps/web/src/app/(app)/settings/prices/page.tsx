@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiRequestError, type PricedService } from '@/lib/api';
 import { formatPaise, parseRupeesToPaise } from '@/lib/format';
 import { IconAlert, IconCheck, IconSearch, IconX } from '@/components/icons';
@@ -24,14 +25,22 @@ import { IconAlert, IconCheck, IconSearch, IconX } from '@/components/icons';
  * receipt — reading what was actually charged. That is FR-PRC-03, and it is a
  * property of the data model rather than of this page; the page simply has no
  * path to an invoice line.
+ *
+ * TESTS ARE NOT HERE. They are priced on the department that performs them,
+ * under Settings -> Departments — because a test is only orderable if its
+ * service names a department, and asking for that on this screen meant an
+ * administrator could price an X-ray that no X-ray room could ever be sent. The
+ * room is the one place where the department cannot be got wrong. This page
+ * links to them rather than listing them, so the count below is not a silent
+ * omission.
  */
 
-const CATEGORIES = ['CONSULTATION', 'PROCEDURE', 'DIAGNOSTIC', 'CONSUMABLE', 'OTHER'] as const;
+/** Diagnostics is absent on purpose — see the note above. */
+const CATEGORIES = ['CONSULTATION', 'PROCEDURE', 'CONSUMABLE', 'OTHER'] as const;
 
 const CATEGORY_LABEL: Record<string, string> = {
   CONSULTATION: 'Consultations',
   PROCEDURE: 'Procedures',
-  DIAGNOSTIC: 'Diagnostics',
   CONSUMABLE: 'Consumables',
   OTHER: 'Other',
 };
@@ -39,14 +48,15 @@ const CATEGORY_LABEL: Record<string, string> = {
 interface Draft {
   name: string;
   category: string;
-  departmentId: string;
   rupees: string;
   taxPercent: string;
 }
 
 export default function PricesPage() {
+  /** Everything but the tests. Those belong to their department. */
   const [services, setServices] = useState<PricedService[]>([]);
-  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  /** How many tests are priced elsewhere, so this page can say where. */
+  const [testCount, setTestCount] = useState(0);
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(true);
 
@@ -58,7 +68,6 @@ export default function PricesPage() {
     code: '',
     name: '',
     category: 'CONSULTATION',
-    departmentId: '',
     rupees: '',
     taxPercent: '0',
   });
@@ -69,8 +78,11 @@ export default function PricesPage() {
   const load = useCallback(async () => {
     try {
       const data = await api.priceList();
-      setServices(data.services);
-      setDepartments(data.departments);
+      /* Split on arrival rather than filtered in the render: the counts in the
+         header are about what this page can actually change, and a test is not
+         one of those things. */
+      setServices(data.services.filter((s) => s.category !== 'DIAGNOSTIC'));
+      setTestCount(data.services.filter((s) => s.category === 'DIAGNOSTIC').length);
       setError(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not load the prices.');
@@ -94,11 +106,7 @@ export default function PricesPage() {
     const matching = services.filter((s) => {
       if (!showInactive && !s.isActive) return false;
       if (needle === '') return true;
-      return (
-        s.name.toLowerCase().includes(needle) ||
-        s.code.toLowerCase().includes(needle) ||
-        (s.department?.name.toLowerCase().includes(needle) ?? false)
-      );
+      return s.name.toLowerCase().includes(needle) || s.code.toLowerCase().includes(needle);
     });
 
     return CATEGORIES.map((category) => ({
@@ -125,7 +133,6 @@ export default function PricesPage() {
     setDraft({
       name: service.name,
       category: service.category,
-      departmentId: service.department?.id ?? '',
       rupees: (service.pricePaise / 100).toFixed(2),
       taxPercent: String(service.taxRateBasisPoints / 100),
     });
@@ -157,7 +164,8 @@ export default function PricesPage() {
           category: draft.category,
           pricePaise,
           taxRateBasisPoints: Math.round(taxPercent * 100),
-          departmentId: draft.departmentId === '' ? null : draft.departmentId,
+          // `departmentId` is deliberately NOT sent either. Absent means "leave
+          // it alone", and nothing on this page is attached to a department.
           // `isActive` is deliberately NOT sent. Editing a price must not
           // revive a service somebody withdrew — that was the bug.
         });
@@ -190,14 +198,12 @@ export default function PricesPage() {
           category: newRow.category,
           pricePaise,
           taxRateBasisPoints: Math.round(taxPercent * 100),
-          departmentId: newRow.departmentId === '' ? null : newRow.departmentId,
         });
         setAdding(false);
         setNewRow({
           code: '',
           name: '',
           category: 'CONSULTATION',
-          departmentId: '',
           rupees: '',
           taxPercent: '0',
         });
@@ -278,21 +284,6 @@ export default function PricesPage() {
               </select>
             </label>
             <label>
-              <span className="field-label">Department</span>
-              <select
-                className="field-input"
-                value={newRow.departmentId}
-                onChange={(e) => setNewRow({ ...newRow, departmentId: e.target.value })}
-              >
-                <option value="">None</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
               <span className="field-label">Price in rupees</span>
               <input
                 className="field-input font-mono"
@@ -336,6 +327,19 @@ export default function PricesPage() {
         </section>
       )}
 
+      {/* Said plainly, because a price list that is missing the tests without
+          explaining where they are is a price list an administrator does not
+          trust. */}
+      <p className="text-[13px] text-ink-60">
+        Tests are priced on the department that performs them.{' '}
+        <Link href="/settings/departments" className="underline">
+          {testCount === 0
+            ? 'Set them up under Departments'
+            : `${testCount} ${testCount === 1 ? 'test' : 'tests'} under Departments`}
+        </Link>
+        .
+      </p>
+
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex min-w-[240px] flex-1 items-center">
           <span className="pointer-events-none absolute left-3.5 text-ink-20">
@@ -345,7 +349,7 @@ export default function PricesPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="field-input-icon"
-            placeholder="Search by name, code or department"
+            placeholder="Search by name or code"
             autoComplete="off"
           />
         </div>
@@ -388,7 +392,7 @@ export default function PricesPage() {
                   return (
                     <li key={service.id} className={service.isActive ? '' : 'bg-bg-soft'}>
                       {isEditing ? (
-                        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
+                        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
                           <label className="lg:col-span-2">
                             <span className="field-label">Name</span>
                             <input
@@ -407,21 +411,6 @@ export default function PricesPage() {
                               {CATEGORIES.map((c) => (
                                 <option key={c} value={c}>
                                   {CATEGORY_LABEL[c]}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span className="field-label">Department</span>
-                            <select
-                              className="field-input"
-                              value={draft.departmentId}
-                              onChange={(e) => setDraft({ ...draft, departmentId: e.target.value })}
-                            >
-                              <option value="">None</option>
-                              {departments.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  {d.name}
                                 </option>
                               ))}
                             </select>
@@ -447,7 +436,7 @@ export default function PricesPage() {
                             </label>
                           </div>
 
-                          <div className="flex items-end gap-2 lg:col-span-5">
+                          <div className="flex items-end gap-2 lg:col-span-4">
                             <button
                               type="button"
                               className="btn-primary"
@@ -479,7 +468,6 @@ export default function PricesPage() {
                             </p>
                             <p className="truncate text-[12.5px] text-ink-40">
                               <span className="font-mono">{service.code}</span>
-                              {service.department ? ` · ${service.department.name}` : ''}
                               {service.taxRateBasisPoints > 0
                                 ? ` · ${service.taxRateBasisPoints / 100}% tax`
                                 : ''}

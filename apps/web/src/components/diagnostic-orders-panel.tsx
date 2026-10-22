@@ -14,6 +14,7 @@ import { useAuth } from '@/components/auth-provider';
 import { IconAlert, IconCheck, IconStethoscope } from '@/components/icons';
 import { TestBillingBadge } from '@/components/test-billing-badge';
 import { PatientTestHistory } from '@/components/patient-test-history';
+import { PrintTestSlipButton } from '@/components/test-slip-button';
 
 /**
  * Tests, inside the consultation.
@@ -438,6 +439,19 @@ export function DiagnosticOrdersPanel({
                   >
                     {openId === o.id ? 'Hide' : 'View result'}
                   </button>
+                )}
+
+                {/* A reprint, for the slip the patient folded into a pocket and
+                    lost on the way to the department. Only while the test is
+                    still waiting: once it is back, the slip is a request for
+                    work already done. */}
+                {o.status === 'PENDING' && (
+                  <PrintTestSlipButton
+                    order={o}
+                    className="text-[12.5px] font-semibold text-clinical-text underline underline-offset-2"
+                    label="Slip"
+                    iconSize={12}
+                  />
                 )}
 
                 {o.status === 'PENDING' && mayOrder && editable && (

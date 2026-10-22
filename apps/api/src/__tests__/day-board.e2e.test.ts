@@ -47,6 +47,8 @@ interface Row {
   bucket: string;
   hasVisit: boolean;
   hasTest: boolean;
+  opdDone: boolean;
+  testsDoneIn: string | null;
   token: number | null;
   withWhom: string | null;
   visitFee: string | null;
@@ -86,7 +88,7 @@ beforeAll(async () => {
     method: 'POST',
     url: '/api/v1/departments',
     headers: { cookie: admin.cookie },
-    payload: { name: 'Board X-ray', isDiagnostic: true },
+    payload: { name: 'Board X-ray' },
   });
   expect(created.statusCode).toBe(201);
   departmentId = created.json<{ id: string }>().id;
@@ -142,8 +144,9 @@ async function board(session: Session = frontDesk): Promise<Board> {
 }
 
 /** An appointment TODAY in `status`, for `patientIndex`, with this clinic's doctor. */
-async function visit(status: string, patientIndex = 0, hoursFromNow = 1) {
-  await ownerQuery(
+async function visit(status: string, patientIndex = 0, hoursFromNow = 1): Promise<string> {
+  // Returns the id, because the tests that close a visit have to name one.
+  const rows = await ownerQuery<{ id: string }>(
     fx.main.id,
     `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
                               start_at, end_at, queue_date, status, visit_type, updated_at)
@@ -151,7 +154,8 @@ async function visit(status: string, patientIndex = 0, hoursFromNow = 1) {
              now() + ($5 || ' hours')::interval,
              now() + ($5 || ' hours')::interval + interval '15 minutes',
              (now() AT TIME ZONE 'Asia/Kolkata')::date,
-             $6::appointment_status, 'NEW', now())`,
+             $6::appointment_status, 'NEW', now())
+     RETURNING id`,
     [
       fx.main.id,
       fx.main.patientIds[patientIndex],
@@ -161,10 +165,18 @@ async function visit(status: string, patientIndex = 0, hoursFromNow = 1) {
       status,
     ],
   );
+
+  return rows[0]!.id;
 }
 
-/** A test TODAY in `status`. With no appointment it is a walk-in. */
-async function test(status: string, patientIndex = 0) {
+/**
+ * A test TODAY in `status`. With no appointment it is a walk-in.
+ *
+ * `appointmentId` attaches it to a visit, which the database only allows on an
+ * INTERNAL order — the biconditional CHECK that keeps a walk-in from claiming a
+ * consultation. So the referral source follows from whether one was given.
+ */
+async function test(status: string, patientIndex = 0, appointmentId: string | null = null) {
   // A COMPLETED order has to name who completed it and when — the database
   // enforces that with `diagnostic_order_completion_is_attributed`, so a
   // fixture cannot mark a test done without saying who did it.
@@ -173,10 +185,11 @@ async function test(status: string, patientIndex = 0) {
   await ownerQuery(
     fx.main.id,
     `INSERT INTO diagnostic_order (tenant_id, patient_id, department_id, ordered_by_user_id,
-                                   description, status, referral_source, legacy_unbilled,
-                                   completed_at, completed_by_user_id, updated_at)
-     VALUES ($1, $2, $3, $4, 'Knee X-ray', $5::diagnostic_order_status, 'SELF', true,
-             $6::timestamptz, $7::uuid, now())`,
+                                   appointment_id, description, status, referral_source,
+                                   legacy_unbilled, completed_at, completed_by_user_id, updated_at)
+     VALUES ($1, $2, $3, $4, $8::uuid, 'Knee X-ray', $5::diagnostic_order_status,
+             CASE WHEN $8::uuid IS NULL THEN 'SELF' ELSE 'INTERNAL' END::diagnostic_referral_source,
+             true, $6::timestamptz, $7::uuid, now())`,
     [
       fx.main.id,
       fx.main.patientIds[patientIndex],
@@ -185,6 +198,7 @@ async function test(status: string, patientIndex = 0) {
       status,
       done ? new Date().toISOString() : null,
       done ? orderedByUserId : null,
+      appointmentId,
     ],
   );
 }
@@ -195,7 +209,9 @@ describe('where a patient sits on the board', () => {
     ['ARRIVED', 'WAITING'],
     ['IN_PROGRESS', 'WITH_DOCTOR'],
     ['AWAITING_TESTS', 'AT_DEPARTMENT'],
-    ['FULFILLED', 'DONE'],
+    /* Not DONE. The doctor has finished; nobody has said the visit is over,
+       and the patient is still in the building. See the close tests below. */
+    ['FULFILLED', 'READY_TO_CLOSE'],
     ['CANCELLED', 'NOT_ATTENDING'],
     ['NO_SHOW', 'NOT_ATTENDING'],
   ])('a %s visit shows as %s', async (status, bucket) => {
@@ -254,13 +270,152 @@ describe('a patient with both a visit and a test', () => {
     expect(row!.bucket).toBe('AT_DEPARTMENT');
   });
 
-  it('is done once both are finished', async () => {
+  /**
+   * The two names the clinic actually says out loud.
+   *
+   * "OPD done" and "X-ray done" are different facts about one patient, and the
+   * row has to carry both — a chip saying only "Done" on a row where the
+   * doctor has finished but the film has not come back would be a lie in the
+   * one place the front desk trusts.
+   */
+  it('says which parts are done, separately', async () => {
+    await visit('FULFILLED', 0);
+    await test('PENDING', 0);
+
+    const [row] = (await board()).rows;
+
+    expect(row!.opdDone).toBe(true);
+    // Not finished at the department, so no name to put on a chip.
+    expect(row!.testsDoneIn).toBeNull();
+  });
+
+  it('names the department once every test is back', async () => {
+    await visit('AWAITING_TESTS', 0);
+    await test('COMPLETED', 0);
+
+    const [row] = (await board()).rows;
+
+    // The chip reads "Board X-ray done" from this.
+    expect(row!.testsDoneIn).toBe('Board X-ray');
+    // The doctor has not signed off — they have not seen the film yet.
+    expect(row!.opdDone).toBe(false);
+  });
+
+  it('is ready to close once both are finished', async () => {
     await visit('FULFILLED', 0);
     await test('COMPLETED', 0);
 
     const [row] = (await board()).rows;
 
-    expect(row!.bucket).toBe('DONE');
+    // Everything clinical is done; the desk has not sent them home yet.
+    expect(row!.bucket).toBe('READY_TO_CLOSE');
+  });
+
+  /**
+   * THE STATE THE CLINIC HAD AND THE BOARD DID NOT.
+   *
+   * Sent out for a film, film is back, doctor has not seen it. Until this
+   * existed the patient read as AT_DEPARTMENT — identical to lying under the
+   * machine — so nobody was looking for them, and they sat in the corridor
+   * until they complained.
+   */
+  it('is back from tests once the film is in and the visit is still out', async () => {
+    await visit('AWAITING_TESTS', 0);
+    await test('COMPLETED', 0);
+
+    const [row] = (await board()).rows;
+
+    expect(row!.bucket).toBe('BACK_FROM_TESTS');
+  });
+
+  it('is still at the department while any test is outstanding', async () => {
+    // One film back, one still on the machine. They have not finished there.
+    await visit('AWAITING_TESTS', 0);
+    await test('COMPLETED', 0);
+    await test('PENDING', 0);
+
+    const [row] = (await board()).rows;
+
+    expect(row!.bucket).toBe('AT_DEPARTMENT');
+  });
+
+  it('does not claim somebody is back from tests who never went', async () => {
+    // Sent out, nothing has come back. This is the ordinary away state.
+    await visit('AWAITING_TESTS', 0);
+    await test('PENDING', 0);
+
+    expect((await board()).rows[0]!.bucket).toBe('AT_DEPARTMENT');
+  });
+});
+
+/**
+ * Closing a visit, which is not the same act as finishing it.
+ *
+ * FULFILLED is the doctor's sign-off. Closing is the desk sending the patient
+ * home, and the gap between them is where a clinic's afternoon actually lives:
+ * people who are finished with, still here, and still somebody's problem.
+ */
+describe('closing a visit', () => {
+  async function close(appointmentId: string, session = frontDesk) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appointmentId}/close`,
+      headers: { cookie: session.cookie },
+    });
+  }
+
+  it('moves the row from ready-to-close to done', async () => {
+    const id = await visit('FULFILLED', 0);
+
+    expect((await board()).rows[0]!.bucket).toBe('READY_TO_CLOSE');
+
+    const res = await close(id);
+    expect(res.statusCode).toBe(200);
+
+    expect((await board()).rows[0]!.bucket).toBe('DONE');
+  });
+
+  it('records who closed it and when', async () => {
+    const id = await visit('FULFILLED', 0);
+    await close(id);
+
+    const [row] = await ownerQuery<{ closed_at: Date | null; closed_by_user_id: string | null }>(
+      fx.main.id,
+      `SELECT closed_at, closed_by_user_id FROM appointment WHERE id = $1`,
+      [id],
+    );
+
+    // The whole reason this is a column and not an inference.
+    expect(row?.closed_at).not.toBeNull();
+    expect(row?.closed_by_user_id).not.toBeNull();
+  });
+
+  it('refuses a visit the doctor has not finished', async () => {
+    const id = await visit('IN_PROGRESS', 0);
+
+    const res = await close(id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('NOT_FINISHED');
+  });
+
+  it('refuses while a test is still out', async () => {
+    // Closing here would leave a film nobody is waiting for, on a visit
+    // nobody is watching.
+    const id = await visit('FULFILLED', 0);
+    await test('PENDING', 0, id);
+
+    const res = await close(id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('TEST_STILL_PENDING');
+  });
+
+  it('refuses to close the same visit twice', async () => {
+    const id = await visit('FULFILLED', 0);
+    expect((await close(id)).statusCode).toBe(200);
+
+    const again = await close(id);
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('ALREADY_CLOSED');
   });
 });
 
@@ -751,8 +906,11 @@ describe('what a row says to do next', () => {
 
     const row = (await board()).rows[0]!;
 
-    expect(kinds(row)).toEqual(['RECEIPT']);
-    expect(row.nextSteps[0]!.paymentId).toBe(paymentId);
+    /* CLOSE_VISIT first: the patient is at the desk on their way out, and
+       sending them home is the step that moves them on. The receipt is still
+       there, and is what the desk prints while they are standing there. */
+    expect(kinds(row)).toEqual(['CLOSE_VISIT', 'RECEIPT']);
+    expect(row.nextSteps[1]!.paymentId).toBe(paymentId);
   });
 
   /**

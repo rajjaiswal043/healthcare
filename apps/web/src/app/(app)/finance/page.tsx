@@ -30,6 +30,7 @@ import {
 } from '@/components/icons';
 import { Banner } from '@/components/banner';
 import { PromotionPanel } from '@/components/promotion-panel';
+import { DEFAULT_STATE, INDIAN_STATES } from '@/lib/india';
 
 /**
  * The finance desk — FR-FIN-02.
@@ -926,7 +927,7 @@ export default function FinanceDeskPage() {
                   >
                     <p className="text-[14px] font-semibold text-ink">{d.fullName}</p>
                     <p className="text-[12.5px] text-ink-40">
-                      {d.specialty ?? d.department?.name ?? 'General'}
+                      {d.specialty ?? 'General'}
                       {d.qualification ? ` · ${d.qualification}` : ''}
                     </p>
 
@@ -1527,6 +1528,7 @@ function InlineRegister({
   const [ageYears, setAgeYears] = useState('');
   const [mobile, setMobile] = useState('');
   const [city, setCity] = useState('');
+  const [state, setState] = useState(DEFAULT_STATE);
   const [consent, setConsent] = useState(true);
 
   const [weak, setWeak] = useState<Array<{ id: string; name: string; uhid: string }>>([]);
@@ -1568,6 +1570,7 @@ function InlineRegister({
         consentMarketing: false,
         ...(ageYears ? { ageYears: Number(ageYears) } : {}),
         ...(city ? { city } : {}),
+        ...(state ? { state } : {}),
         ...(confirmedNotDuplicate ? { confirmedNotDuplicate: true } : {}),
       });
       onDone(patient);
@@ -1688,9 +1691,28 @@ function InlineRegister({
             inputMode="numeric"
           />
         </label>
-        <label className="sm:col-span-2">
+        <label>
           <span className="field-label">City</span>
           <input className="field-input" value={city} onChange={(e) => setCity(e.target.value)} />
+        </label>
+        {/*
+          THE OTHER REGISTRATION DOOR.
+
+          This form is deliberately short — a patient at a finance desk is not
+          the moment to ask for a postcode — but it was sending no state at
+          all, so the same clinic produced patients with a state and patients
+          without one depending on which screen registered them. A dropdown
+          that is already on the right answer costs the desk nothing.
+        */}
+        <label>
+          <span className="field-label">State</span>
+          <select className="field-input" value={state} onChange={(e) => setState(e.target.value)}>
+            {INDIAN_STATES.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 

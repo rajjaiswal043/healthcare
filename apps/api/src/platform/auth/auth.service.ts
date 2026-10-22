@@ -532,6 +532,15 @@ export class AuthService {
     tenant: BrandedTenant;
     /** Set when this user IS a bookable doctor. Null for everybody else. */
     practitionerId: string | null;
+    /**
+     * The room this member of staff works in, for the diagnostics role.
+     *
+     * On the profile rather than only on the staff list because the test
+     * worklist opens on it — and a screen that has to fetch the whole staff
+     * directory to find out which department the signed-in person works in is
+     * a screen that asks an administrator's question to answer a technician's.
+     */
+    department: { id: string; name: string } | null;
   }> {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const user = await tx.user.findUniqueOrThrow({
@@ -540,6 +549,7 @@ export class AuthService {
           fullName: true,
           mustChangePassword: true,
           roles: { select: { role: { select: { key: true, name: true } } } },
+          department: { select: { id: true, name: true } },
         },
       });
 
@@ -582,6 +592,7 @@ export class AuthService {
         mustChangePassword: user.mustChangePassword,
         tenant: brandedTenant(tenant),
         practitionerId: practitioner?.id ?? null,
+        department: user.department,
       };
     });
   }

@@ -195,6 +195,161 @@ describe('adding somebody', () => {
   });
 });
 
+/**
+ * A member of diagnostics staff works in a department — and only they do.
+ *
+ * The X-ray technician is not the pathology technician, and their worklist opens
+ * on their own room. Without this, a diagnostics login got every department's
+ * tests and filtered them by hand; the column is nullable because every other
+ * role genuinely has no room, so the rule has to live where the roles are known
+ * rather than in a NOT NULL that a receptionist would fail.
+ */
+describe('which room somebody works in', () => {
+  it('insists on one for diagnostics staff', async () => {
+    const res = await createUser({ roleKeys: ['diagnostics'] });
+
+    expect(res.statusCode).toBe(400);
+    expect(domainCode(res)).toBe('DEPARTMENT_REQUIRED');
+  });
+
+  it('records it, and hands it back on the staff list and on sign-in', async () => {
+    const created = await createUser({
+      email: 'made-tech@main.test',
+      fullName: 'Made Technician',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    expect(created.statusCode).toBe(201);
+
+    const listed = (await listUsers()).json<{
+      users: Array<{ email: string; department: { id: string } | null }>;
+    }>().users;
+    expect(listed.find((u) => u.email === 'made-tech@main.test')?.department?.id).toBe(
+      fx.main.departmentId,
+    );
+
+    /* On the profile too, because that is what the worklist reads to decide
+       which department to open on — a screen that had to fetch the whole staff
+       directory to answer it would be asking an administrator's question. */
+    const them = await login(
+      app,
+      fx.main.slug,
+      'made-tech@main.test',
+      created.json<{ temporaryPassword: string }>().temporaryPassword,
+    );
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: them.cookie },
+    });
+    expect(me.json<{ department: { id: string } | null }>().department?.id).toBe(
+      fx.main.departmentId,
+    );
+  });
+
+  it('refuses a room that has been retired', async () => {
+    // A login whose room is closed gets an empty worklist for a reason nobody
+    // can see from any screen.
+    await ownerQuery(fx.main.id, `UPDATE department SET is_active = false WHERE id = $1`, [
+      fx.main.departmentId,
+    ]);
+
+    try {
+      const res = await createUser({
+        roleKeys: ['diagnostics'],
+        departmentId: fx.main.departmentId,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(domainCode(res)).toBe('DEPARTMENT_INACTIVE');
+    } finally {
+      await ownerQuery(fx.main.id, `UPDATE department SET is_active = true WHERE id = $1`, [
+        fx.main.departmentId,
+      ]);
+    }
+  });
+
+  it('can be set on somebody who never had one', async () => {
+    /* The case every technician created before the column existed is in: the
+       role is right, the room is empty, and without this there is no screen
+       anywhere that can fill it. */
+    const created = await createUser({
+      email: 'made-roomless-tech@main.test',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    await ownerQuery(fx.main.id, `UPDATE app_user SET department_id = NULL WHERE id = $1`, [id]);
+
+    const saved = await updateUser(id, { departmentId: fx.main.departmentId });
+    expect(saved.statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE id = $1`,
+      [id],
+    );
+    expect(row?.department_id).toBe(fx.main.departmentId);
+  });
+
+  it('survives an edit that does not mention it', async () => {
+    // Correcting a typo in a name must not empty somebody's room.
+    const created = await createUser({
+      email: 'made-stays@main.test',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    expect((await updateUser(id, { fullName: 'Made Stays Put' })).statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE id = $1`,
+      [id],
+    );
+    expect(row?.department_id).toBe(fx.main.departmentId);
+  });
+
+  it('is cleared when the diagnostics role is withdrawn', async () => {
+    // Somebody moved to the front desk should not still be filed under X-ray.
+    const created = await createUser({
+      email: 'made-moved@main.test',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    expect((await updateUser(id, { roleKeys: ['nurse'] })).statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE id = $1`,
+      [id],
+    );
+    expect(row?.department_id).toBeNull();
+  });
+
+  it('leaves it null for a role that has no room', async () => {
+    // A nurse belongs to no department, and sending one does not give her one:
+    // the field is read only for the role that has it.
+    const created = await createUser({
+      email: 'made-roomless@main.test',
+      roleKeys: ['nurse'],
+      departmentId: fx.main.departmentId,
+    });
+    expect(created.statusCode).toBe(201);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE email = $1`,
+      ['made-roomless@main.test'],
+    );
+    expect(row?.department_id).toBeNull();
+  });
+});
+
 // --- editing --------------------------------------------------------------
 
 /**

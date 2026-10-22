@@ -40,11 +40,18 @@ export class DiagnosticsService {
     private readonly billing: BillingService,
   ) {}
 
-  /** Departments that do tests. The worklist's filter, and the order form's choices. */
+  /**
+   * Departments that do tests — which is all of them.
+   *
+   * `isDiagnostic` used to narrow this. Every department is a place a patient
+   * is sent for a test now, so the only question left is whether it is still
+   * open: a department that should take no more orders is RETIRED, which says
+   * the same thing once instead of twice.
+   */
   async departments(tenantId: string) {
     const departments = await this.prisma.forTenant(tenantId, (tx) =>
       tx.department.findMany({
-        where: { isActive: true, isDiagnostic: true },
+        where: { isActive: true },
         orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
         select: { id: true, name: true },
       }),
@@ -93,7 +100,7 @@ export class DiagnosticsService {
           isActive: true,
           category: 'DIAGNOSTIC',
           ...(departmentId ? { departmentId } : { departmentId: { not: null } }),
-          department: { isActive: true, isDiagnostic: true },
+          department: { isActive: true },
         },
         orderBy: [{ name: 'asc' }],
         select: {
@@ -127,6 +134,8 @@ export class DiagnosticsService {
       departmentId: string;
       description?: string;
       serviceId?: string;
+      /** What to charge, when it is not the catalogue price. Ignored without a test. */
+      pricePaise?: number;
       referralSource?: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
       referrerName?: string;
       referrerClinic?: string;
@@ -204,18 +213,19 @@ export class DiagnosticsService {
 
       const department = await tx.department.findUnique({
         where: { id: input.departmentId },
-        select: { id: true, isDiagnostic: true, isActive: true, name: true },
+        select: { id: true, isActive: true, name: true },
       });
       if (!department) throw new NotFoundException('No such department.');
 
-      // A clinic that sends an X-ray request to "Orthopaedics" has misconfigured
-      // something, and the order would sit on a worklist nobody looks at.
-      if (!department.isDiagnostic) {
-        throw new BadRequestException({
-          code: 'NOT_A_DIAGNOSTIC_DEPARTMENT',
-          message: `“${department.name}” does not do tests. Mark it as a diagnostic department first.`,
-        });
-      }
+      /**
+       * A retired department takes no new work.
+       *
+       * This used to be two refusals: one for a department that was not marked
+       * diagnostic, and one for a department switched off. Every department
+       * does tests now, so there is a single question — is it still open — and
+       * an order addressed to a closed one would sit on a worklist nobody
+       * looks at.
+       */
       if (!department.isActive) {
         throw new BadRequestException({
           code: 'DEPARTMENT_INACTIVE',
@@ -366,6 +376,11 @@ export class DiagnosticsService {
             visitAppointmentId: appointmentId,
             serviceId,
             description,
+            /* Only when the caller said so. Absent is the catalogue price, and
+               the two must stay distinguishable: sending the list price back as
+               an explicit override would record every ordinary order as a
+               priced decision somebody made. */
+            ...(input.pricePaise === undefined ? {} : { pricePaise: input.pricePaise }),
           },
           meta,
         );
@@ -511,7 +526,7 @@ export class DiagnosticsService {
             isActive: true,
             category: true,
             departmentId: true,
-            department: { select: { isActive: true, isDiagnostic: true, name: true } },
+            department: { select: { isActive: true, name: true } },
           },
         });
         if (!service) throw new NotFoundException('No such test.');
@@ -522,10 +537,10 @@ export class DiagnosticsService {
             message: `“${service.name}” is not a test this centre offers.`,
           });
         }
-        if (!service.departmentId || !service.department?.isDiagnostic) {
+        if (!service.departmentId || !service.department) {
           throw new BadRequestException({
             code: 'TEST_HAS_NO_DEPARTMENT',
-            message: `Nobody here performs “${service.name}”. Give it a diagnostic department first.`,
+            message: `Nobody here performs “${service.name}”. Give it a department first.`,
           });
         }
         if (!service.department.isActive) {
@@ -618,19 +633,67 @@ export class DiagnosticsService {
    */
   async worklist(
     tenantId: string,
-    filter: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' | 'DECLINED' },
+    filter: {
+      departmentId?: string;
+      status?: 'PENDING' | 'COMPLETED' | 'DECLINED';
+      /** `2026-10-22` in the clinic's own timezone. Absent means every day. */
+      date?: string;
+    },
   ) {
-    const orders = await this.prisma.forTenant(tenantId, (tx) =>
-      tx.diagnosticOrder.findMany({
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      /**
+       * WHICH DAY'S WORK, in the clinic's own timezone.
+       *
+       * Absent on purpose means EVERY day rather than today, and the default
+       * matters: a pending test ordered yesterday evening is still pending
+       * this morning, and a worklist that silently dropped it would lose a
+       * patient who came back the next day. The date is what a technician
+       * reaches for to answer "what did we do on Tuesday", which is a
+       * different question and one the screen has to ask explicitly.
+       *
+       * Bounded by the ORDER time, because that is when the clinic took the
+       * work on. A test ordered late and completed the next morning belongs to
+       * the day it was asked for — which is the day the patient was here.
+       */
+      const window = filter.date ? await this.clinicDayWindow(tx, tenantId, filter.date) : null;
+
+      const orders = await tx.diagnosticOrder.findMany({
         where: {
           ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
           status: filter.status ?? 'PENDING',
+          ...(window ? { createdAt: { gte: window.from, lt: window.to } } : {}),
         },
         orderBy: { createdAt: 'asc' },
         select: ORDER_SELECT,
-      }),
-    );
-    return { orders: orders.map(toView) };
+      });
+
+      return { orders: orders.map(toView), date: filter.date ?? null };
+    });
+  }
+
+  /**
+   * Midnight to midnight for one clinic day, as instants.
+   *
+   * The clinic's timezone rather than the server's: a clinic in Pune closes at
+   * midnight IST, and a UTC day would put the evening's last three films on
+   * tomorrow's list. `startOfClinicDay` answers the same question for today
+   * only; this answers it for any day the picker can reach.
+   */
+  private async clinicDayWindow(
+    tx: TenantClient,
+    tenantId: string,
+    date: string,
+  ): Promise<{ from: Date; to: Date }> {
+    const tenant = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: { timezone: true },
+    });
+    const timezone = tenant?.timezone ?? 'Asia/Kolkata';
+
+    return {
+      from: localToInstant(date, '00:00', timezone),
+      to: localToInstant(stepDay(date, 1), '00:00', timezone),
+    };
   }
 
   /** What was ordered on one visit — the consultation's view. */
@@ -1236,9 +1299,15 @@ const ORDER_SELECT = {
   department: { select: { id: true, name: true } },
   /**
    * Which catalogue test this was, when it was one. Deliberately without the
-   * price: the worklist is read by the diagnostics role, which holds no billing
-   * permission, and a department does not need to know what it charges to run
-   * the machine. The fee is served by `catalogue()` to whoever may order.
+   * LIST price: that is a clinic-wide setting, the worklist is read by the
+   * diagnostics role which holds no billing permission, and a department does
+   * not need the price list to run the machine. The fee is served by
+   * `catalogue()` to whoever may order.
+   *
+   * What this particular order was CHARGED is a different fact and does come
+   * back — see `chargedPaise` in `toView`. It is printed on the requisition
+   * slip the patient carries to the department, so withholding it from the
+   * department's own screen would protect nothing.
    */
   service: { select: { id: true, code: true, name: true } },
   /** Who decided the test was needed, and the outside doctor when there is one. */
@@ -1314,6 +1383,31 @@ const ORDER_SELECT = {
  * Every method that returns an order goes through this.
  */
 function toView<T extends DiagnosticBillingInput>(order: T) {
-  const { invoiceLine: _invoiceLine, legacyUnbilled: _legacyUnbilled, ...rest } = order;
-  return { ...rest, billing: diagnosticBillingState(order) };
+  const { invoiceLine, legacyUnbilled: _legacyUnbilled, ...rest } = order;
+  return {
+    ...rest,
+    /**
+     * What this test was charged, as charged.
+     *
+     * Read off the invoice LINE rather than recomputed from the service, so a
+     * price the clinic has since changed — or one somebody set by hand when
+     * ordering — still prints on the slip as the amount actually owed. Null
+     * for a free-text order, which raises no charge at all.
+     */
+    chargedPaise: invoiceLine?.totalPaise ?? null,
+    billing: diagnosticBillingState(order),
+  };
+}
+
+/**
+ * The next day, as a plain `2026-10-22` string.
+ *
+ * Noon UTC before stepping, so the addition cannot land on a daylight-saving
+ * boundary and come back as the same date. India has no DST, but this is a
+ * date helper and the next clinic to use it may not be in India.
+ */
+function stepDay(date: string, days: number): string {
+  const at = new Date(`${date}T12:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
 }

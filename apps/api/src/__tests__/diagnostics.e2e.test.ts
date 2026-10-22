@@ -71,11 +71,22 @@ async function attach(session: Session, orderId: string, fileName = 'knee-ap.pdf
   });
 }
 
-/** The clinic's consulting department, seeded by the harness. Not diagnostic. */
-async function consultingDepartmentId(): Promise<string> {
+/**
+ * A department that has been retired.
+ *
+ * There used to be a "consulting department" here — one that was not marked
+ * diagnostic — because a department was two things wearing one name. Every
+ * department does tests now, so the only way one refuses work is by being
+ * switched off, and that is what this builds.
+ */
+async function retiredDepartmentId(): Promise<string> {
   const [row] = await ownerQuery<{ id: string }>(
     fx.main.id,
-    'SELECT id FROM department WHERE is_diagnostic = false LIMIT 1',
+    `INSERT INTO department (tenant_id, name, display_order, is_active, updated_at)
+     VALUES ($1, 'Closed Imaging', 90, false, now())
+     ON CONFLICT (tenant_id, name) DO UPDATE SET is_active = false
+     RETURNING id`,
+    [fx.main.id],
   );
   return row!.id;
 }
@@ -155,7 +166,7 @@ beforeAll(async () => {
     method: 'POST',
     url: '/api/v1/departments',
     headers: { cookie: admin.cookie },
-    payload: { name: 'X-ray', isDiagnostic: true },
+    payload: { name: 'X-ray' },
   });
   expect(created.statusCode).toBe(201);
   xrayDepartmentId = created.json<{ id: string }>().id;
@@ -164,7 +175,7 @@ beforeAll(async () => {
     method: 'POST',
     url: '/api/v1/departments',
     headers: { cookie: admin.cookie },
-    payload: { name: 'Pathology', isDiagnostic: true },
+    payload: { name: 'Pathology' },
   });
   expect(pathology.statusCode).toBe(201);
   pathologyDepartmentId = pathology.json<{ id: string }>().id;
@@ -173,7 +184,7 @@ beforeAll(async () => {
     method: 'POST',
     url: '/api/v1/departments',
     headers: { cookie: admin.cookie },
-    payload: { name: 'ECG', isDiagnostic: true },
+    payload: { name: 'ECG' },
   });
   expect(plain.statusCode).toBe(201);
   plainDepartmentId = plain.json<{ id: string }>().id;
@@ -217,6 +228,9 @@ beforeAll(async () => {
       email: 'radiographer@main.test',
       fullName: 'Meera Radiographer',
       roleKeys: ['diagnostics'],
+      // A technician works in a room, and the server now insists on knowing
+      // which: their worklist opens on it.
+      departmentId: xrayDepartmentId,
     },
   });
   if (staff.statusCode !== 201) {
@@ -288,14 +302,14 @@ describe('diagnostic departments', () => {
   });
 
   /**
-   * The reason the flag exists. Radiology has no slots — offering it at the
-   * first step of booking produces an appointment nobody can fill.
+   * Setup lists them, because that is the screen a clinic manages them from.
+   *
+   * This pair used to test the two halves of a flag: that radiology was hidden
+   * from booking and shown in setup. Booking has no department list any more —
+   * nobody books an appointment with one — so only the half that was ever
+   * doing anything is left.
    */
-  /**
-   * And the mirror of it: setup MUST show what booking hides, or an
-   * administrator creates an X-ray department and never sees it again.
-   */
-  it('do appear in the setup listing, marked as diagnostic', async () => {
+  it('appear in the setup listing', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/setup/departments',
@@ -303,24 +317,9 @@ describe('diagnostic departments', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(
-      res.json<{ departments: Array<{ name: string; isDiagnostic: boolean }> }>().departments,
-    ).toContainEqual(expect.objectContaining({ name: 'X-ray', isDiagnostic: true }));
-  });
-
-  it('do not appear on the booking screen', async () => {
-    const res = await app.inject({
-      method: 'GET',
-      url: '/api/v1/departments',
-      headers: { cookie: frontDesk.cookie },
-    });
-
-    const names = res
-      .json<{ departments: Array<{ name: string }> }>()
-      .departments.map((d) => d.name);
-
-    expect(names).not.toContain('X-ray');
-    expect(names.length).toBeGreaterThan(0);
+    expect(res.json<{ departments: Array<{ name: string }> }>().departments).toContainEqual(
+      expect.objectContaining({ name: 'X-ray' }),
+    );
   });
 });
 
@@ -353,15 +352,17 @@ describe('raising an order', () => {
     expect(body.patient.id).toBe(row?.patient_id);
   });
 
-  it('refuses a department that does not do tests', async () => {
+  it('refuses a department that has been retired', async () => {
+    // An order addressed to a closed department would sit on a worklist
+    // nobody looks at.
     const res = await order(doctor, {
       appointmentId: mainVisit,
-      departmentId: await consultingDepartmentId(),
+      departmentId: await retiredDepartmentId(),
       description: 'X-ray left knee',
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().error.details?.code).toBe('NOT_A_DIAGNOSTIC_DEPARTMENT');
+    expect(res.json().error.details?.code).toBe('DEPARTMENT_INACTIVE');
   });
 
   it('refuses a visit from another clinic', async () => {
@@ -671,6 +672,81 @@ describe('billing a doctor-ordered test', () => {
   async function testBillsFor(appointmentId: string) {
     return (await billsFor(appointmentId)).filter((i) => i.appointment_id === null);
   }
+
+  /**
+   * What this one patient is charged, which is not always the list price.
+   *
+   * The amount is editable where the test is ordered, because the decision — a
+   * repeat film not charged twice, a concession on a second view — is made in
+   * front of the patient. Settling it afterwards at the desk means they have
+   * already been quoted the wrong number and the slip they are holding is
+   * wrong too.
+   */
+  describe('the amount charged', () => {
+    it('uses the price sent instead of the catalogue price', async () => {
+      const res = await order(doctor, {
+        appointmentId: mainVisit,
+        departmentId: xrayDepartmentId,
+        serviceId: kneeXrayId,
+        pricePaise: 20_000,
+      });
+      expect(res.statusCode).toBe(201);
+
+      // The LINE carries it, so the slip and the bill agree...
+      expect(res.json<{ chargedPaise: number | null }>().chargedPaise).toBe(20_000);
+
+      const [line] = await ownerQuery<{ unit_price_paise: number; total_paise: number }>(
+        fx.main.id,
+        `SELECT unit_price_paise, total_paise FROM invoice_line WHERE service_id = $1`,
+        [kneeXrayId],
+      );
+      expect(line?.unit_price_paise).toBe(20_000);
+      expect(line?.total_paise).toBe(20_000);
+
+      // ...and the catalogue is untouched. Charging one patient less must not
+      // drop the clinic's price for everybody else.
+      const [service] = await ownerQuery<{ price_paise: number }>(
+        fx.main.id,
+        `SELECT price_paise FROM service WHERE id = $1`,
+        [kneeXrayId],
+      );
+      expect(service?.price_paise).toBe(45_000);
+    });
+
+    it('charges the catalogue price when no amount is sent', async () => {
+      const res = await order(doctor, {
+        appointmentId: mainVisit,
+        departmentId: xrayDepartmentId,
+        serviceId: kneeXrayId,
+      });
+
+      expect(res.json<{ chargedPaise: number | null }>().chargedPaise).toBe(45_000);
+    });
+
+    it('allows zero, which is a real answer', async () => {
+      // A film repeated because the first was unreadable is not charged twice.
+      const res = await order(doctor, {
+        appointmentId: mainVisit,
+        departmentId: xrayDepartmentId,
+        serviceId: kneeXrayId,
+        pricePaise: 0,
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(res.json<{ chargedPaise: number | null }>().chargedPaise).toBe(0);
+    });
+
+    it('refuses a negative amount', async () => {
+      const res = await order(doctor, {
+        appointmentId: mainVisit,
+        departmentId: xrayDepartmentId,
+        serviceId: kneeXrayId,
+        pricePaise: -100,
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+  });
 
   it('raises the charge on its own bill, never on the consultation invoice', async () => {
     const res = await order(doctor, {
@@ -1372,7 +1448,7 @@ describe('a test this centre does not do', () => {
       method: 'POST',
       url: '/api/v1/departments',
       headers: { cookie: admin.cookie },
-      payload: { name: 'Ultrasound', isDiagnostic: true },
+      payload: { name: 'Ultrasound' },
     });
     expect(bare.statusCode).toBe(201);
 
@@ -2152,6 +2228,30 @@ describe('handing the report over', () => {
 });
 
 describe('the worklist', () => {
+  /**
+   * A real order, moved to a chosen instant.
+   *
+   * Raised through the API so it is a genuine order with its charge and its
+   * audit row, then back-dated with SQL because `created_at` is set by the
+   * database and has no endpoint. Faking the row outright would test the query
+   * against a shape the application never writes.
+   */
+  async function orderedOn(iso: string, description: string): Promise<string> {
+    const res = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description,
+    });
+    expect(res.statusCode).toBe(201);
+
+    const id = res.json<{ id: string }>().id;
+    await ownerQuery(fx.main.id, `UPDATE diagnostic_order SET created_at = $2 WHERE id = $1`, [
+      id,
+      iso,
+    ]);
+    return id;
+  }
+
   it('shows pending orders oldest first, with enough to identify the patient', async () => {
     const appointmentId = mainVisit;
     await order(doctor, { appointmentId, departmentId: plainDepartmentId, description: 'First' });
@@ -2172,6 +2272,76 @@ describe('the worklist', () => {
     // A technician has to match the request to the person in front of them.
     expect(orders[0]?.patient.name).toBeTruthy();
     expect(orders[0]?.patient.uhid).toBeTruthy();
+  });
+
+  /**
+   * WHICH DAY'S WORK.
+   *
+   * The technician's board is their home page and it has the same day picker
+   * the patient board does, so the list has to be answerable per day. The
+   * DEFAULT is the interesting half: no date means every day still outstanding,
+   * because a film ordered last night and not yet taken is this morning's job
+   * and a list that dropped it at midnight would lose that patient.
+   */
+  describe('one day at a time', () => {
+    it('defaults to every outstanding day, not to today', async () => {
+      const id = await orderedOn('2026-10-19T08:30:00+05:30', 'Ordered days ago');
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/diagnostics/orders',
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      expect(res.json<{ orders: Array<{ id: string }> }>().orders.map((o) => o.id)).toContain(id);
+    });
+
+    it('returns only that day when one is asked for', async () => {
+      const onTheNineteenth = await orderedOn('2026-10-19T08:30:00+05:30', 'The nineteenth');
+      const onTheTwentieth = await orderedOn('2026-10-20T08:30:00+05:30', 'The twentieth');
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/diagnostics/orders?date=2026-10-19',
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const ids = res.json<{ orders: Array<{ id: string }> }>().orders.map((o) => o.id);
+      expect(ids).toContain(onTheNineteenth);
+      expect(ids).not.toContain(onTheTwentieth);
+    });
+
+    it("cuts the day at the clinic's midnight, not at UTC's", async () => {
+      /* 23:30 IST on the 19th is 18:00 UTC on the 19th; 00:30 IST on the 20th
+         is 19:00 UTC on the 19th. A UTC day would put the second film on the
+         nineteenth's list, which is the night shift's whole complaint. */
+      const lateOnTheNineteenth = await orderedOn('2026-10-19T23:30:00+05:30', 'Last of the night');
+      const earlyOnTheTwentieth = await orderedOn(
+        '2026-10-20T00:30:00+05:30',
+        'First after midnight',
+      );
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/diagnostics/orders?date=2026-10-19',
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      const ids = res.json<{ orders: Array<{ id: string }> }>().orders.map((o) => o.id);
+      expect(ids).toContain(lateOnTheNineteenth);
+      expect(ids).not.toContain(earlyOnTheTwentieth);
+    });
+
+    it('refuses a date that is not one', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/diagnostics/orders?date=last-tuesday',
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
   });
 
   it("never shows one clinic another's orders", async () => {

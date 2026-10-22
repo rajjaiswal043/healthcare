@@ -1055,7 +1055,7 @@ describe('a custom promotion', () => {
       method: 'POST',
       url: '/api/v1/departments',
       headers: { cookie: admin.cookie },
-      payload: { name: 'X-ray', isDiagnostic: true },
+      payload: { name: 'X-ray' },
     });
     expect(department.statusCode).toBe(201);
 
@@ -1105,7 +1105,7 @@ describe('a custom promotion', () => {
       method: 'POST',
       url: '/api/v1/departments',
       headers: { cookie: admin.cookie },
-      payload: { name: 'Pathology', isDiagnostic: true },
+      payload: { name: 'Pathology' },
     });
     const service = await app.inject({
       method: 'POST',

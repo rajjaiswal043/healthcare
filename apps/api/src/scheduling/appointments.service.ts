@@ -63,7 +63,6 @@ type BookInput = {
   patientId: string;
   practitionerId: string;
   locationId: string;
-  departmentId?: string;
   startAt: string;
   visitType?: string;
   reasonForVisit?: string;
@@ -225,7 +224,6 @@ export class AppointmentsService {
         patientId: input.patientId,
         practitionerId: input.practitionerId,
         locationId: input.locationId,
-        departmentId: input.departmentId ?? null,
         startAt: slot.startAt,
         endAt: slot.endAt,
         status: 'BOOKED',
@@ -271,7 +269,6 @@ export class AppointmentsService {
       patientId: string;
       practitionerId: string;
       locationId: string;
-      departmentId?: string;
       reasonForVisit?: string;
       visitType?: string;
     },
@@ -328,7 +325,6 @@ export class AppointmentsService {
           patientId: input.patientId,
           practitionerId: input.practitionerId,
           locationId: input.locationId,
-          departmentId: input.departmentId ?? null,
           // A walk-in has no slot; the window is nominal and exists so the
           // record has a consistent shape with booked appointments.
           startAt: now,
@@ -527,6 +523,92 @@ export class AppointmentsService {
    *
    * Either way they keep their token, their draft note and their invoice.
    */
+  /**
+   * Say the visit is over.
+   *
+   * THE DIFFERENCE FROM `FULFILLED`. That status is the doctor's sign-off and
+   * nothing more. The patient may still be in the building — waiting on a film,
+   * waiting to pay, waiting to be told they can go — and until this was
+   * recorded the board called that "Done" and the front desk had no queue of
+   * people still here. Closing is the desk's act, not the clinician's.
+   *
+   * ONLY FROM FULFILLED. A visit still in progress, or one the patient was sent
+   * out of, has something left to happen; closing it would strand whatever that
+   * is. Refused rather than quietly ignored, because the caller believes they
+   * finished something.
+   *
+   * MONEY IS NOT CHECKED HERE, deliberately (Narveer, 22 Oct 2026). The desk is
+   * the one standing in front of the patient and "they will settle it at the
+   * follow-up" is a real answer a clinic gives. The board shows what is owed
+   * before the button and the bill stays open afterwards, so nothing is lost —
+   * what would be lost is the desk's ability to send somebody home.
+   *
+   * Closing twice is refused: the second caller would overwrite who closed it
+   * and when, which is the only thing this column is for.
+   */
+  async closeVisit(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      if (appt.closedAt) {
+        throw new ConflictException({
+          code: 'ALREADY_CLOSED',
+          message: 'This visit has already been closed.',
+        });
+      }
+
+      if (appt.status !== 'FULFILLED') {
+        throw new ConflictException({
+          code: 'NOT_FINISHED',
+          message:
+            appt.status === 'AWAITING_TESTS'
+              ? 'They are still out for a test. Bring them back before closing the visit.'
+              : 'The doctor has not finished with this patient yet.',
+        });
+      }
+
+      /**
+       * A test still running keeps the visit open.
+       *
+       * The board never offers the button in this state — a pending order puts
+       * the patient at a department, not in the close queue — but the rule
+       * belongs on the server as well: closing here would leave a film that
+       * nobody is waiting for, on a visit nobody is watching.
+       */
+      const pending = await tx.diagnosticOrder.count({
+        where: { appointmentId: id, status: 'PENDING' },
+      });
+      if (pending > 0) {
+        throw new ConflictException({
+          code: 'TEST_STILL_PENDING',
+          message:
+            pending === 1
+              ? 'A test on this visit has not come back yet.'
+              : `${pending} tests on this visit have not come back yet.`,
+        });
+      }
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: { closedAt: new Date(), closedByUserId: meta.actorUserId ?? null },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.close',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: appt.patientId,
+        changedFields: ['closedAt', 'closedByUserId'],
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
+  }
+
   async returnFromTests(
     tenantId: string,
     id: string,
@@ -799,7 +881,6 @@ export class AppointmentsService {
           patientId: existing.patientId,
           practitionerId: existing.practitionerId,
           locationId: existing.locationId,
-          ...(existing.departmentId ? { departmentId: existing.departmentId } : {}),
           startAt: input.startAt,
           visitType: existing.visitType,
           ...(existing.reasonForVisit ? { reasonForVisit: existing.reasonForVisit } : {}),
