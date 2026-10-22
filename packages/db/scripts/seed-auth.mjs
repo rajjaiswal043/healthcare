@@ -101,6 +101,21 @@ const USERS = [
   },
   { email: 'nurse@demo.local', fullName: 'Meena Joshi', role: 'nurse', password: 'demo1234' },
   {
+    /**
+     * The X-ray room. Needed to walk the test worklist as the role it was built
+     * for: an administrator holds every permission and so proves nothing about
+     * what a technician sees, and the worklist now OPENS on the signed-in
+     * technician's own department, which only this login can demonstrate.
+     *
+     * The department itself is assigned by `seed:scheduling`, which is what
+     * creates the departments — this seed may well run before any exist.
+     */
+    email: 'xray@demo.local',
+    fullName: 'Imran Shaikh',
+    role: 'diagnostics',
+    password: 'demo1234',
+  },
+  {
     email: 'admin@demo.local',
     fullName: 'Ravi Kulkarni',
     role: 'administrator',
@@ -182,6 +197,7 @@ try {
   console.log('\nDemo sign-in (any clinic):');
   console.log('  reception@demo.local / demo1234   front desk — can register');
   console.log('  nurse@demo.local     / demo1234   nurse      — read only, cannot register');
+  console.log('  xray@demo.local      / demo1234   diagnostics — the X-ray room');
   console.log('  doctor@demo.local    / demo1234   doctor');
   console.log('  finance@demo.local   / demo1234   finance    — bills and takes payment');
   console.log(

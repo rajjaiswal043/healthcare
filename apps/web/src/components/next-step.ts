@@ -12,7 +12,12 @@ const NEEDS: Record<NextStep['kind'], string> = {
   CHECK_IN: 'appointment:write',
   START: 'consultation:write',
   RESUME: 'consultation:write',
+  /* The desk's act, not the doctor's: bringing somebody back from a department
+     is moving them through the clinic, and a receptionist does it. */
+  BRING_BACK: 'appointment:write',
   FINISH: 'appointment:write',
+  /* Likewise. Closing a visit is sending a patient home, not a clinical call. */
+  CLOSE_VISIT: 'appointment:write',
   RECORD_RESULT: 'diagnostic:result',
   RECEIPT: 'invoice:read',
 };
@@ -70,8 +75,17 @@ export function stepLabel(step: NextStep): string {
       return 'Start';
     case 'RESUME':
       return 'Open';
+    case 'BRING_BACK':
+      /* Not "Return": the verb has to be something the desk DOES to the
+         patient, and the patient is already standing there. */
+      return 'Bring back in';
     case 'FINISH':
-      return 'Done';
+      /* Named for what it finishes. 'Done' on its own sat on a board where a
+         test can also be done and a visit can also be closed, and meant one
+         of the three depending on where you looked. */
+      return 'OPD done';
+    case 'CLOSE_VISIT':
+      return 'Close visit';
     case 'RECORD_RESULT':
       return 'Record result';
     case 'RECEIPT':

@@ -336,11 +336,20 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 title={
                   awaitingTests
                     ? 'Close the visit with what is recorded — for a patient who did not come back'
-                    : undefined
+                    : 'Signs the note and marks the OPD finished. This cannot be undone.'
                 }
               >
                 <IconCheckCircle size={16} />
-                {signing ? 'Signing…' : 'Sign and finish'}
+                {/*
+                  THE DOCTOR'S "OPD DONE", in the words the rest of the console
+                  uses. It was "Sign and finish", which was accurate and shared
+                  no vocabulary with the front desk's button for the same act —
+                  the desk said "OPD done" and the doctor said "finish", about
+                  one event. "Sign" stays in front of it because signing is a
+                  clinical act with a registration number attached, and a
+                  doctor should see that they are doing it.
+                */}
+                {signing ? 'Signing…' : 'Sign · OPD done'}
               </button>
             )}
 

@@ -91,13 +91,12 @@ function readDoctor() {
     registration_number: string | null;
     specialty: string | null;
     qualification: string | null;
-    department_id: string | null;
     user_id: string | null;
     consultation_fee_paise: number | null;
     follow_up_fee_paise: number | null;
   }>(
     fx.main.id,
-    `SELECT registration_number, specialty, qualification, department_id, user_id,
+    `SELECT registration_number, specialty, qualification, user_id,
             consultation_fee_paise, follow_up_fee_paise
        FROM practitioner WHERE id = $1`,
     [fx.main.practitionerId],
@@ -178,16 +177,17 @@ describe('what an edit may not touch', () => {
    *
    * Refused rather than ignored. Ignoring tells the caller it worked.
    */
+  /**
+   * A doctor has no department any more — `specialty` says what they do. The
+   * refusal is still worth a test: `forbidNonWhitelisted` means an unknown
+   * field is REFUSED rather than quietly dropped, and a caller told its write
+   * worked when half of it was ignored is the failure this prevents.
+   */
   it('refuses a department change outright', async () => {
-    const [before] = await readDoctor();
-
     const res = await update({ departmentId: fx.main.departmentId });
 
     expect(res.statusCode).toBe(400);
     expect(res.payload).toMatch(/departmentId/i);
-
-    const [after] = await readDoctor();
-    expect(after?.department_id).toBe(before?.department_id ?? null);
   });
 
   it('refuses a department change even alongside legitimate fields', async () => {

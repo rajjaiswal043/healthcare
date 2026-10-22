@@ -39,19 +39,20 @@ function makeRandom(seed) {
 const rand = makeRandom(20260807);
 const pick = (a) => a[Math.floor(rand() * a.length)];
 
-/** `[name, displayOrder, isDiagnostic]`. */
+/**
+ * `[name, displayOrder]`.
+ *
+ * TEST DEPARTMENTS ONLY. There used to be five clinical ones here — General
+ * Medicine, Paediatrics, Orthopaedics, Dermatology, ENT — created so the
+ * booking screen had a filter to offer. Nobody books an appointment with a
+ * department, a doctor's `specialty` says what they do, and the filter is gone,
+ * so what is left is the half that was always doing the work: somewhere a
+ * patient is sent, that a priced test belongs to.
+ */
 const DEPARTMENTS = [
-  ['General Medicine', 1, false],
-  ['Paediatrics', 2, false],
-  ['Orthopaedics', 3, false],
-  ['Dermatology', 4, false],
-  ['ENT', 5, false],
-  // Diagnostic departments, added 29 Sep 2026. Without them the home board's
-  // "At a department" tab is permanently empty and the walk-in test flow — a
-  // patient who comes in for an X-ray and never sees a doctor — cannot be
-  // demonstrated at all.
-  ['X-ray', 6, true],
-  ['Pathology', 7, true],
+  ['X-ray', 1],
+  ['Pathology', 2],
+  ['Physiotherapy', 3],
 ];
 
 /**
@@ -253,18 +254,40 @@ async function seedTenant(tenant, doctors) {
 
   // --- departments -------------------------------------------------------
   const deptIds = {};
-  for (const [name, order, isDiagnostic] of DEPARTMENTS) {
+  for (const [name, order] of DEPARTMENTS) {
     const { rows } = await client.query(
-      `INSERT INTO department (tenant_id, name, display_order, is_diagnostic, updated_at)
-       VALUES ($1,$2,$3,$4, now())
+      `INSERT INTO department (tenant_id, name, display_order, updated_at)
+       VALUES ($1,$2,$3, now())
        ON CONFLICT (tenant_id, name) DO UPDATE
-         SET display_order = EXCLUDED.display_order,
-             is_diagnostic = EXCLUDED.is_diagnostic
+         SET display_order = EXCLUDED.display_order
        RETURNING id`,
-      [tenant.id, name, order, isDiagnostic],
+      [tenant.id, name, order],
     );
     deptIds[name] = rows[0].id;
   }
+
+  /**
+   * PUT THE DIAGNOSTICS STAFF IN A ROOM.
+   *
+   * A diagnostics login with no department gets every department's tests and
+   * filters them by hand, which is the thing the department link exists to
+   * stop — and `seed:auth` cannot do this itself, because it runs before any
+   * department exists. Only the ones still unassigned are touched: a clinic
+   * that has moved somebody to Pathology should not be moved back on the next
+   * reseed.
+   */
+  await client.query(
+    `UPDATE app_user u
+        SET department_id = $2, updated_at = now()
+      WHERE u.tenant_id = $1
+        AND u.department_id IS NULL
+        AND EXISTS (
+          SELECT 1 FROM user_role ur
+            JOIN role r ON r.id = ur.role_id
+           WHERE ur.user_id = u.id AND r.key = 'diagnostics'
+        )`,
+    [tenant.id, deptIds['X-ray']],
+  );
 
   // --- locations ---------------------------------------------------------
   const { rows: locations } = await client.query(
@@ -288,10 +311,12 @@ async function seedTenant(tenant, doctors) {
     const { rows } = await client.query(
       `INSERT INTO practitioner
          (tenant_id, full_name, prefix, registration_number, qualification,
-          specialty, department_id, user_id, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+          specialty, user_id, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7, now())
        RETURNING id`,
-      [tenant.id, doc.name, doc.prefix, doc.reg, doc.qual, doc.dept, deptIds[doc.dept], userId],
+      // `doc.dept` is the SPECIALTY — "Orthopaedics" is what the doctor does,
+      // not a room they belong to.
+      [tenant.id, doc.name, doc.prefix, doc.reg, doc.qual, doc.dept, userId],
     );
     const practitionerId = rows[0].id;
     practitioners.push({ id: practitionerId, ...doc });
@@ -337,7 +362,6 @@ async function seedTodaysQueue(
   tenant,
   practitioner,
   locationId,
-  deptId,
   diagnosticDeptIds,
   daysAgo = 0,
   doctorIndex = 0,
@@ -437,19 +461,18 @@ async function seedTodaysQueue(
     const { id: appointmentId } = rows0(
       await client.query(
         `INSERT INTO appointment
-         (tenant_id, patient_id, practitioner_id, location_id, department_id,
+         (tenant_id, patient_id, practitioner_id, location_id,
           start_at, end_at, status, visit_type, source, reason_for_visit,
           token_number, queue_date, checked_in_at, ready_at, called_at, completed_at,
           sent_out_at, sent_out_reason, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::appointment_status,$9::visit_type,
-               $10::appointment_source,$11,$12,$13,$14,$15,$16,$17,$18,$19, now())
+       VALUES ($1,$2,$3,$4,$5,$6,$7::appointment_status,$8::visit_type,
+               $9::appointment_source,$10,$11,$12,$13,$14,$15,$16,$17,$18, now())
        RETURNING id`,
         [
           tenant.id,
           patient.id,
           practitioner.id,
           locationId,
-          deptId,
           startAt,
           endAt,
           status,
@@ -555,8 +578,17 @@ async function seedTodaysQueue(
        *
        * `diagnostic_order_completion_is_attributed` wants the time AND the
        * person together, so both go or neither does.
+       *
+       * TODAY, ONE OF THE TWO COMES BACK. The two sent-out patients split: the
+       * X-ray (even index) is read and waiting for the doctor, the blood test
+       * (odd) is still running. Without this both sat PENDING and the board's
+       * "Back from tests" tab was empty on a fresh seed — the one stage nobody
+       * could see without setting it up by hand first.
+       *
+       * One of each on purpose. Two completed would empty "At a department";
+       * two pending is where this started.
        */
-      const done = !isToday;
+      const done = !isToday || i % 2 === 0;
 
       await client.query(
         `INSERT INTO diagnostic_order
@@ -735,7 +767,6 @@ try {
           tenant,
           p,
           locations[0].id,
-          deptIds[p.dept],
           { xray: deptIds['X-ray'], pathology: deptIds['Pathology'] },
           daysAgo,
           index,

@@ -5,7 +5,6 @@ import {
   api,
   ApiRequestError,
   type ClinicLocation,
-  type Department,
   type LinkableUser,
   type SetupPractitioner,
 } from '@/lib/api';
@@ -43,7 +42,6 @@ export default function DoctorsPage() {
   const { can } = useAuth();
   const [doctors, setDoctors] = useState<SetupPractitioner[]>([]);
   const [linkable, setLinkable] = useState<LinkableUser[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -54,25 +52,16 @@ export default function DoctorsPage() {
     registrationNumber: '',
     specialty: '',
     qualification: '',
-    departmentId: '',
     userId: '',
     consultationFee: '',
     followUpFee: '',
   });
 
-  const [newDepartment, setNewDepartment] = useState('');
-  const [newIsDiagnostic, setNewIsDiagnostic] = useState(false);
-
   const load = useCallback(async () => {
     try {
-      const [setup, depts, locs] = await Promise.all([
-        api.setupPractitioners(),
-        api.setupDepartments(),
-        api.locations(),
-      ]);
+      const [setup, locs] = await Promise.all([api.setupPractitioners(), api.locations()]);
       setDoctors(setup.practitioners);
       setLinkable(setup.linkableUsers);
-      setDepartments(depts.departments);
       setLocations(locs.locations);
       setError(null);
     } catch (err) {
@@ -119,7 +108,6 @@ export default function DoctorsPage() {
           : {}),
         ...(form.specialty.trim() ? { specialty: form.specialty.trim() } : {}),
         ...(form.qualification.trim() ? { qualification: form.qualification.trim() } : {}),
-        ...(form.departmentId ? { departmentId: form.departmentId } : {}),
         ...(form.userId ? { userId: form.userId } : {}),
         ...(consultationFeePaise === undefined ? {} : { consultationFeePaise }),
         ...(followUpFeePaise === undefined ? {} : { followUpFeePaise }),
@@ -132,7 +120,6 @@ export default function DoctorsPage() {
       registrationNumber: '',
       specialty: '',
       qualification: '',
-      departmentId: '',
       userId: '',
       consultationFee: '',
       followUpFee: '',
@@ -201,22 +188,6 @@ export default function DoctorsPage() {
               onChange={(v) => setForm({ ...form, qualification: v })}
               placeholder="MBBS, MS (Ortho)"
             />
-
-            <label className="block">
-              <span className="field-label">Department</span>
-              <select
-                className="field-input mt-1"
-                value={form.departmentId}
-                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-              >
-                <option value="">None</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </label>
 
             <label className="block">
               <span className="field-label">Their login</span>
@@ -291,63 +262,13 @@ export default function DoctorsPage() {
         />
       ))}
 
-      <section className="card p-5">
-        <h2 className="font-display text-[17px] font-bold">Departments</h2>
-        <p className="mt-1 max-w-[62ch] text-[13px] text-ink-60">
-          The first step of booking. Optional — with none, the booking screen simply shows every
-          doctor. Mark a department as <strong>diagnostic</strong> (X-ray, pathology) and it takes
-          test requests instead of appointments: it has no slots and never appears when booking.
-        </p>
-
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {departments.map((d) => (
-            <span key={d.id} className={d.isDiagnostic ? 'badge-clinical' : 'badge-neutral'}>
-              {d.name}
-              {d.isDiagnostic && ' · tests'}
-            </span>
-          ))}
-          {departments.length === 0 && <span className="text-[13px] text-ink-40">None yet.</span>}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            className="field-input max-w-[260px]"
-            value={newDepartment}
-            onChange={(e) => setNewDepartment(e.target.value)}
-            placeholder={newIsDiagnostic ? 'X-ray' : 'Orthopaedics'}
-            maxLength={120}
-          />
-
-          {/* Chosen before creating, not after: the flag decides whether the
-              department ever appears on the booking screen, and a consulting
-              department that quietly became diagnostic would take its doctors'
-              slots with it. */}
-          <label className="flex select-none items-center gap-2 text-[13.5px] text-ink-60">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-clinical"
-              checked={newIsDiagnostic}
-              onChange={(e) => setNewIsDiagnostic(e.target.checked)}
-            />
-            Does tests, not appointments
-          </label>
-
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={busy === 'dept' || newDepartment.trim().length < 2}
-            onClick={() =>
-              void run('dept', async () => {
-                await api.createDepartment(newDepartment.trim(), newIsDiagnostic);
-                setNewDepartment('');
-                setNewIsDiagnostic(false);
-              })
-            }
-          >
-            Add department
-          </button>
-        </div>
-      </section>
+      {/*
+        DEPARTMENTS MOVED OUT. They were listed and created here because this
+        was the only screen that had them, back when a department was "the
+        first step of booking". They are a place that does tests now, managed
+        at Settings → Departments, and a second way to create one from a screen
+        about doctors is how the two drift apart.
+      */}
     </div>
   );
 }
@@ -471,7 +392,6 @@ function DoctorCard({
           <p className="text-[12.5px] text-ink-40">
             {[
               d.specialty,
-              d.department?.name,
               d.registrationNumber ? `Reg. ${d.registrationNumber}` : null,
               d.consultationFeePaise !== null ? `₹${rupees(d.consultationFeePaise)}` : null,
               d.userId ? 'has a login' : 'no login',
@@ -704,11 +624,11 @@ function DoctorCard({
                 last quarter's report MEANS, which is the one thing a report
                 must not do. The server refuses it outright, not just this form. */}
             <div>
-              <span className="field-label">Department</span>
+              <span className="field-label">Specialty</span>
               <p className="mt-1 truncate rounded-panel border border-ink/10 bg-ink/5 px-3.5 py-2.5 text-[15px] text-ink-40">
-                {d.department?.name ?? 'None'}
+                {d.specialty ?? 'Not set'}
               </p>
-              <span className="field-hint">Locked once set — past reports are split by it.</span>
+              <span className="field-hint">Shown wherever this doctor is chosen.</span>
             </div>
           </div>
 

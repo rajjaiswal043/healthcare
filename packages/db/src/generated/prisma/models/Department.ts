@@ -44,7 +44,6 @@ export type DepartmentMinAggregateOutputType = {
   id: string | null
   tenantId: string | null
   name: string | null
-  isDiagnostic: boolean | null
   displayOrder: number | null
   isActive: boolean | null
   createdAt: Date | null
@@ -55,7 +54,6 @@ export type DepartmentMaxAggregateOutputType = {
   id: string | null
   tenantId: string | null
   name: string | null
-  isDiagnostic: boolean | null
   displayOrder: number | null
   isActive: boolean | null
   createdAt: Date | null
@@ -66,7 +64,6 @@ export type DepartmentCountAggregateOutputType = {
   id: number
   tenantId: number
   name: number
-  isDiagnostic: number
   displayOrder: number
   isActive: number
   createdAt: number
@@ -87,7 +84,6 @@ export type DepartmentMinAggregateInputType = {
   id?: true
   tenantId?: true
   name?: true
-  isDiagnostic?: true
   displayOrder?: true
   isActive?: true
   createdAt?: true
@@ -98,7 +94,6 @@ export type DepartmentMaxAggregateInputType = {
   id?: true
   tenantId?: true
   name?: true
-  isDiagnostic?: true
   displayOrder?: true
   isActive?: true
   createdAt?: true
@@ -109,7 +104,6 @@ export type DepartmentCountAggregateInputType = {
   id?: true
   tenantId?: true
   name?: true
-  isDiagnostic?: true
   displayOrder?: true
   isActive?: true
   createdAt?: true
@@ -207,7 +201,6 @@ export type DepartmentGroupByOutputType = {
   id: string
   tenantId: string
   name: string
-  isDiagnostic: boolean
   displayOrder: number
   isActive: boolean
   createdAt: Date
@@ -241,13 +234,11 @@ export type DepartmentWhereInput = {
   id?: Prisma.UuidFilter<"Department"> | string
   tenantId?: Prisma.UuidFilter<"Department"> | string
   name?: Prisma.StringFilter<"Department"> | string
-  isDiagnostic?: Prisma.BoolFilter<"Department"> | boolean
   displayOrder?: Prisma.IntFilter<"Department"> | number
   isActive?: Prisma.BoolFilter<"Department"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Department"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Department"> | Date | string
-  practitioners?: Prisma.PractitionerListRelationFilter
-  appointments?: Prisma.AppointmentListRelationFilter
+  staff?: Prisma.UserListRelationFilter
   diagnosticOrders?: Prisma.DiagnosticOrderListRelationFilter
   services?: Prisma.ServiceListRelationFilter
 }
@@ -256,13 +247,11 @@ export type DepartmentOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   name?: Prisma.SortOrder
-  isDiagnostic?: Prisma.SortOrder
   displayOrder?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  practitioners?: Prisma.PractitionerOrderByRelationAggregateInput
-  appointments?: Prisma.AppointmentOrderByRelationAggregateInput
+  staff?: Prisma.UserOrderByRelationAggregateInput
   diagnosticOrders?: Prisma.DiagnosticOrderOrderByRelationAggregateInput
   services?: Prisma.ServiceOrderByRelationAggregateInput
 }
@@ -275,13 +264,11 @@ export type DepartmentWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.DepartmentWhereInput | Prisma.DepartmentWhereInput[]
   tenantId?: Prisma.UuidFilter<"Department"> | string
   name?: Prisma.StringFilter<"Department"> | string
-  isDiagnostic?: Prisma.BoolFilter<"Department"> | boolean
   displayOrder?: Prisma.IntFilter<"Department"> | number
   isActive?: Prisma.BoolFilter<"Department"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Department"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Department"> | Date | string
-  practitioners?: Prisma.PractitionerListRelationFilter
-  appointments?: Prisma.AppointmentListRelationFilter
+  staff?: Prisma.UserListRelationFilter
   diagnosticOrders?: Prisma.DiagnosticOrderListRelationFilter
   services?: Prisma.ServiceListRelationFilter
 }, "id" | "tenantId_name">
@@ -290,7 +277,6 @@ export type DepartmentOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   name?: Prisma.SortOrder
-  isDiagnostic?: Prisma.SortOrder
   displayOrder?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -309,7 +295,6 @@ export type DepartmentScalarWhereWithAggregatesInput = {
   id?: Prisma.UuidWithAggregatesFilter<"Department"> | string
   tenantId?: Prisma.UuidWithAggregatesFilter<"Department"> | string
   name?: Prisma.StringWithAggregatesFilter<"Department"> | string
-  isDiagnostic?: Prisma.BoolWithAggregatesFilter<"Department"> | boolean
   displayOrder?: Prisma.IntWithAggregatesFilter<"Department"> | number
   isActive?: Prisma.BoolWithAggregatesFilter<"Department"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Department"> | Date | string
@@ -320,13 +305,11 @@ export type DepartmentCreateInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerCreateNestedManyWithoutDepartmentInput
-  appointments?: Prisma.AppointmentCreateNestedManyWithoutDepartmentInput
+  staff?: Prisma.UserCreateNestedManyWithoutDepartmentInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutDepartmentInput
   services?: Prisma.ServiceCreateNestedManyWithoutDepartmentInput
 }
@@ -335,13 +318,11 @@ export type DepartmentUncheckedCreateInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerUncheckedCreateNestedManyWithoutDepartmentInput
-  appointments?: Prisma.AppointmentUncheckedCreateNestedManyWithoutDepartmentInput
+  staff?: Prisma.UserUncheckedCreateNestedManyWithoutDepartmentInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutDepartmentInput
   services?: Prisma.ServiceUncheckedCreateNestedManyWithoutDepartmentInput
 }
@@ -350,13 +331,11 @@ export type DepartmentUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUpdateManyWithoutDepartmentNestedInput
-  appointments?: Prisma.AppointmentUpdateManyWithoutDepartmentNestedInput
+  staff?: Prisma.UserUpdateManyWithoutDepartmentNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutDepartmentNestedInput
   services?: Prisma.ServiceUpdateManyWithoutDepartmentNestedInput
 }
@@ -365,13 +344,11 @@ export type DepartmentUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUncheckedUpdateManyWithoutDepartmentNestedInput
-  appointments?: Prisma.AppointmentUncheckedUpdateManyWithoutDepartmentNestedInput
+  staff?: Prisma.UserUncheckedUpdateManyWithoutDepartmentNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutDepartmentNestedInput
   services?: Prisma.ServiceUncheckedUpdateManyWithoutDepartmentNestedInput
 }
@@ -380,7 +357,6 @@ export type DepartmentCreateManyInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
@@ -391,7 +367,6 @@ export type DepartmentUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -402,11 +377,15 @@ export type DepartmentUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type DepartmentNullableScalarRelationFilter = {
+  is?: Prisma.DepartmentWhereInput | null
+  isNot?: Prisma.DepartmentWhereInput | null
 }
 
 export type DepartmentTenantIdNameCompoundUniqueInput = {
@@ -418,7 +397,6 @@ export type DepartmentCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   name?: Prisma.SortOrder
-  isDiagnostic?: Prisma.SortOrder
   displayOrder?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -433,7 +411,6 @@ export type DepartmentMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   name?: Prisma.SortOrder
-  isDiagnostic?: Prisma.SortOrder
   displayOrder?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -444,7 +421,6 @@ export type DepartmentMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
   name?: Prisma.SortOrder
-  isDiagnostic?: Prisma.SortOrder
   displayOrder?: Prisma.SortOrder
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -455,46 +431,25 @@ export type DepartmentSumOrderByAggregateInput = {
   displayOrder?: Prisma.SortOrder
 }
 
-export type DepartmentNullableScalarRelationFilter = {
-  is?: Prisma.DepartmentWhereInput | null
-  isNot?: Prisma.DepartmentWhereInput | null
-}
-
 export type DepartmentScalarRelationFilter = {
   is?: Prisma.DepartmentWhereInput
   isNot?: Prisma.DepartmentWhereInput
 }
 
-export type DepartmentCreateNestedOneWithoutPractitionersInput = {
-  create?: Prisma.XOR<Prisma.DepartmentCreateWithoutPractitionersInput, Prisma.DepartmentUncheckedCreateWithoutPractitionersInput>
-  connectOrCreate?: Prisma.DepartmentCreateOrConnectWithoutPractitionersInput
+export type DepartmentCreateNestedOneWithoutStaffInput = {
+  create?: Prisma.XOR<Prisma.DepartmentCreateWithoutStaffInput, Prisma.DepartmentUncheckedCreateWithoutStaffInput>
+  connectOrCreate?: Prisma.DepartmentCreateOrConnectWithoutStaffInput
   connect?: Prisma.DepartmentWhereUniqueInput
 }
 
-export type DepartmentUpdateOneWithoutPractitionersNestedInput = {
-  create?: Prisma.XOR<Prisma.DepartmentCreateWithoutPractitionersInput, Prisma.DepartmentUncheckedCreateWithoutPractitionersInput>
-  connectOrCreate?: Prisma.DepartmentCreateOrConnectWithoutPractitionersInput
-  upsert?: Prisma.DepartmentUpsertWithoutPractitionersInput
+export type DepartmentUpdateOneWithoutStaffNestedInput = {
+  create?: Prisma.XOR<Prisma.DepartmentCreateWithoutStaffInput, Prisma.DepartmentUncheckedCreateWithoutStaffInput>
+  connectOrCreate?: Prisma.DepartmentCreateOrConnectWithoutStaffInput
+  upsert?: Prisma.DepartmentUpsertWithoutStaffInput
   disconnect?: Prisma.DepartmentWhereInput | boolean
   delete?: Prisma.DepartmentWhereInput | boolean
   connect?: Prisma.DepartmentWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.DepartmentUpdateToOneWithWhereWithoutPractitionersInput, Prisma.DepartmentUpdateWithoutPractitionersInput>, Prisma.DepartmentUncheckedUpdateWithoutPractitionersInput>
-}
-
-export type DepartmentCreateNestedOneWithoutAppointmentsInput = {
-  create?: Prisma.XOR<Prisma.DepartmentCreateWithoutAppointmentsInput, Prisma.DepartmentUncheckedCreateWithoutAppointmentsInput>
-  connectOrCreate?: Prisma.DepartmentCreateOrConnectWithoutAppointmentsInput
-  connect?: Prisma.DepartmentWhereUniqueInput
-}
-
-export type DepartmentUpdateOneWithoutAppointmentsNestedInput = {
-  create?: Prisma.XOR<Prisma.DepartmentCreateWithoutAppointmentsInput, Prisma.DepartmentUncheckedCreateWithoutAppointmentsInput>
-  connectOrCreate?: Prisma.DepartmentCreateOrConnectWithoutAppointmentsInput
-  upsert?: Prisma.DepartmentUpsertWithoutAppointmentsInput
-  disconnect?: Prisma.DepartmentWhereInput | boolean
-  delete?: Prisma.DepartmentWhereInput | boolean
-  connect?: Prisma.DepartmentWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.DepartmentUpdateToOneWithWhereWithoutAppointmentsInput, Prisma.DepartmentUpdateWithoutAppointmentsInput>, Prisma.DepartmentUncheckedUpdateWithoutAppointmentsInput>
+  update?: Prisma.XOR<Prisma.XOR<Prisma.DepartmentUpdateToOneWithWhereWithoutStaffInput, Prisma.DepartmentUpdateWithoutStaffInput>, Prisma.DepartmentUncheckedUpdateWithoutStaffInput>
 }
 
 export type DepartmentCreateNestedOneWithoutServicesInput = {
@@ -527,146 +482,66 @@ export type DepartmentUpdateOneRequiredWithoutDiagnosticOrdersNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.DepartmentUpdateToOneWithWhereWithoutDiagnosticOrdersInput, Prisma.DepartmentUpdateWithoutDiagnosticOrdersInput>, Prisma.DepartmentUncheckedUpdateWithoutDiagnosticOrdersInput>
 }
 
-export type DepartmentCreateWithoutPractitionersInput = {
+export type DepartmentCreateWithoutStaffInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  appointments?: Prisma.AppointmentCreateNestedManyWithoutDepartmentInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutDepartmentInput
   services?: Prisma.ServiceCreateNestedManyWithoutDepartmentInput
 }
 
-export type DepartmentUncheckedCreateWithoutPractitionersInput = {
+export type DepartmentUncheckedCreateWithoutStaffInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  appointments?: Prisma.AppointmentUncheckedCreateNestedManyWithoutDepartmentInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutDepartmentInput
   services?: Prisma.ServiceUncheckedCreateNestedManyWithoutDepartmentInput
 }
 
-export type DepartmentCreateOrConnectWithoutPractitionersInput = {
+export type DepartmentCreateOrConnectWithoutStaffInput = {
   where: Prisma.DepartmentWhereUniqueInput
-  create: Prisma.XOR<Prisma.DepartmentCreateWithoutPractitionersInput, Prisma.DepartmentUncheckedCreateWithoutPractitionersInput>
+  create: Prisma.XOR<Prisma.DepartmentCreateWithoutStaffInput, Prisma.DepartmentUncheckedCreateWithoutStaffInput>
 }
 
-export type DepartmentUpsertWithoutPractitionersInput = {
-  update: Prisma.XOR<Prisma.DepartmentUpdateWithoutPractitionersInput, Prisma.DepartmentUncheckedUpdateWithoutPractitionersInput>
-  create: Prisma.XOR<Prisma.DepartmentCreateWithoutPractitionersInput, Prisma.DepartmentUncheckedCreateWithoutPractitionersInput>
+export type DepartmentUpsertWithoutStaffInput = {
+  update: Prisma.XOR<Prisma.DepartmentUpdateWithoutStaffInput, Prisma.DepartmentUncheckedUpdateWithoutStaffInput>
+  create: Prisma.XOR<Prisma.DepartmentCreateWithoutStaffInput, Prisma.DepartmentUncheckedCreateWithoutStaffInput>
   where?: Prisma.DepartmentWhereInput
 }
 
-export type DepartmentUpdateToOneWithWhereWithoutPractitionersInput = {
+export type DepartmentUpdateToOneWithWhereWithoutStaffInput = {
   where?: Prisma.DepartmentWhereInput
-  data: Prisma.XOR<Prisma.DepartmentUpdateWithoutPractitionersInput, Prisma.DepartmentUncheckedUpdateWithoutPractitionersInput>
+  data: Prisma.XOR<Prisma.DepartmentUpdateWithoutStaffInput, Prisma.DepartmentUncheckedUpdateWithoutStaffInput>
 }
 
-export type DepartmentUpdateWithoutPractitionersInput = {
+export type DepartmentUpdateWithoutStaffInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  appointments?: Prisma.AppointmentUpdateManyWithoutDepartmentNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutDepartmentNestedInput
   services?: Prisma.ServiceUpdateManyWithoutDepartmentNestedInput
 }
 
-export type DepartmentUncheckedUpdateWithoutPractitionersInput = {
+export type DepartmentUncheckedUpdateWithoutStaffInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  appointments?: Prisma.AppointmentUncheckedUpdateManyWithoutDepartmentNestedInput
-  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutDepartmentNestedInput
-  services?: Prisma.ServiceUncheckedUpdateManyWithoutDepartmentNestedInput
-}
-
-export type DepartmentCreateWithoutAppointmentsInput = {
-  id?: string
-  tenantId: string
-  name: string
-  isDiagnostic?: boolean
-  displayOrder?: number
-  isActive?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerCreateNestedManyWithoutDepartmentInput
-  diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutDepartmentInput
-  services?: Prisma.ServiceCreateNestedManyWithoutDepartmentInput
-}
-
-export type DepartmentUncheckedCreateWithoutAppointmentsInput = {
-  id?: string
-  tenantId: string
-  name: string
-  isDiagnostic?: boolean
-  displayOrder?: number
-  isActive?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerUncheckedCreateNestedManyWithoutDepartmentInput
-  diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutDepartmentInput
-  services?: Prisma.ServiceUncheckedCreateNestedManyWithoutDepartmentInput
-}
-
-export type DepartmentCreateOrConnectWithoutAppointmentsInput = {
-  where: Prisma.DepartmentWhereUniqueInput
-  create: Prisma.XOR<Prisma.DepartmentCreateWithoutAppointmentsInput, Prisma.DepartmentUncheckedCreateWithoutAppointmentsInput>
-}
-
-export type DepartmentUpsertWithoutAppointmentsInput = {
-  update: Prisma.XOR<Prisma.DepartmentUpdateWithoutAppointmentsInput, Prisma.DepartmentUncheckedUpdateWithoutAppointmentsInput>
-  create: Prisma.XOR<Prisma.DepartmentCreateWithoutAppointmentsInput, Prisma.DepartmentUncheckedCreateWithoutAppointmentsInput>
-  where?: Prisma.DepartmentWhereInput
-}
-
-export type DepartmentUpdateToOneWithWhereWithoutAppointmentsInput = {
-  where?: Prisma.DepartmentWhereInput
-  data: Prisma.XOR<Prisma.DepartmentUpdateWithoutAppointmentsInput, Prisma.DepartmentUncheckedUpdateWithoutAppointmentsInput>
-}
-
-export type DepartmentUpdateWithoutAppointmentsInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUpdateManyWithoutDepartmentNestedInput
-  diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutDepartmentNestedInput
-  services?: Prisma.ServiceUpdateManyWithoutDepartmentNestedInput
-}
-
-export type DepartmentUncheckedUpdateWithoutAppointmentsInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUncheckedUpdateManyWithoutDepartmentNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutDepartmentNestedInput
   services?: Prisma.ServiceUncheckedUpdateManyWithoutDepartmentNestedInput
 }
@@ -675,13 +550,11 @@ export type DepartmentCreateWithoutServicesInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerCreateNestedManyWithoutDepartmentInput
-  appointments?: Prisma.AppointmentCreateNestedManyWithoutDepartmentInput
+  staff?: Prisma.UserCreateNestedManyWithoutDepartmentInput
   diagnosticOrders?: Prisma.DiagnosticOrderCreateNestedManyWithoutDepartmentInput
 }
 
@@ -689,13 +562,11 @@ export type DepartmentUncheckedCreateWithoutServicesInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerUncheckedCreateNestedManyWithoutDepartmentInput
-  appointments?: Prisma.AppointmentUncheckedCreateNestedManyWithoutDepartmentInput
+  staff?: Prisma.UserUncheckedCreateNestedManyWithoutDepartmentInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutDepartmentInput
 }
 
@@ -719,13 +590,11 @@ export type DepartmentUpdateWithoutServicesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUpdateManyWithoutDepartmentNestedInput
-  appointments?: Prisma.AppointmentUpdateManyWithoutDepartmentNestedInput
+  staff?: Prisma.UserUpdateManyWithoutDepartmentNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUpdateManyWithoutDepartmentNestedInput
 }
 
@@ -733,13 +602,11 @@ export type DepartmentUncheckedUpdateWithoutServicesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUncheckedUpdateManyWithoutDepartmentNestedInput
-  appointments?: Prisma.AppointmentUncheckedUpdateManyWithoutDepartmentNestedInput
+  staff?: Prisma.UserUncheckedUpdateManyWithoutDepartmentNestedInput
   diagnosticOrders?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutDepartmentNestedInput
 }
 
@@ -747,13 +614,11 @@ export type DepartmentCreateWithoutDiagnosticOrdersInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerCreateNestedManyWithoutDepartmentInput
-  appointments?: Prisma.AppointmentCreateNestedManyWithoutDepartmentInput
+  staff?: Prisma.UserCreateNestedManyWithoutDepartmentInput
   services?: Prisma.ServiceCreateNestedManyWithoutDepartmentInput
 }
 
@@ -761,13 +626,11 @@ export type DepartmentUncheckedCreateWithoutDiagnosticOrdersInput = {
   id?: string
   tenantId: string
   name: string
-  isDiagnostic?: boolean
   displayOrder?: number
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  practitioners?: Prisma.PractitionerUncheckedCreateNestedManyWithoutDepartmentInput
-  appointments?: Prisma.AppointmentUncheckedCreateNestedManyWithoutDepartmentInput
+  staff?: Prisma.UserUncheckedCreateNestedManyWithoutDepartmentInput
   services?: Prisma.ServiceUncheckedCreateNestedManyWithoutDepartmentInput
 }
 
@@ -791,13 +654,11 @@ export type DepartmentUpdateWithoutDiagnosticOrdersInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUpdateManyWithoutDepartmentNestedInput
-  appointments?: Prisma.AppointmentUpdateManyWithoutDepartmentNestedInput
+  staff?: Prisma.UserUpdateManyWithoutDepartmentNestedInput
   services?: Prisma.ServiceUpdateManyWithoutDepartmentNestedInput
 }
 
@@ -805,13 +666,11 @@ export type DepartmentUncheckedUpdateWithoutDiagnosticOrdersInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   tenantId?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
-  isDiagnostic?: Prisma.BoolFieldUpdateOperationsInput | boolean
   displayOrder?: Prisma.IntFieldUpdateOperationsInput | number
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  practitioners?: Prisma.PractitionerUncheckedUpdateManyWithoutDepartmentNestedInput
-  appointments?: Prisma.AppointmentUncheckedUpdateManyWithoutDepartmentNestedInput
+  staff?: Prisma.UserUncheckedUpdateManyWithoutDepartmentNestedInput
   services?: Prisma.ServiceUncheckedUpdateManyWithoutDepartmentNestedInput
 }
 
@@ -821,15 +680,13 @@ export type DepartmentUncheckedUpdateWithoutDiagnosticOrdersInput = {
  */
 
 export type DepartmentCountOutputType = {
-  practitioners: number
-  appointments: number
+  staff: number
   diagnosticOrders: number
   services: number
 }
 
 export type DepartmentCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  practitioners?: boolean | DepartmentCountOutputTypeCountPractitionersArgs
-  appointments?: boolean | DepartmentCountOutputTypeCountAppointmentsArgs
+  staff?: boolean | DepartmentCountOutputTypeCountStaffArgs
   diagnosticOrders?: boolean | DepartmentCountOutputTypeCountDiagnosticOrdersArgs
   services?: boolean | DepartmentCountOutputTypeCountServicesArgs
 }
@@ -847,15 +704,8 @@ export type DepartmentCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.E
 /**
  * DepartmentCountOutputType without action
  */
-export type DepartmentCountOutputTypeCountPractitionersArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.PractitionerWhereInput
-}
-
-/**
- * DepartmentCountOutputType without action
- */
-export type DepartmentCountOutputTypeCountAppointmentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.AppointmentWhereInput
+export type DepartmentCountOutputTypeCountStaffArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.UserWhereInput
 }
 
 /**
@@ -877,13 +727,11 @@ export type DepartmentSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   id?: boolean
   tenantId?: boolean
   name?: boolean
-  isDiagnostic?: boolean
   displayOrder?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  practitioners?: boolean | Prisma.Department$practitionersArgs<ExtArgs>
-  appointments?: boolean | Prisma.Department$appointmentsArgs<ExtArgs>
+  staff?: boolean | Prisma.Department$staffArgs<ExtArgs>
   diagnosticOrders?: boolean | Prisma.Department$diagnosticOrdersArgs<ExtArgs>
   services?: boolean | Prisma.Department$servicesArgs<ExtArgs>
   _count?: boolean | Prisma.DepartmentCountOutputTypeDefaultArgs<ExtArgs>
@@ -893,7 +741,6 @@ export type DepartmentSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   id?: boolean
   tenantId?: boolean
   name?: boolean
-  isDiagnostic?: boolean
   displayOrder?: boolean
   isActive?: boolean
   createdAt?: boolean
@@ -904,7 +751,6 @@ export type DepartmentSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   id?: boolean
   tenantId?: boolean
   name?: boolean
-  isDiagnostic?: boolean
   displayOrder?: boolean
   isActive?: boolean
   createdAt?: boolean
@@ -915,17 +761,15 @@ export type DepartmentSelectScalar = {
   id?: boolean
   tenantId?: boolean
   name?: boolean
-  isDiagnostic?: boolean
   displayOrder?: boolean
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type DepartmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "name" | "isDiagnostic" | "displayOrder" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["department"]>
+export type DepartmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "name" | "displayOrder" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["department"]>
 export type DepartmentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  practitioners?: boolean | Prisma.Department$practitionersArgs<ExtArgs>
-  appointments?: boolean | Prisma.Department$appointmentsArgs<ExtArgs>
+  staff?: boolean | Prisma.Department$staffArgs<ExtArgs>
   diagnosticOrders?: boolean | Prisma.Department$diagnosticOrdersArgs<ExtArgs>
   services?: boolean | Prisma.Department$servicesArgs<ExtArgs>
   _count?: boolean | Prisma.DepartmentCountOutputTypeDefaultArgs<ExtArgs>
@@ -936,8 +780,15 @@ export type DepartmentIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.E
 export type $DepartmentPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Department"
   objects: {
-    practitioners: Prisma.$PractitionerPayload<ExtArgs>[]
-    appointments: Prisma.$AppointmentPayload<ExtArgs>[]
+    /**
+     * A department is a place that does TESTS. It no longer holds doctors or
+     * appointments — `specialty` describes a doctor, and nobody books an
+     * appointment with radiology. See the departments_do_tests_only migration.
+     * 
+     * It does hold the STAFF who work in it, which is a different claim: a
+     * technician works in a room, a doctor does not.
+     */
+    staff: Prisma.$UserPayload<ExtArgs>[]
     diagnosticOrders: Prisma.$DiagnosticOrderPayload<ExtArgs>[]
     services: Prisma.$ServicePayload<ExtArgs>[]
   }
@@ -946,12 +797,7 @@ export type $DepartmentPayload<ExtArgs extends runtime.Types.Extensions.Internal
     tenantId: string
     name: string
     /**
-     * X-ray, pathology. No appointment slots, absent from booking: nobody books
-     * an appointment with radiology, a doctor sends them there mid-visit.
-     */
-    isDiagnostic: boolean
-    /**
-     * Sort order on the booking screen â€” clinics want their busiest first.
+     * Sort order in the pickers — clinics want their busiest first.
      */
     displayOrder: number
     isActive: boolean
@@ -1351,8 +1197,7 @@ readonly fields: DepartmentFieldRefs;
  */
 export interface Prisma__DepartmentClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  practitioners<T extends Prisma.Department$practitionersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Department$practitionersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PractitionerPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  appointments<T extends Prisma.Department$appointmentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Department$appointmentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AppointmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  staff<T extends Prisma.Department$staffArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Department$staffArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   diagnosticOrders<T extends Prisma.Department$diagnosticOrdersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Department$diagnosticOrdersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   services<T extends Prisma.Department$servicesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Department$servicesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ServicePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
@@ -1387,7 +1232,6 @@ export interface DepartmentFieldRefs {
   readonly id: Prisma.FieldRef<"Department", 'String'>
   readonly tenantId: Prisma.FieldRef<"Department", 'String'>
   readonly name: Prisma.FieldRef<"Department", 'String'>
-  readonly isDiagnostic: Prisma.FieldRef<"Department", 'Boolean'>
   readonly displayOrder: Prisma.FieldRef<"Department", 'Int'>
   readonly isActive: Prisma.FieldRef<"Department", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"Department", 'DateTime'>
@@ -1785,51 +1629,27 @@ export type DepartmentDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.In
 }
 
 /**
- * Department.practitioners
+ * Department.staff
  */
-export type Department$practitionersArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+export type Department$staffArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
-   * Select specific fields to fetch from the Practitioner
+   * Select specific fields to fetch from the User
    */
-  select?: Prisma.PractitionerSelect<ExtArgs> | null
+  select?: Prisma.UserSelect<ExtArgs> | null
   /**
-   * Omit specific fields from the Practitioner
+   * Omit specific fields from the User
    */
-  omit?: Prisma.PractitionerOmit<ExtArgs> | null
+  omit?: Prisma.UserOmit<ExtArgs> | null
   /**
    * Choose, which related nodes to fetch as well
    */
-  include?: Prisma.PractitionerInclude<ExtArgs> | null
-  where?: Prisma.PractitionerWhereInput
-  orderBy?: Prisma.PractitionerOrderByWithRelationInput | Prisma.PractitionerOrderByWithRelationInput[]
-  cursor?: Prisma.PractitionerWhereUniqueInput
+  include?: Prisma.UserInclude<ExtArgs> | null
+  where?: Prisma.UserWhereInput
+  orderBy?: Prisma.UserOrderByWithRelationInput | Prisma.UserOrderByWithRelationInput[]
+  cursor?: Prisma.UserWhereUniqueInput
   take?: number
   skip?: number
-  distinct?: Prisma.PractitionerScalarFieldEnum | Prisma.PractitionerScalarFieldEnum[]
-}
-
-/**
- * Department.appointments
- */
-export type Department$appointmentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the Appointment
-   */
-  select?: Prisma.AppointmentSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the Appointment
-   */
-  omit?: Prisma.AppointmentOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.AppointmentInclude<ExtArgs> | null
-  where?: Prisma.AppointmentWhereInput
-  orderBy?: Prisma.AppointmentOrderByWithRelationInput | Prisma.AppointmentOrderByWithRelationInput[]
-  cursor?: Prisma.AppointmentWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.AppointmentScalarFieldEnum | Prisma.AppointmentScalarFieldEnum[]
+  distinct?: Prisma.UserScalarFieldEnum | Prisma.UserScalarFieldEnum[]
 }
 
 /**

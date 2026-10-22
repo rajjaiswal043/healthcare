@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import { IconAlert, IconCheck, IconInfo, IconSearch, IconUserPlus } from '@/components/icons';
 import { looksLikeAPersonName } from '@/lib/person-name';
+import { DEFAULT_STATE, INDIAN_STATES } from '@/lib/india';
 
 type Form = {
   name: string;
@@ -41,7 +42,7 @@ const EMPTY: Form = {
   birthDate: '',
   mobile: '',
   city: '',
-  state: 'Maharashtra',
+  state: DEFAULT_STATE,
   postalCode: '',
   addressLine: '',
   bloodGroup: 'UNKNOWN',
@@ -337,6 +338,33 @@ export default function RegisterPatientPage() {
                 onChange={(e) => set('city', e.target.value)}
                 className="field-input"
               />
+            </div>
+
+            <div>
+              <label htmlFor="state" className="field-label">
+                State
+              </label>
+              {/*
+                A LIST, NOT A TEXT BOX. Free-typed states become "UP", "U.P."
+                and "Uttar pradesh" within a week, and then nothing can group
+                by them.
+
+                It replaces a hidden `state: 'Maharashtra'` that was never on
+                screen — which is why every patient in the register currently
+                reads Maharashtra regardless of where they live.
+              */}
+              <select
+                id="state"
+                value={form.state}
+                onChange={(e) => set('state', e.target.value)}
+                className="field-input"
+              >
+                {INDIAN_STATES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>

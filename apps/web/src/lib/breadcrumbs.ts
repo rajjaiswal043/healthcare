@@ -43,6 +43,7 @@ export const BREADCRUMBS: Record<string, string> = {
   '/settings/users': 'Staff',
   '/settings/roles': 'Roles and permissions',
   '/settings/doctors': 'Doctors and hours',
+  '/settings/departments': 'Departments',
   '/settings/prices': 'Prices',
   '/settings/promotions': 'Promotions',
   '/settings/branding': 'Branding',

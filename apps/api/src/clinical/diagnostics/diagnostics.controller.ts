@@ -16,10 +16,14 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import type { FastifyRequest } from 'fastify';
@@ -100,6 +104,24 @@ class CreateOrderDto {
   @MinLength(2)
   @MaxLength(300)
   description?: string;
+
+  /**
+   * What to charge for this one, in paise, when it is not the list price.
+   *
+   * Absent means the catalogue price — which is what every order sent before
+   * this existed meant, and what the form sends unless somebody edits the
+   * amount. Zero is allowed and is a real answer: a film repeated because the
+   * first was unreadable is not charged twice.
+   *
+   * Capped at the same ₹1,00,000 as the price list itself. The cap is the
+   * only judgement this layer makes; whether a concession was right is the
+   * clinic's call and shows up in the audit trail either way.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100_000_000)
+  pricePaise?: number;
 }
 
 class ExternalTestNoteDto {
@@ -191,6 +213,14 @@ class WorklistQueryDto {
   @IsOptional()
   @IsIn(['PENDING', 'COMPLETED', 'DECLINED'])
   status?: 'PENDING' | 'COMPLETED' | 'DECLINED';
+
+  /**
+   * One clinic day, `2026-10-22`. Absent means every day, which is what a
+   * to-do list wants: yesterday's unfinished work is still today's work.
+   */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'A date looks like 2026-10-22.' })
+  date?: string;
 }
 
 @Controller()

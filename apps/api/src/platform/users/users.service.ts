@@ -93,6 +93,7 @@ export class UsersService {
           mfaEnabledAt: true,
           createdAt: true,
           roles: { select: { role: { select: { key: true, name: true } } } },
+          department: { select: { id: true, name: true } },
         },
       });
 
@@ -110,6 +111,8 @@ export class UsersService {
           mfaEnrolled: u.mfaEnabledAt !== null,
           createdAt: u.createdAt,
           roles: u.roles.map((r) => r.role),
+          /** Null for every role but diagnostics. */
+          department: u.department,
         })),
         seats: await this.seats(tx),
       };
@@ -161,9 +164,62 @@ export class UsersService {
    * chance to read it — the screen has to get it to the person before it is
    * dismissed, and the UI is built around that.
    */
+  /**
+   * Which department this member of staff works in, if any.
+   *
+   * REQUIRED FOR DIAGNOSTICS, IGNORED FOR EVERYONE ELSE. The technician who
+   * works the X-ray room is not the one who works pathology, and a diagnostics
+   * login with no room gets a worklist of every department's tests to filter by
+   * hand — which is the thing this is here to stop. Every other role genuinely
+   * has no department, so the column stays nullable and the rule lives here,
+   * where the roles being granted are actually known.
+   *
+   * Checked against the tenant's own departments, and against retired ones:
+   * assigning somebody to a room that has been closed would produce a login
+   * whose worklist is empty for a reason nobody can see.
+   */
+  private async departmentFor(
+    tx: TenantClient,
+    roles: Array<{ key: string }>,
+    departmentId: string | undefined,
+  ): Promise<string | null> {
+    const needsOne = roles.some((r) => r.key === 'diagnostics');
+
+    if (!needsOne) return null;
+
+    if (!departmentId) {
+      throw new BadRequestException({
+        code: 'DEPARTMENT_REQUIRED',
+        message: 'Somebody who works in diagnostics has to be given a department.',
+      });
+    }
+
+    const department = await tx.department.findUnique({
+      where: { id: departmentId },
+      select: { id: true, name: true, isActive: true },
+    });
+
+    if (!department) throw new NotFoundException('No such department.');
+
+    if (!department.isActive) {
+      throw new BadRequestException({
+        code: 'DEPARTMENT_INACTIVE',
+        message: `“${department.name}” is retired. Bring it back before assigning somebody to it.`,
+      });
+    }
+
+    return department.id;
+  }
+
   async create(
     tenantId: string,
-    input: { email: string; fullName: string; mobile?: string; roleKeys: string[] },
+    input: {
+      email: string;
+      fullName: string;
+      mobile?: string;
+      roleKeys: string[];
+      departmentId?: string;
+    },
     meta: RequestMeta,
   ) {
     const email = input.email.trim().toLowerCase();
@@ -185,6 +241,7 @@ export class UsersService {
 
       const roles = await this.rolesByKey(tx, input.roleKeys);
       await this.assertSeatsAvailable(tx, roles);
+      const departmentId = await this.departmentFor(tx, roles, input.departmentId);
 
       const temporaryPassword = generateTemporaryPassword();
 
@@ -194,6 +251,7 @@ export class UsersService {
           email,
           fullName: input.fullName.trim(),
           mobile: input.mobile ?? null,
+          departmentId,
           passwordHash: await hashPassword(temporaryPassword),
           // The point of the whole flow: what we hand over cannot be kept.
           mustChangePassword: true,
@@ -221,11 +279,40 @@ export class UsersService {
   async update(
     tenantId: string,
     id: string,
-    input: { fullName?: string; mobile?: string | null; roleKeys?: string[] },
+    input: {
+      fullName?: string;
+      mobile?: string | null;
+      roleKeys?: string[];
+      departmentId?: string;
+    },
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const user = await this.load(tx, id);
+
+      /**
+       * WHICH ROOM THEY WORK IN, after the fact.
+       *
+       * Creating a diagnostics login insists on a department; editing one has
+       * to be able to CHANGE it, and to supply one that was never given —
+       * every technician who existed before the column did has none, and
+       * without this there is no screen anywhere that can put them in a room.
+       *
+       * Worked out from the roles the user will hold once this save lands, not
+       * the ones they hold now: granting the diagnostics role and the
+       * department in a single edit must succeed, and withdrawing the role must
+       * clear the room rather than leave somebody filed under X-ray who no
+       * longer works there.
+       */
+      const rolesAfter = input.roleKeys
+        ? input.roleKeys.map((key) => ({ key }))
+        : user.roles.map((r) => ({ key: r.role.key }));
+
+      const departmentId = await this.departmentFor(
+        tx,
+        rolesAfter,
+        input.departmentId ?? user.departmentId ?? undefined,
+      );
 
       if (input.roleKeys) {
         const roles = await this.rolesByKey(tx, input.roleKeys);
@@ -251,6 +338,7 @@ export class UsersService {
         data: {
           ...(input.fullName === undefined ? {} : { fullName: input.fullName.trim() }),
           ...(input.mobile === undefined ? {} : { mobile: input.mobile }),
+          departmentId,
         },
       });
 
@@ -378,6 +466,9 @@ export class UsersService {
         fullName: true,
         isActive: true,
         roles: { select: { role: { select: { key: true, name: true } } } },
+        /* The room they are in now, so an edit that does not mention it keeps
+           it rather than silently emptying it. */
+        departmentId: true,
       },
     });
 

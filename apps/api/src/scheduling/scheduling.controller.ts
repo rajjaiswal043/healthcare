@@ -46,32 +46,22 @@ export class SchedulingController {
 
   // --- masters -------------------------------------------------------------
 
-  /** Departments, for the first step of booking. */
-  @Get('departments')
-  @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
-  async departments(@CurrentTenant() tenantId: string) {
-    const departments = await this.prisma.forTenant(tenantId, (tx) =>
-      tx.department.findMany({
-        // Diagnostic departments are excluded: nobody books an appointment with
-        // radiology, and offering it here produces a booking with no slots.
-        where: { isActive: true, isDiagnostic: false },
-        orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
-        select: { id: true, name: true },
-      }),
-    );
-    return { departments };
-  }
-
-  /** Doctors, optionally narrowed to one department. */
+  /**
+   * Doctors.
+   *
+   * THERE IS NO `GET /departments` ANY MORE, and no `departmentId` filter here.
+   * A department is a place that does tests; booking never had a use for one.
+   * The list it served narrowed four doctors by departments a seed invented,
+   * and `specialty` — which this does return — is what somebody choosing a
+   * doctor actually reads. Test departments are served by
+   * `GET /diagnostics/departments`.
+   */
   @Get('practitioners')
   @RequirePermissions(PERMISSIONS.APPOINTMENT_READ)
-  async practitioners(
-    @CurrentTenant() tenantId: string,
-    @Query('departmentId') departmentId?: string,
-  ) {
+  async practitioners(@CurrentTenant() tenantId: string) {
     const practitioners = await this.prisma.forTenant(tenantId, (tx) =>
       tx.practitioner.findMany({
-        where: { isActive: true, ...(departmentId ? { departmentId } : {}) },
+        where: { isActive: true },
         orderBy: { fullName: 'asc' },
         select: {
           id: true,
@@ -90,7 +80,6 @@ export class SchedulingController {
            * opens a NEW consultation.
            */
           consultationFeePaise: true,
-          department: { select: { id: true, name: true } },
         },
       }),
     );
@@ -212,6 +201,24 @@ export class SchedulingController {
       { seeNext: dto.seeNext, ...(dto.note ? { note: dto.note } : {}) },
       metaFrom(req, user),
     );
+  }
+
+  /**
+   * Say the visit is over.
+   *
+   * `appointment:write` rather than anything clinical: closing is the front
+   * desk sending somebody home, not a clinical judgement. The doctor's own
+   * sign-off is FULFILLED and happens earlier.
+   */
+  @Patch('appointments/:id/close')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async closeVisit(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.closeVisit(tenantId, id, metaFrom(req, user));
   }
 
   /**

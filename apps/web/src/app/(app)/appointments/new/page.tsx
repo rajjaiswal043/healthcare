@@ -8,7 +8,6 @@ import {
   ApiRequestError,
   type ClinicLocation,
   type DayAvailability,
-  type Department,
   type PatientSummary,
   type Practitioner,
 } from '@/lib/api';
@@ -57,8 +56,6 @@ export default function NewAppointmentPage() {
   const [patient, setPatient] = useState<PatientSummary | null>(null);
   /** Arrived straight from registration, so this screen says so. */
   const [justRegistered, setJustRegistered] = useState(false);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [departmentId, setDepartmentId] = useState<string>('');
   const [doctors, setDoctors] = useState<Practitioner[]>([]);
   const [doctorId, setDoctorId] = useState<string>('');
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
@@ -87,10 +84,9 @@ export default function NewAppointmentPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [d, l] = await Promise.all([api.departments(), api.locations()]);
-        setDepartments(d.departments);
-        setLocations(l.locations);
-        if (l.locations.length > 0) setLocationId(l.locations[0]!.id);
+        const { locations } = await api.locations();
+        setLocations(locations);
+        if (locations.length > 0) setLocationId(locations[0]!.id);
       } catch {
         setError('Could not load clinic setup.');
       }
@@ -121,12 +117,12 @@ export default function NewAppointmentPage() {
 
   useEffect(() => {
     void (async () => {
-      const { practitioners } = await api.practitioners(departmentId || undefined);
+      const { practitioners } = await api.practitioners();
       setDoctors(practitioners);
       setDoctorId((prev) => (practitioners.some((p) => p.id === prev) ? prev : ''));
       setSlotStart('');
     })();
-  }, [departmentId]);
+  }, []);
 
   const loadAvailability = useCallback(async () => {
     if (!doctorId) {
@@ -156,14 +152,12 @@ export default function NewAppointmentPage() {
             patientId: patient.id,
             practitionerId: doctorId,
             locationId,
-            ...(departmentId ? { departmentId } : {}),
             ...(reason ? { reasonForVisit: reason } : {}),
           })
         : await api.bookAppointment({
             patientId: patient.id,
             practitionerId: doctorId,
             locationId,
-            ...(departmentId ? { departmentId } : {}),
             startAt: slotStart,
             ...(reason ? { reasonForVisit: reason } : {}),
           });
@@ -317,18 +311,16 @@ export default function NewAppointmentPage() {
       <section className="card p-5">
         <p className="mono-label mb-3">2 · Doctor</p>
 
-        <div className="flex flex-wrap gap-1.5">
-          <Chip active={departmentId === ''} onClick={() => setDepartmentId('')}>
-            All departments
-          </Chip>
-          {departments.map((d) => (
-            <Chip key={d.id} active={departmentId === d.id} onClick={() => setDepartmentId(d.id)}>
-              {d.name}
-            </Chip>
-          ))}
-        </div>
+        {/*
+          NO DEPARTMENT FILTER. A department is a place that does tests — X-ray,
+          Pathology — and nobody books an appointment with radiology. The chips
+          here listed clinical departments that existed only because a seed made
+          them, and filtered a list of four doctors by them.
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          The doctor cards carry the specialty, which is the thing somebody
+          booking actually wants to know.
+        */}
+        <div className="grid gap-2 sm:grid-cols-2">
           {doctors.map((d) => (
             <button
               key={d.id}
@@ -343,7 +335,7 @@ export default function NewAppointmentPage() {
             >
               <p className="text-[14px] font-semibold text-ink">{d.fullName}</p>
               <p className="text-[12.5px] text-ink-40">
-                {d.specialty ?? d.department?.name ?? '—'}
+                {d.specialty ?? '—'}
                 {d.qualification ? ` · ${d.qualification}` : ''}
               </p>
             </button>
@@ -534,32 +526,6 @@ export default function NewAppointmentPage() {
         )}
       </section>
     </div>
-  );
-}
-
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={[
-        'rounded-pill border-[1.5px] px-3 py-1 text-[13px] font-semibold transition-colors',
-        active
-          ? 'border-clinical bg-clinical text-white'
-          : 'border-ink/12 bg-white text-ink-60 hover:border-ink/25 hover:text-ink',
-      ].join(' ')}
-    >
-      {children}
-    </button>
   );
 }
 

@@ -172,7 +172,7 @@ export type Session = Prisma.SessionModel
 export type Department = Prisma.DepartmentModel
 /**
  * Model Practitioner
- * A doctor. FHIR: Practitioner (+ PractitionerRole for the department link).
+ * A doctor. FHIR: Practitioner.
  * 
  * registrationNumber is not optional in spirit: the Telemedicine Guidelines and
  * the Drugs rules both require a doctor's registration number on prescriptions

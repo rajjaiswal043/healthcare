@@ -20,22 +20,25 @@ import { RecordResultDialog } from '@/components/record-result-dialog';
 import { PaymentDialog } from '@/components/payment-dialog';
 import { PrintReceiptButton } from '@/components/receipt-button';
 import { firstDoableStep, stepLabel } from '@/components/next-step';
+import { DATE_RE, DayPicker, dayLabel } from '@/components/day-picker';
+import { DiagnosticsBoard } from '@/components/diagnostics-board';
+import { worksOneDepartment } from '@/lib/roles';
 import { formatAge, formatPaise, genderInitial, payMethodLabel } from '@/lib/format';
-import {
-  IconAlert,
-  IconCalendar,
-  IconChevronRight,
-  IconRefresh,
-  IconSearch,
-  IconUserPlus,
-  IconUsers,
-} from '@/components/icons';
+import { IconAlert, IconSearch, IconUserPlus, IconUsers } from '@/components/icons';
 
 /** How often the board refreshes while somebody is actually looking at it. */
 const POLL_MS = 30000;
 const PAGE_SIZE = 12;
 
-type TabKey = 'everyone' | 'expected' | 'waiting' | 'with-doctor' | 'at-department' | 'done';
+type TabKey =
+  | 'everyone'
+  | 'expected'
+  | 'waiting'
+  | 'with-doctor'
+  | 'at-department'
+  | 'back-from-tests'
+  | 'ready-to-close'
+  | 'done';
 
 const TABS: Array<{ key: TabKey; label: string; bucket: DayBucket | null }> = [
   { key: 'everyone', label: 'Everyone', bucket: null },
@@ -43,6 +46,12 @@ const TABS: Array<{ key: TabKey; label: string; bucket: DayBucket | null }> = [
   { key: 'waiting', label: 'Waiting', bucket: 'WAITING' },
   { key: 'with-doctor', label: 'With the doctor', bucket: 'WITH_DOCTOR' },
   { key: 'at-department', label: 'At a department', bucket: 'AT_DEPARTMENT' },
+  /* The film is in and the patient is in the corridor. The queue the clinic
+     had and the board could not see. */
+  { key: 'back-from-tests', label: 'Back from tests', bucket: 'BACK_FROM_TESTS' },
+  /* The doctor has finished and nobody has sent them home yet. The front
+     desk's queue, and the reason "Done" now means what it says. */
+  { key: 'ready-to-close', label: 'Ready to close', bucket: 'READY_TO_CLOSE' },
   { key: 'done', label: 'Done', bucket: 'DONE' },
 ];
 
@@ -51,6 +60,8 @@ const COUNT_KEY: Record<DayBucket, keyof DayBoard['counts']> = {
   WAITING: 'waiting',
   WITH_DOCTOR: 'with_doctor',
   AT_DEPARTMENT: 'at_department',
+  BACK_FROM_TESTS: 'back_from_tests',
+  READY_TO_CLOSE: 'ready_to_close',
   DONE: 'done',
   NOT_ATTENDING: 'not_attending',
 };
@@ -60,6 +71,8 @@ const BUCKET_LABEL: Record<DayBucket, string> = {
   WAITING: 'Waiting',
   WITH_DOCTOR: 'With the doctor',
   AT_DEPARTMENT: 'At a department',
+  BACK_FROM_TESTS: 'Back from tests',
+  READY_TO_CLOSE: 'Ready to close',
   DONE: 'Done',
   NOT_ATTENDING: 'Not attending',
 };
@@ -92,7 +105,16 @@ const BUCKET_LABEL: Record<DayBucket, string> = {
 const ROW_TONE: Partial<Record<DayBucket, string>> = {
   WAITING: 'bg-amber-soft/35 hover:bg-amber-soft/55',
   WITH_DOCTOR: 'bg-clinical-tint/60 hover:bg-clinical-tint/80',
-  AT_DEPARTMENT: 'bg-ink/[0.045] hover:bg-ink/[0.07]',
+  /* A cool blue rather than the grey this used to be. Grey is what every
+     switched-off thing in this console wears, and "at the X-ray" is a live
+     stage of a visit, not a disabled one. */
+  AT_DEPARTMENT: 'bg-sky-soft/45 hover:bg-sky-soft/70',
+  /* Warmer and deeper than WAITING, and next to it on purpose: both are people
+     waiting on a doctor, but this one has already waited once. */
+  BACK_FROM_TESTS: 'bg-peach-soft/50 hover:bg-peach-soft/75',
+  /* Nothing clinical left, nobody has sent them home. Pale grey is right here
+     and nowhere else: this row IS inert, it is paperwork. */
+  READY_TO_CLOSE: 'bg-ink/[0.045] hover:bg-ink/[0.07]',
   DONE: 'bg-iris-soft/60 hover:bg-iris-soft/80',
 };
 
@@ -111,7 +133,9 @@ const BUCKET_TONE: Record<DayBucket, string> = {
   EXPECTED: 'bg-ink/8 text-ink-60',
   WAITING: 'bg-amber-soft text-amber-text',
   WITH_DOCTOR: 'bg-clinical-soft text-clinical-text',
-  AT_DEPARTMENT: 'bg-ink/14 text-ink-60',
+  AT_DEPARTMENT: 'bg-sky-soft text-sky-text',
+  BACK_FROM_TESTS: 'bg-peach-soft text-peach-text',
+  READY_TO_CLOSE: 'bg-ink/14 text-ink-60',
   // Iris, not green: green is money settled on this very row, and `clinical` is
   // itself a teal-green — so finished needs a hue of its own to be seen at all.
   DONE: 'bg-iris-soft text-iris-text',
@@ -136,19 +160,41 @@ const BUCKET_TONE: Record<DayBucket, string> = {
  * their response contains only their own patients, and this renders whatever it
  * is given.
  */
+/**
+ * Home, which is a different board depending on what you do here.
+ *
+ * SOMEBODY WHOSE ONLY JOB IS DIAGNOSTICS GETS THEIR WORKLIST. A technician
+ * signing in has no use for a list of who is expected at the front desk: their
+ * day is the films waiting to be taken, and the patient board is a screen they
+ * would have to navigate away from every single morning. Same theme, same
+ * chrome, same filters and day picker along the top — a different list.
+ *
+ * THE TEST IS "ONLY", AND THAT MATTERS. A login that holds diagnostics AND the
+ * front desk, which is the ordinary arrangement in a small clinic where one
+ * person does both, keeps the patient board: it is the wider of the two jobs
+ * and the worklist is one click away under Diagnostics. Only a login that does
+ * nothing else is given the narrower home.
+ *
+ * Decided on roles rather than permissions. Diagnostics holds `patient:read`
+ * and `appointment:read` like everybody else — it is what somebody DOES here
+ * that decides which list they should open on, and the role is the only honest
+ * record of that.
+ */
 export default function HomePage() {
+  const { session } = useAuth();
+
+  const diagnosticsOnly = worksOneDepartment(session?.roles);
+
   // `useSearchParams` needs a boundary, or the build refuses to prerender this
-  // route at all.
+  // route at all. Both boards read the day off the URL, so both need one.
   return (
     <Suspense fallback={<BoardSkeleton />}>
-      <DayBoardScreen />
+      {diagnosticsOnly ? <DiagnosticsBoard /> : <DayBoardScreen />}
     </Suspense>
   );
 }
 
 /** `YYYY-MM-DD`, and nothing else. A URL is somewhere anybody can type. */
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 function DayBoardScreen() {
   const { can, session } = useAuth();
   const params = useSearchParams();
@@ -380,11 +426,52 @@ function DayBoardScreen() {
             break;
           }
 
+          case 'BRING_BACK':
+            await api.bringBackFromTests(step.appointmentId);
+            setNotice(
+              `${row.patient.name} is back in the waiting list, ahead of people who have not ` +
+                'been seen yet.',
+            );
+            await load();
+            break;
+
           case 'FINISH':
             await api.completeVisit(step.appointmentId);
             setNotice(`${row.patient.name}’s visit is finished.`);
             await load();
             break;
+
+          case 'CLOSE_VISIT': {
+            /**
+             * WARNED, NOT REFUSED.
+             *
+             * Closing with a balance is allowed on purpose — the desk is the
+             * one standing in front of the patient, and "they will settle it
+             * at the follow-up" is a real answer a clinic gives. What is not
+             * allowed is doing it without being told, so the amount is in the
+             * question rather than in a message afterwards. The bill stays
+             * open either way; the finance desk keeps chasing it.
+             */
+            const due = row.money?.duePaise ?? 0;
+            if (
+              due > 0 &&
+              !window.confirm(
+                `${formatPaise(due)} is still due from ${row.patient.name}. ` +
+                  'Close the visit anyway? The bill stays open.',
+              )
+            ) {
+              break;
+            }
+
+            await api.closeVisit(step.appointmentId);
+            setNotice(
+              due > 0
+                ? `${row.patient.name}’s visit is closed. ${formatPaise(due)} is still owed.`
+                : `${row.patient.name}’s visit is closed.`,
+            );
+            await load();
+            break;
+          }
 
           case 'RECORD_RESULT':
             setRecording({ row, orderId: step.orderId });
@@ -504,87 +591,13 @@ function DayBoardScreen() {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/*
-            WHICH DAY.
-
-            A day at a time with the arrows, any day at all with the calendar,
-            and one press back to today. Three ways because the questions are
-            different: "what did yesterday look like" is a step, "who owed us
-            on the 3rd" is a jump, and "take me back to the live board" is the
-            one people need most and should never have to think about.
-          */}
-          <div className="flex flex-1 items-center gap-1 rounded-pill border border-ink/12 bg-white p-0.5 md:flex-none">
-            <button
-              type="button"
-              className="btn-ghost !rounded-pill !px-2 !py-1"
-              aria-label="The day before"
-              title="The day before"
-              onClick={() => goToDay(stepDay(shownDate, -1))}
-            >
-              <span className="inline-flex rotate-180">
-                <IconChevronRight size={14} />
-              </span>
-            </button>
-
-            <label className="relative flex items-center">
-              <span className="sr-only">Show another day</span>
-              <span className="pointer-events-none absolute left-2 text-ink-40">
-                <IconCalendar size={13} />
-              </span>
-              {/*
-                The native picker. A hand-built calendar would be prettier and
-                would also have to reinvent keyboard entry, locale and the
-                mobile wheel — and the desk types dates faster than it clicks
-                them.
-              */}
-              <input
-                type="date"
-                value={shownDate}
-                onChange={(e) => e.target.value && goToDay(e.target.value)}
-                className="w-full rounded-pill border-0 bg-transparent py-1 pl-7 pr-2 font-mono text-[16px] tabular-nums text-ink focus:outline-none md:w-[150px] md:text-[12.5px]"
-              />
-            </label>
-
-            <button
-              type="button"
-              className="btn-ghost !rounded-pill !px-2 !py-1"
-              aria-label="The day after"
-              title="The day after"
-              onClick={() => goToDay(stepDay(shownDate, 1))}
-            >
-              <IconChevronRight size={14} />
-            </button>
-          </div>
-
-          {/* Only when it would do something. */}
-          {!isToday && (
-            <button
-              type="button"
-              className="btn-secondary !py-1.5 !text-[12.5px]"
-              onClick={() => goToDay(null)}
-            >
-              Today
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="btn-ghost !py-1.5 !text-[12.5px]"
-            onClick={() => void load()}
-          >
-            <IconRefresh size={14} />
-            {/* The time is only worth printing while the board is live. On a
-                past day it would read as "this might have changed", and it
-                cannot have. */}
-            {isToday && refreshedAt
-              ? `Updated ${refreshedAt.toLocaleTimeString('en-IN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}`
-              : 'Refresh'}
-          </button>
-        </div>
+        <DayPicker
+          shownDate={shownDate}
+          isToday={isToday}
+          onPick={goToDay}
+          refreshedAt={refreshedAt}
+          onRefresh={() => void load()}
+        />
 
         {/*
           REGISTERING SOMEBODY, FROM THE SCREEN THEY ARE ALREADY ON.
@@ -1078,23 +1091,6 @@ const SENDABLE = new Set<DayBucket>(['WITH_DOCTOR', 'WAITING', 'AT_DEPARTMENT', 
  * timezone is a column in the database, and a board that skipped a day in a
  * clinic abroad would be an exceptionally quiet bug.
  */
-function stepDay(date: string, days: number): string {
-  const at = new Date(`${date}T12:00:00Z`);
-  at.setUTCDate(at.getUTCDate() + days);
-  return at.toISOString().slice(0, 10);
-}
-
-/** "Tue 13 Oct" — enough to know which day you are looking at. */
-function dayLabel(date: string): string {
-  if (!date) return '';
-  return new Intl.DateTimeFormat('en-IN', {
-    timeZone: 'UTC',
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  }).format(new Date(`${date}T12:00:00Z`));
-}
-
 function emptyMessage(bucket: DayBucket | null): string {
   switch (bucket) {
     case 'EXPECTED':
@@ -1105,6 +1101,10 @@ function emptyMessage(bucket: DayBucket | null): string {
       return 'No consultation is in progress.';
     case 'AT_DEPARTMENT':
       return 'Nobody is having a test.';
+    case 'BACK_FROM_TESTS':
+      return 'Nobody is waiting with a result.';
+    case 'READY_TO_CLOSE':
+      return 'Nobody is waiting to be sent home.';
     case 'DONE':
       return 'Nobody has finished yet.';
     default:
@@ -1250,8 +1250,25 @@ function DayBoardCard({
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {showsStage && <Chip tone={BUCKET_TONE[row.bucket]}>{BUCKET_LABEL[row.bucket]}</Chip>}
-            {row.hasVisit && <Chip tone="bg-clinical-soft text-clinical-text">Doctor visit</Chip>}
-            {row.hasTest && <Chip tone="bg-clinical-tint text-clinical-text">Test</Chip>}
+            {/*
+              WHAT THEY CAME FOR, and whether it is finished.
+              The chips used to say "Doctor visit" and "Test" whatever had
+              happened, so a row that was entirely finished looked identical to
+              one that had not started. They now carry the stage in the same
+              words the buttons use, and turn iris when they do.
+            */}
+            {row.hasVisit &&
+              (row.opdDone ? (
+                <Chip tone="bg-iris-soft text-iris-text">OPD done</Chip>
+              ) : (
+                <Chip tone="bg-clinical-soft text-clinical-text">Doctor visit</Chip>
+              ))}
+            {row.hasTest &&
+              (row.testsDoneIn ? (
+                <Chip tone="bg-iris-soft text-iris-text">{row.testsDoneIn} done</Chip>
+              ) : (
+                <Chip tone="bg-clinical-tint text-clinical-text">Test</Chip>
+              ))}
             <Fee label="Fee" state={row.visitFee} />
             <Fee label="Tests" state={row.testFee} />
           </div>

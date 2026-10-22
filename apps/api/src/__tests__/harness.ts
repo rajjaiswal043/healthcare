@@ -257,10 +257,19 @@ async function seedTenant(input: {
       [input.id],
     );
 
+    /**
+     * A department is somewhere a patient is sent for a test. The fixture used
+     * to seed "General Medicine" here, back when a department was also the
+     * first step of booking — which is the thing that went.
+     */
     const department = await one<{ id: string }>(
       tx,
+      // "Imaging", not "X-ray": suites that exercise the diagnostics flow
+      // create their own X-ray and Pathology, and a name clash on
+      // (tenant, name) would 409 their fixture rather than the thing under
+      // test.
       `INSERT INTO department (tenant_id, name, display_order, updated_at)
-       VALUES ($1, 'General Medicine', 1, now()) RETURNING id`,
+       VALUES ($1, 'Imaging', 1, now()) RETURNING id`,
       [input.id],
     );
 
@@ -268,10 +277,10 @@ async function seedTenant(input: {
       tx,
       `INSERT INTO practitioner
          (tenant_id, full_name, prefix, registration_number, specialty,
-          department_id, overbook_per_session, updated_at)
-       VALUES ($1, $2, NULL, 'TEST-0001', 'General Medicine', $3, 0, now())
+          overbook_per_session, updated_at)
+       VALUES ($1, $2, NULL, 'TEST-0001', 'General Medicine', 0, now())
        RETURNING id`,
-      [input.id, input.doctorName, department.id],
+      [input.id, input.doctorName],
     );
 
     // 09:00–12:00, 15-minute slots, capacity 1, every day. Twelve slots, which
@@ -599,17 +608,11 @@ export async function createDoctor(
     const [row] = await ownerQuery<{ id: string }>(
       tenant.id,
       `INSERT INTO practitioner
-         (tenant_id, user_id, full_name, registration_number, specialty, department_id,
+         (tenant_id, user_id, full_name, registration_number, specialty,
           overbook_per_session, updated_at)
-       VALUES ($1, $2, $3, $4, 'General Medicine', $5, 0, now())
+       VALUES ($1, $2, $3, $4, 'General Medicine', 0, now())
        RETURNING id`,
-      [
-        tenant.id,
-        user.id,
-        options.fullName,
-        `TEST-${options.email.slice(0, 8)}`,
-        tenant.departmentId,
-      ],
+      [tenant.id, user.id, options.fullName, `TEST-${options.email.slice(0, 8)}`],
     );
     practitionerId = row?.id ?? null;
 

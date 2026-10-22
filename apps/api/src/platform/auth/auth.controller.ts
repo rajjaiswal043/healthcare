@@ -149,6 +149,8 @@ export class AuthController {
       permissions: user.permissions,
       fullName: profile.fullName,
       roles: profile.roles,
+      /** The room this person works in — diagnostics only. Null otherwise. */
+      department: profile.department,
       // The console gates every screen on this, so it has to survive a reload —
       // a gate that only exists in the login response is one refresh away from
       // being bypassed.

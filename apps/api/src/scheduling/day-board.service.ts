@@ -9,9 +9,33 @@ import {
 } from '../billing/billing.service.js';
 import { clinicToday, instantToLocalTime, localToInstant } from './clinic-time.js';
 
-/** Where a patient is in the clinic right now. */
+/**
+ * Where a patient is in the clinic right now.
+ *
+ * BACK_FROM_TESTS is the state the clinic had and the software did not. A
+ * patient sent for an X-ray stayed AT_DEPARTMENT until the doctor finished
+ * them, so the twenty minutes between the film coming back and the doctor
+ * seeing it looked identical to the time they were lying under the machine.
+ * They are not at the department any more — they are sitting in the corridor
+ * holding a film, and nobody was looking for them.
+ */
 export type DayBucket =
-  'EXPECTED' | 'WAITING' | 'WITH_DOCTOR' | 'AT_DEPARTMENT' | 'DONE' | 'NOT_ATTENDING';
+  | 'EXPECTED'
+  | 'WAITING'
+  | 'WITH_DOCTOR'
+  | 'AT_DEPARTMENT'
+  | 'BACK_FROM_TESTS'
+  /**
+   * The doctor has finished and nobody has said the visit is over.
+   *
+   * FULFILLED and closed are different facts: the first is the clinician's
+   * sign-off, the second is the patient leaving. This bucket is the gap
+   * between them, and it is the front desk's queue — the people still in the
+   * building with nothing clinical left to do.
+   */
+  | 'READY_TO_CLOSE'
+  | 'DONE'
+  | 'NOT_ATTENDING';
 
 /** Where a bill stands, without saying how much. Null when nothing was charged. */
 export type FeeTag = 'PAID' | 'PENDING' | null;
@@ -56,6 +80,10 @@ export type NextStep =
   | { kind: 'CHECK_IN'; appointmentId: string }
   | { kind: 'START'; appointmentId: string }
   | { kind: 'RESUME'; appointmentId: string }
+  /** Their tests are back. Put them in the waiting list for the doctor. */
+  | { kind: 'BRING_BACK'; appointmentId: string }
+  /** Nothing left to do. Say the visit is over. */
+  | { kind: 'CLOSE_VISIT'; appointmentId: string }
   | { kind: 'FINISH'; appointmentId: string }
   | { kind: 'RECORD_RESULT'; orderId: string }
   | { kind: 'RECEIPT'; paymentId: string };
@@ -80,6 +108,23 @@ export interface DayBoardRow {
   /** What they are here for. Both can be true; neither ever is. */
   hasVisit: boolean;
   hasTest: boolean;
+  /**
+   * The doctor has finished with them — "OPD done".
+   *
+   * Independent of whether the visit has been CLOSED: one is the clinician's
+   * sign-off, the other is the desk sending them home, and the whole point of
+   * the 22 Oct split is that they are different facts. A row can be OPD done
+   * and still sitting in the building.
+   */
+  opdDone: boolean;
+  /**
+   * The department that finished their tests, once every one is back.
+   *
+   * Carries the NAME rather than a boolean because the chip says it: "X-ray
+   * done", "Pathology done". Null while anything is still pending, and null
+   * for a patient with no tests at all.
+   */
+  testsDoneIn: string | null;
   token: number | null;
   /** The doctor they are booked with, or the department for a test-only visit. */
   withWhom: string | null;
@@ -120,9 +165,27 @@ export interface DayBoard {
 /** The order a patient moves through the clinic, most current state first. */
 const PLACEMENT: DayBucket[] = [
   'WITH_DOCTOR',
+  /**
+   * Second only to somebody already in the room.
+   *
+   * A patient whose film is back is the most urgent thing in the building: the
+   * clinic has their result, they are sitting outside, and every minute from
+   * here is one nobody meant to make them wait. Above AT_DEPARTMENT because a
+   * patient with two tests — one back, one still running — is still at the
+   * department, and the placement list takes the first match.
+   */
+  'BACK_FROM_TESTS',
   'AT_DEPARTMENT',
   'WAITING',
   'EXPECTED',
+  /**
+   * Below everybody still being seen, above the finished.
+   *
+   * Nothing clinical is owed to these patients, so they must not sit above a
+   * queue of people who have not been seen — but they ARE still here, which
+   * is what separates them from DONE.
+   */
+  'READY_TO_CLOSE',
   'DONE',
   'NOT_ATTENDING',
 ];
@@ -187,6 +250,9 @@ export class DayBoardService {
           status: true,
           tokenNumber: true,
           startAt: true,
+          /* FULFILLED says the doctor has finished; this says the visit is
+             over. The board needs both to tell "about to leave" from "gone". */
+          closedAt: true,
           patient: { select: { id: true, name: true, uhid: true, ageYears: true, gender: true } },
           practitioner: { select: { fullName: true } },
         },
@@ -432,6 +498,8 @@ export class DayBoardService {
       status: string;
       tokenNumber: number | null;
       startAt: Date;
+      /** Null while the visit is still open. See `bucketForAppointment`. */
+      closedAt: Date | null;
       patient: DayBoardRow['patient'];
       practitioner: { fullName: string } | null;
     }>;
@@ -479,6 +547,19 @@ export class DayBoardService {
        */
       pendingOrderId: string | null;
       pendingOrderBlocked: boolean;
+      /**
+       * Whether the live visit is out at a department.
+       *
+       * Tracked apart from `buckets` because the bucket a patient belongs in
+       * depends on TWO facts that arrive from different queries — the visit
+       * says "sent out", the orders say "all back" — and a set of buckets can
+       * only record that each was seen. BACK_FROM_TESTS is the conjunction.
+       */
+      visitIsAway: boolean;
+      /** At least one test has come back. Distinguishes "back" from "never went". */
+      hasCompletedTest: boolean;
+      /** Any live visit the doctor has signed off. */
+      visitFulfilled: boolean;
     }
 
     const byPatient = new Map<string, Accumulator>();
@@ -500,6 +581,9 @@ export class DayBoardService {
           testFees: [],
           pendingOrderId: null,
           pendingOrderBlocked: false,
+          visitIsAway: false,
+          hasCompletedTest: false,
+          visitFulfilled: false,
         };
         byPatient.set(patient.id, row);
       }
@@ -508,11 +592,13 @@ export class DayBoardService {
 
     for (const a of appointments) {
       const row = open(a.patient);
-      row.buckets.add(bucketForAppointment(a.status));
+      row.buckets.add(bucketForAppointment(a.status, a.closedAt));
 
       // CANCELLED and NO_SHOW are not something the patient is here FOR.
       if (a.status !== 'CANCELLED' && a.status !== 'NO_SHOW') {
         row.hasVisit = true;
+        if (a.status === 'AWAITING_TESTS') row.visitIsAway = true;
+        if (a.status === 'FULFILLED') row.visitFulfilled = true;
         row.doctor ??= a.practitioner?.fullName ?? null;
         // The live visit, not a cancelled one: a test ordered from this row has
         // to attach to the appointment the patient is actually here for.
@@ -531,6 +617,7 @@ export class DayBoardService {
 
       if (o.status !== 'CANCELLED' && o.status !== 'DECLINED') {
         row.hasTest = true;
+        if (o.status === 'COMPLETED') row.hasCompletedTest = true;
         row.department ??= o.department.name;
         if (!row.earliest || o.createdAt < row.earliest) row.earliest = o.createdAt;
 
@@ -550,6 +637,19 @@ export class DayBoardService {
         // Worked out once. The row's stage and the steps offered against it
         // have to be the same fact — two copies of this expression is two
         // places for them to drift apart.
+        /**
+         * THE FILM IS IN AND THEY ARE STILL OUT.
+         *
+         * Added to the set rather than special-cased after the placement run,
+         * so one list decides where every patient sits. Requires all three:
+         * the visit says they were sent out, something came back, and nothing
+         * is still running — a patient with the knee done and the spine still
+         * on the machine has not finished at the department.
+         */
+        if (r.visitIsAway && r.hasCompletedTest && r.pendingOrderId === null) {
+          r.buckets.add('BACK_FROM_TESTS');
+        }
+
         const bucket = PLACEMENT.find((b) => r.buckets.has(b)) ?? 'DONE';
         const paid = paymentMethods.get(r.patient.id);
 
@@ -559,6 +659,12 @@ export class DayBoardService {
           appointmentId: r.appointmentId,
           hasVisit: r.hasVisit,
           hasTest: r.hasTest,
+          opdDone: r.visitFulfilled,
+          /* Every test back, and there was at least one. A patient still
+             waiting on one film has not finished at the department, however
+             many others came back. */
+          testsDoneIn:
+            r.hasTest && r.hasCompletedTest && r.pendingOrderId === null ? r.department : null,
           token: r.token,
           // A patient with a doctor is described by their doctor; a test-only
           // patient by the department holding them.
@@ -594,6 +700,8 @@ export class DayBoardService {
       waiting: 0,
       with_doctor: 0,
       at_department: 0,
+      back_from_tests: 0,
+      ready_to_close: 0,
       done: 0,
       not_attending: 0,
       total: 0,
@@ -686,6 +794,28 @@ function stepsFor(row: {
       if (!row.visitFeePending) {
         steps.push({ kind: 'CHECK_IN', appointmentId: row.appointmentId });
       }
+    } else if (row.bucket === 'BACK_FROM_TESTS') {
+      /**
+       * One button, and it is not "finish".
+       *
+       * The doctor has not seen the result yet. Bringing them back puts them
+       * in the waiting list carrying the BACK_FROM_TESTS priority that
+       * `returnFromTests` already stamps, so they go in front of people who
+       * have not been seen at all rather than to the end of the queue they
+       * already waited in once.
+       */
+      steps.push({ kind: 'BRING_BACK', appointmentId: row.appointmentId });
+    } else if (row.bucket === 'READY_TO_CLOSE') {
+      /**
+       * The last button of the visit.
+       *
+       * Offered after COLLECT, which `stepsFor` pushes first when money is
+       * owed — so the desk is shown the bill before the thing that sends the
+       * patient away. Closing with a balance is still allowed; it is a
+       * decision somebody makes in front of the patient, not one this board
+       * should refuse on their behalf.
+       */
+      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
     } else if (row.bucket === 'WAITING') {
       steps.push({ kind: 'START', appointmentId: row.appointmentId });
     } else if (row.bucket === 'WITH_DOCTOR') {
@@ -718,15 +848,29 @@ function stepsFor(row: {
    * put "print something" in front of "see the patient". It is the one step
    * that still makes sense on a day long past, which is most of the point of
    * being able to look at one.
+   *
+   * BOTH FINISHED BUCKETS, since FULFILLED split in two. Ready-to-close is
+   * where the receipt is most often wanted — the patient is standing at the
+   * desk settling up on their way out, which is the moment somebody asks for
+   * a printed one. Pushed after CLOSE_VISIT so the step that moves the patient
+   * on still comes first.
    */
-  if (row.bucket === 'DONE' && row.lastPaymentId) {
+  if ((row.bucket === 'DONE' || row.bucket === 'READY_TO_CLOSE') && row.lastPaymentId) {
     steps.push({ kind: 'RECEIPT', paymentId: row.lastPaymentId });
   }
 
   return steps;
 }
 
-function bucketForAppointment(status: string): DayBucket {
+/**
+ * Where one visit puts a patient.
+ *
+ * FULFILLED SPLITS IN TWO, which is the whole of the 22 Oct change. It used to
+ * mean DONE, and that made "the doctor has finished" and "this person has left"
+ * the same word on the one screen the front desk uses to tell them apart. A
+ * fulfilled visit nobody has closed is still in the building.
+ */
+function bucketForAppointment(status: string, closedAt: Date | null): DayBucket {
   switch (status) {
     case 'BOOKED':
       return 'EXPECTED';
@@ -737,7 +881,7 @@ function bucketForAppointment(status: string): DayBucket {
     case 'AWAITING_TESTS':
       return 'AT_DEPARTMENT';
     case 'FULFILLED':
-      return 'DONE';
+      return closedAt ? 'DONE' : 'READY_TO_CLOSE';
     default:
       return 'NOT_ATTENDING';
   }

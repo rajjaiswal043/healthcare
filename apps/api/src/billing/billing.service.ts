@@ -119,6 +119,8 @@ export const EMERGENCY_SURCHARGE_CODE = 'CONS-EMERG';
 export interface DiagnosticBillingInput {
   legacyUnbilled: boolean;
   invoiceLine: {
+    /** What this one test was charged, which is not the invoice's total. */
+    totalPaise: number;
     invoice: {
       number: string;
       status: string;
@@ -149,6 +151,12 @@ export const DIAGNOSTIC_BILLING_SELECT = {
   legacyUnbilled: true,
   invoiceLine: {
     select: {
+      /**
+       * What this test cost, as charged — the line's own total, not the
+       * invoice's. A visit's bill may carry a consultation and three films;
+       * the requisition slip has to say what THIS one was.
+       */
+      totalPaise: true,
       invoice: {
         select: {
           number: true,
@@ -404,6 +412,15 @@ export class BillingService {
       visitAppointmentId: string | null;
       serviceId: string;
       description: string;
+      /**
+       * What to charge, when the clinic is not charging the list price.
+       *
+       * Absent means the catalogue price, which is the normal case. Present
+       * means somebody decided this one costs something else — a concession on
+       * a repeat film, a bundled rate — and the decision belongs on the bill at
+       * the moment it is made, not as a discount argued about later at the desk.
+       */
+      pricePaise?: number;
     },
     meta: RequestMeta,
   ): Promise<{ invoiceId: string; lineId: string }> {
@@ -424,7 +441,12 @@ export class BillingService {
       tx,
       tenantId,
       invoice.id,
-      { patientId: input.patientId, serviceId: service.id, description: input.description },
+      {
+        patientId: input.patientId,
+        serviceId: service.id,
+        description: input.description,
+        ...(input.pricePaise === undefined ? {} : { pricePaise: input.pricePaise }),
+      },
       meta,
     );
 
@@ -447,7 +469,13 @@ export class BillingService {
     tx: TenantClient,
     tenantId: string,
     invoiceId: string,
-    input: { patientId: string; serviceId: string; description: string },
+    input: {
+      patientId: string;
+      serviceId: string;
+      description: string;
+      /** What to charge instead of the catalogue price. See the caller above. */
+      pricePaise?: number;
+    },
     meta: RequestMeta,
   ): Promise<{ id: string }> {
     const service = await tx.service.findUnique({
@@ -456,7 +484,19 @@ export class BillingService {
     });
     if (!service) throw new NotFoundException('Service not found');
 
-    const taxPaise = Math.round((service.pricePaise * service.taxRateBasisPoints) / 10000);
+    /**
+     * The price charged, which is not always the price listed.
+     *
+     * The LINE is the record of what was charged — it already copies the
+     * description for the same reason — so an override lives here and leaves
+     * the catalogue alone. Putting the clinic's list price up because one
+     * patient was charged differently is the bug this shape prevents.
+     *
+     * Tax is recomputed from the charged price rather than copied, or a
+     * concession would carry the full tax of a price nobody paid.
+     */
+    const pricePaise = input.pricePaise ?? service.pricePaise;
+    const taxPaise = Math.round((pricePaise * service.taxRateBasisPoints) / 10000);
 
     const line = await tx.invoiceLine.create({
       data: {
@@ -465,10 +505,10 @@ export class BillingService {
         serviceId: service.id,
         description: input.description,
         quantity: 1,
-        unitPricePaise: service.pricePaise,
+        unitPricePaise: pricePaise,
         taxRateBasisPoints: service.taxRateBasisPoints,
         taxPaise,
-        totalPaise: service.pricePaise + taxPaise,
+        totalPaise: pricePaise + taxPaise,
       },
       select: { id: true },
     });

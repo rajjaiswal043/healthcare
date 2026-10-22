@@ -203,6 +203,16 @@ export const IconReceipt = (p: IconProps) => (
   </Svg>
 );
 
+/** A printer with a sheet coming out of it. For slips sent to paper. */
+export const IconPrinter = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 8V3h10v5" />
+    <path d="M5 8h14a2 2 0 012 2v6h-4" />
+    <path d="M5 16H3v-6a2 2 0 012-2" />
+    <path d="M7 13h10v8H7z" />
+  </Svg>
+);
+
 export const IconBell = (p: IconProps) => (
   <Svg {...p}>
     <path d="M18 15V10a6 6 0 10-12 0v5l-1.5 3h15L18 15z" />

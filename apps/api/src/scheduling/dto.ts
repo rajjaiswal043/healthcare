@@ -45,10 +45,6 @@ export class BookAppointmentDto {
   @IsUUID()
   locationId!: string;
 
-  @IsOptional()
-  @IsUUID()
-  departmentId?: string;
-
   /** Slot start as an ISO instant — exactly as the availability endpoint returned it. */
   @IsISO8601()
   startAt!: string;
@@ -72,10 +68,6 @@ export class WalkInDto {
 
   @IsUUID()
   locationId!: string;
-
-  @IsOptional()
-  @IsUUID()
-  departmentId?: string;
 
   @IsOptional()
   @IsEnum(VisitTypeDto)
