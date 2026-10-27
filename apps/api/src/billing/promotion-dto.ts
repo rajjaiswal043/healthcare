@@ -62,7 +62,7 @@ function IsPromotionValue(options?: ValidationOptions) {
         defaultMessage(args: ValidationArguments): string {
           const type = (args.object as { type?: string }).type;
           if (type === PromotionTypeDto.CUSTOM) {
-            return 'A custom promotion takes no value — the amount is entered when it is applied.';
+            return 'A custom promotion takes no value. The amount is entered when it is applied.';
           }
           return type === PromotionTypeDto.PERCENTAGE
             ? 'A percentage promotion is a whole number between 1 and 100.'
@@ -104,8 +104,8 @@ function IsPromotionCap(options?: ValidationOptions) {
         },
         defaultMessage(args: ValidationArguments): string {
           return (args.object as { type?: string }).type === PromotionTypeDto.CUSTOM
-            ? 'A custom promotion cannot have a maximum discount — its amount is typed in full each time.'
-            : 'An uncapped promotion leaves this out — a cap of zero discounts nothing.';
+            ? 'A custom promotion cannot have a maximum discount. Its amount is typed in full each time.'
+            : 'An uncapped promotion leaves this out. A cap of zero discounts nothing.';
         },
       },
     });
@@ -128,7 +128,7 @@ export class CreatePromotionDto {
   @MinLength(2)
   @MaxLength(32)
   @Matches(CODE_PATTERN, {
-    message: 'A code is letters, digits, hyphen and underscore — for example CAMP50.',
+    message: 'A code is letters, digits, hyphen and underscore, for example CAMP50.',
   })
   code!: string;
 

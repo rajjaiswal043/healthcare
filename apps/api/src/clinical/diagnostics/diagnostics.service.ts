@@ -168,12 +168,42 @@ export class DiagnosticsService {
 
         const appointment = await tx.appointment.findUnique({
           where: { id: input.appointmentId },
-          select: { id: true, patientId: true },
+          select: { id: true, patientId: true, closedAt: true },
         });
         if (!appointment) throw new NotFoundException('No such visit.');
 
         appointmentId = appointment.id;
         patientId = appointment.patientId;
+
+        /**
+         * A VISIT BEING SENT SOMEWHERE IS NOT OVER.
+         *
+         * Ordering a test against a closed visit is allowed and normal — the
+         * doctor finishes, the patient stands up, and the doctor wants a film
+         * after all. What was wrong was leaving `closed_at` set through it:
+         * the record then said the visit had ended while the patient was
+         * standing in X-ray, and when the test finished they slid back into
+         * Done without anybody deciding they were finished.
+         *
+         * Cleared rather than refused, because refusing would make the clinic
+         * reopen the visit first and then order the test — two steps for one
+         * decision, and the board would have to explain why.
+         */
+        if (appointment.closedAt) {
+          await tx.appointment.update({
+            where: { id: appointment.id },
+            data: { closedAt: null, closedByUserId: null },
+          });
+
+          await this.audit.record(tx, tenantId, {
+            action: 'appointment.reopen',
+            resourceType: 'Appointment',
+            resourceId: appointment.id,
+            patientId: appointment.patientId,
+            changedFields: ['closedAt', 'closedByUserId'],
+            ...meta,
+          });
+        }
       } else {
         /**
          * A walk-in never attaches to a visit, and the database agrees: the
@@ -207,7 +237,7 @@ export class DiagnosticsService {
       if (referralSource === 'EXTERNAL_DOCTOR' && !referrerName) {
         throw new BadRequestException({
           code: 'REFERRER_REQUIRED',
-          message: 'Name the doctor who sent them — it is printed on the report.',
+          message: 'Name the doctor who sent them. It is printed on the report.',
         });
       }
 
@@ -477,7 +507,7 @@ export class DiagnosticsService {
       if (input.referralSource === 'EXTERNAL_DOCTOR' && !referrerName) {
         throw new BadRequestException({
           code: 'REFERRER_REQUIRED',
-          message: 'Name the doctor who sent them — it is printed on the report.',
+          message: 'Name the doctor who sent them. It is printed on the report.',
         });
       }
 
@@ -1033,7 +1063,7 @@ export class DiagnosticsService {
           code: 'ORDER_NOT_PENDING',
           message:
             existing.status === 'COMPLETED'
-              ? 'That test has already been done. Its charge stands — a refund is the finance desk’s call.'
+              ? 'That test has already been done. Its charge stands. A refund is the finance desk’s call.'
               : existing.status === 'DECLINED'
                 ? 'That test was already declined.'
                 : 'That test was cancelled, so there is nothing to decline.',
@@ -1195,7 +1225,7 @@ export class DiagnosticsService {
           code: 'RESULT_NOT_READY',
           message:
             existing.status === 'PENDING'
-              ? 'That test has not been reported yet — there is nothing to hand over.'
+              ? 'That test has not been reported yet. There is nothing to hand over.'
               : 'That test was not done, so there is no report.',
         });
       }
@@ -1211,7 +1241,7 @@ export class DiagnosticsService {
       if (!to) {
         throw new BadRequestException({
           code: 'RECIPIENT_REQUIRED',
-          message: 'Say who took the report — the patient, or whoever collected it.',
+          message: 'Say who took the report: the patient, or whoever collected it.',
         });
       }
 

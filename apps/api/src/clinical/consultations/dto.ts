@@ -16,8 +16,18 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { IsClinicalText } from '../../common/is-clinical-text.decorator.js';
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * A date, or nothing at all.
+ *
+ * A bare `^\d{4}-\d{2}-\d{2}$` made clearing a follow-up date impossible, found
+ * by a test on 27 Oct 2026. The service has handled `''` as "take the date off" all along;
+ * the DTO refused it with a 400 before the service ever saw it, so the browser
+ * — which sends `''` when the field is emptied on blur — could set a review
+ * date and never remove one.
+ */
+const DATE_OR_BLANK_RE = /^$|^\d{4}-\d{2}-\d{2}$/;
 
 export enum MedicationFormDto {
   TABLET = 'TABLET',
@@ -51,23 +61,34 @@ export class OpenEncounterDto {
 }
 
 export class UpdateEncounterDto {
+  /*
+   * The four narrative fields carry `IsClinicalText` as of 27 Oct 2026: the
+   * testing team got "123" accepted as a chief complaint, which then prints on
+   * the prescription as the reason the patient came. `prescriptionNote` is
+   * deliberately left out — it was not reported, and a note reading "1-0-1"
+   * beside a drug is how dosing is actually written.
+   */
   @IsOptional()
   @IsString()
+  @IsClinicalText()
   @MaxLength(500)
   chiefComplaint?: string;
 
   @IsOptional()
   @IsString()
+  @IsClinicalText()
   @MaxLength(5000)
   historyOfPresentIllness?: string;
 
   @IsOptional()
   @IsString()
+  @IsClinicalText()
   @MaxLength(5000)
   examinationFindings?: string;
 
   @IsOptional()
   @IsString()
+  @IsClinicalText()
   @MaxLength(5000)
   advice?: string;
 
@@ -85,7 +106,7 @@ export class UpdateEncounterDto {
   prescriptionNote?: string;
 
   @IsOptional()
-  @Matches(DATE_RE, { message: 'followUpDate must be YYYY-MM-DD' })
+  @Matches(DATE_OR_BLANK_RE, { message: 'followUpDate must be YYYY-MM-DD, or empty to clear it' })
   followUpDate?: string;
 
   @IsOptional()

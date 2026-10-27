@@ -188,7 +188,7 @@ export default function DepartmentsPage() {
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="font-display text-[24px] font-bold">Departments</h1>
         <p className="text-[13.5px] text-ink-60">
-          Where a patient is sent for a test — X-ray, Pathology, Physio.
+          Where a patient is sent for a test: X-ray, Pathology, Physio.
         </p>
       </header>
 
@@ -340,9 +340,9 @@ export default function DepartmentsPage() {
                 <span className="mono-label mr-2">Staff</span>
                 {d.staff.length === 0 ? (
                   <>
-                    Nobody works here yet —{' '}
+                    Nobody works here yet.{' '}
                     <Link href="/settings/users" className="underline">
-                      add a diagnostics login
+                      Add a diagnostics login
                     </Link>
                     .
                   </>
@@ -553,7 +553,7 @@ export default function DepartmentsPage() {
           <div className="border-b border-ink/8 px-5 py-3">
             <p className="mono-label">Not in any department</p>
             <p className="field-hint">
-              These are priced but cannot be ordered — a test is only orderable from the room that
+              These are priced but cannot be ordered. A test is only orderable from the room that
               does it. Say which room, or switch it off.
             </p>
           </div>

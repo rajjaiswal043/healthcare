@@ -130,8 +130,8 @@ export class AvailabilityService {
     if (wholeDayBlock) {
       return empty(
         wholeDayBlock.type === 'LEAVE'
-          ? `On leave${wholeDayBlock.reason ? ` — ${wholeDayBlock.reason}` : ''}.`
-          : `Unavailable${wholeDayBlock.reason ? ` — ${wholeDayBlock.reason}` : ''}.`,
+          ? `On leave${wholeDayBlock.reason ? `: ${wholeDayBlock.reason}` : ''}.`
+          : `Unavailable${wholeDayBlock.reason ? `: ${wholeDayBlock.reason}` : ''}.`,
       );
     }
 

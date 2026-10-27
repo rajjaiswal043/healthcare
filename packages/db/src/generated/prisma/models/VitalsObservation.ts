@@ -72,6 +72,7 @@ export type VitalsObservationMinAggregateOutputType = {
   spo2Percent: number | null
   respiratoryRate: number | null
   notes: string | null
+  correctsId: string | null
   createdAt: Date | null
 }
 
@@ -91,6 +92,7 @@ export type VitalsObservationMaxAggregateOutputType = {
   spo2Percent: number | null
   respiratoryRate: number | null
   notes: string | null
+  correctsId: string | null
   createdAt: Date | null
 }
 
@@ -110,6 +112,7 @@ export type VitalsObservationCountAggregateOutputType = {
   spo2Percent: number
   respiratoryRate: number
   notes: number
+  correctsId: number
   createdAt: number
   _all: number
 }
@@ -153,6 +156,7 @@ export type VitalsObservationMinAggregateInputType = {
   spo2Percent?: true
   respiratoryRate?: true
   notes?: true
+  correctsId?: true
   createdAt?: true
 }
 
@@ -172,6 +176,7 @@ export type VitalsObservationMaxAggregateInputType = {
   spo2Percent?: true
   respiratoryRate?: true
   notes?: true
+  correctsId?: true
   createdAt?: true
 }
 
@@ -191,6 +196,7 @@ export type VitalsObservationCountAggregateInputType = {
   spo2Percent?: true
   respiratoryRate?: true
   notes?: true
+  correctsId?: true
   createdAt?: true
   _all?: true
 }
@@ -297,6 +303,7 @@ export type VitalsObservationGroupByOutputType = {
   spo2Percent: number | null
   respiratoryRate: number | null
   notes: string | null
+  correctsId: string | null
   createdAt: Date
   _count: VitalsObservationCountAggregateOutputType | null
   _avg: VitalsObservationAvgAggregateOutputType | null
@@ -339,8 +346,11 @@ export type VitalsObservationWhereInput = {
   spo2Percent?: Prisma.IntNullableFilter<"VitalsObservation"> | number | null
   respiratoryRate?: Prisma.IntNullableFilter<"VitalsObservation"> | number | null
   notes?: Prisma.StringNullableFilter<"VitalsObservation"> | string | null
+  correctsId?: Prisma.UuidNullableFilter<"VitalsObservation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"VitalsObservation"> | Date | string
   encounter?: Prisma.XOR<Prisma.EncounterScalarRelationFilter, Prisma.EncounterWhereInput>
+  corrects?: Prisma.XOR<Prisma.VitalsObservationNullableScalarRelationFilter, Prisma.VitalsObservationWhereInput> | null
+  correctedBy?: Prisma.XOR<Prisma.VitalsObservationNullableScalarRelationFilter, Prisma.VitalsObservationWhereInput> | null
 }
 
 export type VitalsObservationOrderByWithRelationInput = {
@@ -359,12 +369,16 @@ export type VitalsObservationOrderByWithRelationInput = {
   spo2Percent?: Prisma.SortOrderInput | Prisma.SortOrder
   respiratoryRate?: Prisma.SortOrderInput | Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
+  correctsId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   encounter?: Prisma.EncounterOrderByWithRelationInput
+  corrects?: Prisma.VitalsObservationOrderByWithRelationInput
+  correctedBy?: Prisma.VitalsObservationOrderByWithRelationInput
 }
 
 export type VitalsObservationWhereUniqueInput = Prisma.AtLeast<{
   id?: string
+  correctsId?: string
   AND?: Prisma.VitalsObservationWhereInput | Prisma.VitalsObservationWhereInput[]
   OR?: Prisma.VitalsObservationWhereInput[]
   NOT?: Prisma.VitalsObservationWhereInput | Prisma.VitalsObservationWhereInput[]
@@ -384,7 +398,9 @@ export type VitalsObservationWhereUniqueInput = Prisma.AtLeast<{
   notes?: Prisma.StringNullableFilter<"VitalsObservation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"VitalsObservation"> | Date | string
   encounter?: Prisma.XOR<Prisma.EncounterScalarRelationFilter, Prisma.EncounterWhereInput>
-}, "id">
+  corrects?: Prisma.XOR<Prisma.VitalsObservationNullableScalarRelationFilter, Prisma.VitalsObservationWhereInput> | null
+  correctedBy?: Prisma.XOR<Prisma.VitalsObservationNullableScalarRelationFilter, Prisma.VitalsObservationWhereInput> | null
+}, "id" | "correctsId">
 
 export type VitalsObservationOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -402,6 +418,7 @@ export type VitalsObservationOrderByWithAggregationInput = {
   spo2Percent?: Prisma.SortOrderInput | Prisma.SortOrder
   respiratoryRate?: Prisma.SortOrderInput | Prisma.SortOrder
   notes?: Prisma.SortOrderInput | Prisma.SortOrder
+  correctsId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.VitalsObservationCountOrderByAggregateInput
   _avg?: Prisma.VitalsObservationAvgOrderByAggregateInput
@@ -429,6 +446,7 @@ export type VitalsObservationScalarWhereWithAggregatesInput = {
   spo2Percent?: Prisma.IntNullableWithAggregatesFilter<"VitalsObservation"> | number | null
   respiratoryRate?: Prisma.IntNullableWithAggregatesFilter<"VitalsObservation"> | number | null
   notes?: Prisma.StringNullableWithAggregatesFilter<"VitalsObservation"> | string | null
+  correctsId?: Prisma.UuidNullableWithAggregatesFilter<"VitalsObservation"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"VitalsObservation"> | Date | string
 }
 
@@ -449,6 +467,8 @@ export type VitalsObservationCreateInput = {
   notes?: string | null
   createdAt?: Date | string
   encounter: Prisma.EncounterCreateNestedOneWithoutVitalsInput
+  corrects?: Prisma.VitalsObservationCreateNestedOneWithoutCorrectedByInput
+  correctedBy?: Prisma.VitalsObservationCreateNestedOneWithoutCorrectsInput
 }
 
 export type VitalsObservationUncheckedCreateInput = {
@@ -467,7 +487,9 @@ export type VitalsObservationUncheckedCreateInput = {
   spo2Percent?: number | null
   respiratoryRate?: number | null
   notes?: string | null
+  correctsId?: string | null
   createdAt?: Date | string
+  correctedBy?: Prisma.VitalsObservationUncheckedCreateNestedOneWithoutCorrectsInput
 }
 
 export type VitalsObservationUpdateInput = {
@@ -487,6 +509,8 @@ export type VitalsObservationUpdateInput = {
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   encounter?: Prisma.EncounterUpdateOneRequiredWithoutVitalsNestedInput
+  corrects?: Prisma.VitalsObservationUpdateOneWithoutCorrectedByNestedInput
+  correctedBy?: Prisma.VitalsObservationUpdateOneWithoutCorrectsNestedInput
 }
 
 export type VitalsObservationUncheckedUpdateInput = {
@@ -505,7 +529,9 @@ export type VitalsObservationUncheckedUpdateInput = {
   spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  correctsId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correctedBy?: Prisma.VitalsObservationUncheckedUpdateOneWithoutCorrectsNestedInput
 }
 
 export type VitalsObservationCreateManyInput = {
@@ -524,6 +550,7 @@ export type VitalsObservationCreateManyInput = {
   spo2Percent?: number | null
   respiratoryRate?: number | null
   notes?: string | null
+  correctsId?: string | null
   createdAt?: Date | string
 }
 
@@ -561,6 +588,7 @@ export type VitalsObservationUncheckedUpdateManyInput = {
   spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  correctsId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -572,6 +600,11 @@ export type VitalsObservationListRelationFilter = {
 
 export type VitalsObservationOrderByRelationAggregateInput = {
   _count?: Prisma.SortOrder
+}
+
+export type VitalsObservationNullableScalarRelationFilter = {
+  is?: Prisma.VitalsObservationWhereInput | null
+  isNot?: Prisma.VitalsObservationWhereInput | null
 }
 
 export type VitalsObservationCountOrderByAggregateInput = {
@@ -590,6 +623,7 @@ export type VitalsObservationCountOrderByAggregateInput = {
   spo2Percent?: Prisma.SortOrder
   respiratoryRate?: Prisma.SortOrder
   notes?: Prisma.SortOrder
+  correctsId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -620,6 +654,7 @@ export type VitalsObservationMaxOrderByAggregateInput = {
   spo2Percent?: Prisma.SortOrder
   respiratoryRate?: Prisma.SortOrder
   notes?: Prisma.SortOrder
+  correctsId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -639,6 +674,7 @@ export type VitalsObservationMinOrderByAggregateInput = {
   spo2Percent?: Prisma.SortOrder
   respiratoryRate?: Prisma.SortOrder
   notes?: Prisma.SortOrder
+  correctsId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -695,12 +731,60 @@ export type VitalsObservationUncheckedUpdateManyWithoutEncounterNestedInput = {
   deleteMany?: Prisma.VitalsObservationScalarWhereInput | Prisma.VitalsObservationScalarWhereInput[]
 }
 
+export type VitalsObservationCreateNestedOneWithoutCorrectedByInput = {
+  create?: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectedByInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectedByInput>
+  connectOrCreate?: Prisma.VitalsObservationCreateOrConnectWithoutCorrectedByInput
+  connect?: Prisma.VitalsObservationWhereUniqueInput
+}
+
+export type VitalsObservationCreateNestedOneWithoutCorrectsInput = {
+  create?: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectsInput>
+  connectOrCreate?: Prisma.VitalsObservationCreateOrConnectWithoutCorrectsInput
+  connect?: Prisma.VitalsObservationWhereUniqueInput
+}
+
+export type VitalsObservationUncheckedCreateNestedOneWithoutCorrectsInput = {
+  create?: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectsInput>
+  connectOrCreate?: Prisma.VitalsObservationCreateOrConnectWithoutCorrectsInput
+  connect?: Prisma.VitalsObservationWhereUniqueInput
+}
+
 export type NullableDecimalFieldUpdateOperationsInput = {
   set?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   increment?: runtime.Decimal | runtime.DecimalJsLike | number | string
   decrement?: runtime.Decimal | runtime.DecimalJsLike | number | string
   multiply?: runtime.Decimal | runtime.DecimalJsLike | number | string
   divide?: runtime.Decimal | runtime.DecimalJsLike | number | string
+}
+
+export type VitalsObservationUpdateOneWithoutCorrectedByNestedInput = {
+  create?: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectedByInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectedByInput>
+  connectOrCreate?: Prisma.VitalsObservationCreateOrConnectWithoutCorrectedByInput
+  upsert?: Prisma.VitalsObservationUpsertWithoutCorrectedByInput
+  disconnect?: Prisma.VitalsObservationWhereInput | boolean
+  delete?: Prisma.VitalsObservationWhereInput | boolean
+  connect?: Prisma.VitalsObservationWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.VitalsObservationUpdateToOneWithWhereWithoutCorrectedByInput, Prisma.VitalsObservationUpdateWithoutCorrectedByInput>, Prisma.VitalsObservationUncheckedUpdateWithoutCorrectedByInput>
+}
+
+export type VitalsObservationUpdateOneWithoutCorrectsNestedInput = {
+  create?: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectsInput>
+  connectOrCreate?: Prisma.VitalsObservationCreateOrConnectWithoutCorrectsInput
+  upsert?: Prisma.VitalsObservationUpsertWithoutCorrectsInput
+  disconnect?: Prisma.VitalsObservationWhereInput | boolean
+  delete?: Prisma.VitalsObservationWhereInput | boolean
+  connect?: Prisma.VitalsObservationWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.VitalsObservationUpdateToOneWithWhereWithoutCorrectsInput, Prisma.VitalsObservationUpdateWithoutCorrectsInput>, Prisma.VitalsObservationUncheckedUpdateWithoutCorrectsInput>
+}
+
+export type VitalsObservationUncheckedUpdateOneWithoutCorrectsNestedInput = {
+  create?: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectsInput>
+  connectOrCreate?: Prisma.VitalsObservationCreateOrConnectWithoutCorrectsInput
+  upsert?: Prisma.VitalsObservationUpsertWithoutCorrectsInput
+  disconnect?: Prisma.VitalsObservationWhereInput | boolean
+  delete?: Prisma.VitalsObservationWhereInput | boolean
+  connect?: Prisma.VitalsObservationWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.VitalsObservationUpdateToOneWithWhereWithoutCorrectsInput, Prisma.VitalsObservationUpdateWithoutCorrectsInput>, Prisma.VitalsObservationUncheckedUpdateWithoutCorrectsInput>
 }
 
 export type VitalsObservationCreateWithoutEncounterInput = {
@@ -719,6 +803,8 @@ export type VitalsObservationCreateWithoutEncounterInput = {
   respiratoryRate?: number | null
   notes?: string | null
   createdAt?: Date | string
+  corrects?: Prisma.VitalsObservationCreateNestedOneWithoutCorrectedByInput
+  correctedBy?: Prisma.VitalsObservationCreateNestedOneWithoutCorrectsInput
 }
 
 export type VitalsObservationUncheckedCreateWithoutEncounterInput = {
@@ -736,7 +822,9 @@ export type VitalsObservationUncheckedCreateWithoutEncounterInput = {
   spo2Percent?: number | null
   respiratoryRate?: number | null
   notes?: string | null
+  correctsId?: string | null
   createdAt?: Date | string
+  correctedBy?: Prisma.VitalsObservationUncheckedCreateNestedOneWithoutCorrectsInput
 }
 
 export type VitalsObservationCreateOrConnectWithoutEncounterInput = {
@@ -784,7 +872,200 @@ export type VitalsObservationScalarWhereInput = {
   spo2Percent?: Prisma.IntNullableFilter<"VitalsObservation"> | number | null
   respiratoryRate?: Prisma.IntNullableFilter<"VitalsObservation"> | number | null
   notes?: Prisma.StringNullableFilter<"VitalsObservation"> | string | null
+  correctsId?: Prisma.UuidNullableFilter<"VitalsObservation"> | string | null
   createdAt?: Prisma.DateTimeFilter<"VitalsObservation"> | Date | string
+}
+
+export type VitalsObservationCreateWithoutCorrectedByInput = {
+  id?: string
+  tenantId: string
+  patientId: string
+  recordedAt?: Date | string
+  recordedByUserId?: string | null
+  heightCm?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: number | null
+  diastolicMmHg?: number | null
+  pulseBpm?: number | null
+  temperatureC?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: number | null
+  respiratoryRate?: number | null
+  notes?: string | null
+  createdAt?: Date | string
+  encounter: Prisma.EncounterCreateNestedOneWithoutVitalsInput
+  corrects?: Prisma.VitalsObservationCreateNestedOneWithoutCorrectedByInput
+}
+
+export type VitalsObservationUncheckedCreateWithoutCorrectedByInput = {
+  id?: string
+  tenantId: string
+  encounterId: string
+  patientId: string
+  recordedAt?: Date | string
+  recordedByUserId?: string | null
+  heightCm?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: number | null
+  diastolicMmHg?: number | null
+  pulseBpm?: number | null
+  temperatureC?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: number | null
+  respiratoryRate?: number | null
+  notes?: string | null
+  correctsId?: string | null
+  createdAt?: Date | string
+}
+
+export type VitalsObservationCreateOrConnectWithoutCorrectedByInput = {
+  where: Prisma.VitalsObservationWhereUniqueInput
+  create: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectedByInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectedByInput>
+}
+
+export type VitalsObservationCreateWithoutCorrectsInput = {
+  id?: string
+  tenantId: string
+  patientId: string
+  recordedAt?: Date | string
+  recordedByUserId?: string | null
+  heightCm?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: number | null
+  diastolicMmHg?: number | null
+  pulseBpm?: number | null
+  temperatureC?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: number | null
+  respiratoryRate?: number | null
+  notes?: string | null
+  createdAt?: Date | string
+  encounter: Prisma.EncounterCreateNestedOneWithoutVitalsInput
+  correctedBy?: Prisma.VitalsObservationCreateNestedOneWithoutCorrectsInput
+}
+
+export type VitalsObservationUncheckedCreateWithoutCorrectsInput = {
+  id?: string
+  tenantId: string
+  encounterId: string
+  patientId: string
+  recordedAt?: Date | string
+  recordedByUserId?: string | null
+  heightCm?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: number | null
+  diastolicMmHg?: number | null
+  pulseBpm?: number | null
+  temperatureC?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: number | null
+  respiratoryRate?: number | null
+  notes?: string | null
+  createdAt?: Date | string
+  correctedBy?: Prisma.VitalsObservationUncheckedCreateNestedOneWithoutCorrectsInput
+}
+
+export type VitalsObservationCreateOrConnectWithoutCorrectsInput = {
+  where: Prisma.VitalsObservationWhereUniqueInput
+  create: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectsInput>
+}
+
+export type VitalsObservationUpsertWithoutCorrectedByInput = {
+  update: Prisma.XOR<Prisma.VitalsObservationUpdateWithoutCorrectedByInput, Prisma.VitalsObservationUncheckedUpdateWithoutCorrectedByInput>
+  create: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectedByInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectedByInput>
+  where?: Prisma.VitalsObservationWhereInput
+}
+
+export type VitalsObservationUpdateToOneWithWhereWithoutCorrectedByInput = {
+  where?: Prisma.VitalsObservationWhereInput
+  data: Prisma.XOR<Prisma.VitalsObservationUpdateWithoutCorrectedByInput, Prisma.VitalsObservationUncheckedUpdateWithoutCorrectedByInput>
+}
+
+export type VitalsObservationUpdateWithoutCorrectedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  recordedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  recordedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  heightCm?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  diastolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  pulseBpm?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  temperatureC?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  encounter?: Prisma.EncounterUpdateOneRequiredWithoutVitalsNestedInput
+  corrects?: Prisma.VitalsObservationUpdateOneWithoutCorrectedByNestedInput
+}
+
+export type VitalsObservationUncheckedUpdateWithoutCorrectedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  encounterId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  recordedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  recordedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  heightCm?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  diastolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  pulseBpm?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  temperatureC?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  correctsId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type VitalsObservationUpsertWithoutCorrectsInput = {
+  update: Prisma.XOR<Prisma.VitalsObservationUpdateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedUpdateWithoutCorrectsInput>
+  create: Prisma.XOR<Prisma.VitalsObservationCreateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedCreateWithoutCorrectsInput>
+  where?: Prisma.VitalsObservationWhereInput
+}
+
+export type VitalsObservationUpdateToOneWithWhereWithoutCorrectsInput = {
+  where?: Prisma.VitalsObservationWhereInput
+  data: Prisma.XOR<Prisma.VitalsObservationUpdateWithoutCorrectsInput, Prisma.VitalsObservationUncheckedUpdateWithoutCorrectsInput>
+}
+
+export type VitalsObservationUpdateWithoutCorrectsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  recordedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  recordedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  heightCm?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  diastolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  pulseBpm?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  temperatureC?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  encounter?: Prisma.EncounterUpdateOneRequiredWithoutVitalsNestedInput
+  correctedBy?: Prisma.VitalsObservationUpdateOneWithoutCorrectsNestedInput
+}
+
+export type VitalsObservationUncheckedUpdateWithoutCorrectsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  encounterId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  recordedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  recordedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  heightCm?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  weightKg?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  systolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  diastolicMmHg?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  pulseBpm?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  temperatureC?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correctedBy?: Prisma.VitalsObservationUncheckedUpdateOneWithoutCorrectsNestedInput
 }
 
 export type VitalsObservationCreateManyEncounterInput = {
@@ -802,6 +1083,7 @@ export type VitalsObservationCreateManyEncounterInput = {
   spo2Percent?: number | null
   respiratoryRate?: number | null
   notes?: string | null
+  correctsId?: string | null
   createdAt?: Date | string
 }
 
@@ -821,6 +1103,8 @@ export type VitalsObservationUpdateWithoutEncounterInput = {
   respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  corrects?: Prisma.VitalsObservationUpdateOneWithoutCorrectedByNestedInput
+  correctedBy?: Prisma.VitalsObservationUpdateOneWithoutCorrectsNestedInput
 }
 
 export type VitalsObservationUncheckedUpdateWithoutEncounterInput = {
@@ -838,7 +1122,9 @@ export type VitalsObservationUncheckedUpdateWithoutEncounterInput = {
   spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  correctsId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correctedBy?: Prisma.VitalsObservationUncheckedUpdateOneWithoutCorrectsNestedInput
 }
 
 export type VitalsObservationUncheckedUpdateManyWithoutEncounterInput = {
@@ -856,6 +1142,7 @@ export type VitalsObservationUncheckedUpdateManyWithoutEncounterInput = {
   spo2Percent?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   respiratoryRate?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   notes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  correctsId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -877,8 +1164,11 @@ export type VitalsObservationSelect<ExtArgs extends runtime.Types.Extensions.Int
   spo2Percent?: boolean
   respiratoryRate?: boolean
   notes?: boolean
+  correctsId?: boolean
   createdAt?: boolean
   encounter?: boolean | Prisma.EncounterDefaultArgs<ExtArgs>
+  corrects?: boolean | Prisma.VitalsObservation$correctsArgs<ExtArgs>
+  correctedBy?: boolean | Prisma.VitalsObservation$correctedByArgs<ExtArgs>
 }, ExtArgs["result"]["vitalsObservation"]>
 
 export type VitalsObservationSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -897,8 +1187,10 @@ export type VitalsObservationSelectCreateManyAndReturn<ExtArgs extends runtime.T
   spo2Percent?: boolean
   respiratoryRate?: boolean
   notes?: boolean
+  correctsId?: boolean
   createdAt?: boolean
   encounter?: boolean | Prisma.EncounterDefaultArgs<ExtArgs>
+  corrects?: boolean | Prisma.VitalsObservation$correctsArgs<ExtArgs>
 }, ExtArgs["result"]["vitalsObservation"]>
 
 export type VitalsObservationSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -917,8 +1209,10 @@ export type VitalsObservationSelectUpdateManyAndReturn<ExtArgs extends runtime.T
   spo2Percent?: boolean
   respiratoryRate?: boolean
   notes?: boolean
+  correctsId?: boolean
   createdAt?: boolean
   encounter?: boolean | Prisma.EncounterDefaultArgs<ExtArgs>
+  corrects?: boolean | Prisma.VitalsObservation$correctsArgs<ExtArgs>
 }, ExtArgs["result"]["vitalsObservation"]>
 
 export type VitalsObservationSelectScalar = {
@@ -937,24 +1231,31 @@ export type VitalsObservationSelectScalar = {
   spo2Percent?: boolean
   respiratoryRate?: boolean
   notes?: boolean
+  correctsId?: boolean
   createdAt?: boolean
 }
 
-export type VitalsObservationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "encounterId" | "patientId" | "recordedAt" | "recordedByUserId" | "heightCm" | "weightKg" | "systolicMmHg" | "diastolicMmHg" | "pulseBpm" | "temperatureC" | "spo2Percent" | "respiratoryRate" | "notes" | "createdAt", ExtArgs["result"]["vitalsObservation"]>
+export type VitalsObservationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "encounterId" | "patientId" | "recordedAt" | "recordedByUserId" | "heightCm" | "weightKg" | "systolicMmHg" | "diastolicMmHg" | "pulseBpm" | "temperatureC" | "spo2Percent" | "respiratoryRate" | "notes" | "correctsId" | "createdAt", ExtArgs["result"]["vitalsObservation"]>
 export type VitalsObservationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   encounter?: boolean | Prisma.EncounterDefaultArgs<ExtArgs>
+  corrects?: boolean | Prisma.VitalsObservation$correctsArgs<ExtArgs>
+  correctedBy?: boolean | Prisma.VitalsObservation$correctedByArgs<ExtArgs>
 }
 export type VitalsObservationIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   encounter?: boolean | Prisma.EncounterDefaultArgs<ExtArgs>
+  corrects?: boolean | Prisma.VitalsObservation$correctsArgs<ExtArgs>
 }
 export type VitalsObservationIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   encounter?: boolean | Prisma.EncounterDefaultArgs<ExtArgs>
+  corrects?: boolean | Prisma.VitalsObservation$correctsArgs<ExtArgs>
 }
 
 export type $VitalsObservationPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "VitalsObservation"
   objects: {
     encounter: Prisma.$EncounterPayload<ExtArgs>
+    corrects: Prisma.$VitalsObservationPayload<ExtArgs> | null
+    correctedBy: Prisma.$VitalsObservationPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -982,6 +1283,14 @@ export type $VitalsObservationPayload<ExtArgs extends runtime.Types.Extensions.I
     spo2Percent: number | null
     respiratoryRate: number | null
     notes: string | null
+    /**
+     * The reading this one replaces, when it is a correction rather than a new
+     * observation. A correction carries the ORIGINAL'''s `recordedAt` — the
+     * observation happened when it happened — and its own `createdAt`, which is
+     * when somebody noticed. See the migration for why this is a row and not an
+     * UPDATE.
+     */
+    correctsId: string | null
     createdAt: Date
   }, ExtArgs["result"]["vitalsObservation"]>
   composites: {}
@@ -1378,6 +1687,8 @@ readonly fields: VitalsObservationFieldRefs;
 export interface Prisma__VitalsObservationClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   encounter<T extends Prisma.EncounterDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.EncounterDefaultArgs<ExtArgs>>): Prisma.Prisma__EncounterClient<runtime.Types.Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  corrects<T extends Prisma.VitalsObservation$correctsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.VitalsObservation$correctsArgs<ExtArgs>>): Prisma.Prisma__VitalsObservationClient<runtime.Types.Result.GetResult<Prisma.$VitalsObservationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  correctedBy<T extends Prisma.VitalsObservation$correctedByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.VitalsObservation$correctedByArgs<ExtArgs>>): Prisma.Prisma__VitalsObservationClient<runtime.Types.Result.GetResult<Prisma.$VitalsObservationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1422,6 +1733,7 @@ export interface VitalsObservationFieldRefs {
   readonly spo2Percent: Prisma.FieldRef<"VitalsObservation", 'Int'>
   readonly respiratoryRate: Prisma.FieldRef<"VitalsObservation", 'Int'>
   readonly notes: Prisma.FieldRef<"VitalsObservation", 'String'>
+  readonly correctsId: Prisma.FieldRef<"VitalsObservation", 'String'>
   readonly createdAt: Prisma.FieldRef<"VitalsObservation", 'DateTime'>
 }
     
@@ -1821,6 +2133,44 @@ export type VitalsObservationDeleteManyArgs<ExtArgs extends runtime.Types.Extens
    * Limit how many VitalsObservations to delete.
    */
   limit?: number
+}
+
+/**
+ * VitalsObservation.corrects
+ */
+export type VitalsObservation$correctsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the VitalsObservation
+   */
+  select?: Prisma.VitalsObservationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the VitalsObservation
+   */
+  omit?: Prisma.VitalsObservationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.VitalsObservationInclude<ExtArgs> | null
+  where?: Prisma.VitalsObservationWhereInput
+}
+
+/**
+ * VitalsObservation.correctedBy
+ */
+export type VitalsObservation$correctedByArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the VitalsObservation
+   */
+  select?: Prisma.VitalsObservationSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the VitalsObservation
+   */
+  omit?: Prisma.VitalsObservationOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.VitalsObservationInclude<ExtArgs> | null
+  where?: Prisma.VitalsObservationWhereInput
 }
 
 /**

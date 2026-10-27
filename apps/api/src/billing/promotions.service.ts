@@ -167,7 +167,7 @@ export class PromotionsService {
         throw new ConflictException({
           code: 'CUSTOM_HAS_NO_VALUE',
           message:
-            `${promotion.code} is a custom promotion — its amount is typed when it is applied, ` +
+            `${promotion.code} is a custom promotion. Its amount is typed when it is applied, ` +
             'so it has no value and no maximum to edit.',
         });
       }
@@ -357,8 +357,8 @@ export class PromotionsService {
         throw new ConflictException({
           code: 'PAYMENT_ALREADY_TAKEN',
           message:
-            'Money has already been taken on this bill. A discount after payment is a refund — ' +
-            'an administrator does that.',
+            'Money has already been taken on this bill. A discount after payment is a refund. ' +
+            'An administrator does that.',
         });
       }
 
@@ -450,7 +450,7 @@ export class PromotionsService {
       if (isCustom && input.customDiscountPaise === undefined) {
         throw new BadRequestException({
           code: 'CUSTOM_AMOUNT_REQUIRED',
-          message: `${promotion.code} needs an amount — type what this bill should be discounted by.`,
+          message: `${promotion.code} needs an amount. Type what this bill should be discounted by.`,
         });
       }
 
@@ -627,7 +627,7 @@ export class PromotionsService {
           code: 'PAYMENT_ALREADY_TAKEN',
           message:
             'Money has already been taken on this bill. Removing the discount now is a ' +
-            'correction — an administrator does that.',
+            'correction. An administrator does that.',
         });
       }
 

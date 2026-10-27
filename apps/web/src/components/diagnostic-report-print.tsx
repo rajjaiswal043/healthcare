@@ -102,7 +102,7 @@ export function DiagnosticReportPrint({
             <p className="whitespace-pre-wrap text-[13px]">{order.resultNote}</p>
           ) : (
             <p className="text-[13px] italic">
-              Reported by image only — see the films listed below.
+              Reported by image only. See the films listed below.
             </p>
           )}
         </section>
@@ -147,7 +147,7 @@ export function DiagnosticReportPrint({
 
         <footer className="mt-10 flex items-end justify-between">
           <p className="text-[10.5px] italic">
-            {order.status === 'COMPLETED' ? '' : 'DRAFT — this test has not been reported.'}
+            {order.status === 'COMPLETED' ? '' : 'DRAFT: this test has not been reported.'}
           </p>
           <div className="w-56 border-t border-ink pt-1 text-center text-[11px]">
             {order.completedBy?.fullName ?? order.department.name}

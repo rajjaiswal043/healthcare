@@ -7,6 +7,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
+import { clinicToday, instantToLocalDate } from '../../scheduling/clinic-time.js';
 import type { RegisterPatientDto } from './dto/register-patient.dto.js';
 
 export interface DuplicateCandidate {
@@ -82,6 +83,20 @@ export interface PatientDetail extends PatientSummary {
     practitioner: { id: string; fullName: string; prefix: string | null };
     /** Null when the visit produced no clinical note. */
     encounterId: string | null;
+    /**
+     * Booked, never checked in, and its day is over.
+     *
+     * Derived here rather than in the browser because it is a question about
+     * the CLINIC's day, and the browser knows only the reader's timezone. A
+     * clinic in Kolkata read from a laptop set to Toronto would otherwise flip
+     * the answer for every appointment in the first half of the day.
+     *
+     * Derived rather than stored because nothing in the clinic marks a
+     * no-show: the status stays BOOKED for ever unless somebody presses the
+     * button on the day board, and the record must not keep saying "booked"
+     * about a Tuesday three weeks ago.
+     */
+    missed: boolean;
   }>;
   stats: {
     totalVisits: number;
@@ -482,8 +497,8 @@ export class PatientsService {
               code: 'UHID_CLASH',
               message:
                 `The next patient ID for this clinic, ${uhid}, is already in use, so nobody can be ` +
-                'registered until the ID format is corrected. This needs the platform team — ' +
-                'please report it with this message.',
+                'registered until the ID format is corrected. This needs the platform team. ' +
+                'Please report it with this message.',
             });
           }
           throw err;
@@ -755,7 +770,8 @@ export class PatientsService {
       // the row is simply not visible, and we must not confirm it exists.
       if (!patient) throw new NotFoundException('Patient not found');
 
-      const [consentRows, appointments, totalVisits, completedVisits] = await Promise.all([
+      const [tenant, consentRows, appointments, totalVisits, completedVisits] = await Promise.all([
+        tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true } }),
         tx.consentRecord.findMany({
           where: { patientId: id },
           orderBy: { grantedAt: 'desc' },
@@ -779,6 +795,10 @@ export class PatientsService {
         tx.appointment.count({ where: { patientId: id } }),
         tx.appointment.count({ where: { patientId: id, status: 'FULFILLED' } }),
       ]);
+
+      /* The clinic's today, against which a booked visit either has not
+         happened yet or never did. */
+      const today = clinicToday(tenant.timezone);
 
       /**
        * Latest decision per purpose.
@@ -841,6 +861,7 @@ export class PatientsService {
           reasonForVisit: a.reasonForVisit,
           practitioner: a.practitioner,
           encounterId: a.encounter?.id ?? null,
+          missed: a.status === 'BOOKED' && instantToLocalDate(a.startAt, tenant.timezone) < today,
         })),
 
         stats: {

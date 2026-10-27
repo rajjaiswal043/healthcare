@@ -136,7 +136,7 @@ class ChangeUhidFormatDto {
 
   /** Why, and who asked. Written into the clinic's audit trail. */
   @IsString()
-  @MinLength(3, { message: 'Say why the format is changing — who asked, and when.' })
+  @MinLength(3, { message: 'Say why the format is changing: who asked, and when.' })
   @MaxLength(300)
   reason!: string;
 }

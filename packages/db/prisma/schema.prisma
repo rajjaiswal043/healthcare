@@ -1153,9 +1153,19 @@ model VitalsObservation {
 
   notes String? @db.VarChar(300)
 
+  /// The reading this one replaces, when it is a correction rather than a new
+  /// observation. A correction carries the ORIGINAL'''s `recordedAt` — the
+  /// observation happened when it happened — and its own `createdAt`, which is
+  /// when somebody noticed. See the migration for why this is a row and not an
+  /// UPDATE.
+  correctsId String? @unique @map("corrects_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  corrects    VitalsObservation?  @relation("VitalsCorrection", fields: [correctsId], references: [id], onDelete: Cascade)
+  correctedBy VitalsObservation?  @relation("VitalsCorrection")
 
   @@index([tenantId, encounterId])
   @@index([tenantId, patientId, recordedAt])

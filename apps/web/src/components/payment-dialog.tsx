@@ -27,7 +27,7 @@ const MODES = [
 const WAIVE_REASONS = [
   'Staff or staff family',
   'Camp or free clinic',
-  'Courtesy — clinic error',
+  'Courtesy (clinic error)',
   'Charitable case',
 ];
 
@@ -49,7 +49,7 @@ export function showsPromotionPanel(mayDiscount: boolean, invoice: Invoice): boo
 }
 
 const DEFER_REASONS = [
-  'Emergency — no means to pay now',
+  'Emergency (no means to pay now)',
   'Corporate or company account',
   'Patient will pay on collection of report',
 ];
@@ -90,6 +90,19 @@ export function PaymentDialog({
    * correction that does not say which.
    */
   const [correcting, setCorrecting] = useState<'PATIENT_REFUND' | 'RECORDED_IN_ERROR' | null>(null);
+  /**
+   * The payment whose MODE is being put right, and what it should have been.
+   *
+   * Its own state rather than part of `correcting` above, because it is not a
+   * correction to the money: the amount does not change and nothing leaves the
+   * clinic. Reported from the clinic on 27 Oct 2026 — an X-ray paid by UPI and
+   * keyed as cash, which left the drawer claiming money it never held.
+   */
+  const [fixingMode, setFixingMode] = useState<{
+    paymentId: string;
+    mode: string;
+    reference: string;
+  } | null>(null);
   const [correctionAmount, setCorrectionAmount] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
   const [reason, setReason] = useState('');
@@ -207,6 +220,36 @@ export function PaymentDialog({
       setError(
         err instanceof ApiRequestError ? err.error.message : 'Could not record the payment.',
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Put a payment under the right mode.
+   *
+   * ONE CALL, because the server does both halves in one transaction: the
+   * original is reversed as recorded-in-error and the same amount goes back in
+   * under the new mode. Doing it as two calls from here would risk a reversal
+   * landing without its replacement, which leaves a settled bill looking
+   * unpaid with the patient already gone.
+   */
+  async function submitModeFix() {
+    if (!fixingMode) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      apply(
+        await api.correctPaymentMode(invoice.id, {
+          paymentId: fixingMode.paymentId,
+          mode: fixingMode.mode,
+          ...(fixingMode.reference.trim() ? { reference: fixingMode.reference.trim() } : {}),
+        }),
+      );
+      setFixingMode(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not correct the mode.');
     } finally {
       setBusy(false);
     }
@@ -416,7 +459,7 @@ export function PaymentDialog({
                 {invoice.status === 'WAIVED'
                   ? 'This charge was waived.'
                   : invoice.status === 'DEFERRED'
-                    ? 'Payment deferred — the patient can be checked in, and this stays on the outstanding list.'
+                    ? 'Payment deferred. The patient can be checked in, and this stays on the outstanding list.'
                     : 'Settled in full. The patient can be checked in.'}
                 {invoice.reason && <span className="block text-ink-60">{invoice.reason}</span>}
               </span>
@@ -471,7 +514,7 @@ export function PaymentDialog({
                 {/* Part payment is normal — ₹200 cash and the rest by UPI. Each
                     press records its own row, and the balance updates. */}
                 <p className="field-hint mt-1.5">
-                  Taking part of it is fine — record each tender separately and the balance updates.
+                  Taking part of it is fine. Record each tender separately and the balance updates.
                 </p>
 
                 <button
@@ -525,7 +568,7 @@ export function PaymentDialog({
                   <p className="mono-label">
                     {correcting === 'PATIENT_REFUND'
                       ? 'Money going back to the patient'
-                      : 'This entry was never real — no money moved'}
+                      : 'This entry was never real, no money moved'}
                   </p>
 
                   <div className="flex flex-wrap gap-2">
@@ -675,6 +718,11 @@ export function PaymentDialog({
                   const reversal = p.correctionKind === 'RECORDED_IN_ERROR';
                   const back = p.direction === 'REFUND';
 
+                  const fixing = fixingMode?.paymentId === p.id;
+                  /* Only money that came in, and only once. A reversal has no
+                     mode worth correcting, and neither does a refund. */
+                  const fixable = mayCorrect && !back && !p.correctionKind;
+
                   return (
                     <li key={p.id} className="text-[12.5px]">
                       <div className="flex justify-between gap-3">
@@ -703,6 +751,92 @@ export function PaymentDialog({
                       </p>
 
                       {p.reason && <p className="text-[11.5px] text-ink-60">“{p.reason}”</p>}
+
+                      {/*
+                        THE MODE, PUT RIGHT.
+                        
+                        Keyed as cash when the money arrived by UPI leaves the
+                        drawer claiming what it never held. Offered under the
+                        payment it concerns rather than beside the invoice
+                        total, because the thing being corrected is this entry
+                        and a bill may carry several.
+                      */}
+                      {fixable && !fixing && (
+                        <button
+                          type="button"
+                          className="mt-1 text-[11.5px] font-semibold text-clinical-text underline underline-offset-2"
+                          onClick={() =>
+                            setFixingMode({
+                              paymentId: p.id,
+                              mode: p.mode === 'CASH' ? 'UPI' : 'CASH',
+                              reference: '',
+                            })
+                          }
+                        >
+                          Wrong payment mode?
+                        </button>
+                      )}
+
+                      {fixing && fixingMode && (
+                        <div className="mt-2 space-y-2 rounded-panel bg-bg-soft p-2.5">
+                          <p className="text-[11.5px] text-ink-60">It was actually taken by:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {MODES.filter((m) => m.key !== p.mode).map((m) => (
+                              <button
+                                key={m.key}
+                                type="button"
+                                aria-pressed={fixingMode.mode === m.key}
+                                onClick={() => setFixingMode({ ...fixingMode, mode: m.key })}
+                                className={[
+                                  'rounded-pill border-[1.5px] px-2.5 py-1 text-[11.5px] font-semibold transition-colors',
+                                  fixingMode.mode === m.key
+                                    ? 'border-clinical bg-clinical-tint text-clinical-text'
+                                    : 'border-ink/12 bg-white text-ink-60 hover:border-ink/25',
+                                ].join(' ')}
+                              >
+                                {m.label}
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            className="field-input !py-1.5 !text-[12px]"
+                            value={fixingMode.reference}
+                            onChange={(e) =>
+                              setFixingMode({ ...fixingMode, reference: e.target.value })
+                            }
+                            placeholder={
+                              fixingMode.mode === 'UPI' ? 'UPI transaction id' : 'Reference'
+                            }
+                            maxLength={120}
+                          />
+                          {/* Said before the press: this writes two rows, and
+                              the receipt the patient already holds says the
+                              old mode. */}
+                          <p className="text-[11px] text-ink-40">
+                            {formatPaise(p.amountPaise)} is reversed as recorded in error and taken
+                            again as {fixingMode.mode.replace('_', ' ').toLowerCase()}. The bill
+                            stays settled.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className="btn-primary !py-1.5 !text-[12px]"
+                              disabled={busy}
+                              onClick={() => void submitModeFix()}
+                            >
+                              {busy ? 'Correcting…' : 'Correct it'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-ghost !py-1.5 !text-[12px]"
+                              disabled={busy}
+                              onClick={() => setFixingMode(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </li>
                   );
                 })}

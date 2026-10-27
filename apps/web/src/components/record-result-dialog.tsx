@@ -108,12 +108,29 @@ export function RecordResultDialog({
     if (fileInput.current) fileInput.current.value = '';
   }
 
+  /**
+   * WHAT COUNTS AS A RESULT — the server's rule, not a stricter one.
+   *
+   * `completeOrder` refuses an order carrying neither a file nor a note, and
+   * accepts either. This dialog used to demand a note regardless, so somebody
+   * who attached the film — which IS the result, and leaves nothing to type —
+   * watched Mark done stay grey while the server would have taken it.
+   *
+   * Reported from the clinic on 27 Oct 2026: the technician could not log in,
+   * the patient came back holding their X-ray, and the administrator had no
+   * way to mark it done.
+   */
+  const hasResult = note.trim().length >= 2 || documents.length > 0;
+
   async function record() {
-    if (note.trim().length < 2) return;
+    if (!hasResult) return;
     setBusy('completing');
     setError(null);
 
     try {
+      /* An empty note is sent as empty rather than as two spaces: the server
+         stores it only when there is something in it, and a note of "" beside
+         an attached film is the honest record of "the film is the result". */
       await api.completeDiagnosticOrder(orderId, note.trim());
       onRecorded(`${row.patient.name}’s result is recorded. The doctor can see it now.`);
     } catch (err) {
@@ -227,7 +244,16 @@ export function RecordResultDialog({
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink/8 bg-bg-soft px-6 py-4">
           {/* Said before the press: this is what stops the patient appearing
               under "At a department" on every board in the clinic. */}
-          <p className="text-[12px] text-ink-40">Marks the test done for everyone.</p>
+          {/*
+            Says what is still missing, rather than leaving a grey button to be
+            puzzled over. The two ways to finish are a film or a reading, and
+            either alone is enough.
+          */}
+          <p className="text-[12px] text-ink-40">
+            {hasResult
+              ? 'Marks the test done for everyone.'
+              : 'Attach the film or write the reading first.'}
+          </p>
           <div className="flex gap-2">
             <button type="button" className="btn-ghost" onClick={onClose} disabled={working}>
               Cancel
@@ -235,7 +261,7 @@ export function RecordResultDialog({
             <button
               type="button"
               className="btn-primary"
-              disabled={note.trim().length < 2 || working}
+              disabled={!hasResult || working}
               onClick={() => void record()}
             >
               {busy === 'completing' ? 'Recording…' : 'Mark done'}

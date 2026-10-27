@@ -1068,8 +1068,8 @@ export class ClinicSetupService {
         throw new ConflictException({
           code: 'SERVICE_IN_USE',
           message:
-            `“${service.name}” is on ${used}. Switch it off instead — ` +
-            'deleting it would cut those records loose from what they were for.',
+            `“${service.name}” is on ${used}. Switch it off instead. ` +
+            'Deleting it would cut those records loose from what they were for.',
         });
       }
 
@@ -1193,7 +1193,7 @@ function historyConflict(history: { appointments: number; encounters: number }) 
     code: 'PRACTITIONER_HAS_HISTORY',
     message:
       parts.length > 0
-        ? `This doctor has ${parts.join(' and ')}, so they cannot be deleted — switch them off instead.`
+        ? `This doctor has ${parts.join(' and ')}, so they cannot be deleted. Switch them off instead.`
         : 'Something was recorded for this doctor while they were being deleted. Reload and try again.',
     appointments: history.appointments,
     encounters: history.encounters,
@@ -1218,8 +1218,8 @@ function onlyDoctorOnScreenConflict(doctorName: string, screens: string[]) {
     code: 'PRACTITIONER_ONLY_DOCTOR_ON_SCREEN',
     message:
       `${doctorName} is the only doctor on ${named}. Deleting them would make ` +
-      `${quoted.length === 1 ? 'it' : 'those screens'} show every doctor's queue — ` +
-      `switch ${quoted.length === 1 ? 'that screen' : 'them'} off first, and pair a new ` +
+      `${quoted.length === 1 ? 'it' : 'those screens'} show every doctor's queue. ` +
+      `Switch ${quoted.length === 1 ? 'that screen' : 'them'} off first, and pair a new ` +
       `screen for the doctors it should show.`,
     screens,
   });

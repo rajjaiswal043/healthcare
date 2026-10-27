@@ -695,6 +695,40 @@ export class BillingService {
     });
   }
 
+  /**
+   * EVERY bill this visit has produced, oldest first.
+   *
+   * A visit makes more than one. The consultation's invoice carries
+   * `appointmentId`; a test raises its own with `appointmentId` NULL and
+   * `visitAppointmentId` set, because the consultation bill is settled before
+   * the doctor is reached and will not take another line. That split is
+   * deliberate and is not changing.
+   *
+   * What was wrong is that nothing ever showed both. The finance desk opened a
+   * visit, saw the consultation bill, took the money — and the X-ray's bill was
+   * on no screen it was looking at, so the test stayed unpaid and the
+   * department stayed blocked. Reported from the clinic on 27 Oct 2026: "xray
+   * ka UPI nahi liya".
+   *
+   * Returns settled bills too. "What did this visit cost and what is left" is
+   * one question, and hiding the paid half makes the remainder unexplainable.
+   */
+  async getAllForAppointment(tenantId: string, appointmentId: string) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const invoices = await tx.invoice.findMany({
+        where: {
+          OR: [{ appointmentId }, { visitAppointmentId: appointmentId }],
+        },
+        orderBy: { issuedAt: 'asc' },
+        select: { id: true },
+      });
+
+      return {
+        invoices: await Promise.all(invoices.map((i) => this.view(tx, i.id))),
+      };
+    });
+  }
+
   async get(tenantId: string, id: string) {
     return this.prisma.forTenant(tenantId, (tx) => this.view(tx, id));
   }
@@ -794,8 +828,8 @@ export class BillingService {
         throw new ConflictException({
           code: 'LINE_IS_A_TEST',
           message:
-            `“${line.description}” is a test that was ordered. Decline the test instead — ` +
-            'that takes the charge to zero and stops the department from running it.',
+            `“${line.description}” is a test that was ordered. Decline the test instead. ` +
+            'That takes the charge to zero and stops the department from running it.',
         });
       }
 
@@ -938,6 +972,123 @@ export class BillingService {
   }
 
   /** Give money back. Never more than came in. */
+  /**
+   * The money was right; the MODE was wrong.
+   *
+   * Reported from the clinic on 27 Oct 2026: an X-ray was paid by UPI and
+   * recorded as cash. Nothing was missing from the bill — the patient owed
+   * nothing and the invoice was settled — but the day's cash drawer claimed
+   * ₹700 it had never held, and UPI was short by the same.
+   *
+   * TWO ROWS, NOT AN EDIT. A payment is a row and a correction is a
+   * compensating row, never a column rewritten: that is what lets a receipt
+   * reprinted in 2029 show what actually happened. So this reverses the
+   * original as RECORDED_IN_ERROR — money that was never really in the drawer,
+   * which is exactly true — and records the same amount again in the right
+   * mode.
+   *
+   * ONE TRANSACTION, which is the whole reason this is a method and not two
+   * calls from the browser. A reversal that lands without its replacement
+   * leaves a settled bill looking unpaid, with a patient who has already gone
+   * home; that is a worse state than the typo it was fixing.
+   */
+  async correctPaymentMode(
+    tenantId: string,
+    invoiceId: string,
+    input: { paymentId: string; mode: string; reference?: string },
+    meta: RequestMeta,
+  ) {
+    const actorUserId = meta.actorUserId;
+    if (!actorUserId) throw new BadRequestException('A correction needs an author.');
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      await lockInvoice(tx, invoiceId);
+
+      const invoice = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        select: { id: true, totalPaise: true, patientId: true },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+
+      const original = await tx.payment.findUnique({
+        where: { id: input.paymentId },
+        select: {
+          id: true,
+          invoiceId: true,
+          direction: true,
+          mode: true,
+          amountPaise: true,
+          correctionKind: true,
+        },
+      });
+      if (!original || original.invoiceId !== invoiceId) {
+        throw new NotFoundException('No such payment on this bill.');
+      }
+
+      /* Only money that came IN has a mode worth correcting. A refund's mode
+         says how money went back, and reversing one here would be inventing a
+         second refund. */
+      if (original.direction !== 'IN' || original.correctionKind) {
+        throw new ConflictException({
+          code: 'NOT_A_COLLECTION',
+          message: 'Only a payment taken from the patient can have its mode corrected.',
+        });
+      }
+
+      if (original.mode === input.mode) {
+        throw new ConflictException({
+          code: 'SAME_MODE',
+          message: `That payment is already recorded as ${String(original.mode).toLowerCase()}.`,
+        });
+      }
+
+      const reason = `Mode corrected from ${String(original.mode)} to ${input.mode}`;
+
+      // Out: the drawer never held this.
+      await tx.payment.create({
+        data: {
+          tenantId,
+          invoiceId,
+          direction: 'REFUND',
+          mode: original.mode,
+          amountPaise: original.amountPaise,
+          reason,
+          correctionKind: 'RECORDED_IN_ERROR',
+          collectedByUserId: actorUserId,
+        },
+      });
+
+      // In: the same money, where it actually arrived.
+      const replacement = await tx.payment.create({
+        data: {
+          tenantId,
+          invoiceId,
+          direction: 'IN',
+          mode: input.mode as never,
+          amountPaise: original.amountPaise,
+          reference: input.reference ?? null,
+          reason,
+          collectedByUserId: actorUserId,
+        },
+        select: { id: true },
+      });
+
+      await this.restatus(tx, invoiceId, invoice.totalPaise);
+
+      await this.audit.record(tx, tenantId, {
+        action: 'payment.mode_corrected',
+        resourceType: 'Invoice',
+        resourceId: invoiceId,
+        patientId: invoice.patientId,
+        changedFields: ['payments'],
+        reason,
+        ...meta,
+      });
+
+      return { ...(await this.view(tx, invoiceId)), correctedPaymentId: replacement.id };
+    });
+  }
+
   async refund(
     tenantId: string,
     id: string,
@@ -965,7 +1116,7 @@ export class BillingService {
       if (input.amountPaise > refundable) {
         throw new ConflictException({
           code: 'REFUND_EXCEEDS_PAYMENTS',
-          message: `Only ${formatPaise(refundable)} can be refunded — that is what was actually collected.`,
+          message: `Only ${formatPaise(refundable)} can be refunded. That is what was actually collected.`,
           refundablePaise: refundable,
         });
       }

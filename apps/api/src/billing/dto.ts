@@ -75,6 +75,27 @@ export enum PaymentCorrectionKindDto {
   RECORDED_IN_ERROR = 'RECORDED_IN_ERROR',
 }
 
+/**
+ * Putting a payment under the right mode.
+ *
+ * No amount: it is always the original payment's, in full. A mode correction
+ * that changed the figure would be two decisions wearing one button, and the
+ * second one — how much — belongs to a refund.
+ */
+export class CorrectPaymentModeDto {
+  @IsUUID()
+  paymentId!: string;
+
+  @IsEnum(PaymentModeDto)
+  mode!: PaymentModeDto;
+
+  /** The UPI transaction id or card slip the money actually arrived on. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  reference?: string;
+}
+
 export class RefundDto {
   @IsEnum(PaymentModeDto)
   mode!: PaymentModeDto;

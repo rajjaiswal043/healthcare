@@ -222,6 +222,23 @@ export class SchedulingController {
   }
 
   /**
+   * Undo a close, for the row somebody pressed by mistake.
+   *
+   * The same `appointment:write` as closing. Both events stay in the audit
+   * log, so the history shows the correction rather than hiding it.
+   */
+  @Patch('appointments/:id/reopen')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async reopenVisit(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.reopenVisit(tenantId, id, metaFrom(req, user));
+  }
+
+  /**
    * Move a waiting patient to the front (FR-APT-16).
    *
    * Its own permission, because this is the one queue action a whole waiting

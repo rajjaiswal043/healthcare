@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, setUnauthorizedHandler, type CurrentSession } from '@/lib/api';
+import { clearDraft } from '@/lib/registration-draft';
 import { roleSignature, type RoleSignature } from '@/lib/role-signature';
 
 type Session = CurrentSession;
@@ -132,6 +133,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.logout();
     } finally {
+      /**
+       * Nothing of this person's work is left on the machine.
+       *
+       * The registration draft holds a patient's name, mobile and address for
+       * somebody who has not consented to anything yet, and the front desk is a
+       * shared computer. Left behind, the next receptionist to sign in would
+       * open Register and find the previous one's half-typed patient already in
+       * the form — which is both confusing and a disclosure nobody authorised.
+       *
+       * Signing out is the one moment the draft is definitely finished with: it
+       * already clears on a completed registration and expires after twelve
+       * hours, and this closes the case in between.
+       */
+      clearDraft();
       setSession(null);
       router.replace('/login');
     }

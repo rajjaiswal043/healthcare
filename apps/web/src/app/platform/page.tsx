@@ -351,7 +351,7 @@ export default function PlatformConsole() {
               <span className="text-clinical-text">{clinics.length}</span>
             </h1>
             <p className="mt-1 text-[13.5px] text-ink-60">
-              Counts only — this console cannot open a patient, a queue or an invoice.
+              Counts only. This console cannot open a patient, a queue or an invoice.
             </p>
           </div>
 
@@ -384,7 +384,7 @@ export default function PlatformConsole() {
               {issued.clinic.name} is ready
             </p>
             <p className="mt-1 text-[13px] text-ink-60">
-              Send these to the clinic administrator now. The password cannot be shown again — if it
+              Send these to the clinic administrator now. The password cannot be shown again. If it
               is lost, reset it from this console.
             </p>
 
@@ -537,7 +537,7 @@ export default function PlatformConsole() {
                         somebody choosing 4 digits is otherwise guessing what
                         happens at the ten-thousandth patient. */}
                     <p className="mt-0.5 text-[12.5px] text-ink-40">
-                      Longer numbers are written in full — patient{' '}
+                      Longer numbers are written in full: patient{' '}
                       {(10 ** width).toLocaleString('en-IN')} will be{' '}
                       <span className="font-mono">
                         {formatUhid(proposedPrefix, width, 10 ** width)}
@@ -708,7 +708,7 @@ export default function PlatformConsole() {
                     {issuedPassword.password}
                   </code>
                   <p className="text-[13px] text-ink-60">
-                    Read this to them now — it cannot be shown again. They will choose their own
+                    Read this to them now. It cannot be shown again. They will choose their own
                     password at their next sign-in, and have been signed out everywhere.
                   </p>
                   <p className="field-hint">
@@ -859,7 +859,7 @@ export default function PlatformConsole() {
                         IDs differ only by prefix. */}
                     <p className="mt-0.5 text-[12.5px] text-ink-40">
                       Numbering carries on from {(formatFor.uhidIssued + 1).toLocaleString('en-IN')}{' '}
-                      — it does not restart.
+                      and does not restart.
                     </p>
                   </>
                 )}
@@ -872,7 +872,7 @@ export default function PlatformConsole() {
                   rows={2}
                   maxLength={300}
                   className="field-input text-[16px] md:text-[13.5px]"
-                  placeholder="Dr Vivek asked on the phone — wants DRVIV- instead of DRV"
+                  placeholder="Dr Vivek asked on the phone, wants DRVIV- instead of DRV"
                   value={formatReason}
                   onChange={(e) => setFormatReason(e.target.value)}
                 />
@@ -919,7 +919,7 @@ export default function PlatformConsole() {
           <div className="card mt-6 px-6 py-12 text-center">
             <p className="font-display text-[18px] font-bold text-ink">No clinics yet</p>
             <p className="mt-1 text-[13.5px] text-ink-40">
-              Onboard the first one — it takes a name and an administrator.
+              Onboard the first one. It takes a name and an administrator.
             </p>
           </div>
         )}

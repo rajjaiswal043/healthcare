@@ -91,6 +91,32 @@ export class ConsultationsController {
     return this.consultations.recordVitals(tenantId, id, dto, await this.meta(req, user));
   }
 
+  /**
+   * Correct a reading, rather than adding another one.
+   *
+   * Same permission as recording: whoever may take a patient's blood pressure
+   * is who notices they typed it wrongly, and sending them to find somebody
+   * else is how the wrong number stays on the record.
+   */
+  @Post('encounters/:id/vitals/:vitalsId/correct')
+  @RequirePermissions(PERMISSIONS.VITALS_WRITE)
+  async correctVitals(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('vitalsId', new ParseUUIDPipe()) vitalsId: string,
+    @Body() dto: RecordVitalsDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.consultations.correctVitals(
+      tenantId,
+      id,
+      vitalsId,
+      dto,
+      await this.meta(req, user),
+    );
+  }
+
   @Put('encounters/:id/diagnoses')
   @RequirePermissions(PERMISSIONS.CONSULTATION_WRITE)
   async diagnoses(

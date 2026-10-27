@@ -31,6 +31,7 @@ import {
 import { Banner } from '@/components/banner';
 import { PromotionPanel } from '@/components/promotion-panel';
 import { DEFAULT_STATE, INDIAN_STATES } from '@/lib/india';
+import { SEARCH_CAP } from '@/lib/patient-search';
 
 /**
  * The finance desk — FR-FIN-02.
@@ -83,6 +84,20 @@ export default function FinanceDeskPage() {
 
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  /**
+   * THE OTHER BILLS THIS VISIT HAS.
+   *
+   * A visit makes more than one invoice: the consultation's carries the
+   * appointment, and every test raises its own, because a consultation bill
+   * settled before the doctor will not take another line. The desk used to see
+   * only the first — so the X-ray's bill was on no screen anybody was looking
+   * at, the desk took the money for what was in front of them, and the test
+   * stayed unpaid with the department blocked behind it.
+   *
+   * Holds every bill for the open visit, the one on screen included, so the
+   * strip below can say what is left to settle.
+   */
+  const [visitBills, setVisitBills] = useState<Invoice[]>([]);
   const [services, setServices] = useState<ChargeableService[]>([]);
 
   /**
@@ -343,8 +358,15 @@ export default function FinanceDeskPage() {
        * dead-ending here.
        */
       try {
-        setInvoice(await api.invoiceForAppointment(visit.id));
+        const { invoices } = await api.invoicesForAppointment(visit.id);
+        setVisitBills(invoices);
+        /* The OLDEST opens by default, which is the consultation's: opening a
+           visit raises that bill first and a test's comes later. The server
+           returns them in issue order precisely so this does not have to guess
+           twice. The rest are a press away in the strip above. */
+        setInvoice(invoices[0] ?? null);
       } catch {
+        setVisitBills([]);
         setInvoice(null);
       }
     } catch (err) {
@@ -674,7 +696,7 @@ export default function FinanceDeskPage() {
         (walkInTests.length > 0 || catalogueFailed) && (
           <section className="card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="mono-label">Tests only — no doctor</p>
+              <p className="mono-label">Tests only, no doctor</p>
               {!walkIn && !catalogueFailed && (
                 <button
                   type="button"
@@ -752,7 +774,7 @@ export default function FinanceDeskPage() {
                   <div className="flex flex-wrap gap-2">
                     {(
                       [
-                        ['SELF', 'Nobody — they asked for it'],
+                        ['SELF', 'Nobody (they asked for it)'],
                         ['EXTERNAL_DOCTOR', 'A doctor elsewhere'],
                       ] as const
                     ).map(([value, label]) => (
@@ -988,7 +1010,7 @@ export default function FinanceDeskPage() {
                 <IconCheck size={16} />
                 {busy
                   ? 'Opening…'
-                  : `Confirm — open visit with ${doctors.find((d) => d.id === chosenDoctorId)?.fullName ?? 'this doctor'}`}
+                  : `Confirm: open visit with ${doctors.find((d) => d.id === chosenDoctorId)?.fullName ?? 'this doctor'}`}
               </button>
               <button
                 type="button"
@@ -1039,6 +1061,55 @@ export default function FinanceDeskPage() {
               </button>
             )}
           </div>
+
+          {/*
+            EVERY BILL THIS VISIT HAS, when there is more than one.
+
+            A consultation and a test are two invoices — the test raises its
+            own, because a consultation bill settled before the doctor will not
+            take another line. The desk used to see only the first, take the
+            money for it, and send the patient away with the X-ray still
+            unpaid and the department blocked behind it. Reported from the
+            clinic: "xray ka UPI nahi liya".
+
+            Shown only for a visit with more than one bill, so the ordinary
+            consultation keeps the screen it has always had.
+          */}
+          {visitBills.length > 1 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {visitBills.map((b) => {
+                const open = invoice?.id === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    aria-pressed={open}
+                    onClick={() =>
+                      void run(
+                        async () => setInvoice(await api.invoice(b.id)),
+                        'Could not open that bill.',
+                      )
+                    }
+                    className={[
+                      'rounded-pill border-[1.5px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
+                      open
+                        ? 'border-clinical bg-clinical-tint text-clinical-text'
+                        : b.settled
+                          ? 'border-ink/12 bg-white text-ink-40 hover:border-ink/25'
+                          : 'border-coral/35 bg-coral/8 text-coral-text hover:border-coral/60',
+                    ].join(' ')}
+                  >
+                    <span className="font-mono">{b.number}</span>
+                    {' · '}
+                    {/* Settled ones stay listed and go quiet: "what did this
+                        visit cost" is one question, and hiding the paid half
+                        makes the remainder unexplainable. */}
+                    {b.settled ? 'paid' : `${formatPaise(b.balancePaise)} due`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {!invoice ? (
             <Banner tone="info">
@@ -1140,7 +1211,7 @@ export default function FinanceDeskPage() {
               {(invoice.appointment?.externalTestNote ??
                 invoice.visitAppointment?.externalTestNote) && (
                 <div className="mt-3 rounded-panel border border-dashed border-ink/20 bg-bg-soft px-3.5 py-3">
-                  <p className="mono-label">Not done here — patient to have elsewhere</p>
+                  <p className="mono-label">Not done here, patient to have elsewhere</p>
                   <p className="mt-1 whitespace-pre-wrap text-[13.5px]">
                     {invoice.appointment?.externalTestNote ??
                       invoice.visitAppointment?.externalTestNote}
@@ -1150,8 +1221,8 @@ export default function FinanceDeskPage() {
 
               {canBill && invoice.paidPaise === 0 && invoice.activePromotionApplicationId && (
                 <p className="field-hint mt-2">
-                  Take the discount off before adding or removing charges, then apply it again —
-                  otherwise the discount stays recorded at the old amount.
+                  Take the discount off before adding or removing charges, then apply it again.
+                  Otherwise the discount stays recorded at the old amount.
                 </p>
               )}
 
@@ -1253,6 +1324,14 @@ export default function FinanceDeskPage() {
                       // one.
                       void reloadOutstanding();
                       setInvoice(updated);
+                      /* And the strip above it, or the bill just paid would
+                         still read "₹500 due" beside the one that is open —
+                         which is the same confusion this strip was added to
+                         end. Updated in place rather than refetched: the
+                         server has already told us what this bill now is. */
+                      setVisitBills((bills) =>
+                        bills.map((b) => (b.id === updated.id ? updated : b)),
+                      );
                       if (updated.balancePaise <= 0) setPaid(true);
                     }, 'Could not record the payment.')
                   }
@@ -1436,7 +1515,7 @@ function FindPatient({
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        setResults((await api.searchPatients(query)).patients.slice(0, 6));
+        setResults((await api.searchPatients(query)).patients);
       } catch {
         setResults([]);
       } finally {
@@ -1465,7 +1544,11 @@ function FindPatient({
       {searching && <p className="field-hint">Searching…</p>}
 
       {results.length > 0 && (
-        <ul className="mt-2 divide-y divide-ink/6 overflow-hidden rounded-panel border border-ink/10">
+        /* Scrolls, since 27 Oct 2026. It used to show six of however many
+           matched and say nothing about the rest — which on a UHID search is
+           most of them, because every ID in a clinic shares a prefix and
+           typing one matches everybody on file. */
+        <ul className="scrollbar-quiet mt-2 max-h-[264px] divide-y divide-ink/6 overflow-y-auto rounded-panel border border-ink/10">
           {results.map((p) => (
             <li key={p.id}>
               <button
@@ -1489,6 +1572,14 @@ function FindPatient({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Said, not hidden. A capped list that looks complete is worse than one
+          that admits it is capped. */}
+      {results.length >= SEARCH_CAP && (
+        <p className="field-hint">
+          Showing the closest {SEARCH_CAP}. Add a mobile number or a UHID to narrow it.
+        </p>
       )}
 
       <div className="mt-3 flex items-center gap-2">
@@ -1629,7 +1720,7 @@ function InlineRegister({
             disabled={saving}
             onClick={() => void submit(true)}
           >
-            This is a different person — register anyway
+            This is a different person, register anyway
           </button>
         </div>
       )}
@@ -1724,7 +1815,7 @@ function InlineRegister({
           className="mt-0.5"
         />
         <span>
-          The patient consents to their records being held for their care. Required — this is the
+          The patient consents to their records being held for their care. Required: this is the
           DPDP consent captured at registration.
         </span>
       </label>
@@ -1918,7 +2009,7 @@ function AddCharge({
           <option value="">Choose a service…</option>
           {services.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name} — {formatPaise(s.pricePaise)}
+              {s.name} · {formatPaise(s.pricePaise)}
             </option>
           ))}
         </select>
@@ -2039,7 +2130,7 @@ function Finished({
               sending them back to reception is a wasted trip across a clinic. */}
           <p className="mt-1 text-[13px] text-ink-60">
             {standalone
-              ? 'Send them to the test room — the department can release the result now.'
+              ? 'Send them to the test room. The department can release the result now.'
               : 'Send them to the front desk to be checked in.'}
           </p>
         </div>

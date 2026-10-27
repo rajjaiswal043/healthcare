@@ -60,8 +60,8 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
                 <p className="mt-1 text-[11.5px]">Reg. No. {practitioner.registrationNumber}</p>
               ) : (
                 <p className="mt-1 border border-black px-1 py-0.5 text-[11.5px] font-bold">
-                  REGISTRATION NUMBER MISSING — this prescription is not valid for dispensing. Add
-                  it to the doctor&rsquo;s record and print again.
+                  REGISTRATION NUMBER MISSING. This prescription is not valid for dispensing. Add it
+                  to the doctor&rsquo;s record and print again.
                 </p>
               )}
             </div>
@@ -106,7 +106,7 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
                     {p.form ? ` (${p.form.toLowerCase()})` : ''}
                   </p>
                   <p className="pl-4">
-                    {p.dose} — <span className="font-mono">{p.frequency}</span>
+                    {p.dose} · <span className="font-mono">{p.frequency}</span>
                     {p.durationDays ? ` × ${p.durationDays} days` : ''}
                     {p.quantity ? ` · qty ${p.quantity}` : ''}
                     {p.instructions ? ` · ${p.instructions}` : ''}
@@ -153,7 +153,7 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
           <p className="py-1 text-[12.5px]">
             <strong>Review on</strong>{' '}
             {new Date(encounter.followUpDate).toLocaleDateString('en-IN', { dateStyle: 'long' })}
-            {encounter.followUpNote ? ` — ${encounter.followUpNote}` : ''}
+            {encounter.followUpNote ? `, ${encounter.followUpNote}` : ''}
           </p>
         )}
 
@@ -163,7 +163,7 @@ export function PrescriptionPrint({ encounter }: { encounter: Encounter }) {
             off: the document belongs to the clinic. The draft warning stays —
             it stops an unsigned prescription being dispensed against. */}
           <p className="text-[10.5px] italic">
-            {encounter.status === 'SIGNED' ? '' : 'DRAFT — this consultation has not been signed.'}
+            {encounter.status === 'SIGNED' ? '' : 'DRAFT: this consultation has not been signed.'}
           </p>
           <div className="w-56 border-t border-ink pt-1 text-center text-[11px]">
             {practitioner.fullName}

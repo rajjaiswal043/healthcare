@@ -98,7 +98,7 @@ export default function DisplaysPage() {
         <p className="eyebrow">Settings</p>
         <h1 className="mt-2 font-display text-[30px] font-bold">Waiting-room screens</h1>
         <p className="mt-1 max-w-[62ch] text-[14px] text-ink-60">
-          A screen shows token numbers and the doctor&rsquo;s name — never a patient&rsquo;s. It
+          A screen shows token numbers and the doctor&rsquo;s name, never a patient&rsquo;s. It
           signs in with its own key rather than a staff login, so nobody has to leave a session open
           on a television.
         </p>
@@ -123,7 +123,7 @@ export default function DisplaysPage() {
           <div className="bg-clinical-tint px-5 py-4">
             <p className="mono-label !text-clinical-text">{issued.name} is paired</p>
             <p className="mt-1 text-[13.5px] text-ink-60">
-              Open this address on the screen. <strong>Copy it now</strong> — it cannot be shown
+              Open this address on the screen. <strong>Copy it now</strong>. It cannot be shown
               again, and a screen that loses it has to be paired afresh.
             </p>
           </div>

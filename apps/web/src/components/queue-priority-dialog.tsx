@@ -22,7 +22,7 @@ export const PRIORITY_REASONS: Array<{ key: QueuePriorityReason; label: string }
 export function priorityLabel(priority: NonNullable<Appointment['priority']>): string {
   const reason =
     PRIORITY_REASONS.find((r) => r.key === priority.reasonCode)?.label ?? priority.reasonCode;
-  return priority.note ? `${reason} — ${priority.note}` : reason;
+  return priority.note ? `${reason} · ${priority.note}` : reason;
 }
 
 /**

@@ -96,7 +96,7 @@ export function AppointmentDialog({
   }, [loadAvailability]);
 
   const reasons = mode === 'cancel' ? CANCEL_REASONS : RESCHEDULE_REASONS;
-  const reason = [reasonCode, note.trim()].filter(Boolean).join(' — ');
+  const reason = [reasonCode, note.trim()].filter(Boolean).join(' · ');
   const ready = reasonCode !== '' && (mode === 'cancel' || slotStart !== '') && !busy;
 
   async function submit() {

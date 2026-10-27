@@ -130,7 +130,7 @@ export function PreviousVisitsPanel({ encounterId }: { encounterId: string }) {
                               {p.strength ? ` ${p.strength}` : ''}
                             </span>
                             <span className="text-ink-60">
-                              {' — '}
+                              {' · '}
                               {p.dose} ·{' '}
                               <span className="font-mono text-[12px]">{p.frequency}</span>
                               {p.durationDays ? ` × ${p.durationDays} days` : ''}

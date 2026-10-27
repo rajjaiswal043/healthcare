@@ -3701,6 +3701,7 @@ export const VitalsObservationScalarFieldEnum = {
   spo2Percent: 'spo2Percent',
   respiratoryRate: 'respiratoryRate',
   notes: 'notes',
+  correctsId: 'correctsId',
   createdAt: 'createdAt'
 } as const
 

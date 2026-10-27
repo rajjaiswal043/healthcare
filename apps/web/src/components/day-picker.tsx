@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { IconCalendar, IconChevronRight, IconRefresh } from '@/components/icons';
 
 /** `2026-10-22`, the only date shape the board's URL ever carries. */
@@ -51,6 +52,31 @@ export function DayPicker({
   refreshedAt: Date | null;
   onRefresh: () => void;
 }) {
+  const dateRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Open the native picker.
+   *
+   * Reported on 27 Oct 2026: the calendar icon did not open a calendar. It was
+   * a decorative span with `pointer-events-none`, so a click fell through to
+   * the label and merely focused the field — and focusing a date input opens
+   * nothing. The picker was reachable only from the browser's own small
+   * indicator at the far end of the field, which is not where the icon is.
+   *
+   * `showPicker` throws where it is unsupported or not tied to a real click,
+   * and focusing the field is the honest fallback: the date can still be typed.
+   */
+  const openCalendar = () => {
+    const input = dateRef.current;
+    if (!input) return;
+
+    try {
+      input.showPicker();
+    } catch {
+      input.focus();
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex flex-1 items-center gap-1 rounded-pill border border-ink/12 bg-white p-0.5 md:flex-none">
@@ -66,11 +92,18 @@ export function DayPicker({
           </span>
         </button>
 
-        <label className="relative flex items-center">
-          <span className="sr-only">Show another day</span>
-          <span className="pointer-events-none absolute left-2 text-ink-40">
+        {/* A div, not a label: the icon is a button now, and a button inside a
+            label fires the label's own focus as well as its click. */}
+        <div className="relative flex items-center">
+          <button
+            type="button"
+            aria-label="Open the calendar"
+            title="Open the calendar"
+            className="absolute left-2 flex text-ink-40 transition-colors hover:text-ink"
+            onClick={openCalendar}
+          >
             <IconCalendar size={13} />
-          </span>
+          </button>
           {/*
             The native picker. A hand-built calendar would be prettier and
             would also have to reinvent keyboard entry, locale and the
@@ -78,12 +111,14 @@ export function DayPicker({
             them.
           */}
           <input
+            ref={dateRef}
             type="date"
+            aria-label="Show another day"
             value={shownDate}
             onChange={(e) => e.target.value && onPick(e.target.value)}
             className="w-full rounded-pill border-0 bg-transparent py-1 pl-7 pr-2 font-mono text-[16px] tabular-nums text-ink focus:outline-none md:w-[150px] md:text-[12.5px]"
           />
-        </label>
+        </div>
 
         <button
           type="button"

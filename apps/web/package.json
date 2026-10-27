@@ -12,7 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "next": "^15.5.25",
+    "next": "^15.5.28",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

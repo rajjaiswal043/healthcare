@@ -7,6 +7,7 @@ import {
   api,
   ApiRequestError,
   type EncounterSummary,
+  type Invoice,
   type PatientBilling,
   type PatientCorrection,
   type PatientDetail,
@@ -15,9 +16,11 @@ import {
 } from '@/lib/api';
 import { PatientCorrectionDialog } from '@/components/patient-correction-dialog';
 import { PrintReceiptButton } from '@/components/receipt-button';
+import { PaymentDialog } from '@/components/payment-dialog';
 import { useAuth } from '@/components/auth-provider';
 import { formatAge, formatPaise, genderInitial, payMethodLabel } from '@/lib/format';
 import { initialsOf } from '@/lib/role-signature';
+import { VISIT_STATUS_LABEL, VISIT_STATUS_TONE, effectiveVisitStatus } from '@/lib/visit-status';
 import { AllergyLine } from './allergy-line';
 import {
   IconAlert,
@@ -35,6 +38,19 @@ import {
 } from '@/components/icons';
 
 type Tab = 'timeline' | 'clinical' | 'billing' | 'details';
+
+/**
+ * The statuses that mean this patient is in the clinic's hands right now.
+ *
+ * In for a visit, out for a test mid-visit, or booked for one that has not
+ * happened yet. `FULFILLED`, `CANCELLED` and `NO_SHOW` are over, and a record
+ * holding only those is somebody's history rather than somebody at the desk.
+ *
+ * Read off `patient.appointments`, which the API returns `startAt desc` and
+ * capped, so anything still open — today's visit, or a future booking — sits at
+ * the top of that slice and is always present to be found.
+ */
+const LIVE_VISIT = new Set(['BOOKED', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_TESTS']);
 
 const TABS: Array<{ key: Tab; label: string; icon: React.ReactNode }> = [
   { key: 'timeline', label: 'Timeline', icon: <IconClock size={14} /> },
@@ -102,15 +118,6 @@ const CONSENT_LABELS: Record<string, string> = {
   TELEHEALTH: 'Telehealth',
 };
 
-const STATUS_TONE: Record<string, string> = {
-  FULFILLED: 'badge-green',
-  IN_PROGRESS: 'badge-clinical',
-  ARRIVED: 'badge-amber',
-  BOOKED: 'badge-neutral',
-  CANCELLED: 'badge-coral',
-  NO_SHOW: 'badge-coral',
-};
-
 export default function PatientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { can } = useAuth();
@@ -131,6 +138,19 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
   const [cursor, setCursor] = useState<{ at: string; id: string } | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [billing, setBilling] = useState<PatientBilling | null>(null);
+  /**
+   * The bill opened for correcting, if any.
+   *
+   * THE BILLING TAB IS WHERE PEOPLE LOOK. It lists every bill a patient has
+   * with what it was for and how it was paid — so when the mode on one of them
+   * is wrong, this is the screen somebody is already staring at. Until now the
+   * correction lived only in the finance desk's flow, reachable by opening
+   * today's visit, which is no help at all for a bill from last week.
+   *
+   * Holds the FULL invoice rather than the summary the list draws, because the
+   * payment dialog works on payments and the summary has none.
+   */
+  const [correctingBill, setCorrectingBill] = useState<Invoice | null>(null);
   const [tests, setTests] = useState<PatientTest[] | null>(null);
   /** Null until an administrator asks for them — see the panel at the bottom. */
   const [corrections, setCorrections] = useState<PatientCorrection[] | null>(null);
@@ -300,7 +320,11 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
               </span>
             </div>
 
-            <AllergyLine allergies={patient.allergies} reviewedAt={patient.allergiesReviewedAt} />
+            <AllergyLine
+              allergies={patient.allergies}
+              reviewedAt={patient.allergiesReviewedAt}
+              hasLiveVisit={patient.appointments.some((a) => LIVE_VISIT.has(a.status))}
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -546,6 +570,37 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                         </span>
                       )}
 
+                      {/*
+                        PUTTING A BILL RIGHT, from where it is being read.
+
+                        Behind `payment:refund` — the permission the
+                        corrections themselves sit behind — so the desk cannot
+                        unwind its own entries. It opens the same payment
+                        dialog the finance desk uses, which is where the mode
+                        fix, the reversal and the refund all live.
+                      */}
+                      {can('payment:refund') && (
+                        <button
+                          type="button"
+                          className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+                          onClick={() =>
+                            void (async () => {
+                              try {
+                                setCorrectingBill(await api.invoice(inv.id));
+                              } catch (err) {
+                                setError(
+                                  err instanceof ApiRequestError
+                                    ? err.error.message
+                                    : 'Could not open that bill.',
+                                );
+                              }
+                            })()
+                          }
+                        >
+                          Payments
+                        </button>
+                      )}
+
                       {inv.lastPaymentId && can('payment:collect') && (
                         <PrintReceiptButton
                           paymentId={inv.lastPaymentId}
@@ -654,6 +709,28 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                           control for catching missing cash quietly firing on
                           somebody who was only looking.
                         */}
+                          {can('payment:refund') && (
+                            <button
+                              type="button"
+                              className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+                              onClick={() =>
+                                void (async () => {
+                                  try {
+                                    setCorrectingBill(await api.invoice(inv.id));
+                                  } catch (err) {
+                                    setError(
+                                      err instanceof ApiRequestError
+                                        ? err.error.message
+                                        : 'Could not open that bill.',
+                                    );
+                                  }
+                                })()
+                              }
+                            >
+                              Payments
+                            </button>
+                          )}
+
                           {inv.lastPaymentId && can('payment:collect') && (
                             <PrintReceiptButton
                               paymentId={inv.lastPaymentId}
@@ -916,9 +993,22 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
                     </span>
 
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className={`badge ${STATUS_TONE[a.status] ?? 'badge-neutral'}`}>
-                        {a.status.replace('_', ' ').toLowerCase()}
-                      </span>
+                      {/*
+                        Said in words, not in enum. This printed the raw status
+                        lowercased, so a visit nobody attended read "booked" —
+                        present tense, about a day long gone — and the others
+                        read "awaiting tests" and "in progress", which are
+                        column names rather than anything you would say to a
+                        colleague. Reported 27 Oct 2026.
+                      */}
+                      {(() => {
+                        const shown = effectiveVisitStatus(a.status, a.missed);
+                        return (
+                          <span className={`badge ${VISIT_STATUS_TONE[shown]}`}>
+                            {VISIT_STATUS_LABEL[shown]}
+                          </span>
+                        );
+                      })()}
                       {a.encounterId && mayReadNotes && (
                         <Link
                           href={`/consultations/${a.encounterId}`}
@@ -994,6 +1084,26 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
               </ul>
             ))}
         </section>
+      )}
+
+      {/*
+        THE BILL, OPENED FROM THE LIST THAT SHOWS IT.
+
+        The same dialog the finance desk uses, so there is one place that knows
+        how a payment is corrected rather than two that drift. On close the
+        billing tab is refetched: a mode correction writes two payment rows and
+        the summary beside each bill is drawn from them.
+      */}
+      {correctingBill && (
+        <PaymentDialog
+          invoice={correctingBill}
+          onClose={() => {
+            setCorrectingBill(null);
+            // Null is what the tab's loader treats as "not fetched yet".
+            setBilling(null);
+          }}
+          onSettled={setCorrectingBill}
+        />
       )}
 
       {correcting && (

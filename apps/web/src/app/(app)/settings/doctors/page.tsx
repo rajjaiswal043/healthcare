@@ -133,9 +133,9 @@ export default function DoctorsPage() {
           <p className="eyebrow">Settings</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Doctors and hours</h1>
           <p className="mt-1 max-w-[64ch] text-[14px] text-ink-60">
-            A doctor needs to be listed here before anybody can book them — a login on its own is
-            not enough. And a doctor with no weekly hours has no appointment slots, because times
-            are worked out from these sessions rather than stored in advance.
+            A doctor needs to be listed here before anybody can book them. A login on its own is not
+            enough. And a doctor with no weekly hours has no appointment slots, because times are
+            worked out from these sessions rather than stored in advance.
           </p>
         </div>
         {!adding && (
@@ -331,8 +331,8 @@ function DoctorCard({
     d.relinkOnly === undefined
       ? 'No doctor logins are free to link. A login needs the doctor role and must not be linked to another entry.'
       : d.relinkOnly === null
-        ? `${d.fullName} has ${consultations} and no login was ever unlinked from them here, so no login can be linked — it would become the owner of those notes.`
-        : `${d.fullName} has ${consultations}, so only ${d.relinkOnly.fullName} (${d.relinkOnly.email}), who was linked before, can be linked back — and that login is not eligible now: it is switched off, lacks the doctor role, or is linked to another entry.`;
+        ? `${d.fullName} has ${consultations} and no login was ever unlinked from them here, so no login can be linked: it would become the owner of those notes.`
+        : `${d.fullName} has ${consultations}, so only ${d.relinkOnly.fullName} (${d.relinkOnly.email}), who was linked before, can be linked back, and that login is not eligible now: it is switched off, lacks the doctor role, or is linked to another entry.`;
 
   async function submitLogin() {
     const reason = loginReason.trim();
@@ -509,7 +509,7 @@ function DoctorCard({
                 <option value="">Choose a login…</option>
                 {offer.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.fullName} — {u.email}
+                    {u.fullName} · {u.email}
                   </option>
                 ))}
               </select>

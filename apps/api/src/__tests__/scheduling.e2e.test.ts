@@ -510,6 +510,38 @@ describe('check-in and the queue', () => {
   });
 
   /**
+   * "Seen today" is read backwards from every other list on the screen.
+   *
+   * Reported 27 Oct 2026: it inherited the serving order, so the first patient
+   * of the morning sat at the top all day and the one who had just walked out
+   * was at the bottom of a list of twenty. The waiting list, the diary and the
+   * away-for-tests list are all ascending on purpose; this one is not.
+   */
+  it('puts the most recently finished patient at the top of Seen today', async () => {
+    const first = (await book(frontDesk, { patientIndex: 0, slotIndex: 0 })).json();
+    const second = (await book(frontDesk, { patientIndex: 1, slotIndex: 1 })).json();
+
+    for (const appt of [first, second]) {
+      await checkIn(appt.id);
+      await transition(appt.id, 'call', doctor);
+      expect((await transition(appt.id, 'complete', doctor)).statusCode).toBe(200);
+    }
+
+    const queue = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const completed = queue.json().completed;
+
+    expect(completed).toHaveLength(2);
+    // The one finished last, not the one with the earlier slot or token.
+    expect(completed[0].id).toBe(second.id);
+    expect(completed[1].id).toBe(first.id);
+  });
+
+  /**
    * The X-ray round trip, which is the whole reason phase B exists.
    *
    * The point being asserted is that this is ONE visit throughout: same token,
