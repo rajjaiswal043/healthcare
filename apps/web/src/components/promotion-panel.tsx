@@ -197,7 +197,7 @@ export function PromotionPanel({
               <option value="">None</option>
               {promotions.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.code} —{' '}
+                  {p.code} ·{' '}
                   {p.type === 'CUSTOM'
                     ? 'custom amount'
                     : p.type === 'PERCENTAGE'

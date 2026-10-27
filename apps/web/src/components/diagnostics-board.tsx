@@ -124,7 +124,7 @@ function AllergyStrip({
   }
 
   return (
-    <p className="mt-1 text-[12px] text-amber-text">Allergies not recorded — ask before contrast</p>
+    <p className="mt-1 text-[12px] text-amber-text">Allergies not recorded. Ask before contrast.</p>
   );
 }
 
@@ -946,8 +946,8 @@ export function DiagnosticsBoard() {
                         </>
                       ) : (
                         <>
-                          This test has not been paid for. Send the patient to the finance desk —
-                          the result cannot go out until the bill is cleared.
+                          This test has not been paid for. Send the patient to the finance desk. The
+                          result cannot go out until the bill is cleared.
                         </>
                       )}
                     </span>
@@ -992,7 +992,7 @@ export function DiagnosticsBoard() {
                   {/* Said plainly, because the server refuses it and a silent
                       400 at this point is infuriating. */}
                   <p className="field-hint">
-                    Attach a file or write a report — an order cannot be marked done with neither.
+                    Attach a file or write a report. An order cannot be marked done with neither.
                   </p>
                 </div>
 
@@ -1079,8 +1079,8 @@ export function DiagnosticsBoard() {
                         </button>
                       </div>
                       <p className="field-hint">
-                        Recorded once. Name whoever physically took it — the patient, or the
-                        relative who collected it.
+                        Recorded once. Name whoever physically took it: the patient, or the relative
+                        who collected it.
                       </p>
                     </div>
                   ))}

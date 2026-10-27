@@ -386,6 +386,99 @@ describe('raising an order', () => {
   });
 });
 
+/**
+ * A visit being sent somewhere is not over.
+ *
+ * Ordering a test against a closed visit is normal — the doctor finishes, the
+ * patient stands up, and the doctor wants a film after all. What was wrong was
+ * leaving `closed_at` set through it: the record said the visit had ended while
+ * the patient stood in X-ray, and when the test finished they slid back into
+ * Done without anybody deciding they were finished.
+ */
+describe('ordering against a closed visit', () => {
+  /**
+   * Its OWN visit, never the shared `mainVisit`.
+   *
+   * These tests close a visit, and the fixture is module-level: closing it
+   * here left every test after this file position acting on a finished,
+   * closed appointment. That is how one new describe turned into 82 failures.
+   */
+  async function aVisit(closed: boolean): Promise<string> {
+    /* Written straight to the table rather than through `createVisit`, which
+       books patient 0 and collides with the suite's shared visit on the
+       "already in this doctor's queue" guard. These tests care about one
+       column, not about booking. */
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, queue_date, status, visit_type,
+                                closed_at, updated_at)
+       VALUES ($1, $2, $3, $4,
+               now(), now() + interval '15 minutes',
+               (now() AT TIME ZONE 'Asia/Kolkata')::date,
+               'FULFILLED', 'NEW',
+               CASE WHEN $5 THEN now() ELSE NULL END,
+               now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0], fx.main.practitionerId, fx.main.locationId, closed],
+    );
+    return row!.id;
+  }
+
+  it('reopens it, so the record stops claiming the visit is over', async () => {
+    const id = await aVisit(true);
+
+    const res = await order(doctor, {
+      appointmentId: id,
+      departmentId: plainDepartmentId,
+      description: 'X-ray, left knee — after the consultation',
+    });
+    expect(res.statusCode).toBe(201);
+
+    const [row] = await ownerQuery<{ closed_at: Date | null }>(
+      fx.main.id,
+      `SELECT closed_at FROM appointment WHERE id = $1`,
+      [id],
+    );
+    expect(row?.closed_at).toBeNull();
+  });
+
+  it('records the reopening rather than doing it silently', async () => {
+    const id = await aVisit(true);
+
+    await order(doctor, {
+      appointmentId: id,
+      departmentId: plainDepartmentId,
+      description: 'X-ray, left knee — after the consultation',
+    });
+
+    const actions = await ownerQuery<{ action: string }>(
+      fx.main.id,
+      `SELECT action FROM audit_event WHERE resource_id = $1`,
+      [id],
+    );
+    expect(actions.map((a) => a.action)).toContain('appointment.reopen');
+  });
+
+  it('leaves an open visit alone', async () => {
+    // Nothing to undo, and an audit row saying otherwise would be noise.
+    const id = await aVisit(false);
+
+    await order(doctor, {
+      appointmentId: id,
+      departmentId: plainDepartmentId,
+      description: 'X-ray, left knee',
+    });
+
+    const actions = await ownerQuery<{ action: string }>(
+      fx.main.id,
+      `SELECT action FROM audit_event WHERE resource_id = $1`,
+      [id],
+    );
+    expect(actions.map((a) => a.action)).not.toContain('appointment.reopen');
+  });
+});
+
 describe('the test catalogue', () => {
   it('lists the clinic\u2019s priced tests, with the fee, to whoever may order', async () => {
     const res = await app.inject({
@@ -2630,6 +2723,28 @@ describe('completing an order', () => {
     const res = await complete(diagnosticsUser, await pendingOrder(), {
       resultNote: 'Hb 11.2, WBC normal.',
     });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ status: string }>().status).toBe('COMPLETED');
+  });
+
+  /**
+   * A film with no reading is a complete result.
+   *
+   * The server has always accepted this — either a file or a note will do —
+   * but the day board's dialog demanded a note regardless, so an administrator
+   * who attached the film watched Mark done stay grey. Reported from the
+   * clinic on 27 Oct 2026, when the technician could not log in and the
+   * patient came back holding their X-ray.
+   *
+   * Pinned here because the dialog now mirrors this rule: if the server ever
+   * tightens, the button it draws is wrong again and nothing else would say so.
+   */
+  it('accepts a film with no report — the image is the result', async () => {
+    const id = await pendingOrder();
+    await attach(diagnosticsUser, id);
+
+    const res = await complete(diagnosticsUser, id);
 
     expect(res.statusCode).toBe(200);
     expect(res.json<{ status: string }>().status).toBe('COMPLETED');

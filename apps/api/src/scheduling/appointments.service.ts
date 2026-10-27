@@ -609,6 +609,56 @@ export class AppointmentsService {
     });
   }
 
+  /**
+   * Undo a close.
+   *
+   * CLOSING IS A PRESS, SO IT CAN BE A MISPRESS. The board shows a list of
+   * patients and the button that ends a visit sits on every finished row; the
+   * clinic reported closing the wrong one, and until now the only way back was
+   * an edit to the database. A recorded decision has to be correctable by the
+   * people who record it, or they stop trusting the record.
+   *
+   * THE TRAIL KEEPS BOTH EVENTS. `closed_at` is cleared, but `appointment.close`
+   * and `appointment.reopen` both stand in the audit log — so the history reads
+   * "closed at 4:05, reopened at 4:06 by Asha", which is the truth, rather than
+   * a visit that was never closed at all.
+   *
+   * Same permission as closing: whoever may end a visit may un-end one. The
+   * front desk makes this mistake most often, and sending them to find an
+   * administrator for a thirty-second slip is how a workaround gets invented.
+   */
+  async reopenVisit(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      if (!appt.closedAt) {
+        throw new ConflictException({
+          code: 'NOT_CLOSED',
+          message: 'This visit is already open.',
+        });
+      }
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: { closedAt: null, closedByUserId: null },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.reopen',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: appt.patientId,
+        changedFields: ['closedAt', 'closedByUserId'],
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
+  }
+
   async returnFromTests(
     tenantId: string,
     id: string,
@@ -655,7 +705,7 @@ export class AppointmentsService {
         changedFields: input.seeNext
           ? ['status', 'returnedAt', 'readyAt', 'priorityReasonCode']
           : ['status', 'returnedAt', 'readyAt'],
-        reason: input.seeNext ? 'Back from tests — to be seen next' : 'Back from tests — queued',
+        reason: input.seeNext ? 'Back from tests, to be seen next' : 'Back from tests, queued',
         ...meta,
       });
 
@@ -1011,7 +1061,22 @@ export class AppointmentsService {
         .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
       const waiting = views.filter((v) => v.status === 'ARRIVED');
       const inProgress = views.find((v) => v.status === 'IN_PROGRESS') ?? null;
-      const completed = views.filter((v) => v.status === 'FULFILLED');
+      /**
+       * Most recently finished first, since 27 Oct 2026.
+       *
+       * It used to inherit the serving order, so the first patient of the
+       * morning sat at the top of "Seen today" all day and the one who just
+       * walked out was at the bottom of a list of twenty. This is the only
+       * list on the screen read backwards — the other three are a queue, a
+       * diary and a waiting time, and all three belong in ascending order.
+       *
+       * Sorted on the rows rather than the views, so the ordering reads off
+       * the real `completedAt` rather than anything the view happens to carry.
+       */
+      const completed = rows
+        .filter((r) => r.status === 'FULFILLED')
+        .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))
+        .map((r) => toView(r, tz));
       // Out for an X-ray. Not waiting, not finished, and the desk needs to see
       // them or nobody knows who the clinic is still holding a room for.
       const awayForTests = views

@@ -678,7 +678,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const q = query.trim();
-                if (q) router.push(`/patients?q=${encodeURIComponent(q)}`);
+                if (!q) return;
+
+                router.push(`/patients?q=${encodeURIComponent(q)}`);
+                /* The patients screen's own box carries the term from here.
+                   Leaving it in both reads as two searches, and this one would
+                   go stale the moment the word is refined down there. */
+                setQuery('');
               }}
               className="relative flex items-center"
               role="search"

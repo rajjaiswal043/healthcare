@@ -5,13 +5,11 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiRequestError, type PatientSummary } from '@/lib/api';
 import { pageFromQuery } from '@/lib/pagination';
+import { SEARCH_CAP, adoptionFor, isSearchTerm, urlWriteFor } from '@/lib/patient-search';
 import { useAuth } from '@/components/auth-provider';
 import { PatientTable, PatientTableSkeleton } from '@/components/patient-table';
 import { AllPatientsView, type AllPatientsState } from '@/components/all-patients-view';
 import { IconSearch, IconUserPlus, IconUsers } from '@/components/icons';
-
-/** Below this, the box is not a search — it is somebody mid-word. */
-const MIN_QUERY = 2;
 
 /**
  * Patients: the list, and the search over it, on one screen.
@@ -38,6 +36,11 @@ const MIN_QUERY = 2;
  * THE URL IS THE STATE, as it was on the list before this: `?q=` or `?page=`,
  * never both. A patient opened from page 4 comes Back to page 4, a search can
  * be sent to somebody, and a refresh lands where it left off.
+ *
+ * AND IT IS THE STATE IN BOTH DIRECTIONS since 27 Oct 2026. It used to be
+ * written only, which meant a term pushed at this screen — by the header box,
+ * by the keyboard shortcut, by Back — never reached the input and was then
+ * deleted off the URL again. `patient-search.ts` has the account and the rules.
  */
 export default function PatientsPage() {
   return (
@@ -53,16 +56,28 @@ function Patients() {
   const { can } = useAuth();
 
   /**
-   * The box is local state; the URL is written FROM it, never read back into
-   * it after mount. Reading it back would fight the person typing — every
-   * replace would re-render and reset the cursor.
+   * The box is local state, reconciled with the URL in both directions.
+   *
+   * Reading the URL back on every render would fight the person typing — each
+   * write re-renders this component and would reset the cursor — so it is read
+   * back only when it says something this screen did not write.
    */
   const [query, setQuery] = useState(params.get('q') ?? '');
-  const searching = query.trim().length >= MIN_QUERY;
+  const searching = isSearchTerm(query);
   const page = pageFromQuery(params.get('page'));
 
   /** What the URL currently claims is being searched for. */
   const queryOnUrl = params.get('q');
+
+  /**
+   * The term this screen itself last put on the URL — `null` for having taken
+   * one off.
+   *
+   * The initial URL counts as written: a refresh on `?q=sharma` starts with
+   * that word already in the box, and adopting it as well would be a second
+   * search for the same name.
+   */
+  const writtenByUs = useRef<string | null>(params.get('q'));
 
   /**
    * The last term actually sent to the server.
@@ -70,6 +85,11 @@ function Patients() {
    * Writing the URL re-renders this component with new `params`, which runs the
    * effect below a second time for the same word. Without this it would search
    * twice for every search.
+   *
+   * Cleared again when a request fails, because a search that failed did not
+   * happen. Without that, one dropped response made that name permanently
+   * unsearchable: retyping it matched this ref and fired nothing, and the only
+   * way out was a different word or a reload.
    */
   const lastSearched = useRef<string | null>(null);
 
@@ -79,19 +99,55 @@ function Patients() {
 
   const [list, setList] = useState<AllPatientsState>({ kind: 'loading' });
 
+  /**
+   * Which request is the current one.
+   *
+   * Two searches can be in flight at once, and the first one sent is not
+   * reliably the first one back: "sha" ranks several hundred patients where
+   * "sharma" ranks two. The older response landing last showed results for a
+   * word already typed past — or an empty "No patient matches" for a name with
+   * plenty. The register fetch below has always been guarded this way; the
+   * search never was.
+   */
+  const requestId = useRef(0);
+
   const search = useCallback(async (q: string) => {
+    const id = ++requestId.current;
     setSearchState('searching');
     setSearchError(null);
 
     try {
       const { patients } = await api.searchPatients(q);
+      if (id !== requestId.current) return;
       setResults(patients);
       setSearchState('done');
     } catch (err) {
+      if (id !== requestId.current) return;
+      // So the same word can be sent again on the next keystroke.
+      lastSearched.current = null;
+      setResults([]);
       setSearchError(err instanceof ApiRequestError ? err.error.message : 'Search failed');
       setSearchState('error');
     }
   }, []);
+
+  /**
+   * A term that arrived from somewhere else goes into the box.
+   *
+   * Not debounced: the header search, the keyboard shortcut, Back, Forward and
+   * a `?q=` link somebody was sent all land here as a changed query string, and
+   * every one of them is a person already waiting for a result. `adoptionFor`
+   * decides, so the one case that must NOT adopt — this screen's own write,
+   * re-rendering it with new params while somebody is mid-word — stays a rule
+   * with a test rather than a condition buried in an effect.
+   */
+  useEffect(() => {
+    const adoption = adoptionFor(queryOnUrl, writtenByUs.current);
+    if (adoption.kind === 'NONE') return;
+
+    writtenByUs.current = queryOnUrl;
+    setQuery(adoption.query);
+  }, [queryOnUrl]);
 
   /**
    * Debounced: the receptionist is typing, not submitting. The URL is written
@@ -103,26 +159,23 @@ function Patients() {
     const trimmed = query.trim();
 
     const t = setTimeout(() => {
-      if (trimmed.length >= MIN_QUERY) {
+      if (isSearchTerm(trimmed)) {
         if (lastSearched.current !== trimmed) {
           lastSearched.current = trimmed;
           void search(trimmed);
-        }
-        if (queryOnUrl !== trimmed) {
-          router.replace(`/patients?q=${encodeURIComponent(trimmed)}`, { scroll: false });
         }
       } else {
         lastSearched.current = null;
         setResults([]);
         setSearchState('idle');
-        /**
-         * Back to the register — but only if a search was on the URL.
-         *
-         * The guard is what keeps `?page=4` alive: somebody who lands on page
-         * four and never types must not have the page silently rewritten out
-         * from under them by a search they did not make.
-         */
-        if (queryOnUrl !== null) router.replace('/patients', { scroll: false });
+      }
+
+      const write = urlWriteFor(query, queryOnUrl);
+      if (write.kind === 'WRITE') {
+        // Recorded BEFORE the write, so the re-render it causes is not read
+        // back as somebody else's search.
+        writtenByUs.current = write.term;
+        router.replace(write.href, { scroll: false });
       }
     }, 250);
 
@@ -199,7 +252,7 @@ function Patients() {
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Name, mobile, UHID or ABHA — e.g. Sharma · 9876543210 · SNC00042"
+          placeholder="Name, mobile, UHID or ABHA, e.g. Sharma · 9876543210 · SNC00042"
           className="field-input-icon"
           autoComplete="off"
           aria-describedby="search-status"
@@ -216,6 +269,9 @@ function Patients() {
       {searchError && (
         <div role="alert" className="card p-4 text-[13.5px] text-coral-text">
           {searchError}
+          {/* Said out loud, because a failed search no longer counts as one
+              already made — the same name goes again on the next keystroke. */}
+          <span className="mt-1 block text-ink-60">Type the name again to retry.</span>
         </div>
       )}
 
@@ -251,9 +307,10 @@ function Patients() {
                 other five are simply absent. A list that silently stops is how
                 somebody concludes a patient was never registered.
               */}
-              {results.length >= 25 && (
+              {results.length >= SEARCH_CAP && (
                 <p className="field-hint !mt-0">
-                  Showing the closest 25 matches. Add a mobile number or a UHID to narrow it.
+                  Showing the closest {SEARCH_CAP} matches. Add a mobile number or a UHID to narrow
+                  it.
                 </p>
               )}
             </>

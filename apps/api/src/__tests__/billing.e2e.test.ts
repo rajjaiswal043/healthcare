@@ -108,6 +108,193 @@ async function invoiceFor(appointmentId: string, session: Session = frontDesk) {
   return res.json();
 }
 
+/**
+ * Every bill a visit has produced.
+ *
+ * A consultation and a test are two invoices: the test raises its own, because
+ * a consultation bill settled before the doctor will not take another line.
+ * Until 27 Oct 2026 nothing showed both, so the finance desk took the money for
+ * the one on screen and the test stayed unpaid behind a blocked department.
+ */
+describe('all the bills for one visit', () => {
+  it('returns the consultation and the test together, oldest first', async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+
+    // A test's bill: no appointment of its own, tied to the visit instead.
+    const [testBill] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, patient_id, visit_appointment_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, issued_at, updated_at)
+       VALUES ($1, $2, $3, 'XR-' || floor(random() * 1000000)::text, 'UNPAID',
+               45000, 0, 45000, now() + interval '1 minute', now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0], appointmentId],
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/appointments/${appointmentId}/invoices`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { invoices } = res.json<{ invoices: Array<{ id: string }> }>();
+
+    // Oldest first, so the consultation's is what the desk opens on.
+    expect(invoices.map((i) => i.id)).toEqual([consultation.id, testBill!.id]);
+  });
+
+  it('still lists a bill that has been settled', async () => {
+    // "What did this visit cost, and what is left" is one question. Hiding the
+    // paid half makes the remainder unexplainable.
+    const appointmentId = await book();
+    const invoice = await invoiceFor(appointmentId);
+    await pay(invoice.id, invoice.balancePaise);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/appointments/${appointmentId}/invoices`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const { invoices } = res.json<{ invoices: Array<{ id: string; settled: boolean }> }>();
+    expect(invoices).toHaveLength(1);
+    expect(invoices[0]!.settled).toBe(true);
+  });
+
+  it("never reaches another clinic's visit", async () => {
+    const appointmentId = await book();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/appointments/${appointmentId}/invoices`,
+      headers: { cookie: otherFrontDesk.cookie },
+    });
+
+    // Read through the tenant client, so another clinic's visit has no bills
+    // rather than someone else's.
+    expect(res.json<{ invoices: unknown[] }>().invoices).toHaveLength(0);
+  });
+});
+
+/**
+ * The money was right; the mode was wrong.
+ *
+ * Reported from the clinic on 27 Oct 2026: an X-ray paid by UPI and keyed as
+ * cash. Nothing was missing from the bill — but the day's drawer claimed money
+ * it had never held, and UPI was short by the same.
+ */
+describe('correcting the mode a payment was taken in', () => {
+  async function settledInCash() {
+    const appointmentId = await book();
+    const invoice = await invoiceFor(appointmentId);
+    const res = await pay(invoice.id, invoice.balancePaise, 'CASH');
+    expect(res.statusCode).toBe(201);
+
+    const payments = (await invoiceFor(appointmentId)).payments as Array<{
+      id: string;
+      direction: string;
+    }>;
+    return { invoice, paymentId: payments.find((p) => p.direction === 'IN')!.id };
+  }
+
+  function correctMode(invoiceId: string, body: Record<string, unknown>, session: Session = admin) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/payments/correct-mode`,
+      headers: { cookie: session.cookie },
+      payload: body,
+    });
+  }
+
+  it('leaves the bill settled and the money where it really arrived', async () => {
+    const { invoice, paymentId } = await settledInCash();
+
+    const res = await correctMode(invoice.id, {
+      paymentId,
+      mode: 'UPI',
+      reference: '4471A2938',
+    });
+    expect(res.statusCode).toBe(201);
+
+    const after = res.json<{
+      balancePaise: number;
+      settled: boolean;
+      payments: Array<{ direction: string; mode: string; correctionKind: string | null }>;
+    }>();
+
+    // The patient still owes nothing — that is the point of doing both halves
+    // in one transaction.
+    expect(after.balancePaise).toBe(0);
+    expect(after.settled).toBe(true);
+
+    // Three rows: the cash that came in, the cash that never really did, and
+    // the UPI that did.
+    const cashOut = after.payments.filter(
+      (p) => p.direction === 'REFUND' && p.correctionKind === 'RECORDED_IN_ERROR',
+    );
+    const upiIn = after.payments.filter((p) => p.direction === 'IN' && p.mode === 'UPI');
+    expect(cashOut).toHaveLength(1);
+    expect(upiIn).toHaveLength(1);
+  });
+
+  it('refuses to correct a payment to the mode it already has', async () => {
+    const { invoice, paymentId } = await settledInCash();
+
+    const res = await correctMode(invoice.id, { paymentId, mode: 'CASH' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('SAME_MODE');
+  });
+
+  it('refuses to correct a reversal, which has no mode worth correcting', async () => {
+    const { invoice, paymentId } = await settledInCash();
+    await correctMode(invoice.id, { paymentId, mode: 'UPI' });
+
+    // The reversal just written. Correcting IT would invent a second one.
+    const reversal = (
+      await app
+        .inject({
+          method: 'GET',
+          url: `/api/v1/invoices/${invoice.id}`,
+          headers: { cookie: admin.cookie },
+        })
+        .then((r) => r.json<{ payments: Array<{ id: string; direction: string }> }>())
+    ).payments.find((p) => p.direction === 'REFUND')!;
+
+    const res = await correctMode(invoice.id, { paymentId: reversal.id, mode: 'CARD' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('NOT_A_COLLECTION');
+  });
+
+  it('is refused to the front desk, who must not unwind their own entries', async () => {
+    const { invoice, paymentId } = await settledInCash();
+
+    const res = await correctMode(invoice.id, { paymentId, mode: 'UPI' }, frontDesk);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('will not touch a payment that belongs to another bill', async () => {
+    const { paymentId } = await settledInCash();
+
+    /* A second bill, written straight to the table: booking twice would
+       exhaust the slot, and this test is about which invoice a payment hangs
+       off rather than about booking. */
+    const [other] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, patient_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, updated_at)
+       VALUES ($1, $2, 'OTH-' || floor(random() * 1000000)::text, 'UNPAID',
+               50000, 0, 50000, now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0]],
+    );
+
+    const res = await correctMode(other!.id, { paymentId, mode: 'UPI' });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 function pay(
   invoiceId: string,
   amountPaise: number,

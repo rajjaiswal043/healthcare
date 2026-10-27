@@ -11,7 +11,9 @@ import {
   type PatientSummary,
   type Practitioner,
 } from '@/lib/api';
+import { useAuth } from '@/components/auth-provider';
 import { formatAge, genderInitial } from '@/lib/format';
+import { SEARCH_CAP } from '@/lib/patient-search';
 import {
   IconAlert,
   IconCalendar,
@@ -52,6 +54,7 @@ const VISIT_REASONS = ['Spine', 'Trauma', 'Joint pain', 'Other'] as const;
 export default function NewAppointmentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { can } = useAuth();
 
   const [patient, setPatient] = useState<PatientSummary | null>(null);
   /** Arrived straight from registration, so this screen says so. */
@@ -208,7 +211,7 @@ export default function NewAppointmentPage() {
                 ? 'Waiting to be called.'
                 : booked.walkIn
                   ? 'Collect payment, then check them in to join the queue.'
-                  : `${booked.time} — they join the queue when they arrive and check in.`}
+                  : `${booked.time}. They join the queue when they arrive and check in.`}
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-3 p-6">
@@ -241,7 +244,21 @@ export default function NewAppointmentPage() {
   // A reason is required for both routes into the day, or a walk-in would be
   // the way round the rule — and walk-ins are most of an ortho clinic's list.
   const canBook = Boolean(patient && doctorId && locationId && slotStart && reason);
-  const canWalkIn = Boolean(patient && doctorId && locationId && reason);
+
+  /**
+   * Opening a visit is a different permission from holding the diary.
+   *
+   * `visit:open` sits with the front desk, the finance desk and the
+   * administrator; a doctor holds `appointment:write` and not this. The button
+   * used to be enabled for them anyway and the server answered 403 — and a
+   * button the server refuses is worse than no button, which is the rule the
+   * day board follows for exactly the same reason. Reported 27 Oct 2026.
+   *
+   * An administrator can hand `visit:open` to the doctor role on the Roles
+   * screen, and the button appears without anything being rebuilt.
+   */
+  const mayOpenVisits = can('visit:open');
+  const canWalkIn = Boolean(mayOpenVisits && patient && doctorId && locationId && reason);
 
   return (
     <div className="space-y-6">
@@ -251,7 +268,7 @@ export default function NewAppointmentPage() {
           Book an <em className="accent-words">appointment</em>
         </h1>
         <p className="mt-1 text-[14px] text-ink-60">
-          Or add a walk-in straight to the queue — same form, different button.
+          Or add a walk-in straight to the queue. Same form, different button.
         </p>
       </header>
 
@@ -500,17 +517,21 @@ export default function NewAppointmentPage() {
             {busy ? 'Booking…' : 'Book appointment'}
           </button>
 
-          {/* Same patient and doctor, no slot — straight into today's queue. */}
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={!canWalkIn || busy}
-            title="Add to today's queue now, without a time slot"
-            onClick={() => void book(true)}
-          >
-            <IconClock size={16} />
-            Add as walk-in
-          </button>
+          {/* Same patient and doctor, no slot — straight into today's queue.
+              Absent, not disabled, for somebody who may not open a visit: a
+              greyed-out button reads as "not yet", and this is "not you". */}
+          {mayOpenVisits && (
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!canWalkIn || busy}
+              title="Add to today's queue now, without a time slot"
+              onClick={() => void book(true)}
+            >
+              <IconClock size={16} />
+              Add as walk-in
+            </button>
+          )}
 
           <Link href="/queue" className="btn-ghost text-[13px]">
             Cancel
@@ -520,8 +541,10 @@ export default function NewAppointmentPage() {
         {selectedDoctor && patient && (
           <p className="mt-3 text-[12.5px] text-ink-40">
             {slotStart
-              ? `${patient.name} with ${selectedDoctor.fullName} — ${availability?.slots.find((s) => s.startAt === slotStart)?.time} on ${date}.`
-              : `Pick a time, or add ${patient.name} as a walk-in for today.`}
+              ? `${patient.name} with ${selectedDoctor.fullName} at ${availability?.slots.find((s) => s.startAt === slotStart)?.time} on ${date}.`
+              : mayOpenVisits
+                ? `Pick a time, or add ${patient.name} as a walk-in for today.`
+                : 'Pick a time.'}
           </p>
         )}
       </section>
@@ -544,7 +567,7 @@ function PatientPicker({ onPick }: { onPick: (p: PatientSummary) => void }) {
       setSearching(true);
       try {
         const { patients } = await api.searchPatients(query);
-        setResults(patients.slice(0, 6));
+        setResults(patients);
       } catch {
         setResults([]);
       } finally {
@@ -573,7 +596,11 @@ function PatientPicker({ onPick }: { onPick: (p: PatientSummary) => void }) {
       {searching && <p className="field-hint">Searching…</p>}
 
       {results.length > 0 && (
-        <ul className="mt-2 divide-y divide-ink/6 overflow-hidden rounded-panel border border-ink/10">
+        /* Scrolls, since 27 Oct 2026. It used to show six of however many
+           matched and say nothing about the rest — which on a UHID search is
+           most of them, because every ID in a clinic shares a prefix and
+           typing one matches everybody on file. */
+        <ul className="scrollbar-quiet mt-2 max-h-[264px] divide-y divide-ink/6 overflow-y-auto rounded-panel border border-ink/10">
           {results.map((p) => (
             <li key={p.id}>
               <button
@@ -595,6 +622,14 @@ function PatientPicker({ onPick }: { onPick: (p: PatientSummary) => void }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Said, not hidden. A capped list that looks complete is worse than one
+          that admits it is capped. */}
+      {results.length >= SEARCH_CAP && (
+        <p className="field-hint">
+          Showing the closest {SEARCH_CAP}. Add a mobile number or a UHID to narrow it.
+        </p>
       )}
 
       {query.trim().length >= 2 && !searching && results.length === 0 && (

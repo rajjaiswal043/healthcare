@@ -55,42 +55,108 @@ const NOTABLE: Record<string, [number, number, string]> = {
   respiratoryRate: [12, 20, 'outside 12–20'],
 };
 
-const VITAL_FIELDS: Array<{ key: keyof Vitals; label: string; unit: string; step?: string }> = [
-  { key: 'heightCm', label: 'Height', unit: 'cm', step: '0.1' },
-  { key: 'weightKg', label: 'Weight', unit: 'kg', step: '0.1' },
-  { key: 'systolicMmHg', label: 'BP systolic', unit: 'mmHg' },
-  { key: 'diastolicMmHg', label: 'BP diastolic', unit: 'mmHg' },
-  { key: 'pulseBpm', label: 'Pulse', unit: '/min' },
-  { key: 'temperatureC', label: 'Temperature', unit: '°C', step: '0.1' },
-  { key: 'spo2Percent', label: 'SpO₂', unit: '%' },
-  { key: 'respiratoryRate', label: 'Resp. rate', unit: '/min' },
+/**
+ * The limits, and they are the DTO's own.
+ *
+ * Carried here since 27 Oct 2026. The inputs used to have no bounds at all, so
+ * a systolic of 1400 reached the server, came back refused, and the only thing
+ * the nurse was told was "systolicMmHg must not be greater than 300" — a
+ * column name, not a field on this form. Nothing saved, so nothing displayed,
+ * which is how it was reported: "saved vitals not displayed".
+ *
+ * These reject impossibilities, not unusual patients, exactly as the DTO
+ * comment says. A temperature of 40.5 is a real patient; 405 is a keypress.
+ */
+const VITAL_FIELDS: Array<{
+  key: keyof Vitals;
+  label: string;
+  unit: string;
+  step?: string;
+  min: number;
+  max: number;
+}> = [
+  { key: 'heightCm', label: 'Height', unit: 'cm', step: '0.1', min: 20, max: 275 },
+  { key: 'weightKg', label: 'Weight', unit: 'kg', step: '0.1', min: 0.3, max: 500 },
+  { key: 'systolicMmHg', label: 'BP systolic', unit: 'mmHg', min: 40, max: 300 },
+  { key: 'diastolicMmHg', label: 'BP diastolic', unit: 'mmHg', min: 20, max: 200 },
+  { key: 'pulseBpm', label: 'Pulse', unit: '/min', min: 20, max: 300 },
+  { key: 'temperatureC', label: 'Temperature', unit: '°C', step: '0.1', min: 25, max: 45 },
+  { key: 'spo2Percent', label: 'SpO₂', unit: '%', min: 30, max: 100 },
+  { key: 'respiratoryRate', label: 'Resp. rate', unit: '/min', min: 4, max: 90 },
 ];
 
 export function VitalsPanel({ encounter, onSaved, onError, editable }: PanelProps) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  /**
+   * The reading being corrected, if any.
+   *
+   * Null means the grid is a NEW observation, which is what it has always been.
+   * Set means it replaces that reading — a different act, a different button,
+   * and a different endpoint.
+   */
+  const [correcting, setCorrecting] = useState<string | null>(null);
 
   const latest = encounter.latestVitals;
+  /* Readings that still stand. A corrected one is kept on the record but is no
+     longer a set the nurse took — counting it would say "3 sets" for two. */
+  const liveSets = encounter.vitals.filter((v) => !v.superseded).length;
   const anyEntered = Object.values(draft).some((v) => v.trim() !== '');
+
+  /** Prefill the grid with what the reading says, so only the typo changes. */
+  function startCorrection(of: NonNullable<typeof latest>) {
+    const prefilled: Record<string, string> = {};
+    for (const { key } of VITAL_FIELDS) {
+      const value = of[key] as number | null;
+      if (value !== null) prefilled[key] = String(value);
+    }
+
+    setDraft(prefilled);
+    setCorrecting(of.id);
+  }
+
+  function cancelCorrection() {
+    setDraft({});
+    setCorrecting(null);
+  }
 
   async function save() {
     const payload: Record<string, number> = {};
-    for (const [key, value] of Object.entries(draft)) {
-      if (value.trim() === '') continue;
+
+    for (const { key, label, unit, min, max } of VITAL_FIELDS) {
+      const value = draft[key];
+      if (value === undefined || value.trim() === '') continue;
+
       const n = Number(value);
       if (Number.isNaN(n)) {
-        onError(`${key} is not a number.`);
+        onError(`${label} is not a number.`);
         return;
       }
+
+      /* Named by what the form calls it, with the range said out loud. The
+         server enforces the same numbers; this is so the nurse is told which
+         box and what is wrong before anything is sent. */
+      if (n < min || n > max) {
+        onError(`${label} must be between ${min} and ${max} ${unit}.`);
+        return;
+      }
+
       payload[key] = n;
     }
 
     setBusy(true);
     try {
-      onSaved(await api.recordVitals(encounter.id, payload));
+      onSaved(
+        correcting
+          ? await api.correctVitals(encounter.id, correcting, payload)
+          : await api.recordVitals(encounter.id, payload),
+      );
       setDraft({});
+      setCorrecting(null);
     } catch (err) {
-      onError(message(err, 'Could not save the vitals.'));
+      onError(
+        message(err, correcting ? 'Could not correct the reading.' : 'Could not save the vitals.'),
+      );
     } finally {
       setBusy(false);
     }
@@ -140,7 +206,7 @@ export function VitalsPanel({ encounter, onSaved, onError, editable }: PanelProp
       {editable && (
         <>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {VITAL_FIELDS.map(({ key, label, unit, step }) => (
+            {VITAL_FIELDS.map(({ key, label, unit, step, min, max }) => (
               <label key={key} className="block">
                 <span className="mono-label !text-[9.5px]">
                   {label} <span className="text-ink-20">{unit}</span>
@@ -148,6 +214,8 @@ export function VitalsPanel({ encounter, onSaved, onError, editable }: PanelProp
                 <input
                   type="number"
                   step={step ?? '1'}
+                  min={min}
+                  max={max}
                   inputMode="decimal"
                   className="field-input mt-1 !py-1.5 text-[16px] md:text-[13px]"
                   value={draft[key] ?? ''}
@@ -157,21 +225,70 @@ export function VitalsPanel({ encounter, onSaved, onError, editable }: PanelProp
             ))}
           </div>
 
-          <button
-            type="button"
-            className="btn-secondary mt-3 !py-1.5 text-[12.5px]"
-            disabled={!anyEntered || busy}
-            onClick={() => void save()}
-          >
-            {busy ? 'Saving…' : 'Record vitals'}
-          </button>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary !py-1.5 text-[12.5px]"
+              disabled={!anyEntered || busy}
+              onClick={() => void save()}
+            >
+              {busy ? 'Saving…' : correcting ? 'Save the correction' : 'Record vitals'}
+            </button>
 
-          {/* Each save is a new observation, not an edit of the last. Vitals can
-              legitimately be taken twice in one visit, and the second reading is
-              a fact about the visit, not a correction of the first. */}
-          {encounter.vitals.length > 1 && (
+            {correcting && (
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 text-[12.5px]"
+                disabled={busy}
+                onClick={cancelCorrection}
+              >
+                Cancel
+              </button>
+            )}
+
+            {/*
+              The way to fix a typo, added 27 Oct 2026.
+
+              A pulse of 178 instead of 78, or a weight of 27 instead of 72, is
+              inside every bound and nothing refuses it — `vitals_bp_ordered`
+              catches a transposed blood pressure and nothing catches these. So
+              before this there was no way at all to take one back: recording
+              another set changed what was displayed and left the wrong number
+              in the record, in the set count, and in any chart of this patient
+              over time. This writes a superseding row, and the original stays
+              readable, which is the point.
+
+              Offered on the newest reading only. Correcting an older set while a
+              newer one exists is a question nobody has asked, and the server
+              refuses a second correction of the same row anyway.
+            */}
+            {latest && !correcting && (
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 text-[12.5px]"
+                disabled={busy}
+                title="Replace this reading, keeping the original on the record"
+                onClick={() => startCorrection(latest)}
+              >
+                Correct this reading
+              </button>
+            )}
+          </div>
+
+          {correcting && (
             <p className="field-hint mt-2">
-              {encounter.vitals.length} sets recorded this visit — the most recent is shown.
+              Replacing the reading taken at{' '}
+              {new Date(latest!.recordedAt).toLocaleTimeString('en-IN', { timeStyle: 'short' })}.
+              The original stays on the record.
+            </p>
+          )}
+
+          {/* A save is a new observation unless it is a correction. Vitals can
+              legitimately be taken twice in one visit, and the second reading is
+              a fact about the visit rather than a fix of the first. */}
+          {!correcting && liveSets > 1 && (
+            <p className="field-hint mt-2">
+              {liveSets} sets recorded this visit. The most recent is shown.
             </p>
           )}
         </>
@@ -492,7 +609,7 @@ export function PrescriptionsPanel({ encounter, onSaved, onError, editable }: Pa
             <input
               ref={nameRef}
               className="field-input !py-2"
-              placeholder="Drug name — start typing"
+              placeholder="Drug name, start typing"
               value={row.drugName}
               onChange={(e) => setRow({ ...row, drugName: e.target.value })}
             />
@@ -575,7 +692,7 @@ export function PrescriptionsPanel({ encounter, onSaved, onError, editable }: Pa
 
           <input
             className="field-input mt-2 !py-1.5 text-[16px] md:text-[13px]"
-            placeholder="Instructions — after food, at bedtime"
+            placeholder="Instructions, e.g. after food, at bedtime"
             value={row.instructions}
             onChange={(e) => setRow({ ...row, instructions: e.target.value })}
           />
@@ -655,7 +772,7 @@ export function AddendaPanel({
             </span>
             <span>
               This consultation is signed and cannot be edited. An addendum is added beneath it,
-              timestamped and attributed — the original stays exactly as it was written.
+              timestamped and attributed. The original stays exactly as it was written.
             </span>
           </div>
 

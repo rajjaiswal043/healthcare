@@ -212,8 +212,8 @@ export default function StaffPage() {
           <p className="eyebrow">Settings</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Staff</h1>
           <p className="mt-1 max-w-[62ch] text-[14px] text-ink-60">
-            Everyone who can sign in to this clinic. Accounts are switched off rather than deleted —
-            a name on a signed consultation or an issued receipt has to keep resolving.
+            Everyone who can sign in to this clinic. Accounts are switched off rather than deleted.
+            A name on a signed consultation or an issued receipt has to keep resolving.
           </p>
         </div>
         {!adding && (
@@ -244,7 +244,7 @@ export default function StaffPage() {
           <div className="bg-clinical-tint px-5 py-4">
             <p className="mono-label !text-clinical-text">Temporary password for {issued.who}</p>
             <p className="mt-1 text-[13.5px] text-ink-60">
-              Give this to them now — it cannot be shown again. They will be asked to choose their
+              Give this to them now. It cannot be shown again. They will be asked to choose their
               own password the first time they sign in.
             </p>
           </div>
@@ -306,7 +306,7 @@ export default function StaffPage() {
         <section className="card p-5">
           <h2 className="font-display text-[19px] font-bold">Add someone</h2>
           <p className="mt-1 text-[13px] text-ink-60">
-            They get a temporary password on the next screen. Nothing is emailed — you hand it over.
+            They get a temporary password on the next screen. Nothing is emailed. You hand it over.
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -584,7 +584,7 @@ export default function StaffPage() {
                           <span className="field-hint">
                             {u.department
                               ? 'Their worklist opens on this room.'
-                              : 'Not set — their worklist opens on every department.'}
+                              : 'Not set. Their worklist opens on every department.'}
                           </span>
                         </label>
                       )}

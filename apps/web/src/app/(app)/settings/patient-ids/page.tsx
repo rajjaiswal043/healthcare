@@ -76,7 +76,7 @@ export default function PatientIdsPage() {
             {/* The width is a minimum, which is the part people get wrong in
                 their heads — the same sentence the platform sees when it sets it. */}
             <p className="mt-5 text-[12.5px] text-ink-40">
-              Longer numbers are written in full — patient{' '}
+              Longer numbers are written in full: patient{' '}
               {(10 ** format.width).toLocaleString('en-IN')} will be{' '}
               <span className="font-mono">
                 {formatUhid(format.prefix, format.width, 10 ** format.width)}
@@ -89,9 +89,9 @@ export default function PatientIdsPage() {
           <section className="rounded-panel border border-ink/10 bg-bg-soft px-5 py-4 text-[13.5px]">
             <p className="font-semibold">Need a different format?</p>
             <p className="mt-1 text-ink-60">
-              Ask platform support — it cannot be changed from here. Patients already registered
-              keep their existing IDs; a change applies to new registrations only, and numbering
-              carries on rather than starting again.
+              Ask platform support. It cannot be changed from here. Patients already registered keep
+              their existing IDs; a change applies to new registrations only, and numbering carries
+              on rather than starting again.
             </p>
           </section>
 

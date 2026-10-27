@@ -223,8 +223,8 @@ export default function PricesPage() {
             What the clinic <em className="accent-words">charges</em>
           </h1>
           <p className="mt-1 max-w-[62ch] text-[14px] text-ink-60">
-            Every priced item, in one list. A price change applies to bills raised from now on —
-            everything already billed keeps the price it was billed at.
+            Every priced item, in one list. A price change applies to bills raised from now on.
+            Everything already billed keeps the price it was billed at.
           </p>
         </div>
         <button type="button" className="btn-primary" onClick={() => setAdding((v) => !v)}>
@@ -302,7 +302,7 @@ export default function PricesPage() {
                 inputMode="decimal"
               />
               <span className="field-hint">
-                Zero for most clinics — clinical care is GST-exempt.
+                Zero for most clinics. Clinical care is GST-exempt.
               </span>
             </label>
           </div>
@@ -371,8 +371,8 @@ export default function PricesPage() {
           <p className="font-display text-[17px] font-bold">Nothing is priced yet</p>
           <p className="mx-auto mt-1.5 max-w-[52ch] text-[13.5px] text-ink-60">
             Until something is priced, no bill is raised and the front desk lets every patient
-            through. That is deliberate — a clinic can use the software before its pricing is
-            settled — but the finance desk has nothing to charge for.
+            through. That is deliberate (a clinic can use the software before its pricing is
+            settled), but the finance desk has nothing to charge for.
           </p>
         </div>
       ) : (
@@ -527,7 +527,7 @@ export default function PricesPage() {
       )}
 
       <p className="max-w-[68ch] text-[12.5px] text-ink-40">
-        A service the clinic no longer offers is switched off, never deleted — reporting groups by
+        A service the clinic no longer offers is switched off, never deleted. Reporting groups by
         service, and a deleted one makes last month’s figures unexplainable. A doctor’s own
         consultation fee overrides the price here and is set on{' '}
         <span className="text-ink-60">Doctors and hours</span>.

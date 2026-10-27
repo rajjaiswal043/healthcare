@@ -35,6 +35,21 @@ export type DayBucket =
    */
   | 'READY_TO_CLOSE'
   | 'DONE'
+  /**
+   * Booked for a day that has since gone, and never checked in.
+   *
+   * Not a status anybody set: NOTHING in this clinic ever marks a no-show.
+   * There is no nightly job, and until 27 Oct 2026 there was no button either,
+   * so a missed visit sat at BOOKED for ever and the board said "Expected"
+   * about a Tuesday three weeks ago. Reading the date instead fixes every past
+   * day at once, including the ones already in the database.
+   *
+   * Its own bucket rather than folded into NOT_ATTENDING, which is hidden from
+   * the default view: a cancellation is something the clinic was told about and
+   * has dealt with, while somebody who simply never arrived is a fact the desk
+   * still wants to see when it looks back at the day.
+   */
+  | 'DID_NOT_COME'
   | 'NOT_ATTENDING';
 
 /** Where a bill stands, without saying how much. Null when nothing was charged. */
@@ -76,7 +91,16 @@ export interface RowMoney {
  * out entirely for a caller who may not see money — the same rule as `money`.
  */
 export type NextStep =
-  | { kind: 'COLLECT'; invoiceId: string; duePaise: number }
+  /**
+   * `duePaise` is THIS BILL's balance, not the patient's.
+   *
+   * A visit with a test on it has two bills, and the row's money column sums
+   * both — so a button saying "Collect ₹500" beside a column saying "₹1,000
+   * due" read as a contradiction to the desk. `billsOwing` says how many there
+   * are, so the browser can write "1 of 2" and the two numbers explain each
+   * other instead of disagreeing.
+   */
+  | { kind: 'COLLECT'; invoiceId: string; duePaise: number; billsOwing: number }
   | { kind: 'CHECK_IN'; appointmentId: string }
   | { kind: 'START'; appointmentId: string }
   | { kind: 'RESUME'; appointmentId: string }
@@ -84,8 +108,36 @@ export type NextStep =
   | { kind: 'BRING_BACK'; appointmentId: string }
   /** Nothing left to do. Say the visit is over. */
   | { kind: 'CLOSE_VISIT'; appointmentId: string }
+  /** Closed by mistake. Put it back the way it was. */
+  | { kind: 'REOPEN_VISIT'; appointmentId: string }
   | { kind: 'FINISH'; appointmentId: string }
   | { kind: 'RECORD_RESULT'; orderId: string }
+  /**
+   * The patient said no — usually "not today, I cannot pay for it".
+   *
+   * Takes the charge off and records that the request stood and the answer was
+   * no. Only for an order that HAS a charge: `declineOrder` refuses one without
+   * an invoice line, because calling a free-text or legacy order "declined"
+   * would put a commercial answer on a clinical record.
+   */
+  | { kind: 'DECLINE_TEST'; orderId: string }
+  /**
+   * The same escape hatch where there is no money involved.
+   *
+   * A free-text order, or one raised before tests were billable, cannot be
+   * declined — there is nothing to take off. Withdrawing the request is the
+   * only honest verb, and it is a different permission.
+   */
+  | { kind: 'CANCEL_TEST'; orderId: string }
+  /**
+   * They never came. Record it.
+   *
+   * The endpoint and the service transition have existed since the scheduling
+   * work; what was missing was anywhere to press. Offered on the day, where it
+   * also frees the slot, and on a past row the board has inferred, where it
+   * turns that inference into the actual record.
+   */
+  | { kind: 'MARK_NO_SHOW'; appointmentId: string }
   | { kind: 'RECEIPT'; paymentId: string };
 
 export interface DayBoardRow {
@@ -128,6 +180,22 @@ export interface DayBoardRow {
   token: number | null;
   /** The doctor they are booked with, or the department for a test-only visit. */
   withWhom: string | null;
+  /**
+   * WHAT THEY WERE SENT FOR, and where.
+   *
+   * `withWhom` names the DOCTOR for anybody who had a consultation, so the
+   * department only ever surfaced for a walk-in — a receptionist reading the
+   * board could see that somebody was at a department without being told which
+   * one, and never what test. The answer lived on a different screen, which is
+   * the opposite of a board.
+   *
+   * Live tests only: a cancelled request and one the patient declined are not
+   * things anybody is waiting for. Capped at three, because a row is a line on
+   * a board rather than a record.
+   */
+  tests: string[];
+  /** The department holding them. Null when no test is live. */
+  testDepartment: string | null;
   /** Clinic-local "HH:mm" of the earliest thing they are here for. */
   time: string | null;
   visitFee: FeeTag;
@@ -187,6 +255,9 @@ const PLACEMENT: DayBucket[] = [
    */
   'READY_TO_CLOSE',
   'DONE',
+  /* Below the finished, above the cancelled. They were expected and they are
+     not here, which is a different thing from never having been coming. */
+  'DID_NOT_COME',
   'NOT_ATTENDING',
 ];
 
@@ -271,6 +342,10 @@ export class DayBoardService {
           status: true,
           createdAt: true,
           appointmentId: true,
+          /* What was asked for, in the doctor's own words — "X-ray, left knee
+             — AP and lateral" rather than the catalogue's "X-ray, knee". That
+             is what the patient will say at the desk. */
+          description: true,
           patient: { select: { id: true, name: true, uhid: true, ageYears: true, gender: true } },
           department: { select: { name: true } },
           ...DIAGNOSTIC_BILLING_SELECT,
@@ -361,12 +436,12 @@ export class DayBoardService {
   ): Promise<{
     visitTags: Map<string, FeeTag>;
     byPatient: Map<string, RowMoney>;
-    unpaid: Map<string, { invoiceId: string; duePaise: number }>;
+    unpaid: Map<string, { invoiceId: string; duePaise: number; billsOwing: number }>;
   }> {
     const visitTags = new Map<string, FeeTag>();
     const byPatient = new Map<string, RowMoney>();
-    /** The bill Collect opens: the oldest one still owing. */
-    const unpaid = new Map<string, { invoiceId: string; duePaise: number }>();
+    /** The bill Collect opens: the oldest one still owing, and how many there are. */
+    const unpaid = new Map<string, { invoiceId: string; duePaise: number; billsOwing: number }>();
     if (appointmentIds.length === 0 && orderIds.length === 0) {
       return { visitTags, byPatient, unpaid };
     }
@@ -419,10 +494,16 @@ export class DayBoardService {
       money.billedPaise += invoice.totalPaise;
       if (state.status === 'UNPAID') {
         money.duePaise += state.balancePaise;
-        if (!unpaid.has(invoice.patientId)) {
+        const owing = unpaid.get(invoice.patientId);
+        if (owing) {
+          // A second bill on the same patient. The oldest stays the one Collect
+          // opens; this only makes the count honest.
+          owing.billsOwing += 1;
+        } else {
           unpaid.set(invoice.patientId, {
             invoiceId: invoice.id,
             duePaise: state.balancePaise,
+            billsOwing: 1,
           });
         }
       }
@@ -508,6 +589,7 @@ export class DayBoardService {
         id: string;
         status: string;
         createdAt: Date;
+        description: string;
         appointmentId: string | null;
         patient: DayBoardRow['patient'];
         department: { name: string };
@@ -517,12 +599,22 @@ export class DayBoardService {
     /** Null when the caller may not see figures. See `RowMoney`. */
     money: Map<string, RowMoney> | null;
     /** The bill Collect opens. Null when the caller may not see figures. */
-    unpaid: Map<string, { invoiceId: string; duePaise: number }> | null;
+    unpaid: Map<string, { invoiceId: string; duePaise: number; billsOwing: number }> | null;
     /** `lastPaymentId` is null unless that payment actually has a receipt. */
     paymentMethods: Map<string, { modes: string[]; lastPaymentId: string | null }>;
   }): DayBoard {
     const { day, tz, scope, appointments, orders, visitFees, money, unpaid, paymentMethods } =
       input;
+
+    /**
+     * Whether the day being looked at is already over.
+     *
+     * Compared as text because both sides are `YYYY-MM-DD` in the clinic's own
+     * timezone, which orders correctly without going near a Date. Today is not
+     * "passed": somebody booked for four o'clock, read at two, has not failed
+     * to turn up — they are expected.
+     */
+    const dayHasPassed = day < clinicToday(tz);
 
     /** Everything one patient has going on today, gathered before it is judged. */
     interface Accumulator {
@@ -548,6 +640,15 @@ export class DayBoardService {
       pendingOrderId: string | null;
       pendingOrderBlocked: boolean;
       /**
+       * Whether that pending test has a charge on it.
+       *
+       * Decides which escape hatch the row can offer: decline takes money off
+       * and refuses an order with none, so a legacy or free-text test has to
+       * be cancelled instead. Without this the board would draw a button the
+       * server then refuses, in front of the patient it concerns.
+       */
+      pendingOrderBilled: boolean;
+      /**
        * Whether the live visit is out at a department.
        *
        * Tracked apart from `buckets` because the bucket a patient belongs in
@@ -558,6 +659,8 @@ export class DayBoardService {
       visitIsAway: boolean;
       /** At least one test has come back. Distinguishes "back" from "never went". */
       hasCompletedTest: boolean;
+      /** What was asked for, in the order it was asked. */
+      testDescriptions: string[];
       /** Any live visit the doctor has signed off. */
       visitFulfilled: boolean;
     }
@@ -581,8 +684,10 @@ export class DayBoardService {
           testFees: [],
           pendingOrderId: null,
           pendingOrderBlocked: false,
+          pendingOrderBilled: false,
           visitIsAway: false,
           hasCompletedTest: false,
+          testDescriptions: [],
           visitFulfilled: false,
         };
         byPatient.set(patient.id, row);
@@ -592,7 +697,7 @@ export class DayBoardService {
 
     for (const a of appointments) {
       const row = open(a.patient);
-      row.buckets.add(bucketForAppointment(a.status, a.closedAt));
+      row.buckets.add(bucketForAppointment(a.status, a.closedAt, dayHasPassed));
 
       // CANCELLED and NO_SHOW are not something the patient is here FOR.
       if (a.status !== 'CANCELLED' && a.status !== 'NO_SHOW') {
@@ -618,6 +723,7 @@ export class DayBoardService {
       if (o.status !== 'CANCELLED' && o.status !== 'DECLINED') {
         row.hasTest = true;
         if (o.status === 'COMPLETED') row.hasCompletedTest = true;
+        row.testDescriptions.push(o.description);
         row.department ??= o.department.name;
         if (!row.earliest || o.createdAt < row.earliest) row.earliest = o.createdAt;
 
@@ -628,6 +734,9 @@ export class DayBoardService {
           row.pendingOrderId = o.id;
           // The same two states that stop a result being released.
           row.pendingOrderBlocked = state.status === 'UNPAID' || state.status === 'VOID';
+          /* NOT_BILLED and LEGACY are the two states with no invoice line, and
+             `declineOrder` refuses both. Everything else has money on it. */
+          row.pendingOrderBilled = state.status !== 'NOT_BILLED' && state.status !== 'LEGACY';
         }
       }
     }
@@ -669,6 +778,10 @@ export class DayBoardService {
           // A patient with a doctor is described by their doctor; a test-only
           // patient by the department holding them.
           withWhom: r.doctor ?? r.department,
+          // Three is a glance; the fourth is a list, and a list belongs on the
+          // tests page rather than on a row.
+          tests: r.testDescriptions.slice(0, 3),
+          testDepartment: r.department,
           time: r.earliest ? instantToLocalTime(r.earliest, tz) : null,
           visitFee: r.visitFee,
           // One tag for all their tests: anything outstanding reads as pending,
@@ -689,6 +802,7 @@ export class DayBoardService {
             visitFeePending: r.visitFee === 'PENDING',
             pendingOrderId: r.pendingOrderId,
             pendingOrderBlocked: r.pendingOrderBlocked,
+            pendingOrderBilled: r.pendingOrderBilled,
             lastPaymentId: paid?.lastPaymentId ?? null,
           }),
         };
@@ -703,6 +817,7 @@ export class DayBoardService {
       back_from_tests: 0,
       ready_to_close: 0,
       done: 0,
+      did_not_come: 0,
       not_attending: 0,
       total: 0,
     } as DayBoard['counts'];
@@ -710,7 +825,9 @@ export class DayBoardService {
     for (const row of rows) {
       counts[row.bucket.toLowerCase() as Lowercase<DayBucket>] += 1;
       // The total is everybody the clinic expected to see today, so a
-      // cancellation is not one of them.
+      // cancellation is not one of them. Somebody who never came IS: the slot
+      // was held, the day was planned around them, and a day that quietly
+      // shrinks when patients fail to arrive cannot be compared with any other.
       if (row.bucket !== 'NOT_ATTENDING') counts.total += 1;
     }
 
@@ -759,24 +876,28 @@ export class DayBoardService {
 function stepsFor(row: {
   bucket: DayBucket;
   appointmentId: string | null;
-  owed: { invoiceId: string; duePaise: number } | null;
+  owed: { invoiceId: string; duePaise: number; billsOwing: number } | null;
   /** This VISIT'S own bill, which is the one the check-in gate reads. */
   visitFeePending: boolean;
   pendingOrderId: string | null;
   pendingOrderBlocked: boolean;
+  /** Whether that pending test carries a charge. Decides decline vs cancel. */
+  pendingOrderBilled: boolean;
   lastPaymentId: string | null;
 }): NextStep[] {
   const steps: NextStep[] = [];
 
-  // Nobody is chasing a cancellation or a no-show around the clinic. Their bill
-  // may still be owed, so the money step stands and nothing else does.
-  const attending = row.bucket !== 'NOT_ATTENDING';
+  // Nobody is chasing a cancellation, a no-show, or somebody who never came
+  // around the clinic. Their bill may still be owed, so the money step stands
+  // and nothing else does.
+  const attending = row.bucket !== 'NOT_ATTENDING' && row.bucket !== 'DID_NOT_COME';
 
   if (row.owed) {
     steps.push({
       kind: 'COLLECT',
       invoiceId: row.owed.invoiceId,
       duePaise: row.owed.duePaise,
+      billsOwing: row.owed.billsOwing,
     });
   }
 
@@ -805,6 +926,17 @@ function stepsFor(row: {
        * already waited in once.
        */
       steps.push({ kind: 'BRING_BACK', appointmentId: row.appointmentId });
+    } else if (row.bucket === 'DONE') {
+      /**
+       * The way back, for the row somebody pressed by mistake.
+       *
+       * Offered on every closed visit rather than only a recent one: a clinic
+       * notices at the end of the afternoon, not within thirty seconds. The
+       * browser draws it as the quiet button beside the receipt, never as the
+       * thing the row is telling you to do — a finished patient is not waiting
+       * to be reopened.
+       */
+      steps.push({ kind: 'REOPEN_VISIT', appointmentId: row.appointmentId });
     } else if (row.bucket === 'READY_TO_CLOSE') {
       /**
        * The last button of the visit.
@@ -842,6 +974,47 @@ function stepsFor(row: {
   }
 
   /**
+   * THE WAY OUT, for a patient who is not going to have the test.
+   *
+   * "I cannot pay for it today" was a dead end: a row at a department with an
+   * unpaid test offered Collect and nothing else, so the only way to clear it
+   * was the finance desk or the consultation screen. The patient is standing
+   * at the board, and so is the person who has to answer them.
+   *
+   * LAST in the list on purpose. It must never become anybody's primary action
+   * while there is real work on the row — the browser picks it out explicitly
+   * as a secondary, and `firstDoableStep` reaching it means nothing else on
+   * this row was doable at all.
+   *
+   * Which verb depends on the MONEY, not on the role. `declineOrder` refuses
+   * an order with no invoice line, so offering Decline there would draw a
+   * button the server then refuses.
+   */
+  if (attending && row.pendingOrderId) {
+    steps.push(
+      row.pendingOrderBilled
+        ? { kind: 'DECLINE_TEST', orderId: row.pendingOrderId }
+        : { kind: 'CANCEL_TEST', orderId: row.pendingOrderId },
+    );
+  }
+
+  /**
+   * Record that they never came.
+   *
+   * Outside the `attending` gate deliberately, because it is the one act that
+   * makes sense for a patient who is not here: offered to somebody still
+   * expected today, and to a past row the board has already inferred, where it
+   * writes the status the inference stands in for.
+   *
+   * Never the primary action. A patient who is merely late must not be one
+   * misplaced click away from being written off, and `NEVER_PRIMARY` in the
+   * browser's rule module is what keeps it beside the row rather than on it.
+   */
+  if (row.appointmentId && (row.bucket === 'EXPECTED' || row.bucket === 'DID_NOT_COME')) {
+    steps.push({ kind: 'MARK_NO_SHOW', appointmentId: row.appointmentId });
+  }
+
+  /**
    * A receipt, for somebody who has finished and paid.
    *
    * Last, and only on a finished visit: offering it beside a live step would
@@ -870,10 +1043,17 @@ function stepsFor(row: {
  * the same word on the one screen the front desk uses to tell them apart. A
  * fulfilled visit nobody has closed is still in the building.
  */
-function bucketForAppointment(status: string, closedAt: Date | null): DayBucket {
+function bucketForAppointment(
+  status: string,
+  closedAt: Date | null,
+  dayHasPassed: boolean,
+): DayBucket {
   switch (status) {
     case 'BOOKED':
-      return 'EXPECTED';
+      /* Booked and not checked in. On the day itself that is somebody who has
+         not arrived YET. On a day that has gone it is somebody who never came,
+         and the board cannot still be expecting them. */
+      return dayHasPassed ? 'DID_NOT_COME' : 'EXPECTED';
     case 'ARRIVED':
       return 'WAITING';
     case 'IN_PROGRESS':

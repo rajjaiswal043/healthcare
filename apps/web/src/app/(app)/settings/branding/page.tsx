@@ -79,7 +79,7 @@ export default function BrandingPage() {
     try {
       const base64 = await readAsBase64(file);
       const stored = await api.setClinicLogo(base64);
-      await afterChange(`Logo updated — stored at ${stored.width}×${stored.height}.`);
+      await afterChange(`Logo updated. Stored at ${stored.width}×${stored.height}.`);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not upload that image.');
     } finally {
@@ -196,7 +196,7 @@ export default function BrandingPage() {
 
         {!branding?.logoVersion && (
           <p className="mt-4 text-[12.5px] text-ink-40">
-            No logo of your own yet — the placeholder above is what everyone currently sees.
+            No logo of your own yet. The placeholder above is what everyone currently sees.
           </p>
         )}
       </section>

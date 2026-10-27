@@ -158,7 +158,7 @@ export function SendForTestDialog({
         order,
         message:
           `${row.patient.name} sent to ${chosen.department.name} for ${said}. ` +
-          `${formatPaise(pricePaise)} has been added to their bill — the department ` +
+          `${formatPaise(pricePaise)} has been added to their bill. The department ` +
           `cannot start until it is paid.`,
       });
     } catch (err) {
@@ -214,7 +214,7 @@ export function SendForTestDialog({
               </p>
               <p className="field-hint">
                 The slip carries the test, what exactly was asked for and the amount. Hand it to the
-                patient — they take it to the desk and then to {sent.order.department.name}.
+                patient. They take it to the desk and then to {sent.order.department.name}.
               </p>
             </div>
           ) : null}
@@ -315,7 +315,7 @@ export function SendForTestDialog({
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         maxLength={300}
-                        placeholder="X-ray, left knee — AP and lateral"
+                        placeholder="X-ray, left knee, AP and lateral"
                       />
                       <span className="field-hint">
                         Printed on the slip and shown to the department. Add the side and the views.

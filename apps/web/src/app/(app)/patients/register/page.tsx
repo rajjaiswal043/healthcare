@@ -13,6 +13,7 @@ import {
 import { IconAlert, IconCheck, IconInfo, IconSearch, IconUserPlus } from '@/components/icons';
 import { looksLikeAPersonName } from '@/lib/person-name';
 import { DEFAULT_STATE, INDIAN_STATES } from '@/lib/india';
+import { clearDraft, readDraft, saveDraft } from '@/lib/registration-draft';
 
 type Form = {
   name: string;
@@ -64,8 +65,29 @@ const BLOOD_GROUPS = [
   ['AB_NEGATIVE', 'AB−'],
 ] as const;
 
+/**
+ * Not kept in the draft, and the one deliberate hole in it.
+ *
+ * Consent is an act somebody performed. A tick that reappears by itself after
+ * a refresh is a record of an act that may not have happened, so the typing
+ * comes back and the consent is given again.
+ */
+const NOT_DRAFTED = ['consentCareDelivery', 'consentMarketing'];
+
+/**
+ * The fields a draft may carry, which is every other field of this form.
+ *
+ * Passed to `readDraft` as a whitelist rather than trusted from the stored
+ * text: anything in local storage can be edited by whoever sits at the machine,
+ * so a draft is untrusted input and must not be able to introduce a key the
+ * form never had.
+ */
+const DRAFTABLE = Object.keys(EMPTY).filter((key) => !NOT_DRAFTED.includes(key));
+
 export default function RegisterPatientPage() {
   const [form, setForm] = useState<Form>(EMPTY);
+  /** Whether this form was picked up from a draft, so the screen can say so. */
+  const [restored, setRestored] = useState(false);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
   const [blocking, setBlocking] = useState<DuplicateCandidate[]>([]);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
@@ -119,6 +141,44 @@ export default function RegisterPatientPage() {
     return () => clearTimeout(t);
   }, [form.name, form.mobile, checkDuplicates]);
 
+  /**
+   * Pick up whatever was being typed before.
+   *
+   * Once, on arrival, and never again: reading the draft back on every change
+   * would fight the person at the keyboard. Merged over `EMPTY` rather than
+   * replacing the form, so a field this browser's draft does not carry keeps
+   * its default — `state` and `bloodGroup` especially, which are not blank to
+   * begin with.
+   */
+  useEffect(() => {
+    const draft = readDraft(DRAFTABLE);
+    if (!draft) return;
+
+    /* `ageMode` drives which of two inputs is shown, so a hand-edited draft
+       carrying anything else would leave the form in a state neither radio
+       matches. Every other field is free text and cannot be wrong. */
+    const { ageMode, ...rest } = draft;
+
+    setForm((f) => ({
+      ...f,
+      ...(rest as Partial<Form>),
+      ...(ageMode === 'age' || ageMode === 'dob' ? { ageMode } : {}),
+    }));
+    setRestored(true);
+  }, []);
+
+  /**
+   * Write it back as they type.
+   *
+   * Debounced, because this runs on every keystroke and the draft is only ever
+   * read after a reload. Half a second of typing lost to a crash is not the
+   * problem being solved; a whole form is.
+   */
+  useEffect(() => {
+    const t = setTimeout(() => saveDraft(form, NOT_DRAFTED), 400);
+    return () => clearTimeout(t);
+  }, [form]);
+
   async function submit(confirmedNotDuplicate = false) {
     setSaving(true);
     setError(null);
@@ -146,6 +206,8 @@ export default function RegisterPatientPage() {
 
     try {
       const { patient } = await api.registerPatient(payload);
+      // They are a patient now. Nothing is left half-typed to come back to.
+      clearDraft();
       setRegistered(patient);
       router.replace(`/appointments/new?patientId=${patient.id}&registered=1`);
       setForm(EMPTY);
@@ -199,6 +261,31 @@ export default function RegisterPatientPage() {
         </p>
       </header>
 
+      {/*
+        Said, because a form that fills itself in is alarming otherwise — and
+        because the receptionist has to be able to tell whether these are this
+        patient's details or the last one's. The way out is beside it.
+      */}
+      {restored && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <p className="text-[13.5px] text-ink-60">
+            Picked up where this form was left off. The consent boxes are not restored.
+          </p>
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-[12.5px]"
+            onClick={() => {
+              clearDraft();
+              setForm(EMPTY);
+              setDuplicates([]);
+              setRestored(false);
+            }}
+          >
+            Start fresh
+          </button>
+        </div>
+      )}
+
       {strong.length > 0 && <DuplicateNotice candidates={strong} tone="strong" />}
       {strong.length === 0 && weak.length > 0 && <DuplicateNotice candidates={weak} tone="weak" />}
 
@@ -244,7 +331,7 @@ export default function RegisterPatientPage() {
                 autoComplete="off"
                 placeholder="98765 43210"
               />
-              <p className="field-hint">Any format — spaces and +91 are fine.</p>
+              <p className="field-hint">Any format. Spaces and +91 are fine.</p>
             </div>
 
             <div>
@@ -316,7 +403,7 @@ export default function RegisterPatientPage() {
                 )}
               </div>
               <p className="field-hint">
-                Many patients do not know their date of birth — an approximate age is better than a
+                Many patients do not know their date of birth. An approximate age is better than a
                 made-up date.
               </p>
             </div>
@@ -488,8 +575,7 @@ export default function RegisterPatientPage() {
                   This looks like an existing patient
                 </p>
                 <p className="mt-0.5 text-[13.5px] text-ink-60">
-                  Check before creating a second record — a split file means a split allergy
-                  history.
+                  Check before creating a second record. A split file means a split allergy history.
                 </p>
                 <ul className="mt-3 space-y-1.5">
                   {blocking.map((d) => (
@@ -517,7 +603,7 @@ export default function RegisterPatientPage() {
                     onClick={() => void submit(true)}
                     disabled={saving}
                   >
-                    This is a different person — register anyway
+                    This is a different person, register anyway
                   </button>
                 </div>
               </div>
@@ -631,7 +717,7 @@ function DuplicateNotice({
         <p className={`text-[13.5px] font-semibold ${strong ? 'text-ink' : 'text-ink-60'}`}>
           {strong
             ? 'Likely already registered'
-            : `${candidates.length} similar ${candidates.length === 1 ? 'name' : 'names'} on file — probably unrelated`}
+            : `${candidates.length} similar ${candidates.length === 1 ? 'name' : 'names'} on file, probably unrelated`}
         </p>
         <ul className="mt-1.5 space-y-1 text-[13px] text-ink-60">
           {candidates.slice(0, 4).map((d) => (

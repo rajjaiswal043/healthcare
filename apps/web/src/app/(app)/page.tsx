@@ -19,7 +19,7 @@ import { SendForTestDialog } from '@/components/send-for-test-dialog';
 import { RecordResultDialog } from '@/components/record-result-dialog';
 import { PaymentDialog } from '@/components/payment-dialog';
 import { PrintReceiptButton } from '@/components/receipt-button';
-import { firstDoableStep, stepLabel } from '@/components/next-step';
+import { firstDoableStep, SENDABLE, secondaryStep, stepLabel } from '@/components/next-step';
 import { DATE_RE, DayPicker, dayLabel } from '@/components/day-picker';
 import { DiagnosticsBoard } from '@/components/diagnostics-board';
 import { worksOneDepartment } from '@/lib/roles';
@@ -63,6 +63,7 @@ const COUNT_KEY: Record<DayBucket, keyof DayBoard['counts']> = {
   BACK_FROM_TESTS: 'back_from_tests',
   READY_TO_CLOSE: 'ready_to_close',
   DONE: 'done',
+  DID_NOT_COME: 'did_not_come',
   NOT_ATTENDING: 'not_attending',
 };
 
@@ -74,6 +75,7 @@ const BUCKET_LABEL: Record<DayBucket, string> = {
   BACK_FROM_TESTS: 'Back from tests',
   READY_TO_CLOSE: 'Ready to close',
   DONE: 'Done',
+  DID_NOT_COME: 'Did not come',
   NOT_ATTENDING: 'Not attending',
 };
 
@@ -116,6 +118,9 @@ const ROW_TONE: Partial<Record<DayBucket, string>> = {
      and nowhere else: this row IS inert, it is paperwork. */
   READY_TO_CLOSE: 'bg-ink/[0.045] hover:bg-ink/[0.07]',
   DONE: 'bg-iris-soft/60 hover:bg-iris-soft/80',
+  /* Quieter than everything above it. Nothing happened in this row, and it
+     must not pull the eye away from the rows where something did. */
+  DID_NOT_COME: 'bg-ink/[0.03] hover:bg-ink/[0.06]',
 };
 
 /**
@@ -139,6 +144,10 @@ const BUCKET_TONE: Record<DayBucket, string> = {
   // Iris, not green: green is money settled on this very row, and `clinical` is
   // itself a teal-green — so finished needs a hue of its own to be seen at all.
   DONE: 'bg-iris-soft text-iris-text',
+  /* Coral, the same colour a cancelled visit wears on the patient's record:
+     this is the one stage that means nothing happened. Soft rather than loud,
+     because it is a fact about a past day, not a problem to act on. */
+  DID_NOT_COME: 'bg-coral-soft text-coral-text',
   NOT_ATTENDING: 'bg-ink/8 text-ink-20',
 };
 
@@ -441,6 +450,52 @@ function DayBoardScreen() {
             await load();
             break;
 
+          /**
+           * The row was closed by mistake.
+           *
+           * Confirmed, because it puts a patient the clinic had finished with
+           * back onto the live board — and somebody reading the board has to
+           * be able to trust that a row being there means work.
+           */
+          case 'REOPEN_VISIT': {
+            if (
+              !window.confirm(
+                `Reopen ${row.patient.name}’s visit? It goes back to Ready to close and ` +
+                  'the clinic sees them as still here.',
+              )
+            ) {
+              break;
+            }
+
+            await api.reopenVisit(step.appointmentId);
+            setNotice(`${row.patient.name}’s visit is open again.`);
+            await load();
+            break;
+          }
+
+          /**
+           * They never came.
+           *
+           * Confirmed, because it is written to the record and it frees the
+           * slot: a patient marked off in error has to be booked again rather
+           * than simply un-marked.
+           */
+          case 'MARK_NO_SHOW': {
+            if (
+              !window.confirm(
+                `Mark ${row.patient.name} as not having come? Their slot is freed and the ` +
+                  'visit is recorded as missed.',
+              )
+            ) {
+              break;
+            }
+
+            await api.markNoShow(step.appointmentId);
+            setNotice(`${row.patient.name} is recorded as not having come.`);
+            await load();
+            break;
+          }
+
           case 'CLOSE_VISIT': {
             /**
              * WARNED, NOT REFUSED.
@@ -476,6 +531,53 @@ function DayBoardScreen() {
           case 'RECORD_RESULT':
             setRecording({ row, orderId: step.orderId });
             break;
+
+          /**
+           * "I cannot pay for it today."
+           *
+           * Confirmed, because it takes a charge off a bill and the request
+           * off the department's worklist. Finance can put a declined test
+           * back if the patient changes their mind at the counter.
+           */
+          case 'DECLINE_TEST': {
+            if (
+              !window.confirm(
+                `${row.patient.name} is not having this test. The charge comes off their ` +
+                  'bill and the department stops waiting for them. Continue?',
+              )
+            ) {
+              break;
+            }
+
+            await api.declineDiagnosticOrder(step.orderId);
+            setNotice(
+              `Recorded: ${row.patient.name} declined the test. The charge has been removed.`,
+            );
+            await load();
+            break;
+          }
+
+          /**
+           * The same act where there was never a charge.
+           *
+           * A free-text order, or one raised before tests were billable, has
+           * nothing to take off — the server refuses to call that "declined",
+           * so withdrawing the request is the only honest verb.
+           */
+          case 'CANCEL_TEST': {
+            if (
+              !window.confirm(
+                `Cancel the test for ${row.patient.name}? The department stops waiting for them.`,
+              )
+            ) {
+              break;
+            }
+
+            await api.cancelDiagnosticOrder(step.orderId);
+            setNotice(`The test for ${row.patient.name} has been cancelled.`);
+            await load();
+            break;
+          }
 
           case 'RECEIPT':
             break;
@@ -742,15 +844,6 @@ function DayBoardScreen() {
                       ? () => setSendingFor(r)
                       : null
                   }
-                  onFinish={
-                    mayAct &&
-                    can('appointment:write') &&
-                    r.bucket === 'WITH_DOCTOR' &&
-                    r.appointmentId &&
-                    firstDoableStep(r.nextSteps, can, isToday)?.kind !== 'FINISH'
-                      ? () => void doStep(r, { kind: 'FINISH', appointmentId: r.appointmentId! })
-                      : null
-                  }
                 />
               ))}
 
@@ -779,11 +872,11 @@ function DayBoardScreen() {
                     <Th className="w-[120px]">Method</Th>
                     {showsMoney && <Th className="w-[112px] text-right">Amount</Th>}
                     {active.bucket === null && <Th className="w-[130px]">Stage</Th>}
-                    {showsActions && (
-                      <Th className="w-[190px]">
-                        <span className="sr-only">Actions</span>
-                      </Th>
-                    )}
+                    {/* Said out loud since 27 Oct 2026. It was sr-only, on the
+                        reasoning that a column of buttons explains itself — but
+                        a blank cell above a header row reads as something that
+                        failed to load, which is how it was reported. */}
+                    {showsActions && <Th className="w-[190px]">Action</Th>}
                   </tr>
                 </thead>
 
@@ -826,7 +919,29 @@ function DayBoardScreen() {
                         {' · '}
                         {genderInitial(r.patient.gender)}
                       </td>
-                      <td className="px-4 py-3 text-ink-60">{r.withWhom ?? '—'}</td>
+                      <td className="px-4 py-3 text-ink-60">
+                        {r.withWhom ?? '—'}
+                        {/*
+                          WHAT THEY WERE SENT FOR, under who sent them.
+
+                          The department as well as the test: "at a department"
+                          without saying which one is half an answer, and the
+                          desk is the one pointing the patient down the
+                          corridor.
+                        */}
+                        {r.tests.length > 0 && (
+                          <span className="mt-0.5 block text-[12px] text-ink-40">
+                            {r.testDepartment && (
+                              <span className="font-semibold text-ink-60">
+                                {r.testDepartment}
+                                {' · '}
+                              </span>
+                            )}
+                            {r.tests[0]}
+                            {r.tests.length > 1 && ` and ${r.tests.length - 1} more`}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className="flex flex-wrap gap-1.5">
                           {r.hasVisit && (
@@ -903,26 +1018,6 @@ function DayBoardScreen() {
                               IS the primary — and then this would be the same
                               button twice, so it is left out.
                             */}
-                            {mayAct &&
-                              can('appointment:write') &&
-                              r.bucket === 'WITH_DOCTOR' &&
-                              r.appointmentId &&
-                              firstDoableStep(r.nextSteps, can, isToday)?.kind !== 'FINISH' && (
-                                <button
-                                  type="button"
-                                  className="btn-ghost !px-2 !py-1 !text-[12px]"
-                                  disabled={acting === r.patient.id}
-                                  onClick={() =>
-                                    void doStep(r, {
-                                      kind: 'FINISH',
-                                      appointmentId: r.appointmentId as string,
-                                    })
-                                  }
-                                >
-                                  Done
-                                </button>
-                              )}
-
                             {/* Beside the next step, not instead of it: sending
                                 for a test is something the doctor decides to
                                 add, not the thing the patient is waiting for.
@@ -975,7 +1070,7 @@ function DayBoardScreen() {
                   <tfoot>
                     <tr className="border-t-[1.5px] border-ink/10 bg-bg-soft">
                       <td colSpan={8} className="px-4 py-2.5 text-[12.5px] text-ink-60">
-                        {active.label} — {filtered.length}{' '}
+                        {active.label} · {filtered.length}{' '}
                         {filtered.length === 1 ? 'patient' : 'patients'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-right">
@@ -1064,25 +1159,6 @@ function DayBoardScreen() {
 }
 
 /**
- * Buckets a patient can be sent for a test from.
- *
- * DONE is in the list. A doctor finishes a consultation, the patient stands up,
- * and the doctor decides they want a film after all — which is a normal way for
- * an afternoon to go, and until this included DONE the only way to act on it
- * was to pretend the visit had not finished. The server has never minded:
- * `createOrder` reads the visit's id and patient and does not look at its
- * status.
- *
- * Ordering against a finished visit moves the patient back to "At a department"
- * on its own, because a pending order places there and that beats Done.
- *
- * EXPECTED is still out: a patient who has not arrived cannot be sent anywhere,
- * and raising a charge for one is how a bill exists for a visit that never
- * happens.
- */
-const SENDABLE = new Set<DayBucket>(['WITH_DOCTOR', 'WAITING', 'AT_DEPARTMENT', 'DONE']);
-
-/**
  * A day either side, in `YYYY-MM-DD`.
  *
  * Stepped through UTC midday on purpose. Building a Date from a bare date
@@ -1137,9 +1213,18 @@ function NextStepAction({
   onDo: (step: NextStep) => void;
 }) {
   const step = firstDoableStep(row.nextSteps, can, isToday);
-  if (!step) return null;
+  /**
+   * The quiet button beside it: finishing a visit for somebody whose primary
+   * is Open, or the way out for a patient who cannot pay for their test.
+   *
+   * Worked out even when there is no primary, because the escape hatch is
+   * exactly what a row with nothing else doable on it may still need.
+   */
+  const escape = secondaryStep(row.nextSteps, can, isToday, step);
 
-  if (step.kind === 'RECEIPT') {
+  if (!step && !escape) return null;
+
+  if (step?.kind === 'RECEIPT') {
     return (
       <PrintReceiptButton
         paymentId={step.paymentId}
@@ -1151,20 +1236,60 @@ function NextStepAction({
   }
 
   return (
-    <button
-      type="button"
-      className="btn-secondary !px-3 !py-1 !text-[12.5px]"
-      disabled={busy}
-      onClick={() => onDo(step)}
-    >
-      {busy ? '…' : stepLabel(step)}
-      {/* The figure, on the one step that is about money. Reading "Collect"
-          and then meeting an amount in a dialog is a surprise; reading
-          "Collect ₹500" is an instruction. */}
-      {step.kind === 'COLLECT' && !busy && (
-        <span className="font-mono tabular-nums"> {formatPaise(step.duePaise)}</span>
+    <>
+      {step && (
+        <button
+          type="button"
+          className="btn-secondary !px-3 !py-1 !text-[12.5px]"
+          disabled={busy}
+          onClick={() => onDo(step)}
+        >
+          {busy ? '…' : stepLabel(step)}
+          {/* The figure, on the one step that is about money. Reading "Collect"
+              and then meeting an amount in a dialog is a surprise; reading
+              "Collect ₹500" is an instruction. */}
+          {step.kind === 'COLLECT' && !busy && (
+            <>
+              <span className="font-mono tabular-nums"> {formatPaise(step.duePaise)}</span>
+              {/*
+                WHICH BILL THIS IS, when there is more than one.
+
+                A visit with a test on it has two invoices, and the Due column
+                beside this button sums them. Without this the row read
+                "₹1,000.00 due … Collect ₹500.00" and the desk could not tell
+                whether the button was wrong or the column was.
+              */}
+              {step.billsOwing > 1 && (
+                <span className="text-[11px] font-normal opacity-70">
+                  {' '}
+                  · 1 of {step.billsOwing}
+                </span>
+              )}
+            </>
+          )}
+        </button>
       )}
-    </button>
+
+      {/*
+        THE WAY OUT, beside the way on.
+
+        A ghost button rather than a second `btn-secondary`: the row still has
+        one thing it is telling you to do, and this is the thing you press when
+        that is not going to happen. Both reported on 27 Oct — a doctor and an
+        admin could not finish a visit from the board at all, and a patient who
+        could not pay for a test had nowhere to go but the finance desk.
+      */}
+      {escape && (
+        <button
+          type="button"
+          className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+          disabled={busy}
+          onClick={() => onDo(escape)}
+        >
+          {stepLabel(escape)}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -1192,7 +1317,6 @@ function DayBoardCard({
   busy,
   onDo,
   onSendForTest,
-  onFinish,
 }: {
   row: DayBoardRow;
   showsStage: boolean;
@@ -1203,11 +1327,14 @@ function DayBoardCard({
   onDo: (step: NextStep) => void;
   /** Null when this row may not be sent for a test. */
   onSendForTest: (() => void) | null;
-  /** Null when Done is not an extra action here — see the table's note. */
-  onFinish: (() => void) | null;
 }) {
   const step = firstDoableStep(row.nextSteps, can, isToday);
-  const hasExtra = onSendForTest !== null || onFinish !== null;
+  /* The same way out the table row offers, worked out the same way — see
+     `secondaryStep`. The card used to carry a hand-rolled Done button here,
+     which said a different word for the same act and knew nothing about the
+     patient who could not pay for their test. */
+  const escape = secondaryStep(row.nextSteps, can, isToday, step);
+  const hasExtra = onSendForTest !== null || escape !== null;
 
   return (
     <li className={`px-4 py-3.5 ${ROW_TONE[row.bucket] ?? ''}`}>
@@ -1246,6 +1373,19 @@ function DayBoardCard({
               </>
             )}
             {row.withWhom ? ` · ${row.withWhom}` : ''}
+            {/* Same answer as the table's, on the layout a phone gets. */}
+            {row.tests.length > 0 && (
+              <span className="mt-0.5 block text-[12px] text-ink-40">
+                {row.testDepartment && (
+                  <span className="font-semibold text-ink-60">
+                    {row.testDepartment}
+                    {' · '}
+                  </span>
+                )}
+                {row.tests[0]}
+                {row.tests.length > 1 && ` and ${row.tests.length - 1} more`}
+              </span>
+            )}
           </p>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -1319,14 +1459,14 @@ function DayBoardCard({
               </button>
             ))}
 
-          {onFinish && (
+          {escape && (
             <button
               type="button"
               className="btn-secondary !py-2 !text-[13px]"
               disabled={busy}
-              onClick={onFinish}
+              onClick={() => onDo(escape)}
             >
-              Done
+              {stepLabel(escape)}
             </button>
           )}
 

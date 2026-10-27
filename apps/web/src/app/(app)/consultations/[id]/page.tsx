@@ -335,7 +335,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 onClick={() => void sign()}
                 title={
                   awaitingTests
-                    ? 'Close the visit with what is recorded — for a patient who did not come back'
+                    ? 'Close the visit with what is recorded, for a patient who did not come back'
                     : 'Signs the note and marks the OPD finished. This cannot be undone.'
                 }
               >
@@ -375,7 +375,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 <IconCallNext size={16} />
                 {callingNext
                   ? 'Calling…'
-                  : `Next — ${nextUp.tokenNumber === null ? '' : `#${nextUp.tokenNumber} `}${nextUp.patient.name}`}
+                  : `Next: ${nextUp.tokenNumber === null ? '' : `#${nextUp.tokenNumber} `}${nextUp.patient.name}`}
               </button>
             )}
 
@@ -401,7 +401,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 value={sendOutReason}
                 onChange={(e) => setSendOutReason(e.target.value)}
                 maxLength={200}
-                placeholder="X-ray — left wrist"
+                placeholder="X-ray, left wrist"
                 autoFocus
               />
               <button
@@ -497,6 +497,15 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   <input
                     id="followUpDate"
                     type="date"
+                    /*
+                      No review date in the past. A courtesy only — the server
+                      checks it against the CLINIC's today, which is the one
+                      that counts, and this reads the browser's. Where the two
+                      disagree this is the looser of the pair, which is the
+                      right way round: the screen never refuses something the
+                      server would have taken.
+                    */
+                    min={new Date().toLocaleDateString('en-CA')}
                     // 16px on a phone or iOS zooms the page when this takes focus.
                     className="field-input mt-1.5 block max-w-[200px] text-[16px] md:text-[13.5px]"
                     value={narrative.followUpDate ?? ''}

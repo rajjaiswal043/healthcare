@@ -64,7 +64,7 @@ export default function FinanceReportPage() {
           <p className="eyebrow">Billing</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Finance report</h1>
           <p className="mt-1 text-[14px] text-ink-60">
-            Billed, discounted and collected over a range — by doctor, by department, and by where
+            Billed, discounted and collected over a range: by doctor, by department, and by where
             the work came from.
           </p>
         </div>
@@ -190,8 +190,8 @@ export default function FinanceReportPage() {
             */}
               <p className="field-hint mt-3">
                 There is no collected figure per department, and that is deliberate. A patient pays
-                one bill, not a share to each department — splitting it back out would mean
-                inventing an allocation. The collected total above is for the whole clinic.
+                one bill, not a share to each department. Splitting it back out would mean inventing
+                an allocation. The collected total above is for the whole clinic.
               </p>
             </section>
           )}

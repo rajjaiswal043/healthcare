@@ -49,7 +49,7 @@ export function IsPersonName(options?: ValidationOptions) {
       options: options ?? {},
       validator: {
         validate: (value: unknown) => looksLikeAPersonName(value),
-        defaultMessage: () => 'must be a name — it needs at least two letters in it',
+        defaultMessage: () => 'must be a name: it needs at least two letters in it',
       },
     });
   };

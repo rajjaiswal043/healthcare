@@ -164,7 +164,7 @@ export default function DisplayPage({ params }: { params: Promise<{ key: string 
             everywhere else in the product. */}
         {stale && (
           <p className="rounded-pill bg-amber-soft px-5 py-2 text-[clamp(13px,1.1vw,19px)] font-semibold text-amber-text">
-            Reconnecting — showing the board from{' '}
+            Reconnecting. Showing the board from{' '}
             {new Date(board.generatedAt).toLocaleTimeString('en-IN', { timeStyle: 'short' })}
           </p>
         )}
@@ -238,7 +238,7 @@ function DoctorCard({ doctor: d }: { doctor: DisplayDoctor }) {
 
         {late && (
           <p className="mt-[1vh] inline-flex rounded-pill bg-amber-soft px-3 py-1 text-[clamp(12px,1vw,18px)] font-semibold text-amber-text">
-            Running late — last called {d.minutesSinceLastCall} minutes ago
+            Running late. Last called {d.minutesSinceLastCall} minutes ago
           </p>
         )}
 

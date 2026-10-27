@@ -27,6 +27,7 @@ import {
   DayCollectionQueryDto,
   FinanceReportQueryDto,
   InvoiceExceptionDto,
+  CorrectPaymentModeDto,
   RefundDto,
 } from './dto.js';
 
@@ -74,6 +75,23 @@ export class BillingController {
     @Param('id', new ParseUUIDPipe()) appointmentId: string,
   ) {
     return this.billing.getForAppointment(tenantId, appointmentId);
+  }
+
+  /**
+   * Every bill for a visit, not just the consultation's.
+   *
+   * The desk settles a patient, not an invoice: a visit with an X-ray on it has
+   * two bills and the second one used to be on no screen the desk was looking
+   * at. `appointments/:id/invoice` above still returns the consultation's alone
+   * — the queue board links to it and wants exactly that one.
+   */
+  @Get('appointments/:id/invoices')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async allForAppointment(
+    @CurrentTenant() tenantId: string,
+    @Param('id', new ParseUUIDPipe()) appointmentId: string,
+  ) {
+    return this.billing.getAllForAppointment(tenantId, appointmentId);
   }
 
   @Post('invoices/:id/lines')
@@ -128,6 +146,27 @@ export class BillingController {
     @Req() req: FastifyRequest,
   ) {
     return this.billing.refund(tenantId, id, dto, meta(req, user));
+  }
+
+  /**
+   * The money was right; the mode was wrong.
+   *
+   * Behind `payment:refund` like the other corrections, and for the same
+   * reason: it writes a reversal, and the desk must not be able to unwind its
+   * own entries. It takes nothing OUT on balance — the same amount goes
+   * straight back in under the right mode — but the row it writes is a
+   * reversal and belongs with its neighbours.
+   */
+  @Post('invoices/:id/payments/correct-mode')
+  @RequirePermissions(PERMISSIONS.PAYMENT_REFUND)
+  async correctPaymentMode(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CorrectPaymentModeDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.correctPaymentMode(tenantId, id, { ...dto }, meta(req, user));
   }
 
   @Post('invoices/:id/waive')

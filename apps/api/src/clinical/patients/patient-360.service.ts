@@ -252,7 +252,7 @@ export class Patient360Service {
           SELECT 'APPOINTMENT', a.id::text, a.start_at,
                  CASE a.status
                    WHEN 'CANCELLED' THEN 'Appointment cancelled'
-                   WHEN 'NO_SHOW'   THEN 'Did not attend'
+                   WHEN 'NO_SHOW'   THEN 'Did not come'
                    WHEN 'FULFILLED' THEN 'Visit completed'
                    ELSE 'Appointment booked'
                  END,

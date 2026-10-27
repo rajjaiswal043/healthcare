@@ -146,7 +146,7 @@ export default function QueuePage() {
     } catch (err) {
       setError(
         err instanceof ApiRequestError && err.status === 404
-          ? 'No bill was raised for this visit — this clinic has not set up its charges yet.'
+          ? 'No bill was raised for this visit. This clinic has not set up its charges yet.'
           : err instanceof ApiRequestError
             ? err.error.message
             : 'Could not open the bill.',
@@ -184,7 +184,7 @@ export default function QueuePage() {
           <p className="eyebrow">OPD</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Today&rsquo;s queue</h1>
           <p className="mt-1 text-[14px] text-ink-60">
-            Ordered by arrival — not by token, and not by appointment time.
+            Ordered by arrival, not by token and not by appointment time.
           </p>
         </div>
 
@@ -399,7 +399,7 @@ export default function QueuePage() {
                           type="button"
                           className="btn-ghost !px-2 !py-1.5 text-[12.5px]"
                           disabled={busyId === a.id}
-                          title={`${priorityLabel(a.priority)} — put them back in their normal position`}
+                          title={`${priorityLabel(a.priority)}: put them back in their normal position`}
                           onClick={() => void act(a.id, () => api.clearPriority(a.id))}
                         >
                           Move back

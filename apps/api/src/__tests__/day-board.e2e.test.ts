@@ -49,6 +49,9 @@ interface Row {
   hasTest: boolean;
   opdDone: boolean;
   testsDoneIn: string | null;
+  /** What they were sent for, and where — the receptionist reads this row. */
+  tests: string[];
+  testDepartment: string | null;
   token: number | null;
   withWhom: string | null;
   visitFee: string | null;
@@ -278,6 +281,42 @@ describe('a patient with both a visit and a test', () => {
    * doctor has finished but the film has not come back would be a lie in the
    * one place the front desk trusts.
    */
+  /**
+   * The receptionist reads this row, so the answer belongs on it.
+   *
+   * Reported from the clinic on 27 Oct 2026: "X-ray ordered ek jagah dikhe —
+   * receptionist ke liye". `withWhom` names the DOCTOR for anybody who had a
+   * consultation, so the board could say somebody was at a department without
+   * saying which, and never what test — the answer was on another screen.
+   */
+  it('names the test and the department it is at', async () => {
+    await visit('ARRIVED', 0);
+    await test('PENDING', 0);
+
+    const [row] = (await board()).rows;
+
+    expect(row!.tests).toEqual(['Knee X-ray']);
+    expect(row!.testDepartment).toBe('Board X-ray');
+  });
+
+  it('leaves them empty for a patient with no test', async () => {
+    await visit('ARRIVED', 0);
+
+    const [row] = (await board()).rows;
+
+    expect(row!.tests).toEqual([]);
+    expect(row!.testDepartment).toBeNull();
+  });
+
+  it('says nothing about a test the patient declined', async () => {
+    // Not something anybody is waiting for, so not something the desk should
+    // be pointing a patient down the corridor for.
+    await visit('ARRIVED', 0);
+    await test('DECLINED', 0);
+
+    expect((await board()).rows[0]!.tests).toEqual([]);
+  });
+
   it('says which parts are done, separately', async () => {
     await visit('FULFILLED', 0);
     await test('PENDING', 0);
@@ -355,6 +394,50 @@ describe('a patient with both a visit and a test', () => {
  * home, and the gap between them is where a clinic's afternoon actually lives:
  * people who are finished with, still here, and still somebody's problem.
  */
+/**
+ * The way out for a patient who is not having their test.
+ *
+ * Reported 27 Oct 2026: a row at a department with an unpaid test offered
+ * Collect and nothing else, so "I cannot pay for it today" was a dead end on
+ * the one screen the clinic works from.
+ */
+describe('a test the patient is not having', () => {
+  /* `kinds` further down belongs to another describe; this block sits above it. */
+  const stepKinds = (row: { nextSteps: Array<{ kind: string }> }) =>
+    row.nextSteps.map((s) => s.kind);
+
+  it('offers cancel when there is no charge to take off', async () => {
+    // `declineOrder` refuses an order with no invoice line — calling a legacy
+    // or free-text test "declined" would put a commercial answer on a clinical
+    // record. Drawing Decline here would be a button the server then refuses.
+    const id = await visit('AWAITING_TESTS', 0);
+    await test('PENDING', 0, id);
+
+    const steps = stepKinds((await board()).rows[0]!);
+    expect(steps).toContain('CANCEL_TEST');
+    expect(steps).not.toContain('DECLINE_TEST');
+  });
+
+  it('puts it last, so it is never the thing the row is telling you to do', async () => {
+    const id = await visit('AWAITING_TESTS', 0);
+    await test('PENDING', 0, id);
+
+    const steps = stepKinds((await board()).rows[0]!);
+
+    // Whatever else is on the row, the way out is behind it.
+    expect(steps[steps.length - 1]).toBe('CANCEL_TEST');
+  });
+
+  it('is not offered once the test is done', async () => {
+    const id = await visit('AWAITING_TESTS', 0);
+    await test('COMPLETED', 0, id);
+
+    const steps = stepKinds((await board()).rows[0]!);
+    expect(steps).not.toContain('DECLINE_TEST');
+    expect(steps).not.toContain('CANCEL_TEST');
+  });
+});
+
 describe('closing a visit', () => {
   async function close(appointmentId: string, session = frontDesk) {
     return app.inject({
@@ -407,6 +490,78 @@ describe('closing a visit', () => {
     const res = await close(id);
     expect(res.statusCode).toBe(409);
     expect(res.json().error.details?.code).toBe('TEST_STILL_PENDING');
+  });
+
+  /**
+   * Closing is a press on a crowded board, so it can be a mispress.
+   *
+   * Reported from the clinic on 27 Oct 2026: "agar galti se OPD close kar diya
+   * to bhi" — the wrong row was closed and there was no way back short of
+   * editing the database.
+   */
+  it('can be reopened, and says so on the board', async () => {
+    const id = await visit('FULFILLED', 0);
+    await close(id);
+    expect((await board()).rows[0]!.bucket).toBe('DONE');
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/reopen`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(res.statusCode).toBe(200);
+
+    expect((await board()).rows[0]!.bucket).toBe('READY_TO_CLOSE');
+
+    const [row] = await ownerQuery<{ closed_at: Date | null; closed_by_user_id: string | null }>(
+      fx.main.id,
+      `SELECT closed_at, closed_by_user_id FROM appointment WHERE id = $1`,
+      [id],
+    );
+    expect(row?.closed_at).toBeNull();
+    expect(row?.closed_by_user_id).toBeNull();
+  });
+
+  it('keeps both events in the trail, so the correction is visible', async () => {
+    // "Closed at 4:05, reopened at 4:06" is the truth. A visit that was never
+    // closed at all is not.
+    const id = await visit('FULFILLED', 0);
+    await close(id);
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/reopen`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const actions = await ownerQuery<{ action: string }>(
+      fx.main.id,
+      `SELECT action FROM audit_event WHERE resource_id = $1 ORDER BY occurred_at`,
+      [id],
+    );
+    expect(actions.map((a) => a.action)).toEqual(
+      expect.arrayContaining(['appointment.close', 'appointment.reopen']),
+    );
+  });
+
+  it('refuses to reopen a visit that is already open', async () => {
+    const id = await visit('FULFILLED', 0);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/reopen`,
+      headers: { cookie: frontDesk.cookie },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('NOT_CLOSED');
+  });
+
+  it('offers reopening as a step on a closed row', async () => {
+    const id = await visit('FULFILLED', 0);
+    await close(id);
+
+    expect((await board()).rows[0]!.nextSteps.map((st: { kind: string }) => st.kind)).toContain(
+      'REOPEN_VISIT',
+    );
   });
 
   it('refuses to close the same visit twice', async () => {
@@ -796,8 +951,9 @@ describe('what a row says to do next', () => {
     const [row] = (await board()).rows;
 
     // Not CHECK_IN first: `blockingReason` would refuse that check-in, and a
-    // button the server refuses is worse than no button.
-    expect(kinds(row!)).toEqual(['COLLECT']);
+    // button the server refuses is worse than no button. MARK_NO_SHOW rides
+    // along at the end on every booked row and is never the first thing.
+    expect(kinds(row!)).toEqual(['COLLECT', 'MARK_NO_SHOW']);
     expect(row!.nextSteps[0]!.duePaise).toBe(50000);
   });
 
@@ -808,7 +964,7 @@ describe('what a row says to do next', () => {
 
     const [row] = (await board()).rows;
 
-    expect(kinds(row!)).toEqual(['CHECK_IN']);
+    expect(kinds(row!)).toEqual(['CHECK_IN', 'MARK_NO_SHOW']);
     expect(row!.nextSteps[0]!.appointmentId).toBeTruthy();
   });
 
@@ -858,13 +1014,66 @@ describe('what a row says to do next', () => {
     expect(kinds((await board()).rows[0]!)).not.toContain('FINISH');
   });
 
+  /**
+   * A visit with a test on it has TWO bills, and the row has to say so.
+   *
+   * Reported from the clinic on 27 Oct 2026 as "the money — I don't
+   * understand it": the Due column summed both bills while the Collect button
+   * carried the oldest one's balance alone, so the row read "₹1,000.00 due …
+   * Collect ₹500.00" and nothing said a second bill existed.
+   */
+  it('says how many bills are owing, so the button and the column agree', async () => {
+    await visit('AWAITING_TESTS', 0);
+    await billedTest(0);
+
+    const [row] = (await board()).rows;
+    const collect = row!.nextSteps.find((s: { kind: string }) => s.kind === 'COLLECT') as
+      { duePaise: number; billsOwing: number } | undefined;
+
+    expect(collect).toBeDefined();
+    // One unpaid bill here — the test's. The count is honest either way, and
+    // the browser only writes "1 of n" when n is more than one.
+    expect(collect!.billsOwing).toBe(1);
+    expect(row!.money!.duePaise).toBe(collect!.duePaise);
+  });
+
+  it('counts both when the consultation and the test are each owed', async () => {
+    const id = await visit('AWAITING_TESTS', 0);
+    await billedTest(0);
+    // A second, older bill against the visit itself — the consultation's.
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, patient_id, appointment_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, issued_at, updated_at)
+       VALUES ($1, $2, $3, 'CONS-' || floor(random() * 1000000)::text, 'UNPAID',
+               50000, 0, 50000, now() - interval '1 hour', now())`,
+      [fx.main.id, fx.main.patientIds[0], id],
+    );
+
+    const [row] = (await board()).rows;
+    const collect = row!.nextSteps.find((s: { kind: string }) => s.kind === 'COLLECT') as
+      { duePaise: number; billsOwing: number } | undefined;
+
+    expect(collect!.billsOwing).toBe(2);
+    // The button opens the OLDEST bill, which is the consultation's — so its
+    // figure is deliberately smaller than the row's total.
+    expect(collect!.duePaise).toBe(50000);
+    expect(row!.money!.duePaise).toBe(80000);
+  });
+
   it('offers the department its test only once that test is paid for', async () => {
     await visit('AWAITING_TESTS', 0);
     const orderId = await billedTest(0);
 
-    // Unpaid: the result cannot be released, so the row asks for the money and
-    // says nothing about recording anything.
-    expect(kinds((await board()).rows[0]!)).toEqual(['COLLECT']);
+    /*
+     * Unpaid: the result cannot be released, so the row asks for the money and
+     * says nothing about recording anything.
+     *
+     * DECLINE_TEST beside it since 27 Oct 2026 — "I cannot pay for it today"
+     * used to be a dead end here. It is last, so the row still TELLS you to
+     * collect; the browser draws it as the quiet button beside that.
+     */
+    expect(kinds((await board()).rows[0]!)).toEqual(['COLLECT', 'DECLINE_TEST']);
 
     const [invoice] = await ownerQuery<{ id: string }>(
       fx.main.id,
@@ -877,7 +1086,13 @@ describe('what a row says to do next', () => {
     await payment(invoice!.id, 'CASH', 30000);
 
     const after = (await board()).rows[0]!;
-    expect(kinds(after)).toEqual(['RECORD_RESULT']);
+    /*
+     * Paid: the department can get on with it. The way out stays on the row —
+     * a patient who has paid can still refuse the test, and declining then is
+     * the same act the finance desk's own Decline button has always done,
+     * which leaves a credit on the bill for finance to settle.
+     */
+    expect(kinds(after)).toEqual(['RECORD_RESULT', 'DECLINE_TEST']);
     expect(after.nextSteps[0]!.orderId).toBe(orderId);
   });
 
@@ -1009,4 +1224,112 @@ describe('what a row says to do next', () => {
       [fx.main.id, paymentId, invoiceId, paise],
     );
   }
+});
+
+/**
+ * A patient who never came.
+ *
+ * Nothing in this clinic marks a no-show: there is no nightly job, and the
+ * button only landed on 27 Oct 2026. So a missed visit sits at BOOKED for ever,
+ * and the board used to say "Expected" about a day three weeks gone. The bucket
+ * is inferred from the date instead, which fixes every past day already in the
+ * database without touching a row.
+ */
+describe('a visit nobody attended', () => {
+  const stepKinds = (row: Row) => row.nextSteps.map((s) => s.kind);
+
+  /** The clinic's own date, `days` ago, as `YYYY-MM-DD`. */
+  async function clinicDaysAgo(days: number): Promise<string> {
+    const rows = await ownerQuery<{ d: string }>(
+      fx.main.id,
+      `SELECT (((now() AT TIME ZONE 'Asia/Kolkata')::date
+                 - ($1 || ' days')::interval)::date)::text AS d`,
+      [String(days)],
+    );
+
+    return rows[0]!.d;
+  }
+
+  /** A BOOKED appointment on a day that has gone, left exactly as it was. */
+  async function bookedDaysAgo(days: number): Promise<void> {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, queue_date, status, visit_type, updated_at)
+       VALUES ($1, $2, $3, $4,
+               now() - ($5 || ' days')::interval,
+               now() - ($5 || ' days')::interval + interval '15 minutes',
+               (((now() AT TIME ZONE 'Asia/Kolkata')::date
+                   - ($5 || ' days')::interval)::date),
+               'BOOKED', 'NEW', now())`,
+      [fx.main.id, fx.main.patientIds[0], fx.main.practitionerId, fx.main.locationId, String(days)],
+    );
+  }
+
+  async function boardOn(date: string): Promise<Board> {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/day-board?date=${date}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    return res.json<Board>();
+  }
+
+  it('did not come, on a day that has gone', async () => {
+    await bookedDaysAgo(9);
+
+    const board = await boardOn(await clinicDaysAgo(9));
+
+    expect(board.rows).toHaveLength(1);
+    expect(board.rows[0]!.bucket).toBe('DID_NOT_COME');
+  });
+
+  it('is still merely expected on the day itself', async () => {
+    // The same row, read on its own day. Somebody booked for this afternoon has
+    // not failed to turn up, and this is the line between the two.
+    await bookedDaysAgo(0);
+
+    expect((await boardOn(await clinicDaysAgo(0))).rows[0]!.bucket).toBe('EXPECTED');
+  });
+
+  it('counts toward the day, because the slot was held for them', async () => {
+    await bookedDaysAgo(9);
+
+    const board = await boardOn(await clinicDaysAgo(9));
+
+    expect(board.counts.did_not_come).toBe(1);
+    // A day that quietly shrinks when patients fail to arrive cannot be
+    // compared with any other day.
+    expect(board.counts.total).toBe(1);
+    expect(board.counts.expected).toBe(0);
+  });
+
+  it('offers the step that writes it down, and offers nothing else', async () => {
+    await bookedDaysAgo(9);
+
+    const board = await boardOn(await clinicDaysAgo(9));
+
+    // No check-in, no consultation: nobody is chasing this patient around the
+    // clinic. Only the act of recording what happened.
+    expect(stepKinds(board.rows[0]!)).toEqual(['MARK_NO_SHOW']);
+  });
+
+  it('stops offering it once somebody actually arrived', async () => {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, queue_date, status, visit_type, updated_at)
+       VALUES ($1, $2, $3, $4, now(), now() + interval '15 minutes',
+               (now() AT TIME ZONE 'Asia/Kolkata')::date,
+               'ARRIVED', 'NEW', now())`,
+      [fx.main.id, fx.main.patientIds[0], fx.main.practitionerId, fx.main.locationId],
+    );
+
+    const board = await boardOn(await clinicDaysAgo(0));
+
+    expect(board.rows[0]!.bucket).toBe('WAITING');
+    expect(stepKinds(board.rows[0]!)).not.toContain('MARK_NO_SHOW');
+  });
 });

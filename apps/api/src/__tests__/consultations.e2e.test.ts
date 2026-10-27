@@ -340,6 +340,189 @@ describe('recording the visit', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  /**
+   * A review date is a date in the future.
+   *
+   * Reported 27 Oct 2026: the form took any date at all, so a mistyped year
+   * printed "Review on 12 January 2025" on a prescription. Checked against the
+   * CLINIC's today, not the server's or the browser's.
+   */
+  it('refuses a follow-up date that has already passed', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { followUpDate: clinicDate(-1) },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('FOLLOW_UP_IN_THE_PAST');
+  });
+
+  it('accepts today, because "come back this evening" is a real instruction', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { followUpDate: clinicDate(0) },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('lets the follow-up date be cleared', async () => {
+    // Blank is somebody removing a date, which must not be read as a past one.
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { followUpDate: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().followUpDate).toBeNull();
+  });
+
+  /**
+   * A chief complaint has words in it.
+   *
+   * Reported 27 Oct 2026: "123" was accepted, and then prints on the
+   * prescription as the reason the patient came.
+   */
+  it('refuses a narrative field with no words in it', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: '123' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('accepts a narrative that is mostly numbers but says something', async () => {
+    // The rule is "has words", not "has no digits" — this is how doctors write.
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: '2 days of knee pain', advice: 'T2DM x 5y, review in 2w' },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  /**
+   * Correcting a reading somebody typed wrongly.
+   *
+   * Vitals were append-only, which is right for an observation and wrong for a
+   * typo. A pulse of 178 instead of 78 is inside every bound, so nothing
+   * refused it and nothing could take it back — note that the pair a
+   * transposed BP would make is already refused by `vitals_bp_ordered`, so the
+   * fixture here uses the kind of slip the database cannot see.
+   */
+  describe('correcting a vitals reading', () => {
+    async function withReading() {
+      const { encounter } = await openConsultation();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/encounters/${encounter.id}/vitals`,
+        headers: { cookie: nurse.cookie },
+        payload: { systolicMmHg: 120, diastolicMmHg: 80, pulseBpm: 178 },
+      });
+
+      expect(res.statusCode).toBe(201);
+      return { encounter, reading: res.json().latestVitals };
+    }
+
+    function correct(encounterId: string, vitalsId: string, payload: Record<string, number>) {
+      return app.inject({
+        method: 'POST',
+        url: `/api/v1/encounters/${encounterId}/vitals/${vitalsId}/correct`,
+        headers: { cookie: nurse.cookie },
+        payload,
+      });
+    }
+
+    it('replaces the reading and keeps the original', async () => {
+      const { encounter, reading } = await withReading();
+
+      const res = await correct(encounter.id, reading.id, {
+        systolicMmHg: 120,
+        diastolicMmHg: 80,
+        pulseBpm: 78,
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      const body = res.json();
+      expect(body.latestVitals.pulseBpm).toBe(78);
+      expect(body.latestVitals.correctsId).toBe(reading.id);
+
+      // Both rows are there. The original is the evidence that the first
+      // reading was ever taken, which is what somebody asks about later.
+      expect(body.vitals).toHaveLength(2);
+      const original = body.vitals.find((v: { id: string }) => v.id === reading.id);
+      expect(original.pulseBpm).toBe(178);
+      expect(original.superseded).toBe(true);
+    });
+
+    it('keeps the correction at the time the observation was taken', async () => {
+      // Not the time somebody noticed: a corrected 10:00 reading must not jump
+      // ahead of a real 11:00 one.
+      const { encounter, reading } = await withReading();
+
+      const res = await correct(encounter.id, reading.id, { pulseBpm: 78 });
+
+      expect(res.json().latestVitals.recordedAt).toBe(reading.recordedAt);
+    });
+
+    it('refuses to correct the same reading twice', async () => {
+      const { encounter, reading } = await withReading();
+
+      expect((await correct(encounter.id, reading.id, { pulseBpm: 78 })).statusCode).toBe(201);
+
+      const again = await correct(encounter.id, reading.id, { pulseBpm: 80 });
+
+      expect(again.statusCode).toBe(409);
+      expect(domainCode(again)).toBe('ALREADY_CORRECTED');
+    });
+
+    it('refuses a reading from another visit', async () => {
+      const { reading } = await withReading();
+      // Its own patient and slot: openConsultation defaults to the first of
+      // each, and asking twice collides on the queue rather than the test.
+      const other = await openConsultation(1, 1);
+
+      const res = await correct(other.encounter.id, reading.id, { pulseBpm: 78 });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('refuses a correction with nothing in it', async () => {
+      const { encounter, reading } = await withReading();
+
+      expect((await correct(encounter.id, reading.id, {})).statusCode).toBe(400);
+    });
+
+    it('refuses an impossible correction, the same as a reading', async () => {
+      const { encounter, reading } = await withReading();
+
+      expect((await correct(encounter.id, reading.id, { weightKg: 700 })).statusCode).toBe(400);
+    });
+  });
+
   it('makes the first diagnosis primary when none is marked', async () => {
     const { encounter } = await openConsultation();
 

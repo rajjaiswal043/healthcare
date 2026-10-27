@@ -209,6 +209,8 @@ export type DayBucket =
   /** The doctor has finished; nobody has said the visit is over. Still here. */
   | 'READY_TO_CLOSE'
   | 'DONE'
+  /** Booked for a day that has gone, never checked in. Nobody marked it. */
+  | 'DID_NOT_COME'
   | 'NOT_ATTENDING';
 
 /** Where a bill stands, without saying how much. Null when nothing was charged. */
@@ -240,14 +242,27 @@ export interface RowMoney {
  * as `money`.
  */
 export type NextStep =
-  | { kind: 'COLLECT'; invoiceId: string; duePaise: number }
+  /**
+   * `duePaise` is THIS bill's balance. A visit with a test on it has two bills
+   * and the row's Due column sums both, so `billsOwing` lets the button say
+   * "1 of 2" rather than appearing to contradict the column beside it.
+   */
+  | { kind: 'COLLECT'; invoiceId: string; duePaise: number; billsOwing: number }
   | { kind: 'CHECK_IN'; appointmentId: string }
   | { kind: 'START'; appointmentId: string }
   | { kind: 'RESUME'; appointmentId: string }
   | { kind: 'BRING_BACK'; appointmentId: string }
   | { kind: 'FINISH'; appointmentId: string }
   | { kind: 'CLOSE_VISIT'; appointmentId: string }
+  /** Closed by mistake. Clears `closed_at` and puts the row back. */
+  | { kind: 'REOPEN_VISIT'; appointmentId: string }
   | { kind: 'RECORD_RESULT'; orderId: string }
+  /** The patient said no. Takes the charge off; only where there is one. */
+  | { kind: 'DECLINE_TEST'; orderId: string }
+  /** The same way out where the test was never charged for. */
+  | { kind: 'CANCEL_TEST'; orderId: string }
+  /** They never came. Writes the no-show the board has been inferring. */
+  | { kind: 'MARK_NO_SHOW'; appointmentId: string }
   | { kind: 'RECEIPT'; paymentId: string };
 
 export interface DayBoardRow {
@@ -263,6 +278,16 @@ export interface DayBoardRow {
   testsDoneIn: string | null;
   token: number | null;
   withWhom: string | null;
+  /**
+   * What they were sent for, up to three. Live tests only.
+   *
+   * `withWhom` names the doctor for anybody who had a consultation, so the
+   * board could say somebody was at a department without saying which, and
+   * never what test. The receptionist reads this row; the answer belongs on it.
+   */
+  tests: string[];
+  /** The department holding them. Null when no test is live. */
+  testDepartment: string | null;
   time: string | null;
   visitFee: FeeTag;
   testFee: FeeTag;
@@ -287,6 +312,7 @@ export interface DayBoard {
     ready_to_close: number;
     at_department: number;
     done: number;
+    did_not_come: number;
     not_attending: number;
     total: number;
   };
@@ -537,6 +563,13 @@ export interface PatientDetail extends PatientSummary {
     reasonForVisit: string | null;
     practitioner: { id: string; fullName: string; prefix: string | null };
     encounterId: string | null;
+    /**
+     * Booked, never checked in, and the clinic's day is over.
+     *
+     * Worked out by the server, which knows the clinic's timezone; the browser
+     * knows only the reader's, and those are not the same question.
+     */
+    missed: boolean;
   }>;
   stats: {
     totalVisits: number;
@@ -993,6 +1026,10 @@ export interface Vitals {
   spo2Percent: number | null;
   respiratoryRate: number | null;
   notes: string | null;
+  /** The reading this one replaces, when it is a correction rather than a set. */
+  correctsId: string | null;
+  /** Whether a later correction replaces this one. It is kept, not deleted. */
+  superseded: boolean;
   /** Derived by the server from height and weight — never stored, never sent up. */
   bmi: number | null;
 }
@@ -1685,7 +1722,34 @@ export const api = {
   invoiceForAppointment: (appointmentId: string) =>
     request<Invoice>(`/appointments/${appointmentId}/invoice`),
 
+  /**
+   * EVERY bill a visit has produced, oldest first.
+   *
+   * A consultation and a test are two invoices — the test raises its own,
+   * because a consultation bill settled before the doctor will not take
+   * another line. The desk settles a PATIENT, so it has to see both.
+   */
+  invoicesForAppointment: (appointmentId: string) =>
+    request<{ invoices: Invoice[] }>(`/appointments/${appointmentId}/invoices`),
+
   invoice: (id: string) => request<Invoice>(`/invoices/${id}`),
+
+  /**
+   * The money was right; the mode was wrong.
+   *
+   * One call on purpose. It reverses the original as recorded-in-error and
+   * re-records the same amount under the right mode IN ONE TRANSACTION — a
+   * reversal that landed without its replacement would leave a settled bill
+   * looking unpaid, with the patient already gone home.
+   */
+  correctPaymentMode: (
+    invoiceId: string,
+    input: { paymentId: string; mode: string; reference?: string },
+  ) =>
+    request<Invoice>(`/invoices/${invoiceId}/payments/correct-mode`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   services: () => request<{ services: ChargeableService[] }>('/services'),
 
@@ -1857,6 +1921,18 @@ export const api = {
       followUpNote?: string;
     },
   ) => request<Encounter>(`/encounters/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+
+  /**
+   * Replace a reading that was taken wrongly.
+   *
+   * A superseding row, not an edit: the original stays on the record and comes
+   * back marked `superseded`. Only while the note is unsigned.
+   */
+  correctVitals: (id: string, vitalsId: string, input: Record<string, number>) =>
+    request<Encounter>(`/encounters/${id}/vitals/${vitalsId}/correct`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   recordVitals: (
     id: string,
@@ -2106,6 +2182,19 @@ export const api = {
    */
   closeVisit: (appointmentId: string) =>
     request<{ id: string; status: string }>(`/appointments/${appointmentId}/close`, {
+      method: 'PATCH',
+    }),
+
+  /**
+   * Undo a close.
+   *
+   * Both events stay in the audit log, so the history reads "closed, then
+   * reopened" rather than pretending the close never happened. Raising a test
+   * against a closed visit reopens it on its own — this is for the row that
+   * was simply the wrong one.
+   */
+  reopenVisit: (appointmentId: string) =>
+    request<{ id: string; status: string }>(`/appointments/${appointmentId}/reopen`, {
       method: 'PATCH',
     }),
 

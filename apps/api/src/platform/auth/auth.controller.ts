@@ -46,7 +46,7 @@ class ChangePasswordDto {
    * people who type on a shared clinic PC in a hurry.
    */
   @IsString()
-  @MinLength(12, { message: 'Use at least 12 characters — length matters more than symbols.' })
+  @MinLength(12, { message: 'Use at least 12 characters. Length matters more than symbols.' })
   @MaxLength(200)
   newPassword!: string;
 }

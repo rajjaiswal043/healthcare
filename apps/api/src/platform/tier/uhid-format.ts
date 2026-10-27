@@ -78,7 +78,7 @@ export function IsUhidPrefix(options: UhidFieldOptions = {}): PropertyDecorator 
      * both DRV105. The suggested fix keeps the digit the clinic wanted.
      */
     Matches(/[^0-9]$/, {
-      message: 'The patient ID prefix cannot end in a digit — put a - or / after it, like DRV1-.',
+      message: 'The patient ID prefix cannot end in a digit. Put a - or / after it, like DRV1-.',
     }),
   );
 }

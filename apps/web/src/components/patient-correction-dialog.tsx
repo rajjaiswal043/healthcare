@@ -183,7 +183,7 @@ export function PatientCorrectionDialog({
           <div className="mt-4 rounded-panel border border-amber/40 bg-amber-soft/50 px-3.5 py-3">
             <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-text">
               <IconCheck size={13} />
-              Saved — but this now looks like an existing patient
+              Saved, but this now looks like an existing patient
             </p>
             <ul className="mt-1.5 space-y-0.5 text-[12.5px] text-ink-60">
               {duplicates.map((d) => (
