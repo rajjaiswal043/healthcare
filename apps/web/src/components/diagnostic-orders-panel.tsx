@@ -48,6 +48,14 @@ export function DiagnosticOrdersPanel({
   const [orders, setOrders] = useState<DiagnosticOrder[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The server says this exact test is already on the visit.
+   *
+   * Since 27 Oct 2026 the comparison includes the description, so two X-rays
+   * of different body parts go through untouched. This is only the genuine
+   * repeat of the same wording, and it offers the way through.
+   */
+  const [repeat, setRepeat] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [adding, setAdding] = useState(false);
@@ -132,15 +140,17 @@ export function DiagnosticOrdersPanel({
     })();
   }, [mayOrder]);
 
-  async function raise() {
+  async function raise(confirmedRepeat = false) {
     setBusy(true);
     setError(null);
+    setRepeat(false);
     try {
       await api.raiseDiagnosticOrder({
         appointmentId,
         departmentId,
         serviceId,
         ...(description.trim() ? { description: description.trim() } : {}),
+        ...(confirmedRepeat ? { confirmedRepeat: true } : {}),
       });
       setDescription('');
       setServiceId('');
@@ -148,6 +158,9 @@ export function DiagnosticOrdersPanel({
       await load();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not request that test.');
+      setRepeat(
+        err instanceof ApiRequestError && err.error.details?.code === 'TEST_ALREADY_ORDERED',
+      );
     } finally {
       setBusy(false);
     }
@@ -269,7 +282,21 @@ export function DiagnosticOrdersPanel({
           <span className="mt-0.5 shrink-0">
             <IconAlert size={13} />
           </span>
-          <span>{error}</span>
+          <span>
+            {error}
+            {/* Offered only for a true repeat of the same wording. One
+                deliberate press, so a double-click still cannot bill twice. */}
+            {repeat && (
+              <button
+                type="button"
+                className="btn-ghost mt-1.5 block !px-0 !py-0 !text-[12.5px] !text-coral-text underline underline-offset-2"
+                disabled={busy}
+                onClick={() => void raise(true)}
+              >
+                Order it again anyway
+              </button>
+            )}
+          </span>
         </div>
       )}
 

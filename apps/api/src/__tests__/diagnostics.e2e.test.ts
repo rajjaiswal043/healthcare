@@ -650,6 +650,126 @@ describe('ordering a catalogue test', () => {
     expect(again.json().error.details?.code).toBe('TEST_ALREADY_ORDERED');
   });
 
+  /**
+   * Two X-rays on one visit, of two different body parts.
+   *
+   * A live incident, 27 Oct 2026: an orthopaedic patient needs the knee and
+   * the shoulder imaged, and both are the service called "X-ray". Matching on
+   * the service alone refused the second, which for this clinic is the normal
+   * case rather than the edge one. The description is part of the comparison
+   * now, so saying which part of the body it is for is enough.
+   */
+  it('takes a second order of the same test for a different body part', async () => {
+    const knee = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray, left knee, AP and lateral',
+    });
+    expect(knee.statusCode).toBe(201);
+
+    const shoulder = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray, right shoulder',
+    });
+
+    expect(shoulder.statusCode).toBe(201);
+    expect(shoulder.json().id).not.toBe(knee.json().id);
+  });
+
+  it('still refuses the very same wording, which is a double-click', async () => {
+    // The guard is kept because every order raises its own charge, and one
+    // slip would bill the patient twice.
+    const payload = {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray, left knee',
+    };
+
+    expect((await order(doctor, payload)).statusCode).toBe(201);
+
+    const again = await order(doctor, payload);
+
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('TEST_ALREADY_ORDERED');
+  });
+
+  it('reads the wording the same however it was capitalised', async () => {
+    expect(
+      (
+        await order(doctor, {
+          appointmentId: mainVisit,
+          departmentId: xrayDepartmentId,
+          serviceId: kneeXrayId,
+          description: 'X-ray, Left Knee',
+        })
+      ).statusCode,
+    ).toBe(201);
+
+    const again = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'x-ray, left knee',
+    });
+
+    expect(again.statusCode).toBe(409);
+  });
+
+  it('takes the same wording again once the first one is done', async () => {
+    /*
+     * Asked by the clinic on 28 Oct 2026: if the X-ray has been taken, can we
+     * order another? A completed order is work a department actually carried
+     * out and reported, which is the one thing a double-click cannot produce —
+     * so there is nothing left to protect against, and the same knee may
+     * genuinely need imaging again later in the visit.
+     */
+    const payload = {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray, left knee',
+    };
+
+    const first = await order(doctor, payload);
+    expect(first.statusCode).toBe(201);
+
+    /* Completed the way the table insists on it: `completion_is_attributed`
+       refuses a COMPLETED row that does not say who finished it and when. */
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE diagnostic_order
+          SET status = 'COMPLETED',
+              completed_at = now(),
+              completed_by_user_id = (SELECT id FROM app_user WHERE tenant_id = $2::uuid LIMIT 1)
+        WHERE id = $1::uuid`,
+      [first.json<{ id: string }>().id, fx.main.id],
+    );
+
+    // No confirmation asked for: there is nothing to confirm.
+    expect((await order(doctor, payload)).statusCode).toBe(201);
+  });
+
+  it('lets a confirmed repeat of the same wording through', async () => {
+    // Bloods after a meal, an ECG after fresh chest pain. The screen asks
+    // first; the API does not decide clinical questions.
+    const payload = {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+      description: 'X-ray, left knee',
+    };
+
+    expect((await order(doctor, payload)).statusCode).toBe(201);
+
+    const repeat = await order(doctor, { ...payload, confirmedRepeat: true });
+
+    expect(repeat.statusCode).toBe(201);
+  });
+
   it('lets it be ordered again once the first was declined', async () => {
     const first = await order(doctor, {
       appointmentId: mainVisit,
