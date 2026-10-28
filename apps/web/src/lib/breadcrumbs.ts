@@ -28,7 +28,7 @@
  * the rail, "Register a patient" here.
  */
 export const BREADCRUMBS: Record<string, string> = {
-  '/home': 'Home',
+  '/': 'Home',
   '/patients': 'Patients',
   '/patients/register': 'Register a patient',
   '/patients/[id]': 'Patient record',

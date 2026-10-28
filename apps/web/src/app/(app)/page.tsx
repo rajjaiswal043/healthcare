@@ -312,6 +312,31 @@ function DayBoardScreen() {
    */
   const dateParam = params.get('date');
   const date = dateParam && DATE_RE.test(dateParam) ? dateParam : null;
+
+  /**
+   * A link to this board, keeping the day being looked at.
+   *
+   * The tabs and the paging used to write `/?tab=x` and nothing else, so
+   * changing the tab while reading a PAST day silently threw you back to
+   * today. The date picker already carried the tab the other way, so the two
+   * directions disagreed. Reported from the clinic, 28 Oct 2026.
+   *
+   * Today stays the ABSENCE of a date, as everywhere else on this screen: the
+   * live board has to be the plain URL, or a tab left open overnight would go
+   * on showing yesterday.
+   */
+  const boardHref = useCallback(
+    (nextTab: string, nextPage = 1) => {
+      const qs = new URLSearchParams();
+      if (nextTab) qs.set('tab', nextTab);
+      if (date) qs.set('date', date);
+      if (nextPage > 1) qs.set('page', String(nextPage));
+
+      const query = qs.toString();
+      return query ? `/?${query}` : '/';
+    },
+    [date],
+  );
   const isToday = date === null;
 
   const tab: TabKey = TABS.find((t) => t.key === params.get('tab'))?.key ?? 'everyone';
@@ -815,7 +840,7 @@ function DayBoardScreen() {
             return (
               <Link
                 key={t.key}
-                href={`/?tab=${t.key}`}
+                href={boardHref(t.key)}
                 scroll={false}
                 aria-current={on ? 'page' : undefined}
                 className={[
@@ -1143,7 +1168,7 @@ function DayBoardScreen() {
             <Pagination
               page={page}
               totalPages={totalPages}
-              hrefFor={(n) => `/?tab=${tab}${n > 1 ? `&page=${n}` : ''}`}
+              hrefFor={(n) => boardHref(tab, n)}
               label="Day board pages"
             />
           </div>

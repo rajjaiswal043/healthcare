@@ -66,12 +66,7 @@ describe('the breadcrumb table', () => {
     // A walk that silently found nothing would make every assertion below pass
     // while checking nothing at all.
     expect(routes.length).toBeGreaterThan(15);
-    /* `/home` rather than `/` since 28 Oct 2026: the bare domain is the public
-       landing page now and sits OUTSIDE this route group, so a walk of the app
-       shell should no longer find a root page. The board is the sanity check
-       either way — it is the one route that must always be here. */
-    expect(routes).toContain('/home');
-    expect(routes).not.toContain('/');
+    expect(routes).toContain('/');
     expect(routes).toContain('/finance');
     expect(routes).toContain('/patients/[id]');
   });

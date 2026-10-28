@@ -23,17 +23,14 @@ const AuthContext = createContext<AuthState | null>(null);
 /**
  * Pages anybody may see, session or not.
  *
- * `/` is the public landing page and the front door of the product. Before
- * 28 Oct 2026 the root was the clinic console, so an anonymous visitor to
- * thedoctordesk.in was sent straight to a sign-in box — which is no answer to
- * "what is this". They get the landing page instead, and sign-in is one click
- * away on it.
- *
- * `/welcome` is the same page at the path its files live under. Kept public
- * because the route exists and answering it with a redirect to sign in would
- * be a worse 404 than simply showing the page.
+ * A public landing page was tried on 28 Oct 2026 and taken out again the same
+ * day. It is not the page that was wrong — it is that the console lives at
+ * `/`, and its tabs, paging and date links are all written relative to that
+ * (`/?tab=...`), so giving the bare domain to marketing moved the console to
+ * `/home` and put that into every URL. The clean way to have both is a
+ * separate host for the app rather than a second path on this one.
  */
-const PUBLIC_PATHS = ['/', '/login', '/welcome'];
+const PUBLIC_PATHS = ['/login'];
 
 /**
  * Routes this provider has no business redirecting.
@@ -122,11 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /*
    * ARRIVED WITHOUT A SESSION, which is a different thing from losing one.
    *
-   * Sent to the landing page at the root rather than to the login form.
-   * Somebody opening thedoctordesk.in has usually never seen the product, and a
-   * sign-in box is no answer to "what is this" — reported 28 Oct 2026. Staff
-   * lose nothing: the page carries sign-in, and the browser remembers the
-   * clinic's URL anyway.
+   * Nobody is signed in, so there is nowhere in the console to be.
    */
   useEffect(() => {
     if (
@@ -135,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       !PUBLIC_PATHS.includes(pathname) &&
       governedByThisProvider(pathname)
     ) {
-      router.replace('/');
+      router.replace('/login');
     }
   }, [loading, session, pathname, router]);
 
