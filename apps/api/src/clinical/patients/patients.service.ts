@@ -191,34 +191,71 @@ export class PatientsService {
 
       const incomingAge = ageOf(input.ageYears, input.birthDate);
 
-      return rows.map((r) => {
-        const similarity = Number(r.name_similarity);
-        const candidateAge = ageOf(r.age_years, r.birth_date);
+      return (
+        rows
+          .map((r) => {
+            const similarity = Number(r.name_similarity);
+            const candidateAge = ageOf(r.age_years, r.birth_date);
 
-        const agesAgree =
-          incomingAge !== null &&
-          candidateAge !== null &&
-          Math.abs(incomingAge - candidateAge) <= AGE_TOLERANCE_YEARS;
+            const agesAgree =
+              incomingAge !== null &&
+              candidateAge !== null &&
+              Math.abs(incomingAge - candidateAge) <= AGE_TOLERANCE_YEARS;
 
-        const genderAgrees = input.gender !== undefined && input.gender === r.gender;
+            const genderAgrees = input.gender !== undefined && input.gender === r.gender;
 
-        const strong =
-          r.same_mobile || (similarity >= NAME_SIMILARITY_STRONG && genderAgrees && agesAgree);
+            const strong =
+              r.same_mobile || (similarity >= NAME_SIMILARITY_STRONG && genderAgrees && agesAgree);
 
-        return {
-          id: r.id,
-          uhid: r.uhid,
-          name: r.name,
-          mobile: r.mobile,
-          gender: r.gender,
-          ageYears: r.age_years,
-          birthDate: r.birth_date,
-          createdAt: r.created_at,
-          matchReason: r.same_mobile ? ('SAME_MOBILE' as const) : ('SIMILAR_NAME' as const),
-          nameSimilarity: similarity,
-          confidence: strong ? ('STRONG' as const) : ('WEAK' as const),
-        };
-      });
+            /**
+             * Both known, and years apart.
+             *
+             * Not the same as `!agesAgree`, which is also true when either age is
+             * missing — and an unknown age is no evidence at all. This is the
+             * narrower claim that we have both numbers and they disagree.
+             */
+            const agesContradict =
+              incomingAge !== null &&
+              candidateAge !== null &&
+              Math.abs(incomingAge - candidateAge) > AGE_TOLERANCE_YEARS;
+
+            return {
+              id: r.id,
+              uhid: r.uhid,
+              name: r.name,
+              mobile: r.mobile,
+              gender: r.gender,
+              ageYears: r.age_years,
+              birthDate: r.birth_date,
+              createdAt: r.created_at,
+              matchReason: r.same_mobile ? ('SAME_MOBILE' as const) : ('SIMILAR_NAME' as const),
+              nameSimilarity: similarity,
+              confidence: strong ? ('STRONG' as const) : ('WEAK' as const),
+              contradicted: !r.same_mobile && agesContradict,
+            };
+          })
+          /**
+           * Silence where the evidence argues against it.
+           *
+           * Reported from the clinic on 28 Oct 2026: a different patient who
+           * happens to share a name was being flagged, with a different mobile and
+           * an age years apart. An identical name scores 1.0 and the showing
+           * threshold is 0.4, so the notice fired on the name alone however much
+           * the rest of the record disagreed.
+           *
+           * Nobody was ever BLOCKED by this — strong still needs the same mobile,
+           * or a close name with the gender and the age agreeing too. But a warning
+           * that cries wolf on every Sharma is a warning the desk stops reading,
+           * which costs more than the duplicate it was meant to catch.
+           *
+           * A different number alone is not enough to stay quiet: families share
+           * one number here, and people change theirs. It takes the number AND the
+           * age both disagreeing, and an age nobody recorded disagrees with
+           * nothing.
+           */
+          .filter((candidate) => !candidate.contradicted)
+          .map(({ contradicted: _contradicted, ...candidate }) => candidate)
+      );
     });
   }
 

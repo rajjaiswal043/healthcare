@@ -1587,8 +1587,19 @@ describe('the previous visit', () => {
   });
 
   /**
-   * A draft is somebody's unfinished thinking. Showing it in a later
-   * consultation would put it in front of a doctor as though it were a record.
+   * An unsigned visit is still a visit that happened.
+   *
+   * REVERSED ON 28 OCT 2026, and this test used to assert the opposite. The
+   * reasoning for hiding drafts was that unfinished thinking should not reach a
+   * later consultation as though it were a record — sound on its own, and
+   * wrong beside the panel above it: the tests panel lists every completed test
+   * whatever visit produced it, so a patient whose earlier visit was never
+   * signed showed a previous TEST at the top of the screen and "no previous
+   * visits" at the bottom. One screen, one patient, two answers.
+   *
+   * So the visit is listed and `signedAt` is null, which is what the browser
+   * draws a "Not signed" badge from. The reader is told what they are looking
+   * at rather than told it does not exist.
    *
    * The earlier visit is pushed back to IN_PROGRESS directly rather than by
    * leaving a real one unsigned: an unsigned visit keeps its patient in the
@@ -1596,7 +1607,7 @@ describe('the previous visit', () => {
    * test needs. What is under test is the status filter, and this exercises it
    * without fighting the queue rules.
    */
-  it('ignores an unsigned visit', async () => {
+  it('lists an unsigned visit, and says it is unsigned', async () => {
     const earlier = await signedVisitFor(1, 'Signed then unsigned');
     const { encounter: today } = await openConsultation(1, 1);
 
@@ -1605,7 +1616,10 @@ describe('the previous visit', () => {
       url: `/api/v1/encounters/${today.id}/previous-visits`,
       headers: { cookie: doctor.cookie },
     });
-    expect(before.json<{ visits: unknown[] }>().visits).toHaveLength(1);
+    expect(before.json<{ visits: Array<{ signedAt: string | null }> }>().visits).toHaveLength(1);
+    expect(
+      before.json<{ visits: Array<{ signedAt: string | null }> }>().visits[0]!.signedAt,
+    ).not.toBeNull();
 
     await ownerQuery(
       fx.main.id,
@@ -1620,7 +1634,12 @@ describe('the previous visit', () => {
       headers: { cookie: doctor.cookie },
     });
 
-    expect(after.json<{ visits: unknown[] }>().visits).toHaveLength(0);
+    const visits = after.json<{ visits: Array<{ signedAt: string | null }> }>().visits;
+
+    // Still there — and carrying the one fact that tells a doctor to read it
+    // as a draft rather than as a record.
+    expect(visits).toHaveLength(1);
+    expect(visits[0]!.signedAt).toBeNull();
   });
 
   it('does not leak another clinic history', async () => {

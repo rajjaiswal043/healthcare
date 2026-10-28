@@ -92,8 +92,7 @@ export function TestRequisitionPrint({ order }: { order: DiagnosticOrder }) {
             <strong>{patient.name}</strong> ·{' '}
             {/* The order carries the age already worked out and no birth date,
                 so the second argument is genuinely absent rather than unknown. */}
-            {formatAge({ ageYears: patient.ageYears, birthDate: null })}{' '}
-            {genderInitial(patient.gender)}
+            {formatAge(patient)} {genderInitial(patient.gender)}
           </span>
           <span>UHID {patient.uhid}</span>
           <span>{patient.mobile}</span>

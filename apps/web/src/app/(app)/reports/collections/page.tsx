@@ -75,6 +75,13 @@ export default function CollectionsPage() {
             <input
               id="date"
               type="date"
+              /*
+                No day that has not happened yet. A report for next March is
+                always an empty one, and an empty report reads as "the clinic
+                took nothing" rather than as "you asked the wrong question".
+                Reported 28 Oct 2026.
+              */
+              max={new Date().toLocaleDateString('en-CA')}
               className="field-input"
               value={date}
               onChange={(e) => setDate(e.target.value)}

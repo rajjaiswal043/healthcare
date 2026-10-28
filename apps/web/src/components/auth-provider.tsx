@@ -20,7 +20,20 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-const PUBLIC_PATHS = ['/login'];
+/**
+ * Pages anybody may see, session or not.
+ *
+ * `/` is the public landing page and the front door of the product. Before
+ * 28 Oct 2026 the root was the clinic console, so an anonymous visitor to
+ * thedoctordesk.in was sent straight to a sign-in box — which is no answer to
+ * "what is this". They get the landing page instead, and sign-in is one click
+ * away on it.
+ *
+ * `/welcome` is the same page at the path its files live under. Kept public
+ * because the route exists and answering it with a redirect to sign in would
+ * be a worse 404 than simply showing the page.
+ */
+const PUBLIC_PATHS = ['/', '/login', '/welcome'];
 
 /**
  * Routes this provider has no business redirecting.
@@ -86,9 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void load();
   }, [load, pathname]);
 
-  // A 401 from any call means the session ended — expired, revoked, or signed
-  // out in another tab. Bounce to sign-in rather than leaving a shell of a page
-  // that silently fails every request.
+  /*
+   * A 401 from any call means the session ENDED — expired, revoked, or signed
+   * out in another tab. Bounce to sign-in rather than leaving a shell of a page
+   * that silently fails every request.
+   *
+   * Straight to /login, deliberately, and not to the landing page like the
+   * case below: this is somebody who was working a moment ago and knows
+   * exactly who they are. Showing them the product's front door would be
+   * answering a question they did not ask.
+   */
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setSession(null);
@@ -99,6 +119,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [pathname, router]);
 
+  /*
+   * ARRIVED WITHOUT A SESSION, which is a different thing from losing one.
+   *
+   * Sent to the landing page at the root rather than to the login form.
+   * Somebody opening thedoctordesk.in has usually never seen the product, and a
+   * sign-in box is no answer to "what is this" — reported 28 Oct 2026. Staff
+   * lose nothing: the page carries sign-in, and the browser remembers the
+   * clinic's URL anyway.
+   */
   useEffect(() => {
     if (
       !loading &&
@@ -106,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       !PUBLIC_PATHS.includes(pathname) &&
       governedByThisProvider(pathname)
     ) {
-      router.replace('/login');
+      router.replace('/');
     }
   }, [loading, session, pathname, router]);
 

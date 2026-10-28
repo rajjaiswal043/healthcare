@@ -246,6 +246,28 @@ export default function RegisterPatientPage() {
     );
   }
 
+  /**
+   * The age the typed birthday works out to, or null while it is unusable.
+   *
+   * Null rather than a guess for a half-typed date, a date in the future or a
+   * year nobody could have been born in: a field that flickers through "2026
+   * years old" as somebody types is worse than one that waits.
+   */
+  const ageFromBirthDate = (() => {
+    if (form.ageMode !== 'dob' || !form.birthDate) return null;
+
+    const born = new Date(form.birthDate);
+    if (Number.isNaN(born.getTime())) return null;
+
+    const now = new Date();
+    let years = now.getFullYear() - born.getFullYear();
+    const monthsIn = now.getMonth() - born.getMonth();
+    // Not yet had this year's birthday.
+    if (monthsIn < 0 || (monthsIn === 0 && now.getDate() < born.getDate())) years -= 1;
+
+    return years >= 0 && years <= 130 ? years : null;
+  })();
+
   const weak = duplicates.filter((d) => d.confidence === 'WEAK');
   const strong = duplicates.filter((d) => d.confidence === 'STRONG');
 
@@ -392,14 +414,32 @@ export default function RegisterPatientPage() {
                     placeholder="years"
                   />
                 ) : (
-                  <input
-                    aria-label="Date of birth"
-                    required
-                    type="date"
-                    value={form.birthDate}
-                    onChange={(e) => set('birthDate', e.target.value)}
-                    className="field-input w-48"
-                  />
+                  <>
+                    <input
+                      aria-label="Date of birth"
+                      required
+                      type="date"
+                      /* Nobody alive was born tomorrow, and a date in the future
+                         is the commonest slip on a keyboard-entered year. */
+                      max={new Date().toLocaleDateString('en-CA')}
+                      value={form.birthDate}
+                      onChange={(e) => set('birthDate', e.target.value)}
+                      className="field-input w-48"
+                    />
+                    {/*
+                      The age, as soon as there is a date to work it out from.
+                      Reported 28 Oct 2026: a receptionist entering a birthday
+                      had nothing to check it against, and a mistyped year looks
+                      exactly like a correct one until somebody reads the age.
+                      Said here rather than only after saving, which is where it
+                      used to appear.
+                    */}
+                    {ageFromBirthDate !== null && (
+                      <span className="text-[13px] text-ink-60" role="status" aria-live="polite">
+                        {ageFromBirthDate} years old
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
               <p className="field-hint">

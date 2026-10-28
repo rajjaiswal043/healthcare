@@ -251,6 +251,7 @@ describe('sending a patient for a test', () => {
     READY_TO_CLOSE: true,
     DONE: true,
     // Cancelled or a no-show. Nobody is chasing them around the clinic.
+    NOT_FINISHED: false,
     DID_NOT_COME: false,
     NOT_ATTENDING: false,
   };

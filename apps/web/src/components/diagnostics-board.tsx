@@ -178,6 +178,27 @@ const POLL_MS = 20000;
  * role can reach a patient's record (docs/09 section 4), but nothing on this
  * screen puts clinical history in front of somebody whose job is the film.
  */
+/**
+ * "Mon 27 Oct" when this was ordered before the day being looked at, else null.
+ *
+ * Compared as local dates rather than as instants, because "is this yesterday's
+ * work" is a question about days and not about the twenty-four hours before
+ * now. A test ordered at 11pm and read at 1am is still last night's.
+ */
+function carriedFrom(createdAt: string, shownDate: string): string | null {
+  if (!shownDate) return null;
+
+  const ordered = new Date(createdAt);
+  const orderedDay = ordered.toLocaleDateString('en-CA');
+  if (orderedDay >= shownDate) return null;
+
+  return ordered.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
 export function DiagnosticsBoard() {
   const { can, session } = useAuth();
   const params = useSearchParams();
@@ -377,6 +398,38 @@ export function DiagnosticsBoard() {
       setBusy(null);
       // Cleared so the same file can be chosen again after a failure.
       if (fileInput.current) fileInput.current.value = '';
+    }
+  }
+
+  /**
+   * Take a file back off this order.
+   *
+   * Asks for a reason and keeps it: the row survives with who removed it, when
+   * and why, because a report that was never this patient's sitting on their
+   * record is a fact somebody may have to answer for. Reported from the clinic
+   * on 28 Oct 2026, where a PDF went onto the wrong patient and nothing could
+   * take it off.
+   */
+  async function removeDocument(id: string, fileName: string) {
+    if (!openOrder) return;
+
+    const reason = window.prompt(
+      `Remove "${fileName}" from this report?\n\n` +
+        'Say why — it is kept with the record. For example: belongs to another patient.',
+    );
+    // Cancelled, or nothing typed. The server refuses a blank reason anyway.
+    if (reason === null || reason.trim() === '') return;
+
+    setBusy('remove');
+    setError(null);
+    try {
+      await api.removeDocument(id, reason.trim());
+      await openDetail(openOrder.id);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not remove that file.');
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -768,6 +821,25 @@ export function DiagnosticsBoard() {
                       {waitLabel(waited)}
                     </span>
                   )}
+
+                  {/*
+                    CARRIED OVER FROM AN EARLIER DAY.
+
+                    Outstanding work deliberately does not expire: a test
+                    ordered at six last night is still owed this morning, and a
+                    list that dropped it would lose the patient. But the card
+                    looked identical to one raised an hour ago, so the room read
+                    the board as showing the wrong day's work — reported 28 Oct
+                    2026. The list is right; it just never said so.
+
+                    Only against the day being looked at, so picking Tuesday
+                    does not label everything from Tuesday.
+                  */}
+                  {carriedFrom(tests[0]!.createdAt, shownDate) && (
+                    <span className="badge badge-neutral shrink-0">
+                      {`ordered ${carriedFrom(tests[0]!.createdAt, shownDate)}`}
+                    </span>
+                  )}
                 </div>
 
                 {/* --- what they are here for --------------------------- */}
@@ -915,13 +987,38 @@ export function DiagnosticsBoard() {
                           {Math.max(1, Math.round(d.sizeBytes / 1024))} KB
                         </span>
                       </span>
-                      <button
-                        type="button"
-                        className="shrink-0 text-[12.5px] font-semibold text-clinical-text underline underline-offset-2"
-                        onClick={() => void openDocument(d.id)}
-                      >
-                        Open
-                      </button>
+                      <span className="flex shrink-0 items-center gap-3">
+                        <button
+                          type="button"
+                          className="text-[12.5px] font-semibold text-clinical-text underline underline-offset-2"
+                          onClick={() => void openDocument(d.id)}
+                        >
+                          Open
+                        </button>
+                        {/*
+                          The way back from the wrong file, added 28 Oct 2026.
+                          There was no way to take a document off a patient at
+                          all, so a report uploaded against the wrong person
+                          stayed on their record for ever. Nothing can read a
+                          PDF and tell whose it is; this is what the software
+                          owes instead.
+
+                          A reason is asked for and kept: the row survives with
+                          who removed it and why, because "a report that was
+                          never this patient's was on their record for five
+                          minutes" is a fact somebody may have to answer for.
+                        */}
+                        {mayResult && (
+                          <button
+                            type="button"
+                            className="text-[12.5px] font-semibold text-coral-text underline underline-offset-2"
+                            disabled={busy !== null}
+                            onClick={() => void removeDocument(d.id, d.fileName)}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>

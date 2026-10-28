@@ -95,6 +95,21 @@ export class RescheduleAppointmentDto {
   @IsISO8601()
   startAt!: string;
 
+  /**
+   * A different doctor, when that is what was wrong.
+   *
+   * Optional: most moves are a change of time and keep the doctor, and
+   * omitting it means exactly that. Added 28 Oct 2026 because booking the
+   * wrong consultant was the one slip nothing could put right — not the front
+   * desk, not the administrator. The only way out was to cancel and book
+   * again, which costs the patient their token, raises a second consultation
+   * bill, and leaves a cancellation on their record for a mistake that was
+   * never theirs.
+   */
+  @IsOptional()
+  @IsUUID()
+  practitionerId?: string;
+
   @IsString()
   @MinLength(3)
   @MaxLength(300)

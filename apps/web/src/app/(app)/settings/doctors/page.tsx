@@ -194,7 +194,26 @@ export default function DoctorsPage() {
               <select
                 className="field-input mt-1"
                 value={form.userId}
-                onChange={(e) => setForm({ ...form, userId: e.target.value })}
+                /**
+                 * Picking a login fills the name, reported 28 Oct 2026: the
+                 * name was sitting in the option that had just been chosen and
+                 * still had to be retyped.
+                 *
+                 * Only when the field is empty. A doctor's name on a
+                 * prescription is not always their login's — "Dr V. Swarnkar"
+                 * against an account called "Vivek Swarnkar" — and typing
+                 * deliberately then picking a login must not undo the typing.
+                 */
+                onChange={(e) => {
+                  const userId = e.target.value;
+                  const chosen = linkable.find((u) => u.id === userId);
+
+                  setForm((f) => ({
+                    ...f,
+                    userId,
+                    fullName: f.fullName.trim() === '' && chosen ? chosen.fullName : f.fullName,
+                  }));
+                }}
               >
                 <option value="">Does not sign in</option>
                 {linkable.map((u) => (

@@ -191,7 +191,13 @@ export class DiagnosisInputDto {
   @MaxLength(16)
   code?: string;
 
+  /*
+   * The last narrative field without a rule, reported 28 Oct 2026: a diagnosis
+   * of "123" saved and printed. The ICD code fields above are deliberately
+   * left alone — a code legitimately has no letters in it.
+   */
   @IsString()
+  @IsClinicalText()
   @MinLength(2)
   @MaxLength(300)
   display!: string;
@@ -202,6 +208,7 @@ export class DiagnosisInputDto {
 
   @IsOptional()
   @IsString()
+  @IsClinicalText()
   @MaxLength(500)
   notes?: string;
 }
@@ -221,7 +228,13 @@ export class PrescriptionInputDto {
   @IsUUID()
   formularyItemId?: string;
 
+  /*
+   * A drug name has letters in it. "123456" was accepted and printed on a
+   * prescription, reported from the clinic on 28 Oct 2026. Two letters, any
+   * script, so "B12", "Vitamin D3" and a name written in Devanagari all pass.
+   */
   @IsString()
+  @IsClinicalText()
   @MinLength(2)
   @MaxLength(200)
   drugName!: string;
@@ -235,12 +248,20 @@ export class PrescriptionInputDto {
   @IsEnum(MedicationFormDto)
   form?: MedicationFormDto;
 
+  /*
+   * A dose is letters or digits — "500mg", "1-0-1", "5 ml", "SOS". The rule is
+   * deliberately weaker than the drug name's: dosing is written in a shorthand
+   * that is mostly numbers, so requiring letters would refuse the commonest
+   * forms. What it stops is "@@@###", which was accepted and printed.
+   */
   @IsString()
+  @Matches(/[\p{L}\p{N}]/u, { message: 'dose must contain a letter or a number' })
   @MinLength(1)
   @MaxLength(60)
   dose!: string;
 
   @IsString()
+  @Matches(/[\p{L}\p{N}]/u, { message: 'frequency must contain a letter or a number' })
   @MinLength(1)
   @MaxLength(60)
   frequency!: string;

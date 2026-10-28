@@ -526,6 +526,7 @@ model User {
 
   roles    UserRole[]
   uploadedDocuments ClinicalDocument[]
+  removedDocuments  ClinicalDocument[] @relation("DocumentRemovedBy")
   patientCorrections PatientCorrection[]
   diagnosticOrdersRaised    DiagnosticOrder[] @relation("DiagnosticOrdersRaised")
   diagnosticOrdersCompleted DiagnosticOrder[] @relation("DiagnosticOrdersCompleted")
@@ -1666,14 +1667,23 @@ model ClinicalDocument {
   uploadedByUserId String   @map("uploaded_by_user_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  /// Taken back — wrong patient, wrong file. All three together or none of
+  /// them, enforced by a CHECK. The row and the object both stay: see the
+  /// migration for why this is a removal and not a delete.
+  removedAt       DateTime? @map("removed_at") @db.Timestamptz(6)
+  removedByUserId String?   @map("removed_by_user_id") @db.Uuid
+  removalReason   String?   @map("removal_reason") @db.VarChar(300)
+
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "clinical_document_tenant_fkey")
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "clinical_document_patient_fkey")
   uploadedBy User  @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict, map: "clinical_document_uploader_fkey")
+  removedBy  User? @relation("DocumentRemovedBy", fields: [removedByUserId], references: [id], onDelete: Restrict, map: "clinical_document_remover_fkey")
   diagnosticOrder DiagnosticOrder? @relation(fields: [diagnosticOrderId], references: [id], onDelete: Restrict, map: "clinical_document_order_fkey")
 
   @@unique([objectKey], map: "clinical_document_object_key_key")
   @@index([tenantId, patientId, createdAt(sort: Desc)], map: "clinical_document_patient_idx")
   @@index([tenantId, diagnosticOrderId], map: "clinical_document_order_idx")
+  @@index([tenantId, patientId, createdAt(sort: Desc)], map: "clinical_document_live_idx")
   @@map("clinical_document")
 }
 

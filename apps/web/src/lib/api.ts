@@ -199,6 +199,22 @@ export interface ClinicRole {
   staffCount: number;
 }
 
+/**
+ * One test on a day-board row, and how far it has got.
+ *
+ * A visit can run through several departments — X-ray, then bloods, then
+ * physio — and the desk has to answer "where is this patient" and "what is
+ * left" from the row itself.
+ */
+export interface RowTest {
+  description: string;
+  department: string;
+  /** Reported and back. Nothing left for the patient to do for this one. */
+  done: boolean;
+  /** Money is stopping it: no result goes out against an unpaid bill. */
+  unpaid: boolean;
+}
+
 export type DayBucket =
   | 'EXPECTED'
   | 'WAITING'
@@ -211,6 +227,8 @@ export type DayBucket =
   | 'DONE'
   /** Booked for a day that has gone, never checked in. Nobody marked it. */
   | 'DID_NOT_COME'
+  /** Started on a day that has gone and never finished. They did arrive. */
+  | 'NOT_FINISHED'
   | 'NOT_ATTENDING';
 
 /** Where a bill stands, without saying how much. Null when nothing was charged. */
@@ -266,7 +284,14 @@ export type NextStep =
   | { kind: 'RECEIPT'; paymentId: string };
 
 export interface DayBoardRow {
-  patient: { id: string; name: string; uhid: string; ageYears: number | null; gender: string };
+  patient: {
+    id: string;
+    name: string;
+    uhid: string;
+    /** Already worked out from the age OR the birth date. The date is not sent. */
+    ageYears: number | null;
+    gender: string;
+  };
   bucket: DayBucket;
   /** The visit this row hangs off. Null for a walk-in test with no appointment. */
   appointmentId: string | null;
@@ -285,7 +310,7 @@ export interface DayBoardRow {
    * board could say somebody was at a department without saying which, and
    * never what test. The receptionist reads this row; the answer belongs on it.
    */
-  tests: string[];
+  tests: RowTest[];
   /** The department holding them. Null when no test is live. */
   testDepartment: string | null;
   time: string | null;
@@ -312,6 +337,7 @@ export interface DayBoard {
     ready_to_close: number;
     at_department: number;
     done: number;
+    not_finished: number;
     did_not_come: number;
     not_attending: number;
     total: number;
@@ -692,6 +718,7 @@ export interface DiagnosticOrder {
     name: string;
     uhid: string;
     gender: string;
+    /** Already worked out from the age OR the birth date. The date is not sent. */
     ageYears: number | null;
     mobile: string;
     /** Null means nothing recorded — see `allergiesReviewedAt` for which kind. */
@@ -1628,6 +1655,19 @@ export const api = {
     return res.url.startsWith('/') ? { ...res, url: `${API_BASE}${res.url}` } : res;
   },
 
+  /**
+   * Take a document back — wrong patient, wrong file.
+   *
+   * PATCH, not DELETE, because nothing is deleted: the row keeps who removed
+   * it, when and why, and the file stays in the bucket. It simply stops being
+   * shown anywhere. A reason is required.
+   */
+  removeDocument: (id: string, reason: string) =>
+    request<{ removed: boolean }>(`/documents/${id}/remove`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+
   /** The server's answer, unresolved. */
   documentUrlRaw: (id: string) =>
     request<{ url: string; expiresInSeconds: number; fileName: string; contentType: string }>(
@@ -1675,6 +1715,10 @@ export const api = {
     request<Appointment>(`/appointments/${id}/call`, { method: 'PATCH' }),
   completeVisit: (id: string) =>
     request<Appointment>(`/appointments/${id}/complete`, { method: 'PATCH' }),
+  /** They turned up after all. Back to booked, so check-in runs as normal. */
+  undoNoShow: (id: string) =>
+    request<Appointment>(`/appointments/${id}/undo-no-show`, { method: 'PATCH' }),
+
   markNoShow: (id: string) =>
     request<Appointment>(`/appointments/${id}/no-show`, { method: 'PATCH' }),
 
@@ -1712,10 +1756,18 @@ export const api = {
     ),
   revokeDisplay: (id: string) =>
     request<{ id: string; isActive: boolean }>(`/display-devices/${id}`, { method: 'DELETE' }),
-  rescheduleAppointment: (id: string, startAt: string, reason: string) =>
+  /**
+   * Move a booking to another time, another doctor, or both.
+   *
+   * `practitionerId` omitted keeps the doctor it was booked with, which is
+   * what an ordinary change of time means.
+   */
+  rescheduleAppointment: (id: string, startAt: string, reason: string, practitionerId?: string) =>
     request<Appointment>(`/appointments/${id}/reschedule`, {
       method: 'PATCH',
-      body: JSON.stringify({ startAt, reason }),
+      /* Absent rather than null when the doctor is unchanged: the DTO treats
+         an absent field as "keep the one it has". */
+      body: JSON.stringify({ startAt, reason, ...(practitionerId ? { practitionerId } : {}) }),
     }),
 
   cancelAppointment: (id: string, reason: string) =>
