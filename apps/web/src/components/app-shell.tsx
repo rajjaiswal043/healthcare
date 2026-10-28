@@ -53,9 +53,7 @@ const SECTIONS: NavSection[] = [
   {
     title: 'Front desk',
     items: [
-      /* `/home` since 28 Oct 2026: the bare domain is the public landing page
-         now, and the console moved off it. */
-      { key: 'home', label: 'Home', href: '/home', icon: <IconHome size={16} /> },
+      { key: 'home', label: 'Home', href: '/', icon: <IconHome size={16} /> },
       {
         key: 'queue',
         label: "Today's queue",
@@ -238,7 +236,7 @@ const SECTIONS: NavSection[] = [
  * Tables and boards, where an answer is scanned across a row rather than read
  * down a column. Everything else keeps the 1152px measure.
  */
-const WIDE_ROUTES = ['/home', '/finance', '/patients', '/queue', '/diagnostics'];
+const WIDE_ROUTES = ['/', '/finance', '/patients', '/queue', '/diagnostics'];
 
 function isWideRoute(pathname: string): boolean {
   // A patient record is wide too — its timeline and tables earn the space — and
@@ -448,7 +446,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             scrolling list, matching the one above Collapse. Between them they
             say which part of the rail moves. */}
         <div className="relative flex shrink-0 items-center justify-center border-b border-ink/8 px-3 py-4">
-          <Link href="/home" className="flex items-center" aria-label="Home">
+          <Link href="/" className="flex items-center" aria-label="Home">
             {/* The mark only. The name is written once, in the header, where
                 there is room for it — a real hospital name ("Dr Vivek Swarnkar
                 Ortho Clinic") truncates in a 280px rail no matter what, and at
@@ -660,7 +658,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               this line's position is unchanged from before the logo moved. */}
           <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 sm:flex">
             <Link
-              href="/home"
+              href="/"
               title={session.tenant.name}
               className="max-w-[40ch] shrink-0 truncate font-display text-[17px] font-extrabold tracking-display text-ink transition-colors hover:text-clinical-text"
             >

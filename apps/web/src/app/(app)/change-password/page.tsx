@@ -42,7 +42,7 @@ export default function ChangePasswordPage() {
       await api.changePassword(currentPassword, newPassword);
       // Re-read the session so the gate sees the cleared flag.
       await refresh();
-      router.replace('/home');
+      router.replace('/');
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not change it.');
       setBusy(false);

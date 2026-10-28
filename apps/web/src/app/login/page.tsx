@@ -125,9 +125,7 @@ export default function LoginPage() {
       }
 
       await refresh();
-      // The console, which moved off the bare domain when the landing page
-      // took it. Straight there rather than via `/`, which would only bounce.
-      router.replace('/home');
+      router.replace('/');
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not reach the server.');
     } finally {
