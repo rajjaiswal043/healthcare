@@ -284,6 +284,24 @@ export class SchedulingController {
     return this.appointments.complete(tenantId, id, metaFrom(req, user));
   }
 
+  /**
+   * They turned up after all. Same permission as marking it.
+   *
+   * Whoever may write a patient off is who finds them at the desk ten minutes
+   * later, and sending them to fetch somebody else is how the wrong record
+   * stays wrong.
+   */
+  @Patch('appointments/:id/undo-no-show')
+  @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
+  async undoNoShow(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.appointments.undoNoShow(tenantId, id, metaFrom(req, user));
+  }
+
   @Patch('appointments/:id/no-show')
   @RequirePermissions(PERMISSIONS.APPOINTMENT_WRITE)
   async noShow(

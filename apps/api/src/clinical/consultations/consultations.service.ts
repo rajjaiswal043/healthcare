@@ -674,11 +674,26 @@ export class ConsultationsService {
       });
       if (!current) throw new NotFoundException('Encounter not found');
 
+      /**
+       * SIGNED IS NO LONGER REQUIRED, changed 28 Oct 2026 after the clinic
+       * reported the two panels disagreeing.
+       *
+       * The tests panel above this one lists every completed test for the
+       * patient, whatever visit produced it. This one listed only SIGNED
+       * consultations. So a patient whose earlier visit was never signed — the
+       * doctor finished and moved on, which happens — saw a previous test at
+       * the top of the screen and "no previous visits" at the bottom, on the
+       * same patient, at the same moment.
+       *
+       * A visit that happened is a fact about the patient whether or not
+       * anybody signed the note. The draft is still marked as one on the way
+       * out, so a reader can tell the difference; what it must not do is claim
+       * the visit never happened.
+       */
       const rows = await tx.encounter.findMany({
         where: {
           patientId: current.patientId,
           id: { not: current.id },
-          status: 'SIGNED',
           startedAt: { lt: current.startedAt },
         },
         orderBy: { startedAt: 'desc' },
@@ -730,7 +745,11 @@ export class ConsultationsService {
             description: true,
             resultNote: true,
             department: { select: { name: true } },
-            documents: { select: { id: true, fileName: true }, orderBy: { createdAt: 'asc' } },
+            documents: {
+              where: { removedAt: null },
+              select: { id: true, fileName: true },
+              orderBy: { createdAt: 'asc' },
+            },
           },
         });
 

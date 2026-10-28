@@ -55,6 +55,9 @@ export type ClinicalDocumentMinAggregateOutputType = {
   diagnosticOrderId: string | null
   uploadedByUserId: string | null
   createdAt: Date | null
+  removedAt: Date | null
+  removedByUserId: string | null
+  removalReason: string | null
 }
 
 export type ClinicalDocumentMaxAggregateOutputType = {
@@ -68,6 +71,9 @@ export type ClinicalDocumentMaxAggregateOutputType = {
   diagnosticOrderId: string | null
   uploadedByUserId: string | null
   createdAt: Date | null
+  removedAt: Date | null
+  removedByUserId: string | null
+  removalReason: string | null
 }
 
 export type ClinicalDocumentCountAggregateOutputType = {
@@ -81,6 +87,9 @@ export type ClinicalDocumentCountAggregateOutputType = {
   diagnosticOrderId: number
   uploadedByUserId: number
   createdAt: number
+  removedAt: number
+  removedByUserId: number
+  removalReason: number
   _all: number
 }
 
@@ -104,6 +113,9 @@ export type ClinicalDocumentMinAggregateInputType = {
   diagnosticOrderId?: true
   uploadedByUserId?: true
   createdAt?: true
+  removedAt?: true
+  removedByUserId?: true
+  removalReason?: true
 }
 
 export type ClinicalDocumentMaxAggregateInputType = {
@@ -117,6 +129,9 @@ export type ClinicalDocumentMaxAggregateInputType = {
   diagnosticOrderId?: true
   uploadedByUserId?: true
   createdAt?: true
+  removedAt?: true
+  removedByUserId?: true
+  removalReason?: true
 }
 
 export type ClinicalDocumentCountAggregateInputType = {
@@ -130,6 +145,9 @@ export type ClinicalDocumentCountAggregateInputType = {
   diagnosticOrderId?: true
   uploadedByUserId?: true
   createdAt?: true
+  removedAt?: true
+  removedByUserId?: true
+  removalReason?: true
   _all?: true
 }
 
@@ -230,6 +248,9 @@ export type ClinicalDocumentGroupByOutputType = {
   diagnosticOrderId: string | null
   uploadedByUserId: string
   createdAt: Date
+  removedAt: Date | null
+  removedByUserId: string | null
+  removalReason: string | null
   _count: ClinicalDocumentCountAggregateOutputType | null
   _avg: ClinicalDocumentAvgAggregateOutputType | null
   _sum: ClinicalDocumentSumAggregateOutputType | null
@@ -266,9 +287,13 @@ export type ClinicalDocumentWhereInput = {
   diagnosticOrderId?: Prisma.UuidNullableFilter<"ClinicalDocument"> | string | null
   uploadedByUserId?: Prisma.UuidFilter<"ClinicalDocument"> | string
   createdAt?: Prisma.DateTimeFilter<"ClinicalDocument"> | Date | string
+  removedAt?: Prisma.DateTimeNullableFilter<"ClinicalDocument"> | Date | string | null
+  removedByUserId?: Prisma.UuidNullableFilter<"ClinicalDocument"> | string | null
+  removalReason?: Prisma.StringNullableFilter<"ClinicalDocument"> | string | null
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   uploadedBy?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  removedBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   diagnosticOrder?: Prisma.XOR<Prisma.DiagnosticOrderNullableScalarRelationFilter, Prisma.DiagnosticOrderWhereInput> | null
 }
 
@@ -283,9 +308,13 @@ export type ClinicalDocumentOrderByWithRelationInput = {
   diagnosticOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
   uploadedByUserId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  removedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  removedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  removalReason?: Prisma.SortOrderInput | Prisma.SortOrder
   tenant?: Prisma.TenantOrderByWithRelationInput
   patient?: Prisma.PatientOrderByWithRelationInput
   uploadedBy?: Prisma.UserOrderByWithRelationInput
+  removedBy?: Prisma.UserOrderByWithRelationInput
   diagnosticOrder?: Prisma.DiagnosticOrderOrderByWithRelationInput
 }
 
@@ -303,9 +332,13 @@ export type ClinicalDocumentWhereUniqueInput = Prisma.AtLeast<{
   diagnosticOrderId?: Prisma.UuidNullableFilter<"ClinicalDocument"> | string | null
   uploadedByUserId?: Prisma.UuidFilter<"ClinicalDocument"> | string
   createdAt?: Prisma.DateTimeFilter<"ClinicalDocument"> | Date | string
+  removedAt?: Prisma.DateTimeNullableFilter<"ClinicalDocument"> | Date | string | null
+  removedByUserId?: Prisma.UuidNullableFilter<"ClinicalDocument"> | string | null
+  removalReason?: Prisma.StringNullableFilter<"ClinicalDocument"> | string | null
   tenant?: Prisma.XOR<Prisma.TenantScalarRelationFilter, Prisma.TenantWhereInput>
   patient?: Prisma.XOR<Prisma.PatientScalarRelationFilter, Prisma.PatientWhereInput>
   uploadedBy?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
+  removedBy?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   diagnosticOrder?: Prisma.XOR<Prisma.DiagnosticOrderNullableScalarRelationFilter, Prisma.DiagnosticOrderWhereInput> | null
 }, "id" | "objectKey">
 
@@ -320,6 +353,9 @@ export type ClinicalDocumentOrderByWithAggregationInput = {
   diagnosticOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
   uploadedByUserId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  removedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  removedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  removalReason?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.ClinicalDocumentCountOrderByAggregateInput
   _avg?: Prisma.ClinicalDocumentAvgOrderByAggregateInput
   _max?: Prisma.ClinicalDocumentMaxOrderByAggregateInput
@@ -341,6 +377,9 @@ export type ClinicalDocumentScalarWhereWithAggregatesInput = {
   diagnosticOrderId?: Prisma.UuidNullableWithAggregatesFilter<"ClinicalDocument"> | string | null
   uploadedByUserId?: Prisma.UuidWithAggregatesFilter<"ClinicalDocument"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"ClinicalDocument"> | Date | string
+  removedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ClinicalDocument"> | Date | string | null
+  removedByUserId?: Prisma.UuidNullableWithAggregatesFilter<"ClinicalDocument"> | string | null
+  removalReason?: Prisma.StringNullableWithAggregatesFilter<"ClinicalDocument"> | string | null
 }
 
 export type ClinicalDocumentCreateInput = {
@@ -350,9 +389,12 @@ export type ClinicalDocumentCreateInput = {
   contentType: string
   sizeBytes: number
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
   tenant: Prisma.TenantCreateNestedOneWithoutClinicalDocumentsInput
   patient: Prisma.PatientCreateNestedOneWithoutDocumentsInput
   uploadedBy: Prisma.UserCreateNestedOneWithoutUploadedDocumentsInput
+  removedBy?: Prisma.UserCreateNestedOneWithoutRemovedDocumentsInput
   diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutDocumentsInput
 }
 
@@ -367,6 +409,9 @@ export type ClinicalDocumentUncheckedCreateInput = {
   diagnosticOrderId?: string | null
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentUpdateInput = {
@@ -376,9 +421,12 @@ export type ClinicalDocumentUpdateInput = {
   contentType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tenant?: Prisma.TenantUpdateOneRequiredWithoutClinicalDocumentsNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDocumentsNestedInput
   uploadedBy?: Prisma.UserUpdateOneRequiredWithoutUploadedDocumentsNestedInput
+  removedBy?: Prisma.UserUpdateOneWithoutRemovedDocumentsNestedInput
   diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutDocumentsNestedInput
 }
 
@@ -393,6 +441,9 @@ export type ClinicalDocumentUncheckedUpdateInput = {
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentCreateManyInput = {
@@ -406,6 +457,9 @@ export type ClinicalDocumentCreateManyInput = {
   diagnosticOrderId?: string | null
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentUpdateManyMutationInput = {
@@ -415,6 +469,8 @@ export type ClinicalDocumentUpdateManyMutationInput = {
   contentType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentUncheckedUpdateManyInput = {
@@ -428,6 +484,9 @@ export type ClinicalDocumentUncheckedUpdateManyInput = {
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentListRelationFilter = {
@@ -451,6 +510,9 @@ export type ClinicalDocumentCountOrderByAggregateInput = {
   diagnosticOrderId?: Prisma.SortOrder
   uploadedByUserId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  removedAt?: Prisma.SortOrder
+  removedByUserId?: Prisma.SortOrder
+  removalReason?: Prisma.SortOrder
 }
 
 export type ClinicalDocumentAvgOrderByAggregateInput = {
@@ -468,6 +530,9 @@ export type ClinicalDocumentMaxOrderByAggregateInput = {
   diagnosticOrderId?: Prisma.SortOrder
   uploadedByUserId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  removedAt?: Prisma.SortOrder
+  removedByUserId?: Prisma.SortOrder
+  removalReason?: Prisma.SortOrder
 }
 
 export type ClinicalDocumentMinOrderByAggregateInput = {
@@ -481,6 +546,9 @@ export type ClinicalDocumentMinOrderByAggregateInput = {
   diagnosticOrderId?: Prisma.SortOrder
   uploadedByUserId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  removedAt?: Prisma.SortOrder
+  removedByUserId?: Prisma.SortOrder
+  removalReason?: Prisma.SortOrder
 }
 
 export type ClinicalDocumentSumOrderByAggregateInput = {
@@ -578,10 +646,24 @@ export type ClinicalDocumentCreateNestedManyWithoutUploadedByInput = {
   connect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
 }
 
+export type ClinicalDocumentCreateNestedManyWithoutRemovedByInput = {
+  create?: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput> | Prisma.ClinicalDocumentCreateWithoutRemovedByInput[] | Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput[]
+  connectOrCreate?: Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput | Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput[]
+  createMany?: Prisma.ClinicalDocumentCreateManyRemovedByInputEnvelope
+  connect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+}
+
 export type ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput = {
   create?: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutUploadedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutUploadedByInput> | Prisma.ClinicalDocumentCreateWithoutUploadedByInput[] | Prisma.ClinicalDocumentUncheckedCreateWithoutUploadedByInput[]
   connectOrCreate?: Prisma.ClinicalDocumentCreateOrConnectWithoutUploadedByInput | Prisma.ClinicalDocumentCreateOrConnectWithoutUploadedByInput[]
   createMany?: Prisma.ClinicalDocumentCreateManyUploadedByInputEnvelope
+  connect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+}
+
+export type ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput = {
+  create?: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput> | Prisma.ClinicalDocumentCreateWithoutRemovedByInput[] | Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput[]
+  connectOrCreate?: Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput | Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput[]
+  createMany?: Prisma.ClinicalDocumentCreateManyRemovedByInputEnvelope
   connect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
 }
 
@@ -599,6 +681,20 @@ export type ClinicalDocumentUpdateManyWithoutUploadedByNestedInput = {
   deleteMany?: Prisma.ClinicalDocumentScalarWhereInput | Prisma.ClinicalDocumentScalarWhereInput[]
 }
 
+export type ClinicalDocumentUpdateManyWithoutRemovedByNestedInput = {
+  create?: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput> | Prisma.ClinicalDocumentCreateWithoutRemovedByInput[] | Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput[]
+  connectOrCreate?: Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput | Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput[]
+  upsert?: Prisma.ClinicalDocumentUpsertWithWhereUniqueWithoutRemovedByInput | Prisma.ClinicalDocumentUpsertWithWhereUniqueWithoutRemovedByInput[]
+  createMany?: Prisma.ClinicalDocumentCreateManyRemovedByInputEnvelope
+  set?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  disconnect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  delete?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  connect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  update?: Prisma.ClinicalDocumentUpdateWithWhereUniqueWithoutRemovedByInput | Prisma.ClinicalDocumentUpdateWithWhereUniqueWithoutRemovedByInput[]
+  updateMany?: Prisma.ClinicalDocumentUpdateManyWithWhereWithoutRemovedByInput | Prisma.ClinicalDocumentUpdateManyWithWhereWithoutRemovedByInput[]
+  deleteMany?: Prisma.ClinicalDocumentScalarWhereInput | Prisma.ClinicalDocumentScalarWhereInput[]
+}
+
 export type ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput = {
   create?: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutUploadedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutUploadedByInput> | Prisma.ClinicalDocumentCreateWithoutUploadedByInput[] | Prisma.ClinicalDocumentUncheckedCreateWithoutUploadedByInput[]
   connectOrCreate?: Prisma.ClinicalDocumentCreateOrConnectWithoutUploadedByInput | Prisma.ClinicalDocumentCreateOrConnectWithoutUploadedByInput[]
@@ -610,6 +706,20 @@ export type ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput = {
   connect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
   update?: Prisma.ClinicalDocumentUpdateWithWhereUniqueWithoutUploadedByInput | Prisma.ClinicalDocumentUpdateWithWhereUniqueWithoutUploadedByInput[]
   updateMany?: Prisma.ClinicalDocumentUpdateManyWithWhereWithoutUploadedByInput | Prisma.ClinicalDocumentUpdateManyWithWhereWithoutUploadedByInput[]
+  deleteMany?: Prisma.ClinicalDocumentScalarWhereInput | Prisma.ClinicalDocumentScalarWhereInput[]
+}
+
+export type ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput = {
+  create?: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput> | Prisma.ClinicalDocumentCreateWithoutRemovedByInput[] | Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput[]
+  connectOrCreate?: Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput | Prisma.ClinicalDocumentCreateOrConnectWithoutRemovedByInput[]
+  upsert?: Prisma.ClinicalDocumentUpsertWithWhereUniqueWithoutRemovedByInput | Prisma.ClinicalDocumentUpsertWithWhereUniqueWithoutRemovedByInput[]
+  createMany?: Prisma.ClinicalDocumentCreateManyRemovedByInputEnvelope
+  set?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  disconnect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  delete?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  connect?: Prisma.ClinicalDocumentWhereUniqueInput | Prisma.ClinicalDocumentWhereUniqueInput[]
+  update?: Prisma.ClinicalDocumentUpdateWithWhereUniqueWithoutRemovedByInput | Prisma.ClinicalDocumentUpdateWithWhereUniqueWithoutRemovedByInput[]
+  updateMany?: Prisma.ClinicalDocumentUpdateManyWithWhereWithoutRemovedByInput | Prisma.ClinicalDocumentUpdateManyWithWhereWithoutRemovedByInput[]
   deleteMany?: Prisma.ClinicalDocumentScalarWhereInput | Prisma.ClinicalDocumentScalarWhereInput[]
 }
 
@@ -662,8 +772,11 @@ export type ClinicalDocumentCreateWithoutTenantInput = {
   contentType: string
   sizeBytes: number
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
   patient: Prisma.PatientCreateNestedOneWithoutDocumentsInput
   uploadedBy: Prisma.UserCreateNestedOneWithoutUploadedDocumentsInput
+  removedBy?: Prisma.UserCreateNestedOneWithoutRemovedDocumentsInput
   diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutDocumentsInput
 }
 
@@ -677,6 +790,9 @@ export type ClinicalDocumentUncheckedCreateWithoutTenantInput = {
   diagnosticOrderId?: string | null
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentCreateOrConnectWithoutTenantInput = {
@@ -719,6 +835,9 @@ export type ClinicalDocumentScalarWhereInput = {
   diagnosticOrderId?: Prisma.UuidNullableFilter<"ClinicalDocument"> | string | null
   uploadedByUserId?: Prisma.UuidFilter<"ClinicalDocument"> | string
   createdAt?: Prisma.DateTimeFilter<"ClinicalDocument"> | Date | string
+  removedAt?: Prisma.DateTimeNullableFilter<"ClinicalDocument"> | Date | string | null
+  removedByUserId?: Prisma.UuidNullableFilter<"ClinicalDocument"> | string | null
+  removalReason?: Prisma.StringNullableFilter<"ClinicalDocument"> | string | null
 }
 
 export type ClinicalDocumentCreateWithoutPatientInput = {
@@ -728,8 +847,11 @@ export type ClinicalDocumentCreateWithoutPatientInput = {
   contentType: string
   sizeBytes: number
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
   tenant: Prisma.TenantCreateNestedOneWithoutClinicalDocumentsInput
   uploadedBy: Prisma.UserCreateNestedOneWithoutUploadedDocumentsInput
+  removedBy?: Prisma.UserCreateNestedOneWithoutRemovedDocumentsInput
   diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutDocumentsInput
 }
 
@@ -743,6 +865,9 @@ export type ClinicalDocumentUncheckedCreateWithoutPatientInput = {
   diagnosticOrderId?: string | null
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentCreateOrConnectWithoutPatientInput = {
@@ -778,8 +903,11 @@ export type ClinicalDocumentCreateWithoutUploadedByInput = {
   contentType: string
   sizeBytes: number
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
   tenant: Prisma.TenantCreateNestedOneWithoutClinicalDocumentsInput
   patient: Prisma.PatientCreateNestedOneWithoutDocumentsInput
+  removedBy?: Prisma.UserCreateNestedOneWithoutRemovedDocumentsInput
   diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutDocumentsInput
 }
 
@@ -793,6 +921,9 @@ export type ClinicalDocumentUncheckedCreateWithoutUploadedByInput = {
   sizeBytes: number
   diagnosticOrderId?: string | null
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentCreateOrConnectWithoutUploadedByInput = {
@@ -802,6 +933,46 @@ export type ClinicalDocumentCreateOrConnectWithoutUploadedByInput = {
 
 export type ClinicalDocumentCreateManyUploadedByInputEnvelope = {
   data: Prisma.ClinicalDocumentCreateManyUploadedByInput | Prisma.ClinicalDocumentCreateManyUploadedByInput[]
+  skipDuplicates?: boolean
+}
+
+export type ClinicalDocumentCreateWithoutRemovedByInput = {
+  id?: string
+  objectKey: string
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
+  tenant: Prisma.TenantCreateNestedOneWithoutClinicalDocumentsInput
+  patient: Prisma.PatientCreateNestedOneWithoutDocumentsInput
+  uploadedBy: Prisma.UserCreateNestedOneWithoutUploadedDocumentsInput
+  diagnosticOrder?: Prisma.DiagnosticOrderCreateNestedOneWithoutDocumentsInput
+}
+
+export type ClinicalDocumentUncheckedCreateWithoutRemovedByInput = {
+  id?: string
+  tenantId: string
+  patientId: string
+  objectKey: string
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  diagnosticOrderId?: string | null
+  uploadedByUserId: string
+  createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
+}
+
+export type ClinicalDocumentCreateOrConnectWithoutRemovedByInput = {
+  where: Prisma.ClinicalDocumentWhereUniqueInput
+  create: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput>
+}
+
+export type ClinicalDocumentCreateManyRemovedByInputEnvelope = {
+  data: Prisma.ClinicalDocumentCreateManyRemovedByInput | Prisma.ClinicalDocumentCreateManyRemovedByInput[]
   skipDuplicates?: boolean
 }
 
@@ -821,6 +992,22 @@ export type ClinicalDocumentUpdateManyWithWhereWithoutUploadedByInput = {
   data: Prisma.XOR<Prisma.ClinicalDocumentUpdateManyMutationInput, Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByInput>
 }
 
+export type ClinicalDocumentUpsertWithWhereUniqueWithoutRemovedByInput = {
+  where: Prisma.ClinicalDocumentWhereUniqueInput
+  update: Prisma.XOR<Prisma.ClinicalDocumentUpdateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedUpdateWithoutRemovedByInput>
+  create: Prisma.XOR<Prisma.ClinicalDocumentCreateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedCreateWithoutRemovedByInput>
+}
+
+export type ClinicalDocumentUpdateWithWhereUniqueWithoutRemovedByInput = {
+  where: Prisma.ClinicalDocumentWhereUniqueInput
+  data: Prisma.XOR<Prisma.ClinicalDocumentUpdateWithoutRemovedByInput, Prisma.ClinicalDocumentUncheckedUpdateWithoutRemovedByInput>
+}
+
+export type ClinicalDocumentUpdateManyWithWhereWithoutRemovedByInput = {
+  where: Prisma.ClinicalDocumentScalarWhereInput
+  data: Prisma.XOR<Prisma.ClinicalDocumentUpdateManyMutationInput, Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByInput>
+}
+
 export type ClinicalDocumentCreateWithoutDiagnosticOrderInput = {
   id?: string
   objectKey: string
@@ -828,9 +1015,12 @@ export type ClinicalDocumentCreateWithoutDiagnosticOrderInput = {
   contentType: string
   sizeBytes: number
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
   tenant: Prisma.TenantCreateNestedOneWithoutClinicalDocumentsInput
   patient: Prisma.PatientCreateNestedOneWithoutDocumentsInput
   uploadedBy: Prisma.UserCreateNestedOneWithoutUploadedDocumentsInput
+  removedBy?: Prisma.UserCreateNestedOneWithoutRemovedDocumentsInput
 }
 
 export type ClinicalDocumentUncheckedCreateWithoutDiagnosticOrderInput = {
@@ -843,6 +1033,9 @@ export type ClinicalDocumentUncheckedCreateWithoutDiagnosticOrderInput = {
   sizeBytes: number
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentCreateOrConnectWithoutDiagnosticOrderInput = {
@@ -881,6 +1074,9 @@ export type ClinicalDocumentCreateManyTenantInput = {
   diagnosticOrderId?: string | null
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentUpdateWithoutTenantInput = {
@@ -890,8 +1086,11 @@ export type ClinicalDocumentUpdateWithoutTenantInput = {
   contentType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   patient?: Prisma.PatientUpdateOneRequiredWithoutDocumentsNestedInput
   uploadedBy?: Prisma.UserUpdateOneRequiredWithoutUploadedDocumentsNestedInput
+  removedBy?: Prisma.UserUpdateOneWithoutRemovedDocumentsNestedInput
   diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutDocumentsNestedInput
 }
 
@@ -905,6 +1104,9 @@ export type ClinicalDocumentUncheckedUpdateWithoutTenantInput = {
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentUncheckedUpdateManyWithoutTenantInput = {
@@ -917,6 +1119,9 @@ export type ClinicalDocumentUncheckedUpdateManyWithoutTenantInput = {
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentCreateManyPatientInput = {
@@ -929,6 +1134,9 @@ export type ClinicalDocumentCreateManyPatientInput = {
   diagnosticOrderId?: string | null
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentUpdateWithoutPatientInput = {
@@ -938,8 +1146,11 @@ export type ClinicalDocumentUpdateWithoutPatientInput = {
   contentType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tenant?: Prisma.TenantUpdateOneRequiredWithoutClinicalDocumentsNestedInput
   uploadedBy?: Prisma.UserUpdateOneRequiredWithoutUploadedDocumentsNestedInput
+  removedBy?: Prisma.UserUpdateOneWithoutRemovedDocumentsNestedInput
   diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutDocumentsNestedInput
 }
 
@@ -953,6 +1164,9 @@ export type ClinicalDocumentUncheckedUpdateWithoutPatientInput = {
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentUncheckedUpdateManyWithoutPatientInput = {
@@ -965,6 +1179,9 @@ export type ClinicalDocumentUncheckedUpdateManyWithoutPatientInput = {
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentCreateManyUploadedByInput = {
@@ -977,6 +1194,24 @@ export type ClinicalDocumentCreateManyUploadedByInput = {
   sizeBytes: number
   diagnosticOrderId?: string | null
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
+}
+
+export type ClinicalDocumentCreateManyRemovedByInput = {
+  id?: string
+  tenantId: string
+  patientId: string
+  objectKey: string
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  diagnosticOrderId?: string | null
+  uploadedByUserId: string
+  createdAt?: Date | string
+  removedAt?: Date | string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentUpdateWithoutUploadedByInput = {
@@ -986,8 +1221,11 @@ export type ClinicalDocumentUpdateWithoutUploadedByInput = {
   contentType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tenant?: Prisma.TenantUpdateOneRequiredWithoutClinicalDocumentsNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDocumentsNestedInput
+  removedBy?: Prisma.UserUpdateOneWithoutRemovedDocumentsNestedInput
   diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutDocumentsNestedInput
 }
 
@@ -1001,6 +1239,9 @@ export type ClinicalDocumentUncheckedUpdateWithoutUploadedByInput = {
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentUncheckedUpdateManyWithoutUploadedByInput = {
@@ -1013,6 +1254,54 @@ export type ClinicalDocumentUncheckedUpdateManyWithoutUploadedByInput = {
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type ClinicalDocumentUpdateWithoutRemovedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  objectKey?: Prisma.StringFieldUpdateOperationsInput | string
+  fileName?: Prisma.StringFieldUpdateOperationsInput | string
+  contentType?: Prisma.StringFieldUpdateOperationsInput | string
+  sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutClinicalDocumentsNestedInput
+  patient?: Prisma.PatientUpdateOneRequiredWithoutDocumentsNestedInput
+  uploadedBy?: Prisma.UserUpdateOneRequiredWithoutUploadedDocumentsNestedInput
+  diagnosticOrder?: Prisma.DiagnosticOrderUpdateOneWithoutDocumentsNestedInput
+}
+
+export type ClinicalDocumentUncheckedUpdateWithoutRemovedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  objectKey?: Prisma.StringFieldUpdateOperationsInput | string
+  fileName?: Prisma.StringFieldUpdateOperationsInput | string
+  contentType?: Prisma.StringFieldUpdateOperationsInput | string
+  sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
+  diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type ClinicalDocumentUncheckedUpdateManyWithoutRemovedByInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  objectKey?: Prisma.StringFieldUpdateOperationsInput | string
+  fileName?: Prisma.StringFieldUpdateOperationsInput | string
+  contentType?: Prisma.StringFieldUpdateOperationsInput | string
+  sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
+  diagnosticOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentCreateManyDiagnosticOrderInput = {
@@ -1025,6 +1314,9 @@ export type ClinicalDocumentCreateManyDiagnosticOrderInput = {
   sizeBytes: number
   uploadedByUserId: string
   createdAt?: Date | string
+  removedAt?: Date | string | null
+  removedByUserId?: string | null
+  removalReason?: string | null
 }
 
 export type ClinicalDocumentUpdateWithoutDiagnosticOrderInput = {
@@ -1034,9 +1326,12 @@ export type ClinicalDocumentUpdateWithoutDiagnosticOrderInput = {
   contentType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tenant?: Prisma.TenantUpdateOneRequiredWithoutClinicalDocumentsNestedInput
   patient?: Prisma.PatientUpdateOneRequiredWithoutDocumentsNestedInput
   uploadedBy?: Prisma.UserUpdateOneRequiredWithoutUploadedDocumentsNestedInput
+  removedBy?: Prisma.UserUpdateOneWithoutRemovedDocumentsNestedInput
 }
 
 export type ClinicalDocumentUncheckedUpdateWithoutDiagnosticOrderInput = {
@@ -1049,6 +1344,9 @@ export type ClinicalDocumentUncheckedUpdateWithoutDiagnosticOrderInput = {
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ClinicalDocumentUncheckedUpdateManyWithoutDiagnosticOrderInput = {
@@ -1061,6 +1359,9 @@ export type ClinicalDocumentUncheckedUpdateManyWithoutDiagnosticOrderInput = {
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
   uploadedByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  removedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  removedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  removalReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 
@@ -1076,9 +1377,13 @@ export type ClinicalDocumentSelect<ExtArgs extends runtime.Types.Extensions.Inte
   diagnosticOrderId?: boolean
   uploadedByUserId?: boolean
   createdAt?: boolean
+  removedAt?: boolean
+  removedByUserId?: boolean
+  removalReason?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   uploadedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  removedBy?: boolean | Prisma.ClinicalDocument$removedByArgs<ExtArgs>
   diagnosticOrder?: boolean | Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs>
 }, ExtArgs["result"]["clinicalDocument"]>
 
@@ -1093,9 +1398,13 @@ export type ClinicalDocumentSelectCreateManyAndReturn<ExtArgs extends runtime.Ty
   diagnosticOrderId?: boolean
   uploadedByUserId?: boolean
   createdAt?: boolean
+  removedAt?: boolean
+  removedByUserId?: boolean
+  removalReason?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   uploadedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  removedBy?: boolean | Prisma.ClinicalDocument$removedByArgs<ExtArgs>
   diagnosticOrder?: boolean | Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs>
 }, ExtArgs["result"]["clinicalDocument"]>
 
@@ -1110,9 +1419,13 @@ export type ClinicalDocumentSelectUpdateManyAndReturn<ExtArgs extends runtime.Ty
   diagnosticOrderId?: boolean
   uploadedByUserId?: boolean
   createdAt?: boolean
+  removedAt?: boolean
+  removedByUserId?: boolean
+  removalReason?: boolean
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   uploadedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  removedBy?: boolean | Prisma.ClinicalDocument$removedByArgs<ExtArgs>
   diagnosticOrder?: boolean | Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs>
 }, ExtArgs["result"]["clinicalDocument"]>
 
@@ -1127,25 +1440,31 @@ export type ClinicalDocumentSelectScalar = {
   diagnosticOrderId?: boolean
   uploadedByUserId?: boolean
   createdAt?: boolean
+  removedAt?: boolean
+  removedByUserId?: boolean
+  removalReason?: boolean
 }
 
-export type ClinicalDocumentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "objectKey" | "fileName" | "contentType" | "sizeBytes" | "diagnosticOrderId" | "uploadedByUserId" | "createdAt", ExtArgs["result"]["clinicalDocument"]>
+export type ClinicalDocumentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "patientId" | "objectKey" | "fileName" | "contentType" | "sizeBytes" | "diagnosticOrderId" | "uploadedByUserId" | "createdAt" | "removedAt" | "removedByUserId" | "removalReason", ExtArgs["result"]["clinicalDocument"]>
 export type ClinicalDocumentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   uploadedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  removedBy?: boolean | Prisma.ClinicalDocument$removedByArgs<ExtArgs>
   diagnosticOrder?: boolean | Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs>
 }
 export type ClinicalDocumentIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   uploadedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  removedBy?: boolean | Prisma.ClinicalDocument$removedByArgs<ExtArgs>
   diagnosticOrder?: boolean | Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs>
 }
 export type ClinicalDocumentIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
   uploadedBy?: boolean | Prisma.UserDefaultArgs<ExtArgs>
+  removedBy?: boolean | Prisma.ClinicalDocument$removedByArgs<ExtArgs>
   diagnosticOrder?: boolean | Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs>
 }
 
@@ -1155,6 +1474,7 @@ export type $ClinicalDocumentPayload<ExtArgs extends runtime.Types.Extensions.In
     tenant: Prisma.$TenantPayload<ExtArgs>
     patient: Prisma.$PatientPayload<ExtArgs>
     uploadedBy: Prisma.$UserPayload<ExtArgs>
+    removedBy: Prisma.$UserPayload<ExtArgs> | null
     diagnosticOrder: Prisma.$DiagnosticOrderPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -1180,6 +1500,14 @@ export type $ClinicalDocumentPayload<ExtArgs extends runtime.Types.Extensions.In
     diagnosticOrderId: string | null
     uploadedByUserId: string
     createdAt: Date
+    /**
+     * Taken back — wrong patient, wrong file. All three together or none of
+     * them, enforced by a CHECK. The row and the object both stay: see the
+     * migration for why this is a removal and not a delete.
+     */
+    removedAt: Date | null
+    removedByUserId: string | null
+    removalReason: string | null
   }, ExtArgs["result"]["clinicalDocument"]>
   composites: {}
 }
@@ -1577,6 +1905,7 @@ export interface Prisma__ClinicalDocumentClient<T, Null = never, ExtArgs extends
   tenant<T extends Prisma.TenantDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TenantDefaultArgs<ExtArgs>>): Prisma.Prisma__TenantClient<runtime.Types.Result.GetResult<Prisma.$TenantPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   patient<T extends Prisma.PatientDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.PatientDefaultArgs<ExtArgs>>): Prisma.Prisma__PatientClient<runtime.Types.Result.GetResult<Prisma.$PatientPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   uploadedBy<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  removedBy<T extends Prisma.ClinicalDocument$removedByArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ClinicalDocument$removedByArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   diagnosticOrder<T extends Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ClinicalDocument$diagnosticOrderArgs<ExtArgs>>): Prisma.Prisma__DiagnosticOrderClient<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -1617,6 +1946,9 @@ export interface ClinicalDocumentFieldRefs {
   readonly diagnosticOrderId: Prisma.FieldRef<"ClinicalDocument", 'String'>
   readonly uploadedByUserId: Prisma.FieldRef<"ClinicalDocument", 'String'>
   readonly createdAt: Prisma.FieldRef<"ClinicalDocument", 'DateTime'>
+  readonly removedAt: Prisma.FieldRef<"ClinicalDocument", 'DateTime'>
+  readonly removedByUserId: Prisma.FieldRef<"ClinicalDocument", 'String'>
+  readonly removalReason: Prisma.FieldRef<"ClinicalDocument", 'String'>
 }
     
 
@@ -2015,6 +2347,25 @@ export type ClinicalDocumentDeleteManyArgs<ExtArgs extends runtime.Types.Extensi
    * Limit how many ClinicalDocuments to delete.
    */
   limit?: number
+}
+
+/**
+ * ClinicalDocument.removedBy
+ */
+export type ClinicalDocument$removedByArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the User
+   */
+  select?: Prisma.UserSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the User
+   */
+  omit?: Prisma.UserOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.UserInclude<ExtArgs> | null
+  where?: Prisma.UserWhereInput
 }
 
 /**

@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { looksLikeClinicalText } from '../is-clinical-text.decorator.js';
+import { looksLikeAReport, looksLikeClinicalText } from '../is-clinical-text.decorator.js';
 
 describe('looksLikeClinicalText', () => {
   it.each([
@@ -36,5 +36,37 @@ describe('looksLikeClinicalText', () => {
     expect(looksLikeClinicalText(123)).toBe(false);
     expect(looksLikeClinicalText(null)).toBe(false);
     expect(looksLikeClinicalText(undefined)).toBe(false);
+  });
+});
+
+/**
+ * A diagnostic report says something.
+ *
+ * Three letters, not two, which is the whole difference from the rule above:
+ * "EE" was accepted as a complete X-ray report, reported 28 Oct 2026.
+ */
+describe('looksLikeAReport', () => {
+  it.each([
+    ['NAD', 'no abnormality detected — three letters and a real report'],
+    ['Normal', 'a complete report on its own'],
+    ['No fracture seen.', 'the ordinary case'],
+    ['', 'blank: the result is the image, and the service refuses file-less notes'],
+  ])('accepts %j — %s', (value) => {
+    expect(looksLikeAReport(value)).toBe(true);
+  });
+
+  it.each([
+    ['EE', 'the reported defect'],
+    ['A', 'one letter'],
+    ['12', 'no letters at all'],
+    ['...', 'filling the box to get past it'],
+  ])('refuses %j — %s', (value) => {
+    expect(looksLikeAReport(value)).toBe(false);
+  });
+
+  it('cannot make a report meaningful, and does not pretend to', () => {
+    // Said out loud so nobody reads this rule as a quality check. What stops
+    // "AAAA" is the doctor who reads the report.
+    expect(looksLikeAReport('AAAA')).toBe(true);
   });
 });

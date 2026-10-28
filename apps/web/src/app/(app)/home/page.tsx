@@ -12,6 +12,7 @@ import {
   type FeeTag,
   type Invoice,
   type NextStep,
+  type RowTest,
 } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { Pagination } from '@/components/pagination';
@@ -63,6 +64,7 @@ const COUNT_KEY: Record<DayBucket, keyof DayBoard['counts']> = {
   BACK_FROM_TESTS: 'back_from_tests',
   READY_TO_CLOSE: 'ready_to_close',
   DONE: 'done',
+  NOT_FINISHED: 'not_finished',
   DID_NOT_COME: 'did_not_come',
   NOT_ATTENDING: 'not_attending',
 };
@@ -75,6 +77,7 @@ const BUCKET_LABEL: Record<DayBucket, string> = {
   BACK_FROM_TESTS: 'Back from tests',
   READY_TO_CLOSE: 'Ready to close',
   DONE: 'Done',
+  NOT_FINISHED: 'Not finished',
   DID_NOT_COME: 'Did not come',
   NOT_ATTENDING: 'Not attending',
 };
@@ -104,6 +107,46 @@ const BUCKET_LABEL: Record<DayBucket, string> = {
  * Every tint is held under a tenth so text contrast is untouched, and the Stage
  * chip still carries the word for anybody who cannot separate two of them.
  */
+/**
+ * What a patient still has to get through, test by test.
+ *
+ * ONE VISIT CAN CROSS SEVERAL DEPARTMENTS — an X-ray, then bloods, then physio
+ * — and the row used to name only the FIRST department ordered, for the whole
+ * visit. The board said "X-ray" while the patient stood in pathology. Reported
+ * from the clinic, 28 Oct 2026.
+ *
+ * So the heading is where they are due NOW, and each test carries its own
+ * state. A tick is one that is back; a name on its own is one still running;
+ * and UNPAID is called out because it is the one the desk can actually fix —
+ * no department releases a result against an unpaid bill, so that test is not
+ * merely owed for, it is stopped.
+ *
+ * Shared by the table and the phone card deliberately. Two copies of this is
+ * two places for the same row to say different things.
+ */
+function TestLines({ tests, department }: { tests: RowTest[]; department: string | null }) {
+  if (tests.length === 0) return null;
+
+  return (
+    <span className="mt-0.5 block text-[12px] text-ink-40">
+      {department && (
+        <span className="font-semibold text-ink-60">
+          {department}
+          {' \u00b7 '}
+        </span>
+      )}
+      {tests.map((t, i) => (
+        <span key={`${t.description}-${i}`}>
+          {i > 0 && ', '}
+          {t.done && <span className="text-iris-text">{'\u2713 '}</span>}
+          <span className={t.done ? 'text-ink-20 line-through' : ''}>{t.description}</span>
+          {t.unpaid && <span className="font-semibold text-coral-text">{' unpaid'}</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const ROW_TONE: Partial<Record<DayBucket, string>> = {
   WAITING: 'bg-amber-soft/35 hover:bg-amber-soft/55',
   WITH_DOCTOR: 'bg-clinical-tint/60 hover:bg-clinical-tint/80',
@@ -121,6 +164,7 @@ const ROW_TONE: Partial<Record<DayBucket, string>> = {
   /* Quieter than everything above it. Nothing happened in this row, and it
      must not pull the eye away from the rows where something did. */
   DID_NOT_COME: 'bg-ink/[0.03] hover:bg-ink/[0.06]',
+  NOT_FINISHED: 'bg-amber-soft/30 hover:bg-amber-soft/50',
 };
 
 /**
@@ -148,6 +192,10 @@ const BUCKET_TONE: Record<DayBucket, string> = {
      this is the one stage that means nothing happened. Soft rather than loud,
      because it is a fact about a past day, not a problem to act on. */
   DID_NOT_COME: 'bg-coral-soft text-coral-text',
+  /* Amber, the colour of something still waiting on somebody — which is what
+     an unclosed visit is, even a day later. Not coral: nothing went wrong
+     clinically, the paperwork was just never done. */
+  NOT_FINISHED: 'bg-amber-soft text-amber-text',
   NOT_ATTENDING: 'bg-ink/8 text-ink-20',
 };
 
@@ -913,9 +961,7 @@ function DayBoardScreen() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-60">
-                        {r.patient.ageYears === null
-                          ? '—'
-                          : formatAge({ ageYears: r.patient.ageYears, birthDate: null })}
+                        {r.patient.ageYears === null ? '—' : formatAge(r.patient)}
                         {' · '}
                         {genderInitial(r.patient.gender)}
                       </td>
@@ -929,18 +975,7 @@ function DayBoardScreen() {
                           desk is the one pointing the patient down the
                           corridor.
                         */}
-                        {r.tests.length > 0 && (
-                          <span className="mt-0.5 block text-[12px] text-ink-40">
-                            {r.testDepartment && (
-                              <span className="font-semibold text-ink-60">
-                                {r.testDepartment}
-                                {' · '}
-                              </span>
-                            )}
-                            {r.tests[0]}
-                            {r.tests.length > 1 && ` and ${r.tests.length - 1} more`}
-                          </span>
-                        )}
+                        <TestLines tests={r.tests} department={r.testDepartment} />
                       </td>
                       <td className="px-4 py-3">
                         <span className="flex flex-wrap gap-1.5">
@@ -1368,24 +1403,12 @@ function DayBoardCard({
             {row.patient.ageYears !== null && (
               <>
                 {' · '}
-                {formatAge({ ageYears: row.patient.ageYears, birthDate: null })}{' '}
-                {genderInitial(row.patient.gender)}
+                {formatAge(row.patient)} {genderInitial(row.patient.gender)}
               </>
             )}
             {row.withWhom ? ` · ${row.withWhom}` : ''}
             {/* Same answer as the table's, on the layout a phone gets. */}
-            {row.tests.length > 0 && (
-              <span className="mt-0.5 block text-[12px] text-ink-40">
-                {row.testDepartment && (
-                  <span className="font-semibold text-ink-60">
-                    {row.testDepartment}
-                    {' · '}
-                  </span>
-                )}
-                {row.tests[0]}
-                {row.tests.length > 1 && ` and ${row.tests.length - 1} more`}
-              </span>
-            )}
+            <TestLines tests={row.tests} department={row.testDepartment} />
           </p>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

@@ -27,6 +27,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { IsReportText } from '../../common/is-clinical-text.decorator.js';
 import type { FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
@@ -209,6 +210,7 @@ class CompleteOrderDto {
    */
   @IsOptional()
   @IsString()
+  @IsReportText()
   @MaxLength(2000)
   resultNote?: string;
 }

@@ -15,6 +15,41 @@ export function looksLikeClinicalText(value: unknown): boolean {
 }
 
 /**
+ * A diagnostic report says something.
+ *
+ * Three letters rather than two, which is the whole difference from
+ * `looksLikeClinicalText`: "EE" was accepted as a complete X-ray report and
+ * reported from the clinic on 28 Oct 2026. Three lets through the short reports
+ * a radiologist genuinely writes — NAD, "Normal" — and stops a keyboard mash.
+ *
+ * It cannot make a report MEANINGFUL. "AAAA" passes this and passes any rule
+ * that could reasonably be written; what stops that is the doctor who reads it.
+ */
+export function looksLikeAReport(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  // Blank is a result that is an image and nothing else, which is legitimate:
+  // the service refuses an order with neither a file nor a note.
+  if (value.trim() === '') return true;
+
+  return (value.match(/\p{L}/gu) ?? []).length >= 3;
+}
+
+export function IsReportText(options?: ValidationOptions) {
+  return function (object: object, propertyName: string): void {
+    registerDecorator({
+      name: 'isReportText',
+      target: object.constructor,
+      propertyName,
+      options: options ?? {},
+      validator: {
+        validate: (value: unknown) => looksLikeAReport(value),
+        defaultMessage: () => 'needs at least three letters in it',
+      },
+    });
+  };
+}
+
+/**
  * A clinical narrative has words in it.
  *
  * `@IsString() @MaxLength()` accepted "123" as a chief complaint, reported by

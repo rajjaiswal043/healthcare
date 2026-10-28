@@ -45,12 +45,14 @@ let orderedByUserId: string;
 interface Row {
   patient: { id: string; name: string; uhid: string };
   bucket: string;
+  /** The visit this row acts on. Null for a walk-in test with no appointment. */
+  appointmentId: string | null;
   hasVisit: boolean;
   hasTest: boolean;
   opdDone: boolean;
   testsDoneIn: string | null;
   /** What they were sent for, and where — the receptionist reads this row. */
-  tests: string[];
+  tests: Array<{ description: string; department: string; done: boolean; unpaid: boolean }>;
   testDepartment: string | null;
   token: number | null;
   withWhom: string | null;
@@ -204,6 +206,29 @@ async function test(status: string, patientIndex = 0, appointmentId: string | nu
       appointmentId,
     ],
   );
+
+  // Handed back so a test can finish one of several orders. Ignored by the
+  // callers that only need the order to exist.
+  const [latest] = await ownerQuery<{ id: string }>(
+    fx.main.id,
+    `SELECT id FROM diagnostic_order WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [fx.main.id],
+  );
+
+  return latest!.id;
+}
+
+/** Mark an order reported, the way the table insists it be attributed. */
+async function finish(orderId: string) {
+  await ownerQuery(
+    fx.main.id,
+    `UPDATE diagnostic_order
+        SET status = 'COMPLETED',
+            completed_at = now(),
+            completed_by_user_id = $2::uuid
+      WHERE id = $1::uuid`,
+    [orderId, orderedByUserId],
+  );
 }
 
 describe('where a patient sits on the board', () => {
@@ -295,8 +320,48 @@ describe('a patient with both a visit and a test', () => {
 
     const [row] = (await board()).rows;
 
-    expect(row!.tests).toEqual(['Knee X-ray']);
+    expect(row!.tests).toEqual([
+      { description: 'Knee X-ray', department: 'Board X-ray', done: false, unpaid: false },
+    ]);
     expect(row!.testDepartment).toBe('Board X-ray');
+  });
+
+  /**
+   * One visit, several tests, and they finish one at a time.
+   *
+   * Reported from the clinic on 28 Oct 2026: an X-ray, then bloods, then
+   * physio. The row carried a flat list of names, so it could not say which
+   * were back — and the desk is the one pointing the patient down the
+   * corridor.
+   */
+  it('says which tests are back and which are still running', async () => {
+    await visit('AWAITING_TESTS', 0);
+    const first = await test('PENDING', 0);
+    await test('PENDING', 0);
+
+    await finish(first);
+
+    const [row] = (await board()).rows;
+
+    expect(row!.tests.map((t) => t.done)).toEqual([true, false]);
+    // Still somewhere to send them, because one is still running.
+    expect(row!.testDepartment).toBe('Board X-ray');
+  });
+
+  it('has nowhere left to send them once every test is back', async () => {
+    await visit('AWAITING_TESTS', 0);
+    const only = await test('PENDING', 0);
+
+    await finish(only);
+
+    const [row] = (await board()).rows;
+
+    /*
+     * Null, and the row has moved on. It used to name the first department
+     * ordered for the whole visit, long after there was anything to do there.
+     */
+    expect(row!.testDepartment).toBeNull();
+    expect(row!.bucket).toBe('BACK_FROM_TESTS');
   });
 
   it('leaves them empty for a patient with no test', async () => {
@@ -1092,7 +1157,7 @@ describe('what a row says to do next', () => {
      * the same act the finance desk's own Decline button has always done,
      * which leaves a credit on the bill for finance to settle.
      */
-    expect(kinds(after)).toEqual(['RECORD_RESULT', 'DECLINE_TEST']);
+    expect(kinds(after)).toEqual(['RECORD_RESULT']);
     expect(after.nextSteps[0]!.orderId).toBe(orderId);
   });
 
@@ -1235,6 +1300,59 @@ describe('what a row says to do next', () => {
  * is inferred from the date instead, which fixes every past day already in the
  * database without touching a row.
  */
+/**
+ * A patient seen twice in one day.
+ *
+ * Reported from the clinic on 28 Oct 2026: "Close visit says it is already
+ * closed, but the patient is still on the board". The row took whichever
+ * appointment the database returned first, so its STAGE could come from the
+ * live visit and its ID from the closed one. Closing then answered about a
+ * visit nobody was looking at, and the row stayed because the other was open.
+ *
+ * The id is the target of every action on the row, not just the close button.
+ */
+describe('a patient with two visits in one day', () => {
+  async function closedVisit() {
+    const id = await visit('FULFILLED', 0, -3);
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE appointment SET closed_at = now(), closed_by_user_id = $2::uuid WHERE id = $1::uuid`,
+      [id, orderedByUserId],
+    );
+    return id;
+  }
+
+  it('acts on the visit that is still open, not the closed one', async () => {
+    await closedVisit();
+    const live = await visit('FULFILLED', 0, 1);
+
+    const [row] = (await board()).rows;
+
+    // Ready to close comes from the open visit, so the id must too.
+    expect(row!.bucket).toBe('READY_TO_CLOSE');
+    expect(row!.appointmentId).toBe(live);
+  });
+
+  it('prefers a visit in progress over one the doctor has finished', async () => {
+    await visit('FULFILLED', 0, -2);
+    const inRoom = await visit('IN_PROGRESS', 0, 1);
+
+    const [row] = (await board()).rows;
+
+    expect(row!.bucket).toBe('WITH_DOCTOR');
+    expect(row!.appointmentId).toBe(inRoom);
+  });
+
+  it('falls back to the closed visit when there is nothing else', async () => {
+    const only = await closedVisit();
+
+    const [row] = (await board()).rows;
+
+    expect(row!.bucket).toBe('DONE');
+    expect(row!.appointmentId).toBe(only);
+  });
+});
+
 describe('a visit nobody attended', () => {
   const stepKinds = (row: Row) => row.nextSteps.map((s) => s.kind);
 

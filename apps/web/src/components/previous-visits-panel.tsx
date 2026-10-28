@@ -82,6 +82,15 @@ export function PreviousVisitsPanel({ encounterId }: { encounterId: string }) {
                   {new Date(v.startedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
                 </span>
                 <span className="text-[12.5px] text-ink-40">{v.practitioner.fullName}</span>
+                {/*
+                  Unsigned visits are listed since 28 Oct 2026 — they used to be
+                  left out, so a patient whose earlier consultation was never
+                  signed showed a previous TEST at the top of this screen and
+                  "no previous visits" here. Said out loud rather than hidden,
+                  because a draft note is not the same as a signed one and a
+                  reader has to be able to tell.
+                */}
+                {!v.signedAt && <span className="badge badge-amber">Not signed</span>}
 
                 {v.diagnoses.length > 0 && (
                   <span className="badge-clinical">

@@ -207,7 +207,10 @@ export class Patient360Service {
           referralSource: true,
           referrerName: true,
           department: { select: { name: true } },
-          documents: { select: { id: true, fileName: true, contentType: true } },
+          documents: {
+            where: { removedAt: null },
+            select: { id: true, fileName: true, contentType: true },
+          },
         },
       });
 

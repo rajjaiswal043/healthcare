@@ -8,6 +8,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { clinicToday, instantToLocalDate, localToInstant } from '../../scheduling/clinic-time.js';
+import { ageFrom } from '../../common/age.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import {
@@ -1024,7 +1025,11 @@ export class DiagnosticsService {
           appointmentId: true,
           department: { select: { name: true } },
           service: { select: { name: true } },
-          documents: { select: { id: true, fileName: true }, orderBy: { createdAt: 'asc' } },
+          documents: {
+            where: { removedAt: null },
+            select: { id: true, fileName: true },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       });
 
@@ -1431,6 +1436,9 @@ const ORDER_SELECT = {
       uhid: true,
       gender: true,
       ageYears: true,
+      /* Read so the age can be worked out; dropped again by `toView`, which
+         sends the number. See `ageFrom`. */
+      birthDate: true,
       mobile: true,
       allergies: true,
       allergiesReviewedAt: true,
@@ -1468,8 +1476,29 @@ const ORDER_SELECT = {
  */
 function toView<T extends DiagnosticBillingInput>(order: T) {
   const { invoiceLine, legacyUnbilled: _legacyUnbilled, ...rest } = order;
+
+  /**
+   * The patient's age, worked out, with the birth date left behind.
+   *
+   * The slip and the worklist card draw "47y" and nothing more, and a date of
+   * birth is the field that turns a name into a match against other records.
+   * It is read from the database and stops here.
+   */
+  const patient =
+    'patient' in rest && rest.patient
+      ? (() => {
+          const { birthDate, ...person } = rest.patient as {
+            birthDate?: Date | null;
+            ageYears: number | null;
+          } & Record<string, unknown>;
+
+          return { ...person, ageYears: ageFrom(person.ageYears, birthDate) };
+        })()
+      : undefined;
+
   return {
     ...rest,
+    ...(patient ? { patient } : {}),
     /**
      * What this test was charged, as charged.
      *

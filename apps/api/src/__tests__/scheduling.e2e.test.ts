@@ -510,6 +510,79 @@ describe('check-in and the queue', () => {
   });
 
   /**
+   * Out at a department is not out of the clinic.
+   *
+   * Reported from the clinic on 28 Oct 2026: the same person showed as being
+   * served AND waiting. `LIVE_STATUSES` omitted `AWAITING_TESTS`, so the moment
+   * a doctor sent somebody for an X-ray the "already in this queue" guard
+   * stopped seeing them and the desk could add them a second time — two live
+   * appointments, two tokens and two consultation bills for one visit.
+   */
+  it('refuses a second booking while the patient is out for a test', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+    await transition(appt.id, 'call', doctor);
+
+    const sent = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray, left wrist' },
+    });
+    expect(sent.statusCode).toBe(200);
+    expect(sent.json().status).toBe('AWAITING_TESTS');
+
+    // Booking reports the day-window guard first; both guards read
+    // LIVE_STATUSES, and before the fix neither of them saw this patient.
+    const again = await book(frontDesk, { slotIndex: 1 });
+
+    expect(again.statusCode).toBe(409);
+    expect(domainCode(again)).toBe('ALREADY_BOOKED');
+  });
+
+  it('refuses a walk-in while the patient is out for a test', async () => {
+    /*
+     * Both walk-ins, so both land on TODAY. `book` uses `DAY`, a week out, and
+     * the walk-in guard is scoped to today's queue — a booking next week could
+     * never have collided with a walk-in now, whatever the statuses said.
+     */
+    const walkIn = (patientId: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/appointments/walk-in',
+        headers: { cookie: frontDesk.cookie },
+        payload: {
+          patientId,
+          practitionerId: fx.main.practitionerId,
+          locationId: fx.main.locationId,
+          reasonForVisit: 'Joint pain',
+        },
+      });
+
+    const patientId = fx.main.patientIds[1]!;
+
+    const first = await walkIn(patientId);
+    expect(first.statusCode).toBe(201);
+
+    // A walk-in arrives already in the waiting list, so there is no check-in.
+    const id = first.json<{ id: string }>().id;
+    await transition(id, 'call', doctor);
+
+    const sent = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray, left wrist' },
+    });
+    expect(sent.json().status).toBe('AWAITING_TESTS');
+
+    const again = await walkIn(patientId);
+
+    expect(again.statusCode).toBe(409);
+    expect(domainCode(again)).toBe('ALREADY_IN_QUEUE');
+  });
+
+  /**
    * "Seen today" is read backwards from every other list on the screen.
    *
    * Reported 27 Oct 2026: it inherited the serving order, so the first patient
@@ -825,14 +898,71 @@ describe('rescheduling', () => {
 
   // --- one act, or nothing -------------------------------------------------
 
-  function reschedule(id: string, startAt: unknown) {
+  function reschedule(id: string, startAt: unknown, practitionerId?: string) {
     return app.inject({
       method: 'PATCH',
       url: `/api/v1/appointments/${id}/reschedule`,
       headers: { cookie: frontDesk.cookie },
-      payload: { startAt, reason: 'Patient asked to move' },
+      payload: {
+        startAt,
+        reason: 'Patient asked to move',
+        ...(practitionerId ? { practitionerId } : {}),
+      },
     });
   }
+
+  /**
+   * Booked with the wrong consultant.
+   *
+   * Reported 28 Oct 2026 as "admin should be able to change reception's
+   * mistakes". A move carried the doctor over and nothing anywhere could
+   * change it, so the only way out was cancel and rebook — a new token, a
+   * second consultation bill, and a cancellation on the patient's record for a
+   * mistake that was never theirs.
+   */
+  describe('moving a booking to another doctor', () => {
+    it('keeps the doctor when none is named', async () => {
+      const appt = (await book(frontDesk)).json();
+      const day = await availability(frontDesk);
+
+      const moved = await reschedule(appt.id, day.slots[6]?.startAt);
+
+      // 200: the route PATCHes an existing appointment rather than creating one.
+      expect(moved.statusCode).toBe(200);
+      expect(moved.json().practitioner.id).toBe(fx.main.practitionerId);
+    });
+
+    it('refuses a doctor who does not exist', async () => {
+      /*
+       * The decisive one. If the field were accepted and then ignored, this
+       * would succeed with the original doctor and nobody would notice until a
+       * patient turned up at the wrong room.
+       */
+      const appt = (await book(frontDesk)).json();
+      const day = await availability(frontDesk);
+
+      const moved = await reschedule(
+        appt.id,
+        day.slots[7]?.startAt,
+        '00000000-0000-4000-8000-000000000000',
+      );
+
+      expect(moved.statusCode).toBeGreaterThanOrEqual(400);
+      expect(moved.statusCode).toBeLessThan(500);
+    });
+
+    it('leaves the original untouched when the move is refused', async () => {
+      const appt = (await book(frontDesk)).json();
+      const before = await snapshot(appt.id);
+      const day = await availability(frontDesk);
+
+      await reschedule(appt.id, day.slots[8]?.startAt, '00000000-0000-4000-8000-000000000000');
+
+      // Cancel and book are one transaction: a refused move must not leave the
+      // patient with no appointment at all.
+      expect(await snapshot(appt.id)).toEqual(before);
+    });
+  });
 
   /** Everything a failed reschedule must leave exactly as it was. */
   async function snapshot(id: string) {

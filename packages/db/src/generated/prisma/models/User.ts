@@ -310,6 +310,7 @@ export type UserWhereInput = {
   department?: Prisma.XOR<Prisma.DepartmentNullableScalarRelationFilter, Prisma.DepartmentWhereInput> | null
   roles?: Prisma.UserRoleListRelationFilter
   uploadedDocuments?: Prisma.ClinicalDocumentListRelationFilter
+  removedDocuments?: Prisma.ClinicalDocumentListRelationFilter
   patientCorrections?: Prisma.PatientCorrectionListRelationFilter
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderListRelationFilter
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderListRelationFilter
@@ -341,6 +342,7 @@ export type UserOrderByWithRelationInput = {
   department?: Prisma.DepartmentOrderByWithRelationInput
   roles?: Prisma.UserRoleOrderByRelationAggregateInput
   uploadedDocuments?: Prisma.ClinicalDocumentOrderByRelationAggregateInput
+  removedDocuments?: Prisma.ClinicalDocumentOrderByRelationAggregateInput
   patientCorrections?: Prisma.PatientCorrectionOrderByRelationAggregateInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderOrderByRelationAggregateInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderOrderByRelationAggregateInput
@@ -376,6 +378,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   department?: Prisma.XOR<Prisma.DepartmentNullableScalarRelationFilter, Prisma.DepartmentWhereInput> | null
   roles?: Prisma.UserRoleListRelationFilter
   uploadedDocuments?: Prisma.ClinicalDocumentListRelationFilter
+  removedDocuments?: Prisma.ClinicalDocumentListRelationFilter
   patientCorrections?: Prisma.PatientCorrectionListRelationFilter
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderListRelationFilter
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderListRelationFilter
@@ -452,6 +455,7 @@ export type UserCreateInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -482,6 +486,7 @@ export type UserUncheckedCreateInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -512,6 +517,7 @@ export type UserUpdateInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -542,6 +548,7 @@ export type UserUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -775,12 +782,28 @@ export type UserCreateNestedOneWithoutUploadedDocumentsInput = {
   connect?: Prisma.UserWhereUniqueInput
 }
 
+export type UserCreateNestedOneWithoutRemovedDocumentsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutRemovedDocumentsInput, Prisma.UserUncheckedCreateWithoutRemovedDocumentsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutRemovedDocumentsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
 export type UserUpdateOneRequiredWithoutUploadedDocumentsNestedInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutUploadedDocumentsInput, Prisma.UserUncheckedCreateWithoutUploadedDocumentsInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutUploadedDocumentsInput
   upsert?: Prisma.UserUpsertWithoutUploadedDocumentsInput
   connect?: Prisma.UserWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutUploadedDocumentsInput, Prisma.UserUpdateWithoutUploadedDocumentsInput>, Prisma.UserUncheckedUpdateWithoutUploadedDocumentsInput>
+}
+
+export type UserUpdateOneWithoutRemovedDocumentsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutRemovedDocumentsInput, Prisma.UserUncheckedCreateWithoutRemovedDocumentsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutRemovedDocumentsInput
+  upsert?: Prisma.UserUpsertWithoutRemovedDocumentsInput
+  disconnect?: Prisma.UserWhereInput | boolean
+  delete?: Prisma.UserWhereInput | boolean
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutRemovedDocumentsInput, Prisma.UserUpdateWithoutRemovedDocumentsInput>, Prisma.UserUncheckedUpdateWithoutRemovedDocumentsInput>
 }
 
 export type UserCreateNestedOneWithoutDiagnosticOrdersRaisedInput = {
@@ -917,6 +940,7 @@ export type UserCreateWithoutRolesInput = {
   updatedAt?: Date | string
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -946,6 +970,7 @@ export type UserUncheckedCreateWithoutRolesInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -991,6 +1016,7 @@ export type UserUpdateWithoutRolesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -1020,6 +1046,7 @@ export type UserUncheckedUpdateWithoutRolesInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -1050,6 +1077,7 @@ export type UserCreateWithoutSessionsInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -1079,6 +1107,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -1124,6 +1153,7 @@ export type UserUpdateWithoutSessionsInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -1153,6 +1183,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -1181,6 +1212,7 @@ export type UserCreateWithoutDepartmentInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -1210,6 +1242,7 @@ export type UserUncheckedCreateWithoutDepartmentInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -1287,6 +1320,7 @@ export type UserCreateWithoutUploadedDocumentsInput = {
   updatedAt?: Date | string
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -1316,6 +1350,7 @@ export type UserUncheckedCreateWithoutUploadedDocumentsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -1330,6 +1365,71 @@ export type UserUncheckedCreateWithoutUploadedDocumentsInput = {
 export type UserCreateOrConnectWithoutUploadedDocumentsInput = {
   where: Prisma.UserWhereUniqueInput
   create: Prisma.XOR<Prisma.UserCreateWithoutUploadedDocumentsInput, Prisma.UserUncheckedCreateWithoutUploadedDocumentsInput>
+}
+
+export type UserCreateWithoutRemovedDocumentsInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
+  roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
+  diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderCreateNestedManyWithoutHandedOverByInput
+  promotionsCreated?: Prisma.PromotionCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutRemovedDocumentsInput = {
+  id?: string
+  tenantId: string
+  email: string
+  fullName: string
+  mobile?: string | null
+  passwordHash: string
+  mustChangePassword?: boolean
+  mfaSecret?: string | null
+  mfaEnabledAt?: Date | string | null
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  failedLoginCount?: number
+  lockedUntil?: Date | string | null
+  departmentId?: string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
+  diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutHandedOverByInput
+  promotionsCreated?: Prisma.PromotionUncheckedCreateNestedManyWithoutCreatedByInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAppliedByInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutAuthorisedByInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedCreateNestedManyWithoutPrintedByInput
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutRemovedDocumentsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutRemovedDocumentsInput, Prisma.UserUncheckedCreateWithoutRemovedDocumentsInput>
 }
 
 export type UserUpsertWithoutUploadedDocumentsInput = {
@@ -1361,6 +1461,7 @@ export type UserUpdateWithoutUploadedDocumentsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -1390,6 +1491,78 @@ export type UserUncheckedUpdateWithoutUploadedDocumentsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
+  diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutHandedOverByNestedInput
+  promotionsCreated?: Prisma.PromotionUncheckedUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUncheckedUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserUpsertWithoutRemovedDocumentsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutRemovedDocumentsInput, Prisma.UserUncheckedUpdateWithoutRemovedDocumentsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutRemovedDocumentsInput, Prisma.UserUncheckedCreateWithoutRemovedDocumentsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutRemovedDocumentsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutRemovedDocumentsInput, Prisma.UserUncheckedUpdateWithoutRemovedDocumentsInput>
+}
+
+export type UserUpdateWithoutRemovedDocumentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
+  roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
+  diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
+  diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
+  diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUpdateManyWithoutHandedOverByNestedInput
+  promotionsCreated?: Prisma.PromotionUpdateManyWithoutCreatedByNestedInput
+  promotionsApplied?: Prisma.PromotionApplicationUpdateManyWithoutAppliedByNestedInput
+  promotionsAuthorised?: Prisma.PromotionApplicationUpdateManyWithoutAuthorisedByNestedInput
+  receiptsPrinted?: Prisma.ReceiptPrintUpdateManyWithoutPrintedByNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutRemovedDocumentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  mobile?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  mustChangePassword?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  mfaSecret?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  mfaEnabledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  failedLoginCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
+  uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -1420,6 +1593,7 @@ export type UserCreateWithoutDiagnosticOrdersRaisedInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderCreateNestedManyWithoutHandedOverByInput
@@ -1449,6 +1623,7 @@ export type UserUncheckedCreateWithoutDiagnosticOrdersRaisedInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutHandedOverByInput
@@ -1483,6 +1658,7 @@ export type UserCreateWithoutDiagnosticOrdersCompletedInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderCreateNestedManyWithoutHandedOverByInput
@@ -1512,6 +1688,7 @@ export type UserUncheckedCreateWithoutDiagnosticOrdersCompletedInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutHandedOverByInput
@@ -1546,6 +1723,7 @@ export type UserCreateWithoutDiagnosticOrdersHandedOverInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -1575,6 +1753,7 @@ export type UserUncheckedCreateWithoutDiagnosticOrdersHandedOverInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -1620,6 +1799,7 @@ export type UserUpdateWithoutDiagnosticOrdersRaisedInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUpdateManyWithoutHandedOverByNestedInput
@@ -1649,6 +1829,7 @@ export type UserUncheckedUpdateWithoutDiagnosticOrdersRaisedInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutHandedOverByNestedInput
@@ -1689,6 +1870,7 @@ export type UserUpdateWithoutDiagnosticOrdersCompletedInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUpdateManyWithoutHandedOverByNestedInput
@@ -1718,6 +1900,7 @@ export type UserUncheckedUpdateWithoutDiagnosticOrdersCompletedInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutHandedOverByNestedInput
@@ -1758,6 +1941,7 @@ export type UserUpdateWithoutDiagnosticOrdersHandedOverInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -1787,6 +1971,7 @@ export type UserUncheckedUpdateWithoutDiagnosticOrdersHandedOverInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -1816,6 +2001,7 @@ export type UserCreateWithoutPatientCorrectionsInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderCreateNestedManyWithoutHandedOverByInput
@@ -1845,6 +2031,7 @@ export type UserUncheckedCreateWithoutPatientCorrectionsInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutHandedOverByInput
@@ -1890,6 +2077,7 @@ export type UserUpdateWithoutPatientCorrectionsInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUpdateManyWithoutHandedOverByNestedInput
@@ -1919,6 +2107,7 @@ export type UserUncheckedUpdateWithoutPatientCorrectionsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
   diagnosticOrdersHandedOver?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutHandedOverByNestedInput
@@ -1948,6 +2137,7 @@ export type UserCreateWithoutPromotionsCreatedInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -1977,6 +2167,7 @@ export type UserUncheckedCreateWithoutPromotionsCreatedInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -2022,6 +2213,7 @@ export type UserUpdateWithoutPromotionsCreatedInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -2051,6 +2243,7 @@ export type UserUncheckedUpdateWithoutPromotionsCreatedInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -2080,6 +2273,7 @@ export type UserCreateWithoutPromotionsAppliedInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -2109,6 +2303,7 @@ export type UserUncheckedCreateWithoutPromotionsAppliedInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -2143,6 +2338,7 @@ export type UserCreateWithoutPromotionsAuthorisedInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -2172,6 +2368,7 @@ export type UserUncheckedCreateWithoutPromotionsAuthorisedInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -2217,6 +2414,7 @@ export type UserUpdateWithoutPromotionsAppliedInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -2246,6 +2444,7 @@ export type UserUncheckedUpdateWithoutPromotionsAppliedInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -2286,6 +2485,7 @@ export type UserUpdateWithoutPromotionsAuthorisedInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -2315,6 +2515,7 @@ export type UserUncheckedUpdateWithoutPromotionsAuthorisedInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -2344,6 +2545,7 @@ export type UserCreateWithoutReceiptsPrintedInput = {
   department?: Prisma.DepartmentCreateNestedOneWithoutStaffInput
   roles?: Prisma.UserRoleCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderCreateNestedManyWithoutCompletedByInput
@@ -2373,6 +2575,7 @@ export type UserUncheckedCreateWithoutReceiptsPrintedInput = {
   updatedAt?: Date | string
   roles?: Prisma.UserRoleUncheckedCreateNestedManyWithoutUserInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutUploadedByInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedCreateNestedManyWithoutRemovedByInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedCreateNestedManyWithoutCorrectedByInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutOrderedByInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedCreateNestedManyWithoutCompletedByInput
@@ -2418,6 +2621,7 @@ export type UserUpdateWithoutReceiptsPrintedInput = {
   department?: Prisma.DepartmentUpdateOneWithoutStaffNestedInput
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -2447,6 +2651,7 @@ export type UserUncheckedUpdateWithoutReceiptsPrintedInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -2493,6 +2698,7 @@ export type UserUpdateWithoutDepartmentInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUpdateManyWithoutCompletedByNestedInput
@@ -2522,6 +2728,7 @@ export type UserUncheckedUpdateWithoutDepartmentInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   roles?: Prisma.UserRoleUncheckedUpdateManyWithoutUserNestedInput
   uploadedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutUploadedByNestedInput
+  removedDocuments?: Prisma.ClinicalDocumentUncheckedUpdateManyWithoutRemovedByNestedInput
   patientCorrections?: Prisma.PatientCorrectionUncheckedUpdateManyWithoutCorrectedByNestedInput
   diagnosticOrdersRaised?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutOrderedByNestedInput
   diagnosticOrdersCompleted?: Prisma.DiagnosticOrderUncheckedUpdateManyWithoutCompletedByNestedInput
@@ -2559,6 +2766,7 @@ export type UserUncheckedUpdateManyWithoutDepartmentInput = {
 export type UserCountOutputType = {
   roles: number
   uploadedDocuments: number
+  removedDocuments: number
   patientCorrections: number
   diagnosticOrdersRaised: number
   diagnosticOrdersCompleted: number
@@ -2573,6 +2781,7 @@ export type UserCountOutputType = {
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roles?: boolean | UserCountOutputTypeCountRolesArgs
   uploadedDocuments?: boolean | UserCountOutputTypeCountUploadedDocumentsArgs
+  removedDocuments?: boolean | UserCountOutputTypeCountRemovedDocumentsArgs
   patientCorrections?: boolean | UserCountOutputTypeCountPatientCorrectionsArgs
   diagnosticOrdersRaised?: boolean | UserCountOutputTypeCountDiagnosticOrdersRaisedArgs
   diagnosticOrdersCompleted?: boolean | UserCountOutputTypeCountDiagnosticOrdersCompletedArgs
@@ -2605,6 +2814,13 @@ export type UserCountOutputTypeCountRolesArgs<ExtArgs extends runtime.Types.Exte
  * UserCountOutputType without action
  */
 export type UserCountOutputTypeCountUploadedDocumentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ClinicalDocumentWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountRemovedDocumentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.ClinicalDocumentWhereInput
 }
 
@@ -2692,6 +2908,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   department?: boolean | Prisma.User$departmentArgs<ExtArgs>
   roles?: boolean | Prisma.User$rolesArgs<ExtArgs>
   uploadedDocuments?: boolean | Prisma.User$uploadedDocumentsArgs<ExtArgs>
+  removedDocuments?: boolean | Prisma.User$removedDocumentsArgs<ExtArgs>
   patientCorrections?: boolean | Prisma.User$patientCorrectionsArgs<ExtArgs>
   diagnosticOrdersRaised?: boolean | Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs>
   diagnosticOrdersCompleted?: boolean | Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs>
@@ -2768,6 +2985,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   department?: boolean | Prisma.User$departmentArgs<ExtArgs>
   roles?: boolean | Prisma.User$rolesArgs<ExtArgs>
   uploadedDocuments?: boolean | Prisma.User$uploadedDocumentsArgs<ExtArgs>
+  removedDocuments?: boolean | Prisma.User$removedDocumentsArgs<ExtArgs>
   patientCorrections?: boolean | Prisma.User$patientCorrectionsArgs<ExtArgs>
   diagnosticOrdersRaised?: boolean | Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs>
   diagnosticOrdersCompleted?: boolean | Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs>
@@ -2792,6 +3010,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     department: Prisma.$DepartmentPayload<ExtArgs> | null
     roles: Prisma.$UserRolePayload<ExtArgs>[]
     uploadedDocuments: Prisma.$ClinicalDocumentPayload<ExtArgs>[]
+    removedDocuments: Prisma.$ClinicalDocumentPayload<ExtArgs>[]
     patientCorrections: Prisma.$PatientCorrectionPayload<ExtArgs>[]
     diagnosticOrdersRaised: Prisma.$DiagnosticOrderPayload<ExtArgs>[]
     diagnosticOrdersCompleted: Prisma.$DiagnosticOrderPayload<ExtArgs>[]
@@ -3245,6 +3464,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   department<T extends Prisma.User$departmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$departmentArgs<ExtArgs>>): Prisma.Prisma__DepartmentClient<runtime.Types.Result.GetResult<Prisma.$DepartmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   roles<T extends Prisma.User$rolesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$rolesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserRolePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   uploadedDocuments<T extends Prisma.User$uploadedDocumentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$uploadedDocumentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ClinicalDocumentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  removedDocuments<T extends Prisma.User$removedDocumentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$removedDocumentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ClinicalDocumentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   patientCorrections<T extends Prisma.User$patientCorrectionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$patientCorrectionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PatientCorrectionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   diagnosticOrdersRaised<T extends Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$diagnosticOrdersRaisedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   diagnosticOrdersCompleted<T extends Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$diagnosticOrdersCompletedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosticOrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -3746,6 +3966,30 @@ export type User$rolesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs
  * User.uploadedDocuments
  */
 export type User$uploadedDocumentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ClinicalDocument
+   */
+  select?: Prisma.ClinicalDocumentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ClinicalDocument
+   */
+  omit?: Prisma.ClinicalDocumentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ClinicalDocumentInclude<ExtArgs> | null
+  where?: Prisma.ClinicalDocumentWhereInput
+  orderBy?: Prisma.ClinicalDocumentOrderByWithRelationInput | Prisma.ClinicalDocumentOrderByWithRelationInput[]
+  cursor?: Prisma.ClinicalDocumentWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ClinicalDocumentScalarFieldEnum | Prisma.ClinicalDocumentScalarFieldEnum[]
+}
+
+/**
+ * User.removedDocuments
+ */
+export type User$removedDocumentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   /**
    * Select specific fields to fetch from the ClinicalDocument
    */

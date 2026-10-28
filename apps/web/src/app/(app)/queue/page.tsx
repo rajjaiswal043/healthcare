@@ -111,6 +111,15 @@ export default function QueuePage() {
     return () => clearInterval(t);
   }, [doctorId, load]);
 
+  /**
+   * Today's no-shows, which the server sends mixed in with cancellations.
+   *
+   * Split here rather than asked for separately: they arrive on the same
+   * payload, and the difference that matters is what the desk may do about
+   * them — a no-show can be undone, a cancellation cannot.
+   */
+  const noShows = (queue?.cancelled ?? []).filter((a) => a.status === 'NO_SHOW');
+
   async function act(id: string, fn: () => Promise<unknown>) {
     setBusyId(id);
     setError(null);
@@ -232,12 +241,19 @@ export default function QueuePage() {
               </select>
             </div>
           )}
+          {/*
+            Disabled until a doctor is chosen, reported 28 Oct 2026 as "refresh
+            is not working". It was live, and `load` opens with an early return
+            when there is no id — so it did nothing and said nothing, which
+            reads as a broken button rather than one that has nothing to do.
+          */}
           <button
             type="button"
             className="btn-secondary !px-3"
+            disabled={!doctorId}
             onClick={() => void load(doctorId)}
-            aria-label="Refresh now"
-            title="Refresh now"
+            aria-label={doctorId ? 'Refresh now' : 'Pick a doctor first'}
+            title={doctorId ? 'Refresh now' : 'Pick a doctor first'}
           >
             <IconRefresh size={16} />
           </button>
@@ -533,6 +549,44 @@ export default function QueuePage() {
             >
               {queue.completed.map((a) => (
                 <Row key={a.id} appointment={a} muted />
+              ))}
+            </Panel>
+          )}
+
+          {/*
+            THE WAY BACK FROM A NO-SHOW, added 28 Oct 2026.
+
+            The API has always returned this list and the screen never drew it,
+            so a patient marked off disappeared from the queue entirely. The
+            desk's only route was booking a fresh appointment, which issues a
+            second token and raises a second consultation bill for one visit.
+
+            No-shows only. A CANCELLED appointment is in the same list from the
+            server and is deliberately left alone: somebody rang up and
+            cancelled, which is a decision rather than a mistake, and the way
+            back from it is to book again.
+          */}
+          {noShows.length > 0 && (
+            <Panel
+              title="Did not come"
+              count={noShows.length}
+              empty=""
+              icon={<IconUsers size={16} />}
+            >
+              {noShows.map((a) => (
+                <Row key={a.id} appointment={a} muted>
+                  {mayAct && (
+                    <button
+                      type="button"
+                      className="btn-secondary !px-2.5 !py-1.5 text-[12.5px]"
+                      disabled={busyId === a.id}
+                      title="They turned up after all — put them back in the list"
+                      onClick={() => void act(a.id, () => api.undoNoShow(a.id))}
+                    >
+                      They came
+                    </button>
+                  )}
+                </Row>
               ))}
             </Panel>
           )}

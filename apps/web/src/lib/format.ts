@@ -13,7 +13,12 @@
  * 45", showing 45 is more honest than deriving a false precision from a date of
  * birth nobody was sure of.
  */
-export function formatAge(p: { ageYears: number | null; birthDate: string | null }): string {
+/*
+ * `birthDate` is optional because most payloads no longer carry one: the server
+ * works the age out and sends the number, so a date of birth does not travel to
+ * every screen that draws "47y". The patient's own record still has both.
+ */
+export function formatAge(p: { ageYears: number | null; birthDate?: string | null }): string {
   if (p.ageYears !== null) return `${p.ageYears}y`;
   if (!p.birthDate) return '—';
 

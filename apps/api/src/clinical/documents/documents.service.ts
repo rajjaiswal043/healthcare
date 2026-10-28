@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
 import {
@@ -130,11 +136,85 @@ export class DocumentsService {
     });
   }
 
-  /** The files attached to one order. */
+  /**
+   * Take a document back — wrong patient, wrong file.
+   *
+   * REMOVED, NOT DELETED. The row stays and carries who, when and why, and the
+   * object stays in S3. "A report that was never this patient's sat on their
+   * record between 11:04 and 11:09" is a fact somebody may have to answer for,
+   * and a DELETE destroys the only evidence it ever happened. Every read in
+   * this service, and the three elsewhere that pull documents, filter on
+   * `removedAt: null`, so from the clinic's point of view it is gone.
+   *
+   * A REASON IS REQUIRED. Without one the record says a file vanished and says
+   * nothing about why, which is the half that matters when it is read back
+   * months later.
+   *
+   * Reported from the clinic on 28 Oct 2026: a PDF uploaded against the wrong
+   * patient, with no way to take it off. Nothing can read a PDF and tell whose
+   * it is — a person picking the wrong file is a human error, and what the
+   * software owes is the way back.
+   */
+  async remove(
+    tenantId: string,
+    documentId: string,
+    reason: string,
+    meta: RequestMeta,
+  ): Promise<void> {
+    await this.prisma.forTenant(tenantId, async (tx) => {
+      const document = await tx.clinicalDocument.findUnique({
+        where: { id: documentId },
+        select: { id: true, patientId: true, removedAt: true },
+      });
+      if (!document) throw new NotFoundException('No such document.');
+
+      if (document.removedAt) {
+        throw new ConflictException({
+          code: 'ALREADY_REMOVED',
+          message: 'This document has already been removed.',
+        });
+      }
+
+      // The CHECK constraint refuses a removal with nobody attached to it, and
+      // an unattributable removal is not a record of anything anyway.
+      if (!meta.actorUserId) {
+        throw new ConflictException({
+          code: 'ACTOR_REQUIRED',
+          message: 'A removal has to be attributable to somebody.',
+        });
+      }
+
+      await tx.clinicalDocument.update({
+        where: { id: documentId },
+        data: {
+          removedAt: new Date(),
+          removedByUserId: meta.actorUserId,
+          removalReason: reason.trim(),
+        },
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'document.remove',
+        resourceType: 'ClinicalDocument',
+        resourceId: document.id,
+        patientId: document.patientId,
+        changedFields: ['removedAt', 'removedByUserId', 'removalReason'],
+        ...meta,
+      });
+    });
+  }
+
+  /**
+   * The files attached to one order.
+   *
+   * `removedAt: null` on every read, here and below: a document taken back is
+   * kept as a record of what happened, not as something a clinician should
+   * still see. It is gone from the clinic's point of view.
+   */
   async forOrder(tenantId: string, diagnosticOrderId: string): Promise<DocumentView[]> {
     return this.prisma.forTenant(tenantId, (tx) =>
       tx.clinicalDocument.findMany({
-        where: { diagnosticOrderId },
+        where: { diagnosticOrderId, removedAt: null },
         orderBy: { createdAt: 'asc' },
         select: DOCUMENT_SELECT,
       }),
@@ -144,7 +224,7 @@ export class DocumentsService {
   async list(tenantId: string, patientId: string): Promise<DocumentView[]> {
     return this.prisma.forTenant(tenantId, (tx) =>
       tx.clinicalDocument.findMany({
-        where: { patientId },
+        where: { patientId, removedAt: null },
         orderBy: { createdAt: 'desc' },
         select: DOCUMENT_SELECT,
       }),
@@ -176,8 +256,10 @@ export class DocumentsService {
     }
 
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const document = await tx.clinicalDocument.findUnique({
-        where: { id: documentId },
+      /* `findFirst`, not `findUnique`, so the removal can be part of the
+         query: a document taken back is not fetchable, by URL or by id. */
+      const document = await tx.clinicalDocument.findFirst({
+        where: { id: documentId, removedAt: null },
         select: { id: true, objectKey: true, fileName: true, contentType: true, patientId: true },
       });
       if (!document) throw new NotFoundException('No such document.');
@@ -212,13 +294,13 @@ export class DocumentsService {
     meta: RequestMeta,
   ): Promise<{ url: string; expiresInSeconds: number; fileName: string; contentType: string }> {
     return this.prisma.forTenant(tenantId, async (tx) => {
-      const document = await tx.clinicalDocument.findUnique({
-        where: { id: documentId },
+      const document = await tx.clinicalDocument.findFirst({
+        where: { id: documentId, removedAt: null },
         select: { id: true, objectKey: true, fileName: true, contentType: true, patientId: true },
       });
 
-      // Not found and belongs-to-another-clinic are the same answer, because
-      // under the tenant policy they are the same query result.
+      // Not found, removed, and belongs-to-another-clinic are the same answer,
+      // because under the tenant policy they are the same query result.
       if (!document) throw new NotFoundException('No such document.');
 
       /**

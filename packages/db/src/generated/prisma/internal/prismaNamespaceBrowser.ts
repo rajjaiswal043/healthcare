@@ -684,7 +684,10 @@ export const ClinicalDocumentScalarFieldEnum = {
   sizeBytes: 'sizeBytes',
   diagnosticOrderId: 'diagnosticOrderId',
   uploadedByUserId: 'uploadedByUserId',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  removedAt: 'removedAt',
+  removedByUserId: 'removedByUserId',
+  removalReason: 'removalReason'
 } as const
 
 export type ClinicalDocumentScalarFieldEnum = (typeof ClinicalDocumentScalarFieldEnum)[keyof typeof ClinicalDocumentScalarFieldEnum]

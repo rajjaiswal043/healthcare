@@ -1,13 +1,17 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
   Res,
 } from '@nestjs/common';
+import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsClinicalText } from '../../common/is-clinical-text.decorator.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
@@ -26,6 +30,20 @@ import { DocumentsService, MAX_DOCUMENT_BYTES } from './documents.service.js';
  * server decides where bytes go and which key gets signed. See
  * docs/09-diagnostics-plan.md section 1.
  */
+/**
+ * Why a document is being taken back.
+ *
+ * Required, and long enough to be a sentence rather than a shrug: "wrong
+ * patient" is the answer somebody reads back in six months, and "x" is not.
+ */
+class RemoveDocumentDto {
+  @IsString()
+  @IsClinicalText()
+  @MinLength(4)
+  @MaxLength(300)
+  reason!: string;
+}
+
 @Controller()
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
@@ -39,6 +57,31 @@ export class DocumentsController {
    * to 34MB, which means holding both the encoded string and the decoded buffer
    * in memory for every concurrent upload.
    */
+  /**
+   * Take a document back.
+   *
+   * PATCH rather than DELETE, and that is the honest verb: nothing is deleted.
+   * The row keeps who removed it, when and why, and the object stays in the
+   * bucket — see the service. A DELETE route would promise something this does
+   * not do.
+   *
+   * Behind `document:write`, the same permission as uploading: whoever can put
+   * a report on a patient is who notices it went on the wrong one, and sending
+   * them to find somebody else is how the wrong report stays there.
+   */
+  @Patch('documents/:id/remove')
+  @RequirePermissions(PERMISSIONS.DOCUMENT_WRITE)
+  async remove(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: RemoveDocumentDto,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.documents.remove(tenantId, id, dto.reason, meta(req, user));
+    return { removed: true };
+  }
+
   @Post('patients/:id/documents')
   @RequirePermissions(PERMISSIONS.DOCUMENT_WRITE)
   async upload(

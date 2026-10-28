@@ -68,7 +68,22 @@ type BookInput = {
   reasonForVisit?: string;
 };
 
-const LIVE_STATUSES = ['BOOKED', 'ARRIVED', 'IN_PROGRESS'] as const;
+/**
+ * A visit the clinic is still dealing with, for the "already in this queue"
+ * guard on booking and on walk-in.
+ *
+ * `AWAITING_TESTS` was missing until 28 Oct 2026, and the hole was reported
+ * from the clinic: the moment a doctor sent somebody for an X-ray this guard
+ * stopped seeing them, so the front desk could add the same patient to the same
+ * doctor a second time. They came back from the test and the queue showed one
+ * person being served AND waiting — two live appointments, two tokens and two
+ * consultation bills for one visit.
+ *
+ * Out at a department is not out of the clinic. The states that end a visit are
+ * FULFILLED, CANCELLED and NO_SHOW; everything else is somebody the clinic
+ * still has in its hands.
+ */
+const LIVE_STATUSES = ['BOOKED', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_TESTS'] as const;
 
 /**
  * The visits the "In the queue" tile counts: every one whose day is not over —
@@ -886,6 +901,25 @@ export class AppointmentsService {
   }
 
   /**
+   * They turned up after all.
+   *
+   * Marking a no-show was one-way until 28 Oct 2026, reported from the clinic:
+   * a patient written off at eleven who walks in at half past had no route
+   * back. The desk's only option was booking a fresh appointment, which issues
+   * a second token and raises a second consultation bill for one visit.
+   *
+   * Back to BOOKED rather than straight to ARRIVED, so the ordinary check-in
+   * runs next and the pay-first gate is asked exactly as it would have been.
+   * Undoing a mistake must not also be a way around the money.
+   *
+   * `noShowAt` is cleared, because the record now says it did not happen — the
+   * audit entry is where the fact that somebody marked it lives.
+   */
+  async undoNoShow(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
+    return this.transition(tenantId, id, 'NO_SHOW', 'BOOKED', { noShowAt: null }, meta);
+  }
+
+  /**
    * Move an appointment to a different slot.
    *
    * Implemented as cancel-then-book rather than an UPDATE of start_at, so the
@@ -895,7 +929,7 @@ export class AppointmentsService {
   async reschedule(
     tenantId: string,
     id: string,
-    input: { startAt: string; reason: string },
+    input: { startAt: string; reason: string; practitionerId?: string },
     meta: RequestMeta,
   ): Promise<AppointmentView> {
     /**
@@ -929,7 +963,16 @@ export class AppointmentsService {
         tenantId,
         {
           patientId: existing.patientId,
-          practitionerId: existing.practitionerId,
+          /*
+           * The same doctor unless a different one was asked for.
+           *
+           * `bookIn` validates the slot against whichever practitioner this
+           * is, so a move to a doctor who is switched off, has no session at
+           * that hour, or is already full is refused by the rules that govern
+           * any other booking. Nothing special is needed here beyond letting
+           * the id through.
+           */
+          practitionerId: input.practitionerId ?? existing.practitionerId,
           locationId: existing.locationId,
           startAt: input.startAt,
           visitType: existing.visitType,
