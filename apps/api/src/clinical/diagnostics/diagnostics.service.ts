@@ -140,6 +140,13 @@ export class DiagnosticsService {
       referrerName?: string;
       referrerClinic?: string;
       referrerPhone?: string;
+      /**
+       * This really is a second one, not a double-click.
+       *
+       * Set by the screen after it has told whoever is ordering that the same
+       * test, worded the same way, is already on this visit. See the guard.
+       */
+      confirmedRepeat?: boolean;
     },
     meta: RequestMeta,
   ) {
@@ -306,49 +313,82 @@ export class DiagnosticsService {
           });
         }
 
-        /**
-         * The same test twice on one visit is a mis-click, not an order.
-         *
-         * Scoped to this VISIT, not to the patient forever: the same knee needs
-         * re-imaging next month, and that must not be refused. Scoped to ACTIVE
-         * orders too — a declined or cancelled one leaves the way clear, which
-         * is what makes `undeclineOrder` and a simple re-order possible at all.
-         *
-         * A genuine repeat inside one visit does exist — bloods after a meal,
-         * an ECG after fresh chest pain — and this refuses it. That is the
-         * clinic's call, taken on 10 Sep 2026; the way to take it is to order
-         * the second one after the first is completed, or to say so in the
-         * description of one order.
-         */
-        const already = await tx.diagnosticOrder.findFirst({
-          where: {
-            serviceId: service.id,
-            status: { in: ['PENDING', 'COMPLETED'] },
-            /**
-             * Scoped to the visit when there is one, and to the patient's day
-             * when there is not. A walk-in has no appointment to group by, so
-             * without the second form the guard would simply never fire on the
-             * flow that most invites double entry — finance taking the money
-             * and raising the request in the same breath.
-             */
-            ...(appointmentId
-              ? { appointmentId }
-              : { patientId, createdAt: { gte: await this.startOfClinicDay(tx, tenantId) } }),
-          },
-          select: { id: true },
-        });
-        if (already) {
-          throw new ConflictException({
-            code: 'TEST_ALREADY_ORDERED',
-            message: `“${service.name}” has already been ordered on this visit.`,
-          });
-        }
-
         serviceId = service.id;
         // The catalogue name is the floor, not the ceiling: the form pre-fills
         // it so the doctor can add "left knee, AP and lateral". If they cleared
         // it, the order still has to say what it is.
         if (!description) description = service.name;
+
+        /**
+         * The same test, WORDED THE SAME WAY, twice on one visit.
+         *
+         * Rewritten 27 Oct 2026, from the clinic, as a live incident: an
+         * orthopaedic patient needs an X-ray of the knee and one of the
+         * shoulder on the same visit, and both are the service called "X-ray".
+         * Matching on the service alone refused the second one, which is the
+         * common case here rather than the edge case.
+         *
+         * So the description is part of the comparison. "X-ray — left knee"
+         * and "X-ray — right shoulder" are two orders and go through without
+         * anybody being asked anything; the same words twice is a double-click
+         * and is still refused.
+         *
+         * The guard is kept rather than dropped because every order raises its
+         * own charge. Without it one slip bills the patient twice, and a
+         * reversal is a finance desk job and an awkward conversation.
+         *
+         * `confirmedRepeat` is the way through for a genuine repeat of the same
+         * thing — bloods after a meal, an ECG after fresh chest pain. The
+         * screen asks first; this does not decide clinical questions.
+         *
+         * Scoped to this VISIT, not to the patient forever: the same knee needs
+         * re-imaging next month, and that must not be refused. Scoped to ACTIVE
+         * orders too — a declined or cancelled one leaves the way clear, which
+         * is what makes `undeclineOrder` and a simple re-order possible at all.
+         */
+        if (!input.confirmedRepeat) {
+          const already = await tx.diagnosticOrder.findFirst({
+            where: {
+              serviceId: service.id,
+              /* Case-insensitive so "Left knee" and "left knee" are the same
+                 order twice, which is what a double-click looks like. */
+              description: { equals: description, mode: 'insensitive' },
+              /*
+               * STILL WAITING, not already done.
+               *
+               * A completed order is one a department actually carried out and
+               * reported, which is the one thing a double-click can never
+               * produce — so including it bought no protection and refused a
+               * real repeat: the same knee imaged again after a procedure,
+               * later in the same visit. Narrowed 28 Oct 2026, which also
+               * makes the code agree with what its own comment had claimed
+               * since September: that the way to repeat a test is to order it
+               * once the first is done.
+               */
+              status: 'PENDING',
+              /**
+               * Scoped to the visit when there is one, and to the patient's day
+               * when there is not. A walk-in has no appointment to group by, so
+               * without the second form the guard would simply never fire on
+               * the flow that most invites double entry — finance taking the
+               * money and raising the request in the same breath.
+               */
+              ...(appointmentId
+                ? { appointmentId }
+                : { patientId, createdAt: { gte: await this.startOfClinicDay(tx, tenantId) } }),
+            },
+            select: { id: true },
+          });
+
+          if (already) {
+            throw new ConflictException({
+              code: 'TEST_ALREADY_ORDERED',
+              message:
+                `“${description}” is already on this visit. ` +
+                'Say which part of the body this one is for, or confirm it is a repeat.',
+            });
+          }
+        }
       }
 
       if (!description || description.length < 2) {
@@ -499,6 +539,8 @@ export class DiagnosticsService {
       referrerName?: string;
       referrerClinic?: string;
       referrerPhone?: string;
+      /** These really are repeats, not a double-click. See `createOrder`. */
+      confirmedRepeat?: boolean;
     },
     meta: RequestMeta,
   ) {
@@ -580,22 +622,34 @@ export class DiagnosticsService {
           });
         }
 
-        // Same guard as a doctor's order, scoped the way a walk-in has to be:
-        // there is no visit, so it is this patient, on this clinic day.
-        const already = await tx.diagnosticOrder.findFirst({
-          where: {
-            serviceId: service.id,
-            patientId: patient.id,
-            status: { in: ['PENDING', 'COMPLETED'] },
-            createdAt: { gte: dayStart },
-          },
-          select: { id: true },
-        });
-        if (already) {
-          throw new ConflictException({
-            code: 'TEST_ALREADY_ORDERED',
-            message: `“${service.name}” was already ordered for this patient today.`,
+        /*
+         * Same guard as a doctor's order, scoped the way a walk-in has to be:
+         * there is no visit, so it is this patient, on this clinic day.
+         *
+         * No description to compare here — the desk picks catalogue tests from
+         * a list and types nothing — so this one still matches on the service
+         * alone, and `confirmedRepeat` is the whole of the way through.
+         */
+        if (!input.confirmedRepeat) {
+          const already = await tx.diagnosticOrder.findFirst({
+            where: {
+              serviceId: service.id,
+              patientId: patient.id,
+              /* Still waiting, not already done — same reasoning as above. */
+              status: 'PENDING',
+              createdAt: { gte: dayStart },
+            },
+            select: { id: true },
           });
+
+          if (already) {
+            throw new ConflictException({
+              code: 'TEST_ALREADY_ORDERED',
+              message:
+                `“${service.name}” was already ordered for this patient today. ` +
+                'Confirm it is a repeat to order it again.',
+            });
+          }
         }
 
         tests.push({ id: service.id, name: service.name, departmentId: service.departmentId });

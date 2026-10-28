@@ -15,6 +15,7 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -77,6 +78,16 @@ class CreateOrderDto {
   @IsString()
   @MaxLength(32)
   referrerPhone?: string;
+
+  /**
+   * This really is a second one, not a double-click.
+   *
+   * The screen sets it only after telling whoever is ordering that the same
+   * test, worded the same way, is already on this visit.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmedRepeat?: boolean;
 
   @IsUUID()
   departmentId!: string;
@@ -168,6 +179,11 @@ class WalkInOrderDto {
   @IsString()
   @MaxLength(32)
   referrerPhone?: string;
+
+  /** These really are repeats, not a double-click. */
+  @IsOptional()
+  @IsBoolean()
+  confirmedRepeat?: boolean;
 }
 
 class HandoverDto {

@@ -1529,6 +1529,13 @@ export const api = {
     serviceId?: string;
     description?: string;
     /**
+     * This really is a second one, not a double-click.
+     *
+     * Send it only after the person ordering has been told the same test,
+     * worded the same way, is already on this visit — and has said yes.
+     */
+    confirmedRepeat?: boolean;
+    /**
      * What to charge for this one, when it is not the list price.
      *
      * Omitted means the catalogue price. Send it only when somebody actually

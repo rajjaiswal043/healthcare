@@ -78,6 +78,16 @@ export function SendForTestDialog({
   const [rupees, setRupees] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The server says this test is already on the visit.
+   *
+   * Reported from the clinic on 27 Oct 2026: an orthopaedic patient needs an
+   * X-ray of the knee AND of the shoulder, both of which are the service
+   * called "X-ray". Naming the body part in the description is now enough to
+   * tell them apart, so this only appears for a genuine repeat of the very
+   * same wording — and then it offers the way through rather than stopping.
+   */
+  const [repeat, setRepeat] = useState(false);
   /** The raised order, once it exists. What the slip is printed from. */
   const [sent, setSent] = useState<{ order: DiagnosticOrder; message: string } | null>(null);
 
@@ -102,6 +112,10 @@ export function SendForTestDialog({
    */
   function choose(test: DiagnosticTest) {
     setChosen(test);
+    // A different test is a different question: the last refusal does not
+    // apply to it, and offering "order it again" here would be nonsense.
+    setError(null);
+    setRepeat(false);
     setDescription(test.name);
     setRupees((test.pricePaise / 100).toFixed(2));
   }
@@ -119,7 +133,7 @@ export function SendForTestDialog({
       t.department.name.toLowerCase().includes(needle),
   );
 
-  async function send() {
+  async function send(confirmedRepeat = false) {
     if (!chosen || !row.appointmentId) return;
 
     const said = description.trim();
@@ -134,6 +148,7 @@ export function SendForTestDialog({
 
     setBusy(true);
     setError(null);
+    setRepeat(false);
 
     try {
       const order = await api.raiseDiagnosticOrder({
@@ -141,6 +156,7 @@ export function SendForTestDialog({
         departmentId: chosen.department.id,
         serviceId: chosen.id,
         description: said,
+        ...(confirmedRepeat ? { confirmedRepeat: true } : {}),
         /* Sent only when it differs. The absence of the field means "the list
            price", and an order that merely accepted the default should not be
            recorded as one where somebody priced it by hand. */
@@ -163,6 +179,10 @@ export function SendForTestDialog({
       });
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not send them.');
+      /* Offer the way through, rather than leaving them at a wall. */
+      setRepeat(
+        err instanceof ApiRequestError && err.error.details?.code === 'TEST_ALREADY_ORDERED',
+      );
     } finally {
       setBusy(false);
     }
@@ -227,7 +247,28 @@ export function SendForTestDialog({
               <span className="mt-0.5 shrink-0">
                 <IconAlert size={13} />
               </span>
-              <span>{error}</span>
+              <span>
+                {error}
+                {/*
+                  The way through, not just the wall. Offered only when the
+                  server said this exact test is already on the visit — which,
+                  now that the description is part of the comparison, means the
+                  same body part worded the same way. A genuine repeat does
+                  happen (bloods after a meal, an ECG after fresh chest pain)
+                  and it takes one deliberate press, so an ordinary double-click
+                  still cannot bill the patient twice.
+                */}
+                {repeat && (
+                  <button
+                    type="button"
+                    className="btn-ghost mt-1.5 block !px-0 !py-0 !text-[12.5px] !text-coral-text underline underline-offset-2"
+                    disabled={busy}
+                    onClick={() => void send(true)}
+                  >
+                    Order it again anyway
+                  </button>
+                )}
+              </span>
             </div>
           )}
 
