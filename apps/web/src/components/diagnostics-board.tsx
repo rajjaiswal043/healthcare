@@ -229,6 +229,8 @@ export function DiagnosticsBoard() {
     (DiagnosticOrder & { documents: ClinicalDocument[] }) | null
   >(null);
   const [note, setNote] = useState('');
+  /** Why there is no report file. Only asked for, and only sent, when there is none. */
+  const [noFileReason, setNoFileReason] = useState('');
   /** Who took the report. Its own field — the handover is a separate act. */
   const [handedTo, setHandedTo] = useState('');
   /** Whether the printable sheet is mounted. Only ever true for `openOrder`. */
@@ -433,14 +435,60 @@ export function DiagnosticsBoard() {
     }
   }
 
+  /**
+   * THE PATIENT REFUSED THE TEST AT THE DESK.
+   *
+   * Reported from the clinic on 30 Oct 2026: this screen had no way to decline
+   * a test, so a patient who changed their mind left the order sitting in To do
+   * for ever with a charge on it.
+   *
+   * Gated on `invoice:write`, which is what the endpoint requires and why the
+   * button was never here: declining takes a charge to zero, so it is a money
+   * action wearing a clinical hat, and the person having that conversation is
+   * at the finance desk rather than in the room. A technician holding only
+   * `diagnostic:result` still does not see this.
+   */
+  async function decline() {
+    if (!openOrder) return;
+    if (!window.confirm('The patient refused this test? The charge comes off their bill.')) {
+      return;
+    }
+
+    setBusy('decline');
+    setError(null);
+    try {
+      await api.declineDiagnosticOrder(openOrder.id);
+      setOpenOrder(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not decline it.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function complete() {
     if (!openOrder) return;
     setBusy('complete');
     setError(null);
     try {
-      await api.completeDiagnosticOrder(openOrder.id, note.trim());
+      /*
+       * The reason goes only when there is no file.
+       *
+       * Since 30 Oct 2026 the server refuses a note with no file and no stated
+       * reason — a test reading COMPLETED with no image behind it. This screen
+       * is the SECOND caller of that endpoint and was missed when the rule
+       * changed, so marking a file-less test done here failed outright until
+       * this field existed.
+       */
+      await api.completeDiagnosticOrder(
+        openOrder.id,
+        note.trim(),
+        openOrder.documents.length === 0 ? noFileReason.trim() : undefined,
+      );
       setOpenOrder(null);
       setNote('');
+      setNoFileReason('');
       await load();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not mark it done.');
@@ -1093,6 +1141,36 @@ export function DiagnosticsBoard() {
                   </p>
                 </div>
 
+                {/*
+                  WHY THERE IS NO FILE — asked only when there is none.
+                  
+                  A note is the remark ABOUT a report, not the report. Since
+                  30 Oct 2026 the server takes a note alone only once somebody
+                  has said why there is no file, so an X-ray cannot read
+                  COMPLETED with no image behind it. Tests that genuinely never
+                  produce a file — a strip read off a card, a reading phoned
+                  over — go through by saying so, and what is said is stored.
+                */}
+                {openOrder.documents.length === 0 && (
+                  <div className="mt-4">
+                    <label htmlFor="noFileReason" className="field-label">
+                      Why is there no file to attach?
+                    </label>
+                    <input
+                      id="noFileReason"
+                      maxLength={300}
+                      className="field-input text-[16px] md:text-[13.5px]"
+                      placeholder="Read off the analyser; nothing printed."
+                      value={noFileReason}
+                      onChange={(e) => setNoFileReason(e.target.value)}
+                    />
+                    <p className="field-hint">
+                      Attach the report instead if there is one — this is for tests that never
+                      produce a file.
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-5 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -1100,7 +1178,8 @@ export function DiagnosticsBoard() {
                     disabled={
                       busy !== null ||
                       testIsBlocked(openOrder.billing) ||
-                      (note.trim() === '' && openOrder.documents.length === 0)
+                      (note.trim() === '' && openOrder.documents.length === 0) ||
+                      (openOrder.documents.length === 0 && noFileReason.trim().length < 3)
                     }
                     onClick={() => void complete()}
                   >
@@ -1114,6 +1193,20 @@ export function DiagnosticsBoard() {
                     */}
                     {busy === 'complete' ? 'Saving…' : `${openOrder.department.name} done`}
                   </button>
+                  {/* Only where it would be accepted: the charge has to exist
+                      and still be unpaid. A settled test is a refund, which
+                      belongs on the bill, and an unbilled one is the doctor's
+                      to withdraw. The server refuses both. */}
+                  {can('invoice:write') && openOrder.billing.status === 'UNPAID' && (
+                    <button
+                      type="button"
+                      className="btn-ghost !text-coral-text"
+                      onClick={() => void decline()}
+                      disabled={busy !== null}
+                    >
+                      {busy === 'decline' ? 'Declining…' : 'Patient declined'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-ghost"

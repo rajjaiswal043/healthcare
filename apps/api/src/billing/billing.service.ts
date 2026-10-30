@@ -906,69 +906,272 @@ export class BillingService {
         });
       }
 
-      const payment = await tx.payment.create({
-        data: {
-          tenantId,
-          invoiceId: id,
-          direction: 'IN',
-          mode: input.mode as never,
-          amountPaise: input.amountPaise,
-          reference: input.reference ?? null,
-          collectedByUserId,
-        },
-        select: { id: true, collectedAt: true },
-      });
-
-      /**
-       * The receipt, written in the same transaction as the payment.
-       *
-       * FR-RCP-01: every time the desk takes money, there is a receipt to hand
-       * over. Created HERE rather than at print time so its figures are the ones
-       * that were true when the money moved — a payment without a receipt is not
-       * a state this database can hold.
-       *
-       * The money block is FROZEN rather than derived. Deriving it looked safe,
-       * since the total cannot move while money sits on the invoice — but
-       * `loadEditable` tests paid MINUS refunded, so a fully refunded invoice
-       * becomes editable again and its total can change afterwards. A reprint
-       * would then show a balance that was never true on the day.
-       */
-      const full = await tx.invoice.findUniqueOrThrow({
-        where: { id },
-        select: { subtotalPaise: true, discountPaise: true, taxPaise: true, totalPaise: true },
-      });
-
-      await tx.receipt.create({
-        data: {
-          tenantId,
-          paymentId: payment.id,
-          invoiceId: id,
-          number: await this.nextReceiptNumber(tx, tenantId),
-          totalChargedPaise: full.subtotalPaise,
-          discountPaise: full.discountPaise,
-          taxPaise: full.taxPaise,
-          payablePaise: full.totalPaise,
-          paidNowPaise: input.amountPaise,
-          // What was still outstanding immediately after this payment. The
-          // balance read above is the one BEFORE it.
-          balancePaise: balancePaise - input.amountPaise,
-          issuedAt: payment.collectedAt,
-        },
-      });
-
-      await this.restatus(tx, id, invoice.totalPaise);
-
-      await this.audit.record(tx, tenantId, {
-        action: 'payment.collect',
-        resourceType: 'Invoice',
-        resourceId: id,
-        patientId: invoice.patientId,
-        changedFields: ['payments', 'status'],
-        ...meta,
-      });
+      await this.recordPaymentAgainst(
+        tx,
+        tenantId,
+        { id, totalPaise: invoice.totalPaise, patientId: invoice.patientId },
+        input,
+        collectedByUserId,
+        balancePaise,
+        meta,
+      );
 
       return this.view(tx, id);
     });
+  }
+
+  /**
+   * SETTLE SEVERAL OF ONE PATIENT'S BILLS FROM ONE HANDOVER OF MONEY.
+   *
+   * Reported from the clinic on 29 Oct 2026: a patient seeing three doctors had
+   * three bills, and the desk had to run the Collect dialog three times while
+   * the patient stood there. The board could only ever offer the oldest one,
+   * which is why its button read "1 of 3".
+   *
+   * ONE TRANSACTION, MANY PAYMENT ROWS. A payment row belongs to exactly one
+   * invoice and that is not negotiable — it is what lets the day-end drawer be
+   * counted by mode and a receipt be reprinted years later. So this does not
+   * invent a payment spanning bills; it writes one payment per bill, together,
+   * so the desk cannot end up having settled two bills out of three.
+   *
+   * OLDEST BILL FIRST, not pro-rata. Narveer's call, 29 Oct 2026: a part
+   * payment spread thinly leaves every bill open and the patient still owing on
+   * all three, so nothing is ever finished. Filling the oldest to zero means
+   * the count of bills owing actually falls, and it matches the order the board
+   * already lists them in.
+   *
+   * `invoiceIds` comes from the caller rather than being discovered here, so
+   * the desk settles exactly the bills it was looking at. A charge raised
+   * between the screen rendering and the clerk pressing Collect is not swept
+   * into a payment nobody saw.
+   */
+  async collectAcross(
+    tenantId: string,
+    patientId: string,
+    input: { mode: string; amountPaise: number; reference?: string; invoiceIds: string[] },
+    meta: RequestMeta,
+  ) {
+    const collectedByUserId = meta.actorUserId;
+    if (!collectedByUserId) throw new BadRequestException('A payment needs a collector.');
+    if (input.amountPaise <= 0) {
+      throw new BadRequestException('A payment must be more than zero.');
+    }
+    if (input.invoiceIds.length === 0) {
+      throw new BadRequestException('Name the bills this money is for.');
+    }
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      /*
+       * Locked in a FIXED order, sorted by id.
+       *
+       * Two desks collecting from two patients who share a bill between them is
+       * not a thing, but two clerks on the same patient is — and two
+       * transactions taking the same locks in opposite orders deadlock. Sorting
+       * means every caller queues in the same order instead.
+       */
+      const ids = [...new Set(input.invoiceIds)].sort();
+      for (const id of ids) await lockInvoice(tx, id);
+
+      const invoices = await tx.invoice.findMany({
+        where: { id: { in: ids }, patientId },
+        // Oldest first: the order the money is applied in.
+        orderBy: { issuedAt: 'asc' },
+        select: { id: true, status: true, number: true, totalPaise: true, patientId: true },
+      });
+
+      // Belonging to this patient is part of the WHERE above, so a short result
+      // means one of the ids was somebody else's bill or does not exist. Either
+      // way the desk is not looking at what it thinks it is.
+      if (invoices.length !== ids.length) {
+        throw new NotFoundException('One of those bills is not this patient’s.');
+      }
+
+      for (const invoice of invoices) {
+        if (invoice.status === 'CANCELLED') {
+          throw new ConflictException({
+            code: 'INVOICE_CANCELLED',
+            message: `Bill ${invoice.number} was cancelled. Take it off the list and collect the rest.`,
+          });
+        }
+        if (invoice.status === 'WAIVED') {
+          throw new ConflictException({
+            code: 'INVOICE_WAIVED',
+            message: `Bill ${invoice.number} was waived. Reverse the waiver before collecting.`,
+          });
+        }
+      }
+
+      const owing: Array<{ id: string; number: string; totalPaise: number; balancePaise: number }> =
+        [];
+      for (const invoice of invoices) {
+        const { balancePaise } = await this.totals(tx, invoice.id, invoice.totalPaise);
+        if (balancePaise > 0) {
+          owing.push({
+            id: invoice.id,
+            number: invoice.number,
+            totalPaise: invoice.totalPaise,
+            balancePaise,
+          });
+        }
+      }
+
+      if (owing.length === 0) {
+        throw new ConflictException({
+          code: 'NOTHING_OWING',
+          message: 'Those bills are already settled.',
+        });
+      }
+
+      const outstandingPaise = owing.reduce((n, i) => n + i.balancePaise, 0);
+
+      // The same refusal as a single bill, for the same reason: a clinic that
+      // takes more than is owed has created a debt nobody recorded.
+      if (input.amountPaise > outstandingPaise) {
+        throw new ConflictException({
+          code: 'OVERPAYMENT',
+          message: `Only ${formatPaise(outstandingPaise)} is outstanding across those bills. Collect that or less.`,
+          balancePaise: outstandingPaise,
+        });
+      }
+
+      const allocated: Array<{
+        invoiceId: string;
+        invoiceNumber: string;
+        amountPaise: number;
+        paymentId: string;
+        balancePaise: number;
+      }> = [];
+
+      let left = input.amountPaise;
+      for (const invoice of owing) {
+        if (left <= 0) break;
+
+        // Everything this bill still needs, or everything that is left.
+        const share = Math.min(invoice.balancePaise, left);
+
+        const payment = await this.recordPaymentAgainst(
+          tx,
+          tenantId,
+          { id: invoice.id, totalPaise: invoice.totalPaise, patientId },
+          {
+            mode: input.mode,
+            amountPaise: share,
+            ...(input.reference ? { reference: input.reference } : {}),
+          },
+          collectedByUserId,
+          invoice.balancePaise,
+          meta,
+        );
+
+        allocated.push({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          amountPaise: share,
+          paymentId: payment.id,
+          balancePaise: invoice.balancePaise - share,
+        });
+
+        left -= share;
+      }
+
+      return {
+        collectedPaise: input.amountPaise,
+        outstandingBeforePaise: outstandingPaise,
+        outstandingAfterPaise: outstandingPaise - input.amountPaise,
+        billsSettled: allocated.filter((a) => a.balancePaise === 0).length,
+        allocated,
+      };
+    });
+  }
+
+  /**
+   * One payment and its receipt against ONE invoice that is ALREADY LOCKED.
+   *
+   * Extracted from `collect` so that paying several of a patient's bills in one
+   * go cannot drift from paying one of them — the receipt's frozen figures, the
+   * restatus and the audit row are the parts that must be identical however the
+   * money arrived. The caller locks the invoice and works out the balance,
+   * because only the caller knows whether this is the whole payment or one
+   * slice of a larger one.
+   */
+  private async recordPaymentAgainst(
+    tx: TenantClient,
+    tenantId: string,
+    invoice: { id: string; totalPaise: number; patientId: string },
+    input: { mode: string; amountPaise: number; reference?: string },
+    collectedByUserId: string,
+    balancePaise: number,
+    meta: RequestMeta,
+  ): Promise<{ id: string; collectedAt: Date }> {
+    const id = invoice.id;
+
+    const payment = await tx.payment.create({
+      data: {
+        tenantId,
+        invoiceId: id,
+        direction: 'IN',
+        mode: input.mode as never,
+        amountPaise: input.amountPaise,
+        reference: input.reference ?? null,
+        collectedByUserId,
+      },
+      select: { id: true, collectedAt: true },
+    });
+
+    /**
+     * The receipt, written in the same transaction as the payment.
+     *
+     * FR-RCP-01: every time the desk takes money, there is a receipt to hand
+     * over. Created HERE rather than at print time so its figures are the ones
+     * that were true when the money moved — a payment without a receipt is not
+     * a state this database can hold.
+     *
+     * The money block is FROZEN rather than derived. Deriving it looked safe,
+     * since the total cannot move while money sits on the invoice — but
+     * `loadEditable` tests paid MINUS refunded, so a fully refunded invoice
+     * becomes editable again and its total can change afterwards. A reprint
+     * would then show a balance that was never true on the day.
+     *
+     * One receipt per BILL, including when several bills are settled by one
+     * handover of cash. Narveer's call, 29 Oct 2026: a combined slip would mean
+     * a receipt pointing at many payments, and that is the one thing this table
+     * is shaped not to do. Three bills therefore produce three slips.
+     */
+    const full = await tx.invoice.findUniqueOrThrow({
+      where: { id },
+      select: { subtotalPaise: true, discountPaise: true, taxPaise: true, totalPaise: true },
+    });
+
+    await tx.receipt.create({
+      data: {
+        tenantId,
+        paymentId: payment.id,
+        invoiceId: id,
+        number: await this.nextReceiptNumber(tx, tenantId),
+        totalChargedPaise: full.subtotalPaise,
+        discountPaise: full.discountPaise,
+        taxPaise: full.taxPaise,
+        payablePaise: full.totalPaise,
+        paidNowPaise: input.amountPaise,
+        // What was still outstanding immediately after this payment. The
+        // balance passed in is the one BEFORE it.
+        balancePaise: balancePaise - input.amountPaise,
+        issuedAt: payment.collectedAt,
+      },
+    });
+
+    await this.restatus(tx, id, invoice.totalPaise);
+
+    await this.audit.record(tx, tenantId, {
+      action: 'payment.collect',
+      resourceType: 'Invoice',
+      resourceId: id,
+      patientId: invoice.patientId,
+      changedFields: ['payments', 'status'],
+      ...meta,
+    });
+
+    return payment;
   }
 
   /** Give money back. Never more than came in. */
@@ -1230,6 +1433,30 @@ export class BillingService {
       });
       const tz = tenant.timezone;
       const day = date ?? clinicToday(tz);
+
+      /*
+       * NO DAY THAT HAS NOT HAPPENED YET.
+       *
+       * The screen carries `max={today}` on the picker, and that is all `max`
+       * does — a date TYPED into the field still reaches state and still comes
+       * down the wire. Reported from the clinic on 30 Oct 2026 for this screen
+       * and for the finance report, which guards it the same way.
+       *
+       * Refused rather than clamped: a collection sheet silently showing a
+       * different day than the one asked for is how a figure gets quoted at
+       * closing and nobody can reproduce it.
+       *
+       * Against the CLINIC's today, not the server's — see `ageFrom` for what
+       * the UTC date does for five and a half hours every morning.
+       */
+      const today = clinicToday(tz);
+      if (day > today) {
+        throw new BadRequestException({
+          code: 'FUTURE_DAY',
+          message: 'That day has not happened yet. Collections can only be read up to today.',
+          today,
+        });
+      }
 
       const from = localToInstant(day, '00:00', tz);
       const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);

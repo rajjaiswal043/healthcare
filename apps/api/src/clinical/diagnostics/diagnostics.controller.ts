@@ -27,6 +27,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { IsPersonName } from '../../common/is-person-name.decorator.js';
 import { IsReportText } from '../../common/is-clinical-text.decorator.js';
 import type { FastifyRequest } from 'fastify';
 import {
@@ -188,9 +189,17 @@ class WalkInOrderDto {
 }
 
 class HandoverDto {
-  /** The patient, or the relative who collected it. Free text — see the column. */
+  /**
+   * The patient, or the relative who collected it. Free text — see the column.
+   *
+   * A NAME, because this is the clinic's record of who physically took a
+   * report away. `@MinLength(2)` accepted "12" and "@@", reported from the
+   * clinic on 30 Oct 2026 — and a handover row naming nobody is the one thing
+   * this field exists to prevent. Two letters in any script; see
+   * `IsPersonName` for why digits themselves are not banned.
+   */
   @IsString()
-  @MinLength(2)
+  @IsPersonName()
   @MaxLength(160)
   handedOverTo!: string;
 }
@@ -213,6 +222,24 @@ class CompleteOrderDto {
   @IsReportText()
   @MaxLength(2000)
   resultNote?: string;
+
+  /**
+   * Why this finished test has no report attached.
+   *
+   * A note is NOT a report — it is the remark about one. Until 30 Oct 2026 a
+   * note alone closed a test, so an X-ray could read COMPLETED with no image
+   * behind it, which is what the department was reported doing.
+   *
+   * Not every test produces a file, though: a strip test read off a card, a
+   * reading taken verbally, a measurement on a slip. So the rule is a file OR
+   * a stated reason there is none — and the reason is stored, because "which
+   * finished tests have no report, and why" has to stay answerable.
+   */
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  noFileReason?: string;
 }
 
 class WorklistQueryDto {
@@ -426,7 +453,13 @@ export class DiagnosticsController {
     @Body() dto: CompleteOrderDto,
     @Req() req: FastifyRequest,
   ) {
-    return this.diagnostics.completeOrder(tenantId, id, dto.resultNote, meta(req, user));
+    return this.diagnostics.completeOrder(
+      tenantId,
+      id,
+      dto.resultNote,
+      dto.noFileReason,
+      meta(req, user),
+    );
   }
 
   /**

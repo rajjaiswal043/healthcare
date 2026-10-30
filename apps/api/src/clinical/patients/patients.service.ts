@@ -341,6 +341,27 @@ export class PatientsService {
         data['allergiesReviewedAt'] = new Date();
       }
 
+      /*
+       * ONE AGE, NOT TWO.
+       *
+       * A patient has a date of birth or a stated age, never both — the one
+       * the caller supplies wins and the other is cleared below.
+       *
+       * Refused rather than reconciled when BOTH arrive, because there is no
+       * honest way to choose: silently preferring one would record a fact the
+       * caller did not send and throw away one they did. The correction dialog
+       * used to send both whenever both had changed, which slipped past the
+       * branches below — neither fired — and stored a date of birth beside a
+       * contradictory age. Reported from the clinic, 30 Oct 2026. The dialog
+       * now clears its sibling field; this is here so no other caller can put
+       * the record back into that state.
+       */
+      if (input['birthDate'] !== undefined && input['ageYears'] !== undefined) {
+        throw new BadRequestException(
+          'Send a date of birth or an age, not both — recording one clears the other.',
+        );
+      }
+
       // Keep the two age representations from disagreeing. Whichever the caller
       // supplied wins, and the other is cleared.
       if (data['birthDate'] !== undefined && input['ageYears'] === undefined) {

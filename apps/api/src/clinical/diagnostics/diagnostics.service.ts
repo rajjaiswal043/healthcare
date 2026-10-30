@@ -863,10 +863,29 @@ export class DiagnosticsService {
    * Completing twice is refused rather than silently re-stamped: the second
    * caller would overwrite who did it and when.
    */
+  /**
+   * MARK A TEST DONE.
+   *
+   * A FILE, OR A STATED REASON THERE IS NONE. Until 30 Oct 2026 this refused
+   * only a completely empty result — no note and no file — and accepted
+   * anything beyond that. So a note alone closed the test, and an X-ray could
+   * read COMPLETED with no image behind it. Reported from the clinic.
+   *
+   * A note is not a report. It is the remark ABOUT the report, and a record
+   * claiming the work is finished while holding nothing a clinician can read is
+   * worse than one admitting the work is outstanding.
+   *
+   * Not every test produces a file, though — a strip test read off a card, a
+   * reading taken verbally, a measurement on a slip. Requiring an upload for
+   * those would leave the desk unable to close a test it had genuinely done. So
+   * the exception is explicit and recorded, rather than implied by silence.
+   * Narveer's call, 30 Oct 2026.
+   */
   async completeOrder(
     tenantId: string,
     orderId: string,
     resultNote: string | undefined,
+    noFileReason: string | undefined,
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
@@ -899,12 +918,34 @@ export class DiagnosticsService {
       }
 
       const note = resultNote?.trim();
-      if (!note && existing._count.documents === 0) {
+      const why = noFileReason?.trim();
+      const hasFile = existing._count.documents > 0;
+
+      if (!note && !hasFile) {
         throw new BadRequestException({
           code: 'RESULT_IS_EMPTY',
           message: 'Attach a file or write a report before marking the test done.',
         });
       }
+
+      /*
+       * A note without a file is allowed only once somebody has said why.
+       *
+       * Checked after the empty case so the thinner record still gets the
+       * plainer message — "write something" before "explain yourself".
+       */
+      if (!hasFile && !why) {
+        throw new BadRequestException({
+          code: 'RESULT_HAS_NO_FILE',
+          message:
+            'Attach the report, or say why there is no file to attach — ' +
+            'remarks on their own do not record what the test found.',
+        });
+      }
+
+      // Not kept when there IS a file: it would be an answer to a question
+      // nobody asked, and a later reader would wonder which to believe.
+      const storedWhy = hasFile ? null : (why ?? null);
 
       const order = await tx.diagnosticOrder.update({
         where: { id: orderId },
@@ -913,6 +954,7 @@ export class DiagnosticsService {
           completedAt: new Date(),
           completedByUserId: meta.actorUserId,
           ...(note ? { resultNote: note } : {}),
+          noFileReason: storedWhy,
         },
         select: ORDER_SELECT,
       });
@@ -922,7 +964,12 @@ export class DiagnosticsService {
         resourceType: 'DiagnosticOrder',
         resourceId: orderId,
         patientId: existing.patientId,
-        changedFields: ['status', 'resultNote'],
+        changedFields: storedWhy
+          ? ['status', 'resultNote', 'noFileReason']
+          : ['status', 'resultNote'],
+        // A test closed with no report is the case somebody may have to answer
+        // for later, so the stated reason goes in the audit trail too.
+        ...(storedWhy ? { reason: storedWhy } : {}),
         ...meta,
       });
 
@@ -1474,6 +1521,24 @@ const ORDER_SELECT = {
  * at all — so they are reduced to a state here and the raw rows are dropped.
  * Every method that returns an order goes through this.
  */
+/**
+ * The clinic timezone this file falls back to, as `clinicDayWindow` already
+ * does.
+ *
+ * Used for the patient's AGE on a slip or worklist card, and nothing else. The
+ * age has to be worked out against the calendar the clinic lives in — see
+ * `ageFrom`, which read UTC until 30 Oct 2026 and so reported every patient a
+ * year younger on their birthday for the first five and a half hours of each
+ * IST day.
+ *
+ * Named rather than defaulted inside `ageFrom`, so that a wrong zone is visible
+ * at the call site instead of hidden behind a parameter nobody passes. Every
+ * tenant today is Indian and `tenant.timezone` defaults to this; threading the
+ * real value through all eight `toView` callers would add a tenant query per
+ * order, including inside the worklist loop, for a decorative figure.
+ */
+const SLIP_AGE_TIMEZONE = 'Asia/Kolkata';
+
 function toView<T extends DiagnosticBillingInput>(order: T) {
   const { invoiceLine, legacyUnbilled: _legacyUnbilled, ...rest } = order;
 
@@ -1492,7 +1557,10 @@ function toView<T extends DiagnosticBillingInput>(order: T) {
             ageYears: number | null;
           } & Record<string, unknown>;
 
-          return { ...person, ageYears: ageFrom(person.ageYears, birthDate) };
+          return {
+            ...person,
+            ageYears: ageFrom(person.ageYears, birthDate, SLIP_AGE_TIMEZONE),
+          };
         })()
       : undefined;
 

@@ -21,7 +21,7 @@
  * exactly the group the "At a department" tab exists for.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   closeTestApp,
@@ -56,9 +56,11 @@ interface Row {
   testDepartment: string | null;
   token: number | null;
   withWhom: string | null;
+  doctorCount: number;
   visitFee: string | null;
   testFee: string | null;
   paymentMethods: string[];
+  feeWaived: boolean;
   /** Null for a caller without `invoice:read`. */
   money: { billedPaise: number; duePaise: number } | null;
   nextSteps: Array<{
@@ -771,6 +773,45 @@ describe('the money tag', () => {
     expect((await board()).rows[0]!.paymentMethods).toEqual(['UPI']);
   });
 
+  /**
+   * A WAIVED CHARGE IS NOT AN UNANSWERED ONE.
+   *
+   * `invoiceSettlement` folds PAID, WAIVED and DEFERRED into one SETTLED answer
+   * — right for "is money still expected", useless for "how was this settled".
+   * A waiver produces no payment row at all, so the board's Method column had
+   * nothing to print and showed a hyphen, which reads as data that failed to
+   * load rather than as a decision somebody took and signed for. Reported from
+   * the clinic, 30 Oct 2026.
+   */
+  it('says a charge was written off, rather than leaving the method blank', async () => {
+    await visit('BOOKED', 0);
+    const invoiceId = await billVisit();
+
+    expect((await board()).rows[0]!.feeWaived).toBe(false);
+
+    // A waiver carries its reason and whoever authorised it — the database
+    // refuses one without, which is it saying an exception needs a name on it.
+    const [authoriser] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM app_user WHERE tenant_id = $1 AND email = 'admin@main.test'`,
+      [fx.main.id],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE invoice
+          SET status = 'WAIVED', reason = 'Staff family', authorised_by_user_id = $2
+        WHERE id = $1`,
+      [invoiceId, authoriser!.id],
+    );
+
+    const row = (await board()).rows[0]!;
+
+    expect(row.feeWaived).toBe(true);
+    // Still no payment, because none happened. The browser prints "Waived" off
+    // the flag rather than inventing a method that was never used.
+    expect(row.paymentMethods).toEqual([]);
+  });
+
   it('lists each method once, in the order the money came in', async () => {
     // A consultation on a card and a test settled in cash is two methods for
     // one patient. Two cash payments is still one method.
@@ -841,6 +882,44 @@ describe('the money tag', () => {
  * hidden by the browser, which is what the first test here pins down.
  */
 describe('the amount column', () => {
+  /**
+   * A WAIVER IS A JUDGEMENT ABOUT A PERSON, so it answers to the money rule.
+   *
+   * `feeWaived` was first sent to everybody, matched to `paymentMethods` beside
+   * it on the reasoning that both say HOW a charge was settled rather than what
+   * it came to. That was the wrong comparison, caught in review on 30 Oct 2026:
+   * "paid by UPI" is mundane, while "this bill was written off" implies staff
+   * family, hardship or a charitable case — and `appointment:read` is held by
+   * six roles, nurses and technicians among them.
+   *
+   * The blank-Method bug it fixes only exists for somebody who can see the
+   * amount: a hyphen beside a figure reads as data that failed to load. With no
+   * figure on the row there is nothing to contradict.
+   */
+  it('does not tell a doctor that a charge was written off', async () => {
+    await visit('ARRIVED', 0);
+    const invoiceId = await bill(50000);
+
+    const [authoriser] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM app_user WHERE tenant_id = $1 AND email = 'admin@main.test'`,
+      [fx.main.id],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE invoice
+          SET status = 'WAIVED', reason = 'Staff family', authorised_by_user_id = $2
+        WHERE id = $1`,
+      [invoiceId, authoriser!.id],
+    );
+
+    // The front desk collects, so it may know.
+    expect((await board(frontDesk)).rows[0]!.feeWaived).toBe(true);
+
+    // The doctor may not. Left out of the RESPONSE, not hidden by the browser.
+    expect((await board(doctor)).rows[0]!.feeWaived).toBe(false);
+  });
+
   it('is left out entirely for a doctor, who holds no invoice:read', async () => {
     await visit('ARRIVED', 0);
     await bill(50000);
@@ -1093,7 +1172,7 @@ describe('what a row says to do next', () => {
 
     const [row] = (await board()).rows;
     const collect = row!.nextSteps.find((s: { kind: string }) => s.kind === 'COLLECT') as
-      { duePaise: number; billsOwing: number } | undefined;
+      { duePaise: number; billsOwing: number; invoiceIds: string[] } | undefined;
 
     expect(collect).toBeDefined();
     // One unpaid bill here — the test's. The count is honest either way, and
@@ -1117,13 +1196,22 @@ describe('what a row says to do next', () => {
 
     const [row] = (await board()).rows;
     const collect = row!.nextSteps.find((s: { kind: string }) => s.kind === 'COLLECT') as
-      { duePaise: number; billsOwing: number } | undefined;
+      { duePaise: number; billsOwing: number; invoiceIds: string[] } | undefined;
 
     expect(collect!.billsOwing).toBe(2);
-    // The button opens the OLDEST bill, which is the consultation's — so its
-    // figure is deliberately smaller than the row's total.
-    expect(collect!.duePaise).toBe(50000);
+
+    /*
+     * THE BUTTON AND THE COLUMN NOW CARRY THE SAME FIGURE.
+     *
+     * This used to assert 50000 — the oldest bill alone — because Collect could
+     * only ever open one bill while the column summed both, and the "1 of 2"
+     * label existed to explain the gap. Since 29 Oct 2026 the desk settles them
+     * together, so the step carries the patient's whole balance and both bills
+     * come back in `invoiceIds`, oldest first.
+     */
+    expect(collect!.duePaise).toBe(80000);
     expect(row!.money!.duePaise).toBe(80000);
+    expect(collect!.invoiceIds).toHaveLength(2);
   });
 
   it('offers the department its test only once that test is paid for', async () => {
@@ -1404,6 +1492,101 @@ describe('a visit nobody attended', () => {
     expect(board.rows[0]!.bucket).toBe('DID_NOT_COME');
   });
 
+  /**
+   * A VISIT IN `status` ON A DAY THAT HAS GONE, with the closure given.
+   *
+   * Reported from the clinic on 30 Oct 2026: patients seen on previous days
+   * stayed in "ready to close" forever, because nobody goes back to formally
+   * close a Tuesday three weeks ago.
+   */
+  async function visitDaysAgo(days: number, status: string, closed: boolean): Promise<void> {
+    /*
+     * PATIENT 1, AND A DAY OF ITS OWN PER TEST.
+     *
+     * This file has no `beforeEach`, so every row inserted here outlives the
+     * test that made it — and the board is ONE ROW PER PATIENT PER DAY, so two
+     * tests sharing a patient and a day get one merged row with both visits on
+     * it. Writing these on day 9 beside `bookedDaysAgo(9)` turned that row's
+     * bucket into whichever visit ranked highest and quietly broke two
+     * unrelated assertions about a no-show.
+     */
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, queue_date, status, visit_type,
+                                closed_at, updated_at)
+       VALUES ($1, $2, $3, $4,
+               now() - ($5 || ' days')::interval,
+               now() - ($5 || ' days')::interval + interval '15 minutes',
+               (((now() AT TIME ZONE 'Asia/Kolkata')::date
+                   - ($5 || ' days')::interval)::date),
+               $6::appointment_status, 'NEW',
+               CASE WHEN $7 THEN now() - ($5 || ' days')::interval ELSE NULL END,
+               now())`,
+      [
+        fx.main.id,
+        fx.main.patientIds[1],
+        fx.main.practitionerId,
+        fx.main.locationId,
+        String(days),
+        status,
+        closed,
+      ],
+    );
+  }
+
+  /** That patient's row on that day, whoever else was in the clinic. */
+  async function rowDaysAgo(days: number): Promise<Row> {
+    const board = await boardOn(await clinicDaysAgo(days));
+    const row = board.rows.find((r) => r.patient.id === fx.main.patientIds[1]);
+    expect(row).toBeDefined();
+    return row!;
+  }
+
+  it('reads as done on a past day even though nobody closed it', async () => {
+    await visitDaysAgo(11, 'FULFILLED', false);
+
+    // READ as closed, not WRITTEN as closed — Narveer's call, 30 Oct 2026. The
+    // row stops nagging; `closed_at` is untouched in the database.
+    expect((await rowDaysAgo(11)).bucket).toBe('DONE');
+  });
+
+  it('is still waiting to be closed on the day itself', async () => {
+    // The line between the two. The doctor has finished, but the patient is
+    // still in the building, which is the whole of the 22 Oct split.
+    await visitDaysAgo(0, 'FULFILLED', false);
+
+    expect((await rowDaysAgo(0)).bucket).toBe('READY_TO_CLOSE');
+  });
+
+  it('does not offer to reopen a past visit nobody ever closed', async () => {
+    await visitDaysAgo(12, 'FULFILLED', false);
+
+    // It reads as DONE, but `reopenVisit` refuses a visit with no closure —
+    // so offering the button would be drawing one the server throws out.
+    expect(stepKinds(await rowDaysAgo(12))).not.toContain('REOPEN_VISIT');
+  });
+
+  it('still offers to reopen one that really was closed', async () => {
+    await visitDaysAgo(13, 'FULFILLED', true);
+
+    const row = await rowDaysAgo(13);
+
+    expect(row.bucket).toBe('DONE');
+    expect(stepKinds(row)).toContain('REOPEN_VISIT');
+  });
+
+  it('lets a visit left half-open on a past day be closed', async () => {
+    // Arrived, and then the day ended around them. Until 30 Oct 2026 the board
+    // offered NOTHING on these rows, so they could never be tidied.
+    await visitDaysAgo(14, 'ARRIVED', false);
+
+    const row = await rowDaysAgo(14);
+
+    expect(row.bucket).toBe('NOT_FINISHED');
+    expect(stepKinds(row)).toContain('CLOSE_VISIT');
+  });
+
   it('is still merely expected on the day itself', async () => {
     // The same row, read on its own day. Somebody booked for this afternoon has
     // not failed to turn up, and this is the line between the two.
@@ -1449,5 +1632,121 @@ describe('a visit nobody attended', () => {
 
     expect(board.rows[0]!.bucket).toBe('WAITING');
     expect(stepKinds(board.rows[0]!)).not.toContain('MARK_NO_SHOW');
+  });
+});
+
+/**
+ * ONE PATIENT, SEVERAL DOCTORS, ONE ROW.
+ *
+ * Reported from the clinic on 30 Oct 2026 (point 37): a patient booked with
+ * more than one doctor showed exactly ONE of them in the "With" column, because
+ * the row took the first name it saw with `??=`. The front desk could not tell
+ * a three-doctor visit from an ordinary one — and that is precisely the row
+ * whose tokens and bills look wrong, since both are issued per doctor.
+ *
+ * The row stays ONE ROW PER PATIENT — Narveer's call the same day. Splitting the
+ * board by doctor would list the same person three times and the board's
+ * one-action-per-row rule would stop meaning anything.
+ *
+ * PATIENT 2 AND A RESET, because this file has no `beforeEach` of its own and
+ * every appointment inserted here outlives the test that made it. Sharing
+ * patient 0 with the rest of the file made "one doctor" see the second doctor
+ * left behind by the test before it.
+ */
+describe('a patient seeing more than one doctor', () => {
+  let second: string;
+  let firstName: string;
+  const patientId = () => fx.main.patientIds[2]!;
+
+  beforeAll(async () => {
+    // Read rather than hard-coded: the fixture names its doctor, and a literal
+    // here would quietly rot the day that name changes.
+    const [mine] = await ownerQuery<{ full_name: string }>(
+      fx.main.id,
+      'SELECT full_name FROM practitioner WHERE id = $1',
+      [fx.main.practitionerId],
+    );
+    firstName = mine!.full_name;
+
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO practitioner
+         (tenant_id, full_name, registration_number, specialty, overbook_per_session, updated_at)
+       VALUES ($1, 'Dr Board Physio', 'MH-BOARD-02', 'Physiotherapy', 0, now())
+       RETURNING id`,
+      [fx.main.id],
+    );
+    second = row!.id;
+  });
+
+  beforeEach(async () => {
+    await ownerQuery(fx.main.id, 'DELETE FROM appointment WHERE patient_id = $1', [patientId()]);
+  });
+
+  afterAll(async () => {
+    await ownerQuery(fx.main.id, 'DELETE FROM appointment WHERE patient_id = $1', [patientId()]);
+    await ownerQuery(fx.main.id, 'DELETE FROM practitioner WHERE id = $1', [second]);
+  });
+
+  /** A visit today with a named doctor, at `hoursFromNow` so they do not clash. */
+  async function visitWith(practitionerId: string, hoursFromNow: number) {
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
+                                start_at, end_at, queue_date, status, visit_type, updated_at)
+       VALUES ($1, $2, $3, $4,
+               now() + ($5 || ' hours')::interval,
+               now() + ($5 || ' hours')::interval + interval '15 minutes',
+               (now() AT TIME ZONE 'Asia/Kolkata')::date,
+               'BOOKED', 'NEW', now())`,
+      [fx.main.id, patientId(), practitionerId, fx.main.locationId, String(hoursFromNow)],
+    );
+  }
+
+  /** This patient's row, whoever else is in the clinic today. */
+  async function row(): Promise<Row> {
+    const found = (await board()).rows.find((r) => r.patient.id === patientId());
+    expect(found).toBeDefined();
+    return found!;
+  }
+
+  it('names every doctor, not just the first', async () => {
+    await visitWith(fx.main.practitionerId, 1);
+    await visitWith(second, 3);
+
+    const r = await row();
+
+    expect(r.doctorCount).toBe(2);
+    // Both names, in appointment-time order — the earlier doctor first.
+    expect(r.withWhom).toBe(`${firstName}, Dr Board Physio`);
+  });
+
+  it('is still one row, however many doctors', async () => {
+    await visitWith(fx.main.practitionerId, 1);
+    await visitWith(second, 3);
+
+    // The whole point of the decision: two doctors must not become two patients.
+    const mine = (await board()).rows.filter((r) => r.patient.id === patientId());
+    expect(mine).toHaveLength(1);
+  });
+
+  it('says one doctor for an ordinary visit', async () => {
+    await visitWith(fx.main.practitionerId, 1);
+
+    const r = await row();
+
+    expect(r.doctorCount).toBe(1);
+    expect(r.withWhom).toBe(firstName);
+  });
+
+  it('does not repeat a doctor holding two of the same patient’s visits', async () => {
+    await visitWith(fx.main.practitionerId, 1);
+    await visitWith(fx.main.practitionerId, 4);
+
+    const r = await row();
+
+    // "Dr Rao, Dr Rao" is noise, not information.
+    expect(r.doctorCount).toBe(1);
+    expect(r.withWhom).toBe(firstName);
   });
 });

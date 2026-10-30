@@ -1188,7 +1188,7 @@ describe('the pay-first gate on a test', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'No fracture.' },
+      payload: { resultNote: 'No fracture.', noFileReason: 'Read off the strip; nothing printed.' },
     });
   }
 
@@ -1488,7 +1488,7 @@ describe('declining a test', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'No fracture.' },
+      payload: { resultNote: 'No fracture.', noFileReason: 'Read off the strip; nothing printed.' },
     });
     expect(completed.statusCode).toBe(400);
     // Told apart from "unpaid" in as many words: nobody is coming, and no
@@ -1600,7 +1600,7 @@ describe('declining a test', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${other.orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'No fracture.' },
+      payload: { resultNote: 'No fracture.', noFileReason: 'Read off the strip; nothing printed.' },
     });
 
     const res = await decline(frontDesk, other.orderId);
@@ -2026,7 +2026,7 @@ describe('a test nobody prescribed', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'No fracture.' },
+      payload: { resultNote: 'No fracture.', noFileReason: 'Read off the strip; nothing printed.' },
     });
     expect(blocked.statusCode).toBe(409);
 
@@ -2051,7 +2051,7 @@ describe('a test nobody prescribed', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'No fracture.' },
+      payload: { resultNote: 'No fracture.', noFileReason: 'Read off the strip; nothing printed.' },
     });
     expect(done.statusCode).toBe(200);
   });
@@ -2286,7 +2286,7 @@ describe('finance raises a walk-in', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'No fracture.' },
+      payload: { resultNote: 'No fracture.', noFileReason: 'Read off the strip; nothing printed.' },
     });
     expect(blocked.statusCode).toBe(409);
 
@@ -2301,7 +2301,7 @@ describe('finance raises a walk-in', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'No fracture.' },
+      payload: { resultNote: 'No fracture.', noFileReason: 'Read off the strip; nothing printed.' },
     });
     expect(done.statusCode).toBe(200);
   });
@@ -2339,7 +2339,10 @@ describe('handing the report over', () => {
       method: 'PATCH',
       url: `/api/v1/diagnostics/orders/${orderId}/complete`,
       headers: { cookie: diagnosticsUser.cookie },
-      payload: { resultNote: 'Normal study.' },
+      payload: {
+        resultNote: 'Normal study.',
+        noFileReason: 'Read off the strip; nothing printed.',
+      },
     });
     expect(done.statusCode).toBe(200);
     return orderId;
@@ -2353,6 +2356,34 @@ describe('handing the report over', () => {
       payload: { handedOverTo },
     });
   }
+
+  /**
+   * WHO TOOK IT HAS TO BE A NAME.
+   *
+   * Reported from the clinic on 30 Oct 2026: the box accepted "12" and "@@".
+   * This field is the clinic's only record of who physically walked out with a
+   * report, so a handover row naming nobody defeats the one purpose it has.
+   *
+   * Two letters in any script — digits themselves are fine, because "Ram 2nd"
+   * is a real way to write a name and a mistyped mobile number has no letters
+   * at all. See `IsPersonName`.
+   */
+  it('refuses a handover to somebody with no name', async () => {
+    const orderId = await reported();
+
+    for (const typed of ['12', '999', '@@', '..']) {
+      const res = await handOver(diagnosticsUser, orderId, typed);
+      expect(res.statusCode, `accepted ${typed}`).toBe(400);
+    }
+  });
+
+  it('still takes a name with a digit or a bracket in it', async () => {
+    // The shapes a real desk types, which the rule must not refuse.
+    const orderId = await reported();
+
+    const res = await handOver(diagnosticsUser, orderId, 'Sunita Sharma (daughter) 2');
+    expect(res.statusCode).toBe(201);
+  });
 
   it('records who took it and when', async () => {
     const orderId = await reported();
@@ -2811,7 +2842,10 @@ describe('completing an order', () => {
     const id = await pendingOrder();
     await attach(diagnosticsUser, id);
 
-    const res = await complete(diagnosticsUser, id, { resultNote: 'No fracture. Mild effusion.' });
+    const res = await complete(diagnosticsUser, id, {
+      resultNote: 'No fracture. Mild effusion.',
+      noFileReason: 'Read off the strip; nothing printed.',
+    });
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{
@@ -2839,13 +2873,49 @@ describe('completing an order', () => {
     expect(res.json().error.details?.code).toBe('RESULT_IS_EMPTY');
   });
 
-  it('accepts a report with no file — not every result is an image', async () => {
+  /**
+   * A REPORT WITH NO FILE IS STILL ALLOWED — but it has to say so.
+   *
+   * Not every result is an image: a strip test read off a card, a reading
+   * phoned over by the lab. This test has always protected that, and still
+   * does. What changed on 30 Oct 2026 is that the exception is now STATED
+   * rather than implied by silence — because the same silence also let an X-ray
+   * be closed with a line of remarks and no image behind it.
+   */
+  it('accepts a report with no file, once it says why there is none', async () => {
     const res = await complete(diagnosticsUser, await pendingOrder(), {
       resultNote: 'Hb 11.2, WBC normal.',
+      noFileReason: 'Read off the analyser; nothing printed.',
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json<{ status: string }>().status).toBe('COMPLETED');
+  });
+
+  it('refuses a note with no file and no reason for there being none', async () => {
+    const res = await complete(diagnosticsUser, await pendingOrder(), {
+      resultNote: 'Hb 11.2, WBC normal.',
+    });
+
+    // The reported defect: remarks alone closed the test, so an X-ray could
+    // read COMPLETED with no image behind it.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('RESULT_HAS_NO_FILE');
+  });
+
+  it('stores the stated reason, so it can be asked about later', async () => {
+    const id = await pendingOrder();
+    await complete(diagnosticsUser, id, {
+      resultNote: 'Hb 11.2, WBC normal.',
+      noFileReason: 'Read off the analyser; nothing printed.',
+    });
+
+    const [row] = await ownerQuery<{ no_file_reason: string | null }>(
+      fx.main.id,
+      'SELECT no_file_reason FROM diagnostic_order WHERE id = $1',
+      [id],
+    );
+    expect(row?.no_file_reason).toBe('Read off the analyser; nothing printed.');
   });
 
   /**
@@ -2872,9 +2942,15 @@ describe('completing an order', () => {
 
   it('refuses to complete twice, rather than restamping who did it', async () => {
     const id = await pendingOrder();
-    await complete(diagnosticsUser, id, { resultNote: 'Done' });
+    await complete(diagnosticsUser, id, {
+      resultNote: 'Done',
+      noFileReason: 'Read off the strip; nothing printed.',
+    });
 
-    const again = await complete(diagnosticsUser, id, { resultNote: 'Done again' });
+    const again = await complete(diagnosticsUser, id, {
+      resultNote: 'Done again',
+      noFileReason: 'Read off the strip; nothing printed.',
+    });
 
     expect(again.statusCode).toBe(400);
     expect(again.json().error.details?.code).toBe('ORDER_NOT_PENDING');
@@ -2882,7 +2958,10 @@ describe('completing an order', () => {
 
   it('drops off the pending worklist and appears under completed', async () => {
     const id = await pendingOrder();
-    await complete(diagnosticsUser, id, { resultNote: 'Done' });
+    await complete(diagnosticsUser, id, {
+      resultNote: 'Done',
+      noFileReason: 'Read off the strip; nothing printed.',
+    });
 
     const pending = await app.inject({
       method: 'GET',
@@ -2903,7 +2982,10 @@ describe('completing an order', () => {
   it('lets the doctor read the result they asked for', async () => {
     const id = await pendingOrder();
     await attach(diagnosticsUser, id);
-    await complete(diagnosticsUser, id, { resultNote: 'No fracture.' });
+    await complete(diagnosticsUser, id, {
+      resultNote: 'No fracture.',
+      noFileReason: 'Read off the strip; nothing printed.',
+    });
 
     const res = await app.inject({
       method: 'GET',

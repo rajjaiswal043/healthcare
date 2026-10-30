@@ -50,6 +50,8 @@ export function RecordResultDialog({
   onRecorded: (message: string) => void;
 }) {
   const [note, setNote] = useState('');
+  /** Why there is no file. Only asked for, and only sent, when there is none. */
+  const [noFileReason, setNoFileReason] = useState('');
   const [documents, setDocuments] = useState<ClinicalDocument[]>([]);
   const [busy, setBusy] = useState<'loading' | 'attaching' | 'completing' | null>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -122,8 +124,20 @@ export function RecordResultDialog({
    */
   const hasResult = note.trim().length >= 2 || documents.length > 0;
 
+  /**
+   * A NOTE IS NOT A REPORT.
+   *
+   * Since 30 Oct 2026 the server takes a note alone only once somebody has said
+   * why there is no file — a test reading COMPLETED with no image behind it was
+   * reported from the clinic. Not every test produces one (a strip test read off
+   * a card, a reading taken verbally), so the exception is explicit and stored
+   * rather than implied by silence.
+   */
+  const needsWhy = documents.length === 0;
+  const canRecord = hasResult && (!needsWhy || noFileReason.trim().length >= 3);
+
   async function record() {
-    if (!hasResult) return;
+    if (!canRecord) return;
     setBusy('completing');
     setError(null);
 
@@ -131,7 +145,11 @@ export function RecordResultDialog({
       /* An empty note is sent as empty rather than as two spaces: the server
          stores it only when there is something in it, and a note of "" beside
          an attached film is the honest record of "the film is the result". */
-      await api.completeDiagnosticOrder(orderId, note.trim());
+      await api.completeDiagnosticOrder(
+        orderId,
+        note.trim(),
+        needsWhy ? noFileReason.trim() : undefined,
+      );
       onRecorded(`${row.patient.name}’s result is recorded. The doctor can see it now.`);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not record the result.');
@@ -230,6 +248,38 @@ export function RecordResultDialog({
             </span>
           </label>
 
+          {/*
+            WHY THERE IS NO FILE — asked only when there is none.
+
+            A note is the remark ABOUT a report, not the report, and until
+            30 Oct 2026 a note alone closed the test: an X-ray could read
+            COMPLETED with no image behind it, which the department was
+            reported doing. But a strip test read off a card or a reading taken
+            verbally genuinely has no file, so the way through is to say so —
+            and what is said is stored, because "which finished tests have no
+            report, and why" has to stay answerable.
+
+            Appears only with nothing attached, and disappears the moment a file
+            is: a question nobody needs to answer should not be on the screen.
+          */}
+          {needsWhy && (
+            <label className="block">
+              <span className="field-label">Why is there no file to attach?</span>
+              <input
+                value={noFileReason}
+                onChange={(e) => setNoFileReason(e.target.value)}
+                maxLength={300}
+                disabled={working}
+                placeholder="Read off the strip; nothing printed. / Reading phoned over by the lab."
+                className="field-input"
+              />
+              <span className="field-hint">
+                Attach the report instead if there is one — this is for tests that never produce a
+                file.
+              </span>
+            </label>
+          )}
+
           {/* Handover is a counter job, often hours later and often somebody
               else, so it stays where the form for it lives. */}
           <p className="text-[12.5px] text-ink-40">
@@ -250,9 +300,11 @@ export function RecordResultDialog({
             either alone is enough.
           */}
           <p className="text-[12px] text-ink-40">
-            {hasResult
-              ? 'Marks the test done for everyone.'
-              : 'Attach the film or write the reading first.'}
+            {!hasResult
+              ? 'Attach the film or write the reading first.'
+              : canRecord
+                ? 'Marks the test done for everyone.'
+                : 'Say why there is no file to attach.'}
           </p>
           <div className="flex gap-2">
             <button type="button" className="btn-ghost" onClick={onClose} disabled={working}>
@@ -261,7 +313,7 @@ export function RecordResultDialog({
             <button
               type="button"
               className="btn-primary"
-              disabled={!hasResult || working}
+              disabled={!canRecord || working}
               onClick={() => void record()}
             >
               {busy === 'completing' ? 'Recording…' : 'Mark done'}

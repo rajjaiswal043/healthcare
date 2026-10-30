@@ -132,15 +132,20 @@ export interface RowMoney {
  */
 export type NextStep =
   /**
-   * `duePaise` is THIS BILL's balance, not the patient's.
+   * `duePaise` is THE PATIENT's balance, across every bill still owing, and
+   * `invoiceIds` lists them oldest first.
    *
-   * A visit with a test on it has two bills, and the row's money column sums
-   * both — so a button saying "Collect ₹500" beside a column saying "₹1,000
-   * due" read as a contradiction to the desk. `billsOwing` says how many there
-   * are, so the browser can write "1 of 2" and the two numbers explain each
-   * other instead of disagreeing.
+   * It used to be this ONE bill's balance — the oldest — and the button read
+   * "Collect ₹500 · 1 of 2" beside a column saying "₹1,000 due", because the
+   * column summed the bills and the button could only open one of them. The
+   * label existed to stop those two numbers looking like a contradiction.
+   *
+   * Since 29 Oct 2026 the desk settles them together, so the button carries the
+   * same figure as the column and the label is gone. `billsOwing` stays because
+   * the dialog still says what the money is being spread across. The board
+   * allows one action per row, and this is that action for a patient who owes.
    */
-  | { kind: 'COLLECT'; invoiceId: string; duePaise: number; billsOwing: number }
+  | { kind: 'COLLECT'; invoiceIds: string[]; duePaise: number; billsOwing: number }
   | { kind: 'CHECK_IN'; appointmentId: string }
   | { kind: 'START'; appointmentId: string }
   | { kind: 'RESUME'; appointmentId: string }
@@ -244,8 +249,16 @@ export interface DayBoardRow {
    */
   testsDoneIn: string | null;
   token: number | null;
-  /** The doctor they are booked with, or the department for a test-only visit. */
+  /**
+   * EVERY doctor they are booked with, comma-separated — or the department for
+   * a test-only visit.
+   *
+   * One name until 30 Oct 2026, which hid the other two from a patient booked
+   * with three consultants. See `doctorCount` for marking those rows.
+   */
   withWhom: string | null;
+  /** How many doctors this patient is seeing today. Zero for a test-only row. */
+  doctorCount: number;
   /**
    * WHAT THEY WERE SENT FOR, and where.
    *
@@ -282,6 +295,14 @@ export interface DayBoardRow {
    * cash. Empty when nothing has been collected yet.
    */
   paymentMethods: string[];
+  /**
+   * Whether a charge of theirs was WRITTEN OFF rather than paid.
+   *
+   * A waiver produces no payment row, so the Method column had nothing to print
+   * and showed a hyphen — which reads as missing data rather than as a decision
+   * somebody took. Reported from the clinic, 30 Oct 2026.
+   */
+  feeWaived: boolean;
   /** Null without `invoice:read`. See `RowMoney`. */
   money: RowMoney | null;
   /** What to do with this patient next, most blocking first. See `NextStep`. */
@@ -491,6 +512,26 @@ export class DayBoardService {
         // entirely for a caller who may not see amounts.
         unpaid: mayReadMoney ? bills.unpaid : null,
         paymentMethods,
+        /*
+         * GATED ON `invoice:read`, unlike `paymentMethods` beside it.
+         *
+         * I first matched this to `paymentMethods`, which is ungated, on the
+         * reasoning that both say HOW a charge was settled rather than what it
+         * came to. On review that is the wrong comparison. "Paid by UPI" is
+         * mundane; "this bill was written off" is a judgement about a person —
+         * staff family, hardship, a charitable case — and `appointment:read` is
+         * held by six roles including nurses and technicians who have no
+         * business with it.
+         *
+         * The bug this fixes only exists for somebody who can SEE the amount:
+         * a blank Method beside a figure reads as data that failed to load.
+         * Without `invoice:read` there is no figure on the row to contradict,
+         * so the hyphen stays and is honest.
+         *
+         * `paymentMethods` being ungated is older than this change and is NOT
+         * mine to widen or narrow here; see the review note.
+         */
+        waived: mayReadMoney ? bills.waived : new Set<string>(),
       });
     });
   }
@@ -544,14 +585,38 @@ export class DayBoardService {
   ): Promise<{
     visitTags: Map<string, FeeTag>;
     byPatient: Map<string, RowMoney>;
-    unpaid: Map<string, { invoiceId: string; duePaise: number; billsOwing: number }>;
+    /**
+     * Patients whose charge was WRITTEN OFF rather than paid.
+     *
+     * `invoiceSettlement` folds PAID, WAIVED and DEFERRED into one SETTLED
+     * answer, which is right for "is any money still expected" and useless for
+     * "how was this settled". A waived bill has no payment rows at all, so the
+     * board's Method column had nothing to print and showed a hyphen —
+     * reported from the clinic on 30 Oct 2026 as a blank method on a waived
+     * charge, which reads as missing data rather than as a decision somebody
+     * took.
+     *
+     * DEFERRED is deliberately not here: money is still expected on it, so an
+     * empty Method column is the truth.
+     */
+    waived: Set<string>;
+    unpaid: Map<string, { invoiceIds: string[]; duePaise: number; billsOwing: number }>;
   }> {
     const visitTags = new Map<string, FeeTag>();
+    const waived = new Set<string>();
     const byPatient = new Map<string, RowMoney>();
-    /** The bill Collect opens: the oldest one still owing, and how many there are. */
-    const unpaid = new Map<string, { invoiceId: string; duePaise: number; billsOwing: number }>();
+    /**
+     * Every bill still owing, oldest first, and what they come to together.
+     *
+     * Was the oldest bill alone, which is why Collect could only ever offer one
+     * of them while the money column showed the lot. See `collectAcross`.
+     */
+    const unpaid = new Map<
+      string,
+      { invoiceIds: string[]; duePaise: number; billsOwing: number }
+    >();
     if (appointmentIds.length === 0 && orderIds.length === 0) {
-      return { visitTags, byPatient, unpaid };
+      return { visitTags, byPatient, unpaid, waived };
     }
 
     const invoices = await tx.invoice.findMany({
@@ -598,18 +663,28 @@ export class DayBoardService {
        */
       if (state.status === 'VOID') continue;
 
+      // Written off, so no payment will ever explain this bill. See `waived`.
+      if (invoice.status === 'WAIVED') waived.add(invoice.patientId);
+
       const money = byPatient.get(invoice.patientId) ?? { billedPaise: 0, duePaise: 0 };
       money.billedPaise += invoice.totalPaise;
       if (state.status === 'UNPAID') {
         money.duePaise += state.balancePaise;
         const owing = unpaid.get(invoice.patientId);
         if (owing) {
-          // A second bill on the same patient. The oldest stays the one Collect
-          // opens; this only makes the count honest.
+          /*
+           * A second bill on the same patient. Appended rather than counted and
+           * dropped: the invoices arrive oldest first, which is the order the
+           * money is applied in, and `duePaise` has to come to the same figure
+           * as the row's money column or the button and the column disagree
+           * again.
+           */
+          owing.invoiceIds.push(invoice.id);
+          owing.duePaise += state.balancePaise;
           owing.billsOwing += 1;
         } else {
           unpaid.set(invoice.patientId, {
-            invoiceId: invoice.id,
+            invoiceIds: [invoice.id],
             duePaise: state.balancePaise,
             billsOwing: 1,
           });
@@ -618,7 +693,7 @@ export class DayBoardService {
       byPatient.set(invoice.patientId, money);
     }
 
-    return { visitTags, byPatient, unpaid };
+    return { visitTags, byPatient, unpaid, waived };
   }
 
   /**
@@ -707,12 +782,24 @@ export class DayBoardService {
     /** Null when the caller may not see figures. See `RowMoney`. */
     money: Map<string, RowMoney> | null;
     /** The bill Collect opens. Null when the caller may not see figures. */
-    unpaid: Map<string, { invoiceId: string; duePaise: number; billsOwing: number }> | null;
+    unpaid: Map<string, { invoiceIds: string[]; duePaise: number; billsOwing: number }> | null;
     /** `lastPaymentId` is null unless that payment actually has a receipt. */
     paymentMethods: Map<string, { modes: string[]; lastPaymentId: string | null }>;
+    /** Patients whose charge was written off. See `billsForDay`. */
+    waived: Set<string>;
   }): DayBoard {
-    const { day, tz, scope, appointments, orders, visitFees, money, unpaid, paymentMethods } =
-      input;
+    const {
+      day,
+      tz,
+      scope,
+      appointments,
+      orders,
+      visitFees,
+      money,
+      unpaid,
+      paymentMethods,
+      waived,
+    } = input;
 
     /**
      * Whether the day being looked at is already over.
@@ -733,8 +820,30 @@ export class DayBoardService {
       appointmentId: string | null;
       /** How actionable the chosen appointment is. Lower wins. See above. */
       appointmentRank: number;
+      /**
+       * Whether the chosen visit was ACTUALLY closed, rather than merely
+       * reading as closed.
+       *
+       * A fulfilled visit on a past day shows as DONE without anybody having
+       * closed it — see `bucketForAppointment`. Reopening one would be undoing
+       * something that never happened, and `reopenVisit` refuses it, so the
+       * board must not offer the button. This is the fact that tells them
+       * apart.
+       */
+      visitClosed: boolean;
       token: number | null;
-      doctor: string | null;
+      /**
+       * EVERY doctor this patient is seeing today, in appointment-time order.
+       *
+       * Was one name, taken with `??=` from whichever visit the query returned
+       * first — so a patient booked with three consultants showed exactly one
+       * of them and the front desk had no way to see the other two. Reported
+       * from the clinic on 30 Oct 2026 (point 37).
+       *
+       * A Set because the same doctor can hold two visits for one patient on
+       * one day, and "Dr Rao, Dr Rao" is noise.
+       */
+      doctors: Set<string>;
       department: string | null;
       earliest: Date | null;
       visitFee: FeeTag;
@@ -791,8 +900,9 @@ export class DayBoardService {
           hasTest: false,
           appointmentId: null,
           appointmentRank: Number.MAX_SAFE_INTEGER,
+          visitClosed: false,
           token: null,
-          doctor: null,
+          doctors: new Set<string>(),
           department: null,
           earliest: null,
           visitFee: null,
@@ -821,7 +931,9 @@ export class DayBoardService {
         row.hasVisit = true;
         if (a.status === 'AWAITING_TESTS') row.visitIsAway = true;
         if (a.status === 'FULFILLED') row.visitFulfilled = true;
-        row.doctor ??= a.practitioner?.fullName ?? null;
+        // EVERY doctor, not the first one seen. The appointments arrive in
+        // start-time order, and a Set keeps that order while dropping a repeat.
+        if (a.practitioner?.fullName) row.doctors.add(a.practitioner.fullName);
         /**
          * THE VISIT THIS ROW IS ABOUT, not merely the first one seen.
          *
@@ -845,6 +957,9 @@ export class DayBoardService {
         if (row.appointmentId === null || rank < row.appointmentRank) {
           row.appointmentId = a.id;
           row.appointmentRank = rank;
+          // Tracked with the id, not separately: it is a fact about the visit
+          // the row's buttons point at, and the wrong one aims them all wrong.
+          row.visitClosed = a.closedAt !== null;
         }
         row.token ??= a.tokenNumber;
         if (!row.earliest || a.startAt < row.earliest) row.earliest = a.startAt;
@@ -933,7 +1048,9 @@ export class DayBoardService {
             id: r.patient.id,
             name: r.patient.name,
             uhid: r.patient.uhid,
-            ageYears: ageFrom(r.patient.ageYears, r.patient.birthDate),
+            // The clinic's timezone, not the server's — an age is a calendar
+            // fact. See `ageFrom`.
+            ageYears: ageFrom(r.patient.ageYears, r.patient.birthDate, tz),
             gender: r.patient.gender,
           },
           bucket,
@@ -947,9 +1064,20 @@ export class DayBoardService {
           testsDoneIn:
             r.hasTest && r.hasCompletedTest && r.pendingOrderId === null ? r.department : null,
           token: r.token,
-          // A patient with a doctor is described by their doctor; a test-only
-          // patient by the department holding them.
-          withWhom: r.doctor ?? r.department,
+          /*
+           * A patient with doctors is described by their doctors; a test-only
+           * patient by the department holding them.
+           *
+           * ALL of them, comma-separated. One name was shown until 30 Oct 2026,
+           * which made a patient booked with three consultants look like a
+           * patient booked with one — and the desk had no way to tell from the
+           * board. The row stays one row per patient, Narveer's call: splitting
+           * by doctor would list the same person three times and the board's
+           * one-action-per-row rule would stop meaning anything.
+           */
+          withWhom: r.doctors.size > 0 ? [...r.doctors].join(', ') : r.department,
+          /** How many doctors that is, so the browser can mark the row. */
+          doctorCount: r.doctors.size,
           // Three is a glance; the fourth is a list, and a list belongs on the
           // tests page rather than on a row.
           tests: r.testDescriptions.slice(0, 3),
@@ -961,6 +1089,7 @@ export class DayBoardService {
           // "which of the three".
           testFee: summariseTestFees(r.testFees),
           paymentMethods: paid?.modes ?? [],
+          feeWaived: waived.has(r.patient.id),
           /**
            * Zeroes rather than null for a patient with no bill, so the column
            * reads as "nothing charged" instead of "not allowed to know". The
@@ -970,6 +1099,7 @@ export class DayBoardService {
           nextSteps: stepsFor({
             bucket,
             appointmentId: r.appointmentId,
+            visitClosed: r.visitClosed,
             owed: unpaid?.get(r.patient.id) ?? null,
             visitFeePending: r.visitFee === 'PENDING',
             pendingOrderId: r.pendingOrderId,
@@ -1050,7 +1180,9 @@ export class DayBoardService {
 function stepsFor(row: {
   bucket: DayBucket;
   appointmentId: string | null;
-  owed: { invoiceId: string; duePaise: number; billsOwing: number } | null;
+  /** Really closed, not merely reading as closed. Gates REOPEN_VISIT. */
+  visitClosed: boolean;
+  owed: { invoiceIds: string[]; duePaise: number; billsOwing: number } | null;
   /** This VISIT'S own bill, which is the one the check-in gate reads. */
   visitFeePending: boolean;
   pendingOrderId: string | null;
@@ -1071,7 +1203,7 @@ function stepsFor(row: {
   if (row.owed) {
     steps.push({
       kind: 'COLLECT',
-      invoiceId: row.owed.invoiceId,
+      invoiceIds: row.owed.invoiceIds,
       duePaise: row.owed.duePaise,
       billsOwing: row.owed.billsOwing,
     });
@@ -1111,8 +1243,35 @@ function stepsFor(row: {
        * browser draws it as the quiet button beside the receipt, never as the
        * thing the row is telling you to do — a finished patient is not waiting
        * to be reopened.
+       *
+       * ONLY IF IT WAS REALLY CLOSED. Since 30 Oct 2026 a fulfilled visit on a
+       * past day READS as DONE without anybody having closed it, and
+       * `reopenVisit` refuses one with no `closed_at` — so without this gate
+       * the board would draw a button the server throws out.
        */
-      steps.push({ kind: 'REOPEN_VISIT', appointmentId: row.appointmentId });
+      if (row.visitClosed) {
+        steps.push({ kind: 'REOPEN_VISIT', appointmentId: row.appointmentId });
+      }
+    } else if (row.bucket === 'NOT_FINISHED') {
+      /**
+       * A VISIT NOBODY EVER ENDED, on a day that has gone.
+       *
+       * The patient arrived, or was with the doctor, or was at a department,
+       * and then the day ended around them — so this row is the record of
+       * something left half-open rather than anything still happening.
+       *
+       * Closing is the only thing left that makes sense: it is administrative,
+       * it says the visit is over, and until 30 Oct 2026 the board offered
+       * NOTHING here at all, so these rows could never be tidied. Restoring
+       * the button on past days was Narveer's call the same day; without this
+       * there was nothing for it to be restored ONTO, because every other
+       * branch here is keyed to a stage that only exists today.
+       *
+       * Not FINISH: that moves IN_PROGRESS to FULFILLED and would be writing a
+       * consultation outcome days later. Closing records that the visit ended,
+       * which is the part that is actually true.
+       */
+      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
     } else if (row.bucket === 'READY_TO_CLOSE') {
       /**
        * The last button of the visit.
@@ -1251,7 +1410,27 @@ function bucketForAppointment(
     case 'AWAITING_TESTS':
       return dayHasPassed ? 'NOT_FINISHED' : 'AT_DEPARTMENT';
     case 'FULFILLED':
-      return closedAt ? 'DONE' : 'READY_TO_CLOSE';
+      if (closedAt) return 'DONE';
+      /*
+       * The doctor finished. Whether the patient has LEFT is a separate fact —
+       * that is the whole of the 22 Oct split — so on the day itself an
+       * unclosed fulfilled visit is still in the building and reads
+       * READY_TO_CLOSE.
+       *
+       * On a day that has gone, they left. Reported from the clinic on 30 Oct
+       * 2026: patients seen on previous days piled up in "ready to close"
+       * forever, because nobody is ever going to go back and formally close a
+       * Tuesday three weeks ago. The board already reasons this way about every
+       * other stage above — a booking nobody kept becomes DID_NOT_COME, a visit
+       * left half-done becomes NOT_FINISHED — and this is the same inference
+       * for the stage that actually completed.
+       *
+       * READ as closed, not WRITTEN as closed: Narveer's call, 30 Oct 2026.
+       * `closed_at` stays null, so no clinical record is rewritten by a page
+       * being looked at. The row below is gated on the real `closedAt` for the
+       * same reason — a visit nobody closed cannot be REOPENED.
+       */
+      return dayHasPassed ? 'DONE' : 'READY_TO_CLOSE';
     default:
       return 'NOT_ATTENDING';
   }

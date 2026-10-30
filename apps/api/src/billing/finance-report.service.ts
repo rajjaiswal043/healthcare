@@ -64,6 +64,36 @@ export class FinanceReportService {
         throw new BadRequestException('The end of the range is before its start.');
       }
 
+      /*
+       * NO DAY THAT HAS NOT HAPPENED YET.
+       *
+       * The screen has carried `max={today}` on both boxes since 28 Oct 2026,
+       * and that is all it is: `max` constrains the date PICKER. A date TYPED
+       * into the field still reaches React state and still comes down the wire
+       * — reported from the clinic on 30 Oct 2026 for this report and for the
+       * collections one, which shares this method.
+       *
+       * So the rule lives here, where it cannot be got round by a keyboard, a
+       * stale tab or a hand-written URL. Refused rather than clamped: silently
+       * reporting on a different range than the one somebody asked for is how a
+       * figure ends up quoted in a meeting.
+       *
+       * Compared against the CLINIC's today, not the server's — for the five
+       * and a half hours after midnight IST the server's UTC date is still
+       * yesterday, which would refuse a perfectly ordinary request for today.
+       * The same trap as `ageFrom`.
+       */
+      const today = clinicToday(tz);
+      if (from > today || to > today) {
+        throw new BadRequestException({
+          code: 'FUTURE_RANGE',
+          message:
+            'That range includes days that have not happened yet. ' +
+            'A report can only cover today or earlier.',
+          today,
+        });
+      }
+
       // Half-open, in clinic-local time: [from 00:00, to+1 day 00:00). The
       // clinic's day is what a clinic reports on, not the server's.
       const start = localToInstant(from, '00:00', tz);

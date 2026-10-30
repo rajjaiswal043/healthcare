@@ -23,6 +23,7 @@ import { FinanceReportService } from './finance-report.service.js';
 import { ReceiptsService } from './receipts.service.js';
 import {
   AddLineDto,
+  CollectAcrossBillsDto,
   CollectPaymentDto,
   DayCollectionQueryDto,
   FinanceReportQueryDto,
@@ -128,6 +129,27 @@ export class BillingController {
     @Req() req: FastifyRequest,
   ) {
     return this.billing.collect(tenantId, id, dto, meta(req, user));
+  }
+
+  /**
+   * One handover of money against several of this patient's bills.
+   *
+   * Patient-scoped rather than invoice-scoped because the thing being settled
+   * is "what this person owes", not one document — and scoping it to the
+   * patient is also what lets the server refuse a bill that belongs to
+   * somebody else. Same permission as collecting once: it is the same act,
+   * done fewer times. See `collectAcross`.
+   */
+  @Post('patients/:patientId/payments')
+  @RequirePermissions(PERMISSIONS.PAYMENT_COLLECT)
+  async collectAcross(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('patientId', new ParseUUIDPipe()) patientId: string,
+    @Body() dto: CollectAcrossBillsDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.collectAcross(tenantId, patientId, dto, meta(req, user));
   }
 
   /**

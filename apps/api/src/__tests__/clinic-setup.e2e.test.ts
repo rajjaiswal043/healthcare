@@ -1561,3 +1561,81 @@ describe('switching a doctor off and on', () => {
     await neverSwitchedOffWithNewAppointment(id);
   });
 });
+
+/**
+ * A DOCTOR WHOSE VISITS NOBODY COULD BILL.
+ *
+ * Reported from the clinic on 30 Oct 2026: a doctor could be added with both
+ * fees left blank. Blank is legal and means "use the clinic's catalogue price"
+ * — a doctor-level fee is an override, because consultants in one clinic charge
+ * differently. The harm is narrower: no doctor fee AND no catalogue price, where
+ * `planVisit` returns null, the visit raises no bill at all, and the pay-first
+ * gate passes because there is nothing to pay.
+ */
+describe('adding a doctor nobody could bill for', () => {
+  function create(body: Record<string, unknown>) {
+    return app.inject({
+      method: 'POST',
+      url: '/api/v1/setup/practitioners',
+      headers: { cookie: admin.cookie },
+      payload: { fullName: 'Dr Unbillable', registrationNumber: 'MH-FEE-01', ...body },
+    });
+  }
+
+  /** Take the clinic's consultation prices away, leaving the rest of the list. */
+  async function withoutConsultationPrices<T>(run: () => Promise<T>): Promise<T> {
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE service SET is_active = false WHERE code IN ('CONS-NEW', 'CONS-FOLLOWUP')`,
+    );
+    try {
+      return await run();
+    } finally {
+      await ownerQuery(
+        fx.main.id,
+        `UPDATE service SET is_active = true WHERE code IN ('CONS-NEW', 'CONS-FOLLOWUP')`,
+      );
+      await ownerQuery(fx.main.id, `DELETE FROM practitioner WHERE full_name = 'Dr Unbillable'`);
+    }
+  }
+
+  it('allows blank fees while the clinic has a price to fall back on', async () => {
+    // The fallback is the whole reason blank is legal. seedBilling prices both.
+    const res = await create({});
+
+    expect(res.statusCode).toBe(201);
+    await ownerQuery(fx.main.id, `DELETE FROM practitioner WHERE full_name = 'Dr Unbillable'`);
+  });
+
+  it('refuses blank fees when there is no clinic price either', async () => {
+    const res = await withoutConsultationPrices(() => create({}));
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('VISIT_FEE_MISSING');
+  });
+
+  it('accepts the doctor if they carry their own fees instead', async () => {
+    const res = await withoutConsultationPrices(() =>
+      create({ consultationFeePaise: 60000, followUpFeePaise: 40000 }),
+    );
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('treats a deliberate zero as a price, not as a blank', async () => {
+    // A free consultation is a real thing a clinic does, and it is not the same
+    // as having no price at all.
+    const res = await withoutConsultationPrices(() =>
+      create({ consultationFeePaise: 0, followUpFeePaise: 0 }),
+    );
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('names only the fee that is actually missing', async () => {
+    const res = await withoutConsultationPrices(() => create({ consultationFeePaise: 60000 }));
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.missing).toEqual(['follow-up']);
+  });
+});

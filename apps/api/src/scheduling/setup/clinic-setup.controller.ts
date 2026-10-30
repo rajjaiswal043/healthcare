@@ -33,6 +33,7 @@ import {
 import { PERMISSIONS } from '../../platform/auth/permissions.js';
 import { ClinicSetupService, type RequestMeta } from './clinic-setup.service.js';
 import { IsPersonName } from '../../common/is-person-name.decorator.js';
+import { IsCatalogueName } from '../../common/is-catalogue-name.decorator.js';
 
 class DepartmentDto {
   @IsString()
@@ -226,8 +227,10 @@ class ServiceDto {
   @MaxLength(40)
   code!: string;
 
+  // A name, not a number. "12" and "@@" reached the price list and the
+  // department worklist as the name of a test. See IsCatalogueName.
   @IsString()
-  @MinLength(2)
+  @IsCatalogueName()
   @MaxLength(200)
   name!: string;
 
@@ -285,8 +288,9 @@ class ServiceDto {
  * because a department does tests and nothing else.
  */
 class DepartmentTestDto {
+  // The other screen that writes this column. See IsCatalogueName.
   @IsString()
-  @MinLength(2)
+  @IsCatalogueName()
   @MaxLength(120)
   name!: string;
 

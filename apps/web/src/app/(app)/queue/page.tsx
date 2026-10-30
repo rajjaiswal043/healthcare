@@ -433,6 +433,43 @@ export default function QueuePage() {
                           </button>
                         )
                       ))}
+
+                    {/*
+                      THE WAY OUT FOR SOMEBODY ALREADY WAITING.
+
+                      Reported from the clinic on 30 Oct 2026: an administrator
+                      could not cancel a checked-in patient whose doctor had
+                      become unavailable. The server has always allowed it —
+                      `cancelIn` refuses only a FULFILLED visit — so this was
+                      purely a missing button: Cancel was drawn in the "yet to
+                      arrive" list and nowhere else, and checking in moved the
+                      patient out of that list.
+
+                      Move sits beside it, because a doctor going home is
+                      usually a reason to give the patient another day rather
+                      than nothing — see CANCEL_REASONS in the dialog.
+                    */}
+                    {mayAct && (
+                      <button
+                        type="button"
+                        className="btn-ghost !px-2 !py-1.5 text-[12.5px]"
+                        disabled={busyId === a.id}
+                        title="Give this patient another time or another doctor"
+                        onClick={() => setDialog({ mode: 'reschedule', appointment: a })}
+                      >
+                        Move
+                      </button>
+                    )}
+                    {canCancel && (
+                      <button
+                        type="button"
+                        className="btn-ghost !px-2 !py-1.5 text-[12.5px] !text-coral-text"
+                        disabled={busyId === a.id}
+                        onClick={() => setDialog({ mode: 'cancel', appointment: a })}
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </Row>
               ))}
@@ -614,6 +651,9 @@ export default function QueuePage() {
             setDialog(null);
             void load(doctorId);
           }}
+          /* Cancelling because the doctor is away is usually the wrong act —
+             the dialog offers this instead. See the nudge in that file. */
+          onSwitchToMove={() => setDialog({ mode: 'reschedule', appointment: dialog.appointment })}
         />
       )}
 

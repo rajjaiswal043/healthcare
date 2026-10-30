@@ -321,6 +321,208 @@ function checkIn(appointmentId: string) {
 const domainCode = (res: { json: () => { error: { details?: { code?: string } } } }) =>
   res.json().error.details?.code;
 
+// --- several bills, one handover of money -----------------------------------
+
+/**
+ * ONE PATIENT, THREE DOCTORS, THREE BILLS, ONE PAYMENT.
+ *
+ * Reported from the clinic on 29 Oct 2026: the desk had to run the Collect
+ * dialog once per bill while the patient stood there, because the board could
+ * only ever open the oldest — which is what its "1 of 3" label was saying.
+ *
+ * The money fills the OLDEST bill first rather than spreading across all of
+ * them. Narveer's call: spread thinly, nothing is ever finished and the patient
+ * still owes on every bill.
+ */
+describe('collecting several bills together', () => {
+  /**
+   * A second bill on the same patient, a minute newer than the consultation.
+   *
+   * CANCELLED, WAIVED and DEFERRED carry a reason and whoever authorised it —
+   * `invoice_exception_is_explained` refuses them otherwise, which is the
+   * database saying an exception without a name attached is not a record.
+   */
+  async function extraBill(
+    appointmentId: string,
+    totalPaise: number,
+    patientIndex = 0,
+    status = 'UNPAID',
+  ) {
+    const explained = status === 'CANCELLED' || status === 'WAIVED' || status === 'DEFERRED';
+
+    const [authoriser] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `SELECT id FROM app_user WHERE tenant_id = $1 AND email = 'admin@main.test'`,
+      [fx.main.id],
+    );
+
+    const [row] = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, patient_id, visit_appointment_id, number, status,
+                            subtotal_paise, tax_paise, total_paise, reason,
+                            authorised_by_user_id, issued_at, updated_at)
+       VALUES ($1, $2, $3, 'XR-' || floor(random() * 1000000)::text, $4,
+               $5, 0, $5, $6, $7, now() + interval '1 minute', now())
+       RETURNING id`,
+      [
+        fx.main.id,
+        fx.main.patientIds[patientIndex],
+        appointmentId,
+        status,
+        totalPaise,
+        explained ? 'Raised for this test' : null,
+        explained ? authoriser!.id : null,
+      ],
+    );
+    return row!.id;
+  }
+
+  function payAcross(
+    patientIndex: number,
+    invoiceIds: string[],
+    amountPaise: number,
+    session: Session = frontDesk,
+  ) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/patients/${fx.main.patientIds[patientIndex]}/payments`,
+      headers: { cookie: session.cookie },
+      payload: { mode: 'CASH', amountPaise, invoiceIds },
+    });
+  }
+
+  /** How many receipts exist for a bill — one per payment, never one per bill. */
+  async function receiptCount(invoiceId: string) {
+    const rows = await ownerQuery<{ n: string }>(
+      fx.main.id,
+      'SELECT count(*)::text AS n FROM receipt WHERE invoice_id = $1',
+      [invoiceId],
+    );
+    return Number(rows[0]!.n);
+  }
+
+  it('settles both bills from one payment, with a receipt for each', async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+    const testBill = await extraBill(appointmentId, 45000);
+
+    const res = await payAcross(0, [consultation.id, testBill], CONSULT_FEE + 45000);
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.collectedPaise).toBe(CONSULT_FEE + 45000);
+    expect(body.outstandingAfterPaise).toBe(0);
+    expect(body.billsSettled).toBe(2);
+
+    // Oldest first, and each bill got exactly its own balance.
+    expect(body.allocated.map((a: { invoiceId: string }) => a.invoiceId)).toEqual([
+      consultation.id,
+      testBill,
+    ]);
+    expect(body.allocated.map((a: { amountPaise: number }) => a.amountPaise)).toEqual([
+      CONSULT_FEE,
+      45000,
+    ]);
+
+    // ONE RECEIPT PER BILL. Narveer's call, 29 Oct 2026: a combined slip would
+    // mean a receipt pointing at many payments, which this table cannot hold.
+    expect(await receiptCount(consultation.id)).toBe(1);
+    expect(await receiptCount(testBill)).toBe(1);
+  });
+
+  it('fills the oldest bill first when there is not enough for both', async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+    const testBill = await extraBill(appointmentId, 45000);
+
+    // ₹500 consultation + ₹450 test = ₹950 owing; ₹600 handed over.
+    const res = await payAcross(0, [consultation.id, testBill], 60000);
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+
+    expect(body.billsSettled).toBe(1);
+    expect(body.outstandingAfterPaise).toBe(35000);
+    // The consultation is closed outright; the test takes the remainder.
+    expect(body.allocated).toEqual([
+      expect.objectContaining({ invoiceId: consultation.id, amountPaise: 50000, balancePaise: 0 }),
+      expect.objectContaining({ invoiceId: testBill, amountPaise: 10000, balancePaise: 35000 }),
+    ]);
+  });
+
+  it('leaves the newer bill untouched when the money only covers the oldest', async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+    const testBill = await extraBill(appointmentId, 45000);
+
+    const res = await payAcross(0, [consultation.id, testBill], CONSULT_FEE);
+
+    expect(res.statusCode).toBe(201);
+    // Absent, not present with zero: nothing was recorded against it, so it has
+    // no payment and no receipt to explain.
+    expect(res.json().allocated).toHaveLength(1);
+    expect(await receiptCount(testBill)).toBe(0);
+  });
+
+  it('refuses more than is outstanding across the bills', async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+    const testBill = await extraBill(appointmentId, 45000);
+
+    const res = await payAcross(0, [consultation.id, testBill], CONSULT_FEE + 45000 + 100);
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('OVERPAYMENT');
+    // Nothing partially recorded on the way to the refusal.
+    expect(await receiptCount(consultation.id)).toBe(0);
+  });
+
+  it("refuses a bill that is not this patient's", async () => {
+    const mine = await invoiceFor(await book(0, 0));
+    const theirs = await invoiceFor(await book(1, 1));
+
+    const res = await payAcross(0, [mine.id, theirs.id], 10000);
+
+    expect(res.statusCode).toBe(404);
+    expect(await receiptCount(mine.id)).toBe(0);
+  });
+
+  it('refuses the lot when one bill is cancelled', async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+    const cancelled = await extraBill(appointmentId, 45000, 0, 'CANCELLED');
+
+    const res = await payAcross(0, [consultation.id, cancelled], CONSULT_FEE);
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('INVOICE_CANCELLED');
+    // All or nothing: the good bill is not quietly settled alongside a refusal.
+    expect(await receiptCount(consultation.id)).toBe(0);
+  });
+
+  it('says so when the bills are already settled', async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+    await pay(consultation.id, consultation.balancePaise);
+
+    const res = await payAcross(0, [consultation.id], 10000);
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('NOTHING_OWING');
+  });
+
+  it("never reaches another clinic's bills", async () => {
+    const appointmentId = await book();
+    const consultation = await invoiceFor(appointmentId);
+
+    const res = await payAcross(0, [consultation.id], CONSULT_FEE, otherFrontDesk);
+
+    // The patient is not theirs either, so this never gets as far as the bill.
+    expect(res.statusCode).toBe(404);
+    expect(await receiptCount(consultation.id)).toBe(0);
+  });
+});
+
 // --- raising the bill -------------------------------------------------------
 
 describe('raising the bill', () => {

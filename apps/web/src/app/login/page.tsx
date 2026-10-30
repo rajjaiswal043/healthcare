@@ -103,11 +103,27 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
 
+    /*
+     * The same normalisation the branding lookup above already does.
+     *
+     * Sending the raw field meant a capital letter or a stray space came back
+     * as "Invalid credentials" while the clinic's real name and logo sat on
+     * screen, resolved from the lowercased slug — the page said the clinic was
+     * found and then refused the sign-in. The API folds case too now; this is
+     * here so the request matches what the user was shown.
+     */
+    const slug = tenantSlug.trim().toLowerCase();
+
     try {
       const result =
         stage === 'mfa-enrol'
-          ? await api.confirmMfa({ tenantSlug, email, password, totpCode })
-          : await api.login({ tenantSlug, email, password, ...(totpCode ? { totpCode } : {}) });
+          ? await api.confirmMfa({ tenantSlug: slug, email, password, totpCode })
+          : await api.login({
+              tenantSlug: slug,
+              email,
+              password,
+              ...(totpCode ? { totpCode } : {}),
+            });
 
       if ('mfaRequired' in result) {
         setChallenge(result);
@@ -195,6 +211,13 @@ export default function LoginPage() {
               onChange={setTenantSlug}
               autoComplete="organization"
               placeholder="your-clinic"
+              /* A phone capitalises the first letter of an autofocused field,
+                 which used to turn into "Invalid credentials" before the user
+                 had typed anything wrong. The slug is lowercase by
+                 construction, so there is nothing here to correct or spell. */
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               autoFocus
             />
             <AuthField

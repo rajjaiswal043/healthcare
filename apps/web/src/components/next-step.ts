@@ -92,7 +92,33 @@ const NEEDS: Record<NextStep['kind'], string> = {
  * And marking a no-show, which is the one act that is MORE likely on a past
  * day than on the day itself: it records something about a day that is over.
  */
-const PAST_SAFE = new Set<NextStep['kind']>(['COLLECT', 'RECEIPT', 'MARK_NO_SHOW']);
+/**
+ * What a row on a PAST day may still offer.
+ *
+ * Yesterday is a record, so most of the board goes quiet on it. These are the
+ * acts that are still honest after the day has ended: taking money that is
+ * genuinely still owed, reprinting a receipt, and writing down that somebody
+ * never came.
+ *
+ * CLOSE_VISIT and FINISH were added on 30 Oct 2026. Reported from the clinic:
+ * patients who had been seen on a previous day sat in "ready to close" with no
+ * button to clear them, because both were filtered out here — so the one state
+ * the desk needed to leave was the one state it could not leave. Both are
+ * administrative: they record that a visit ENDED, which is exactly what a past
+ * day needs to be able to say.
+ *
+ * DECLINE_TEST and CANCEL_TEST are deliberately NOT here. Both take a charge
+ * off a bill, and backing money out of yesterday belongs to the finance desk
+ * where there is a reason field and an audit trail built for it, not to a quiet
+ * button on a board row. Narveer's call, 30 Oct 2026.
+ */
+const PAST_SAFE = new Set<NextStep['kind']>([
+  'COLLECT',
+  'RECEIPT',
+  'MARK_NO_SHOW',
+  'CLOSE_VISIT',
+  'FINISH',
+]);
 
 /**
  * The one step this person should be offered on this row.
@@ -217,6 +243,29 @@ const SECONDARY = new Set<NextStep['kind']>([
 ]);
 
 /**
+ * Which quiet button wins when a row has earned more than one.
+ *
+ * THE WAY OUT OF A TEST COMES FIRST. A pending test is what is holding the
+ * visit open — it is the thing the patient is standing there deciding about —
+ * so dealing with it outranks ending the visit around it. Finishing a visit
+ * while a test sits unpaid and unanswered leaves the order dangling, and the
+ * desk has to come back to it anyway.
+ *
+ * Once the test is declined or cancelled the row reloads and Close or Finish
+ * takes this slot, so nothing is lost by making them wait their turn.
+ *
+ * REOPEN_VISIT is last: it is the undo, and an undo should never be sitting
+ * where the next real action belongs.
+ */
+const SECONDARY_RANK: Array<NextStep['kind']> = [
+  'DECLINE_TEST',
+  'CANCEL_TEST',
+  'CLOSE_VISIT',
+  'FINISH',
+  'REOPEN_VISIT',
+];
+
+/**
  * The quiet button beside the primary one, if this person has one.
  *
  * Two cases, both reported from the clinic on 27 Oct 2026:
@@ -240,13 +289,26 @@ export function secondaryStep(
   isToday: boolean,
   primary: NextStep | null,
 ): NextStep | null {
+  const offered = steps.filter(
+    (step) =>
+      SECONDARY.has(step.kind) &&
+      step.kind !== primary?.kind &&
+      (isToday || PAST_SAFE.has(step.kind)) &&
+      can(NEEDS[step.kind]),
+  );
+
+  /*
+   * Picked by SECONDARY_RANK, not by the server's order.
+   *
+   * There is one quiet button, and the server lists CLOSE_VISIT and FINISH
+   * before DECLINE_TEST — so on any row that could also be closed or finished,
+   * `find` returned Close and the way out of the test was never drawn at all.
+   * Reported from the clinic on 30 Oct 2026 as the decline option having gone
+   * missing; it had not gone, it was being outranked.
+   */
   return (
-    steps.find(
-      (step) =>
-        SECONDARY.has(step.kind) &&
-        step.kind !== primary?.kind &&
-        (isToday || PAST_SAFE.has(step.kind)) &&
-        can(NEEDS[step.kind]),
-    ) ?? null
+    [...offered].sort(
+      (a, b) => SECONDARY_RANK.indexOf(a.kind) - SECONDARY_RANK.indexOf(b.kind),
+    )[0] ?? null
   );
 }

@@ -56,11 +56,20 @@ export function AppointmentDialog({
   appointment,
   onClose,
   onDone,
+  onSwitchToMove,
 }: {
   mode: Mode;
   appointment: Appointment;
   onClose: () => void;
   onDone: () => void;
+  /**
+   * Reopen this appointment on the Move flow instead.
+   *
+   * Only meaningful while cancelling, and only a caller holding the dialog's
+   * state can do it — `mode` is a prop, so the dialog cannot switch itself.
+   * Optional, so the nudge simply does not appear where nobody can honour it.
+   */
+  onSwitchToMove?: () => void;
 }) {
   const [date, setDate] = useState(dateKey());
   const [availability, setAvailability] = useState<DayAvailability | null>(null);
@@ -331,6 +340,39 @@ export function AppointmentDialog({
                 </button>
               ))}
             </div>
+
+            {/*
+              THE DOCTOR BEING AWAY IS USUALLY A REASON TO MOVE, NOT TO CANCEL.
+
+              Reported from the clinic on 30 Oct 2026: "Doctor unavailable" sits
+              on the cancel dialog as well as on Move, and offering it here
+              invites the wrong act — the patient loses their slot entirely when
+              what they wanted was another day.
+
+              A NUDGE, NOT A DELETION. Taking the code off this list would have
+              destroyed the one distinction these codes exist for: whether a
+              slot went unused because the PATIENT cancelled or because the
+              DOCTOR did (see the note above CANCEL_REASONS). A patient who is
+              told their doctor is away and does not want another date is a real
+              cancellation, and recording it as "Patient requested" would be a
+              lie in the only field that could answer the question.
+
+              So the code stays and the better action is offered beside it.
+            */}
+            {mode === 'cancel' && reasonCode === 'Doctor unavailable' && onSwitchToMove && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-tiny bg-clinical-tint px-3 py-2">
+                <p className="text-[12.5px] text-ink-60">
+                  The doctor being away is usually a reason to give this patient another time.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary !px-2.5 !py-1 !text-[12px]"
+                  onClick={onSwitchToMove}
+                >
+                  Move instead
+                </button>
+              </div>
+            )}
 
             <input
               value={note}

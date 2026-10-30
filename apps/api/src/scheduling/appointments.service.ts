@@ -86,6 +86,47 @@ type BookInput = {
 const LIVE_STATUSES = ['BOOKED', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_TESTS'] as const;
 
 /**
+ * A patient already somewhere else at this hour, whoever they are with.
+ *
+ * The duplicate checks either side of this are scoped to ONE DOCTOR — they ask
+ * "is this patient already with Dr Rao today", never "is this patient already
+ * booked at all". So the same person could be put in three rooms at ten
+ * o'clock with three different consultants, which produced three tokens, three
+ * consultation bills and a Collect button reading "1 of 3". Reported from the
+ * clinic, 29 Oct 2026.
+ *
+ * OVERLAP, not "same day". A patient seeing an orthopaedic consultant at 10:00
+ * and a physiotherapist at 11:30 is an ordinary morning and must keep working;
+ * the same patient in two rooms at 10:00 is not a booking, it is a mistake.
+ * Narveer's call, 29 Oct 2026.
+ *
+ * Half-open on both sides: a 10:00-10:15 slot and a 10:15-10:30 one touch at
+ * the boundary and do not overlap, which is what back-to-back means.
+ */
+async function patientBusyBetween(
+  tx: TenantClient,
+  patientId: string,
+  startAt: Date,
+  endAt: Date,
+  ignoreAppointmentId?: string,
+) {
+  return tx.appointment.findFirst({
+    where: {
+      patientId,
+      status: { in: [...LIVE_STATUSES] },
+      startAt: { lt: endAt },
+      endAt: { gt: startAt },
+      ...(ignoreAppointmentId ? { id: { not: ignoreAppointmentId } } : {}),
+    },
+    select: {
+      id: true,
+      startAt: true,
+      practitioner: { select: { fullName: true } },
+    },
+  });
+}
+
+/**
  * The visits the "In the queue" tile counts: every one whose day is not over —
  * yet to arrive, waiting, in the room, out for tests.
  *
@@ -221,6 +262,20 @@ export class AppointmentsService {
       });
     }
 
+    /* And with anybody else. See `patientBusyBetween` — the check above only
+       ever looked at this one doctor. */
+    const clash = await patientBusyBetween(tx, input.patientId, slot.startAt, slot.endAt);
+    if (clash) {
+      throw new ConflictException({
+        code: 'PATIENT_DOUBLE_BOOKED',
+        message:
+          `This patient is already with ${clash.practitioner?.fullName ?? 'another doctor'} ` +
+          `at ${instantToLocalTime(clash.startAt, tz)}. They cannot be in two places at once — ` +
+          'pick a time that does not overlap.',
+        existingAppointmentId: clash.id,
+      });
+    }
+
     /**
      * The token is issued here, at booking — not at check-in.
      *
@@ -319,6 +374,23 @@ export class AppointmentsService {
           code: 'ALREADY_IN_QUEUE',
           message: `Already in this doctor's queue with token ${existing.tokenNumber ?? '—'}.`,
           existingAppointmentId: existing.id,
+        });
+      }
+
+      /*
+       * And with anybody else. A walk-in is now, for the next fifteen minutes,
+       * so it clashes with whoever has this patient at this moment — including
+       * somebody they are sitting in front of. See `patientBusyBetween`.
+       */
+      const walkInEnd = new Date(now.getTime() + 15 * 60 * 1000);
+      const clash = await patientBusyBetween(tx, input.patientId, now, walkInEnd);
+      if (clash) {
+        throw new ConflictException({
+          code: 'PATIENT_DOUBLE_BOOKED',
+          message:
+            `This patient is already with ${clash.practitioner?.fullName ?? 'another doctor'} ` +
+            `at ${instantToLocalTime(clash.startAt, tz)}. Finish or cancel that visit first.`,
+          existingAppointmentId: clash.id,
         });
       }
 
@@ -916,7 +988,47 @@ export class AppointmentsService {
    * audit entry is where the fact that somebody marked it lives.
    */
   async undoNoShow(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    return this.transition(tenantId, id, 'NO_SHOW', 'BOOKED', { noShowAt: null }, meta);
+    return this.transition(
+      tenantId,
+      id,
+      'NO_SHOW',
+      'BOOKED',
+      { noShowAt: null },
+      meta,
+      /*
+       * NOT BACK INTO A CLASH.
+       *
+       * A no-show is not a live status, so while it stood the desk could quite
+       * correctly book this patient elsewhere at the same hour — that is the
+       * whole point of writing them off. Reviving it without looking would then
+       * put them in two rooms at ten o'clock by the back door, which is the
+       * same fault `patientBusyBetween` was added to stop at the front.
+       *
+       * Found while confirming no path could still double-book, 30 Oct 2026.
+       * The appointment excludes ITSELF from the search: it is the row being
+       * revived, not a clash with it.
+       */
+      async (tx, appt) => {
+        const clash = await patientBusyBetween(
+          tx,
+          appt.patientId,
+          appt.startAt,
+          appt.endAt,
+          appt.id,
+        );
+        if (!clash) return;
+
+        const tz = await this.timezone(tx, tenantId);
+        throw new ConflictException({
+          code: 'PATIENT_DOUBLE_BOOKED',
+          message:
+            `This patient was booked with ${clash.practitioner?.fullName ?? 'another doctor'} ` +
+            `at ${instantToLocalTime(clash.startAt, tz)} after being marked absent. ` +
+            'Use that appointment, or cancel it before bringing this one back.',
+          existingAppointmentId: clash.id,
+        });
+      },
+    );
   }
 
   /**
@@ -1187,9 +1299,31 @@ export class AppointmentsService {
     to: string,
     extra: Record<string, unknown>,
     meta: RequestMeta,
+    /**
+     * One more rule, checked inside this transaction with the row in hand.
+     *
+     * Exists for `undoNoShow`, which is the only transition that puts an
+     * appointment BACK into a live status and so is the only one that can
+     * create a clash rather than resolve one.
+     */
+    guard?: (
+      tx: TenantClient,
+      appt: { id: string; patientId: string; startAt: Date; endAt: Date },
+    ) => Promise<void>,
   ): Promise<AppointmentView> {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const tz = await this.timezone(tx, tenantId);
+
+      /*
+       * Locked before it is read, as `reschedule` does.
+       *
+       * Without this, two desks calling the same transition both read the old
+       * status, both pass the check below and both write — and for the one
+       * transition that revives an appointment, both could revive it into a
+       * clash that neither saw.
+       */
+      await tx.$queryRaw`SELECT id FROM appointment WHERE id = ${id}::uuid FOR UPDATE`;
+
       const appt = await tx.appointment.findUnique({ where: { id } });
       if (!appt) throw new NotFoundException('Appointment not found');
 
@@ -1199,6 +1333,8 @@ export class AppointmentsService {
           message: `Expected the appointment to be ${from.toLowerCase()}, but it is ${appt.status.toLowerCase()}.`,
         });
       }
+
+      if (guard) await guard(tx, appt);
 
       const updated = await tx.appointment.update({
         where: { id },
