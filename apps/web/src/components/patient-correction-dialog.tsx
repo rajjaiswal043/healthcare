@@ -87,6 +87,28 @@ export function PatientCorrectionDialog({
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
 
+  /**
+   * The age the typed date works out to, or null if there is no usable date.
+   *
+   * Shown beside the field for the same reason the registration screen shows
+   * it: a mistyped year looks exactly like a correct one until somebody reads
+   * the age out loud. A date in the future or an implausible age reads as null
+   * rather than as a negative number.
+   */
+  const derivedAge = (() => {
+    if (!form.birthDate) return null;
+
+    const born = new Date(form.birthDate);
+    if (Number.isNaN(born.getTime())) return null;
+
+    const now = new Date();
+    let years = now.getFullYear() - born.getFullYear();
+    const monthsIn = now.getMonth() - born.getMonth();
+    if (monthsIn < 0 || (monthsIn === 0 && now.getDate() < born.getDate())) years -= 1;
+
+    return years >= 0 && years < 130 ? years : null;
+  })();
+
   function set(key: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -232,17 +254,42 @@ export function PatientCorrectionDialog({
             </select>
           </div>
 
+          {/*
+            ONE OR THE OTHER, AND THE BOX ACTUALLY EMPTIES.
+
+            These two hints were already promising that setting one clears the
+            other, and the server does exactly that — but only for the field
+            that arrives ALONE. This dialog sent both whenever both had changed,
+            so neither branch fired and the patient ended up holding a date of
+            birth AND a contradictory age. Reported from the clinic on 30 Oct
+            2026 as the age box being left behind after filling the date.
+
+            Clearing the sibling here makes the promise true, and means only one
+            of the pair is ever sent. The registration screen solves the same
+            problem with a mode toggle; this keeps both boxes visible, because a
+            correction dialog has to show what is currently recorded.
+          */}
           <Field
             label="Date of birth"
             type="date"
             value={form.birthDate}
-            onChange={(v) => set('birthDate', v)}
-            hint="Setting this clears the recorded age."
+            onChange={(v) => setForm((f) => ({ ...f, birthDate: v, ageYears: '' }))}
+            hint={
+              derivedAge === null
+                ? 'Setting this clears the recorded age.'
+                : `That is ${derivedAge} years old. Clears the recorded age.`
+            }
           />
           <Field
             label="Age"
             value={form.ageYears}
-            onChange={(v) => set('ageYears', v.replace(/\D/g, '').slice(0, 3))}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                ageYears: v.replace(/\D/g, '').slice(0, 3),
+                birthDate: '',
+              }))
+            }
             hint="Setting this clears the date of birth."
           />
 

@@ -183,6 +183,33 @@ describe('correcting a patient', () => {
     expect(cleared[0]?.new_value).toBeNull();
   });
 
+  /**
+   * BOTH AT ONCE IS REFUSED, not reconciled.
+   *
+   * The correction dialog used to send a date of birth AND an age whenever both
+   * boxes had been touched, which slipped between the two clearing branches —
+   * neither fired — and left the patient holding a birth date beside an age
+   * that disagreed with it. Reported from the clinic on 30 Oct 2026 as the age
+   * box being left behind after filling in the date.
+   *
+   * There is no honest way to pick one here: preferring either would record
+   * something the caller did not send and discard something they did.
+   */
+  it('refuses a date of birth and an age in the same correction', async () => {
+    const res = await correct(frontDesk, patientId, { birthDate: '1991-03-12', ageYears: 40 });
+
+    expect(res.statusCode).toBe(400);
+
+    // And nothing was written on the way to the refusal.
+    const [row] = await ownerQuery<{ age_years: number | null; birth_date: Date | null }>(
+      fx.main.id,
+      'SELECT age_years, birth_date FROM patient WHERE id = $1',
+      [patientId],
+    );
+    expect(row?.birth_date).toBeNull();
+    expect(row?.age_years).toBe(34);
+  });
+
   it('warns about a duplicate rather than refusing the correction', async () => {
     const twinMobile = `98${nextMobile++}`;
 

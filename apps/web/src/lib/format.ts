@@ -22,10 +22,31 @@ export function formatAge(p: { ageYears: number | null; birthDate?: string | nul
   if (p.ageYears !== null) return `${p.ageYears}y`;
   if (!p.birthDate) return '—';
 
-  const years = Math.floor(
-    (Date.now() - new Date(p.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000),
-  );
-  return Number.isFinite(years) ? `${years}y` : '—';
+  /*
+   * CALENDAR ARITHMETIC, not a division.
+   *
+   * This divided the elapsed milliseconds by 365.25 days until 30 Oct 2026, and
+   * that is off by one on the day it matters most. Somebody born exactly 25
+   * years ago has lived 9131 days — 25 × 365 plus six leap days — while
+   * 25 × 365.25 is 9131.25, so the division floored to 24 ON THEIR BIRTHDAY.
+   * Reported from the clinic alongside the server's own age bug: a patient born
+   * 30 Oct 2001 read 25 on the registration screen and 24 once saved.
+   *
+   * An age is "how many birthdays have happened", which is a question about the
+   * calendar and cannot be answered by averaging the length of a year.
+   */
+  const dob = new Date(p.birthDate);
+  if (Number.isNaN(dob.getTime())) return '—';
+
+  const now = new Date();
+  let years = now.getFullYear() - dob.getUTCFullYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const bornMonth = dob.getUTCMonth() + 1;
+  const bornDay = dob.getUTCDate();
+  if (month < bornMonth || (month === bornMonth && day < bornDay)) years -= 1;
+
+  return years >= 0 && years <= 130 ? `${years}y` : '—';
 }
 
 export function genderInitial(gender: string): string {

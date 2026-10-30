@@ -51,6 +51,7 @@ export type DiagnosticOrderMinAggregateOutputType = {
   description: string | null
   status: $Enums.DiagnosticOrderStatus | null
   resultNote: string | null
+  noFileReason: string | null
   completedAt: Date | null
   completedByUserId: string | null
   handedOverAt: Date | null
@@ -77,6 +78,7 @@ export type DiagnosticOrderMaxAggregateOutputType = {
   description: string | null
   status: $Enums.DiagnosticOrderStatus | null
   resultNote: string | null
+  noFileReason: string | null
   completedAt: Date | null
   completedByUserId: string | null
   handedOverAt: Date | null
@@ -103,6 +105,7 @@ export type DiagnosticOrderCountAggregateOutputType = {
   description: number
   status: number
   resultNote: number
+  noFileReason: number
   completedAt: number
   completedByUserId: number
   handedOverAt: number
@@ -131,6 +134,7 @@ export type DiagnosticOrderMinAggregateInputType = {
   description?: true
   status?: true
   resultNote?: true
+  noFileReason?: true
   completedAt?: true
   completedByUserId?: true
   handedOverAt?: true
@@ -157,6 +161,7 @@ export type DiagnosticOrderMaxAggregateInputType = {
   description?: true
   status?: true
   resultNote?: true
+  noFileReason?: true
   completedAt?: true
   completedByUserId?: true
   handedOverAt?: true
@@ -183,6 +188,7 @@ export type DiagnosticOrderCountAggregateInputType = {
   description?: true
   status?: true
   resultNote?: true
+  noFileReason?: true
   completedAt?: true
   completedByUserId?: true
   handedOverAt?: true
@@ -282,6 +288,7 @@ export type DiagnosticOrderGroupByOutputType = {
   description: string
   status: $Enums.DiagnosticOrderStatus
   resultNote: string | null
+  noFileReason: string | null
   completedAt: Date | null
   completedByUserId: string | null
   handedOverAt: Date | null
@@ -329,6 +336,7 @@ export type DiagnosticOrderWhereInput = {
   description?: Prisma.StringFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
+  noFileReason?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"DiagnosticOrder"> | Date | string | null
   completedByUserId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
   handedOverAt?: Prisma.DateTimeNullableFilter<"DiagnosticOrder"> | Date | string | null
@@ -365,6 +373,7 @@ export type DiagnosticOrderOrderByWithRelationInput = {
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrderInput | Prisma.SortOrder
+  noFileReason?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   handedOverAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -404,6 +413,7 @@ export type DiagnosticOrderWhereUniqueInput = Prisma.AtLeast<{
   description?: Prisma.StringFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
+  noFileReason?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"DiagnosticOrder"> | Date | string | null
   completedByUserId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
   handedOverAt?: Prisma.DateTimeNullableFilter<"DiagnosticOrder"> | Date | string | null
@@ -440,6 +450,7 @@ export type DiagnosticOrderOrderByWithAggregationInput = {
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrderInput | Prisma.SortOrder
+  noFileReason?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   handedOverAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -472,6 +483,7 @@ export type DiagnosticOrderScalarWhereWithAggregatesInput = {
   description?: Prisma.StringWithAggregatesFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusWithAggregatesFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableWithAggregatesFilter<"DiagnosticOrder"> | string | null
+  noFileReason?: Prisma.StringNullableWithAggregatesFilter<"DiagnosticOrder"> | string | null
   completedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"DiagnosticOrder"> | Date | string | null
   completedByUserId?: Prisma.UuidNullableWithAggregatesFilter<"DiagnosticOrder"> | string | null
   handedOverAt?: Prisma.DateTimeNullableWithAggregatesFilter<"DiagnosticOrder"> | Date | string | null
@@ -491,6 +503,7 @@ export type DiagnosticOrderCreateInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -525,6 +538,7 @@ export type DiagnosticOrderUncheckedCreateInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -545,6 +559,7 @@ export type DiagnosticOrderUpdateInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -579,6 +594,7 @@ export type DiagnosticOrderUncheckedUpdateInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -606,6 +622,7 @@ export type DiagnosticOrderCreateManyInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -625,6 +642,7 @@ export type DiagnosticOrderUpdateManyMutationInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -649,6 +667,7 @@ export type DiagnosticOrderUncheckedUpdateManyInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -690,6 +709,7 @@ export type DiagnosticOrderCountOrderByAggregateInput = {
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrder
+  noFileReason?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   completedByUserId?: Prisma.SortOrder
   handedOverAt?: Prisma.SortOrder
@@ -716,6 +736,7 @@ export type DiagnosticOrderMaxOrderByAggregateInput = {
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrder
+  noFileReason?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   completedByUserId?: Prisma.SortOrder
   handedOverAt?: Prisma.SortOrder
@@ -742,6 +763,7 @@ export type DiagnosticOrderMinOrderByAggregateInput = {
   description?: Prisma.SortOrder
   status?: Prisma.SortOrder
   resultNote?: Prisma.SortOrder
+  noFileReason?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   completedByUserId?: Prisma.SortOrder
   handedOverAt?: Prisma.SortOrder
@@ -1153,6 +1175,7 @@ export type DiagnosticOrderCreateWithoutTenantInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1185,6 +1208,7 @@ export type DiagnosticOrderUncheckedCreateWithoutTenantInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1241,6 +1265,7 @@ export type DiagnosticOrderScalarWhereInput = {
   description?: Prisma.StringFilter<"DiagnosticOrder"> | string
   status?: Prisma.EnumDiagnosticOrderStatusFilter<"DiagnosticOrder"> | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
+  noFileReason?: Prisma.StringNullableFilter<"DiagnosticOrder"> | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"DiagnosticOrder"> | Date | string | null
   completedByUserId?: Prisma.UuidNullableFilter<"DiagnosticOrder"> | string | null
   handedOverAt?: Prisma.DateTimeNullableFilter<"DiagnosticOrder"> | Date | string | null
@@ -1260,6 +1285,7 @@ export type DiagnosticOrderCreateWithoutPatientInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1292,6 +1318,7 @@ export type DiagnosticOrderUncheckedCreateWithoutPatientInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1338,6 +1365,7 @@ export type DiagnosticOrderCreateWithoutOrderedByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1370,6 +1398,7 @@ export type DiagnosticOrderUncheckedCreateWithoutOrderedByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1400,6 +1429,7 @@ export type DiagnosticOrderCreateWithoutCompletedByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1433,6 +1463,7 @@ export type DiagnosticOrderUncheckedCreateWithoutCompletedByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverByUserId?: string | null
@@ -1462,6 +1493,7 @@ export type DiagnosticOrderCreateWithoutHandedOverByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1495,6 +1527,7 @@ export type DiagnosticOrderUncheckedCreateWithoutHandedOverByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1572,6 +1605,7 @@ export type DiagnosticOrderCreateWithoutDepartmentInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1604,6 +1638,7 @@ export type DiagnosticOrderUncheckedCreateWithoutDepartmentInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1650,6 +1685,7 @@ export type DiagnosticOrderCreateWithoutAppointmentInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1682,6 +1718,7 @@ export type DiagnosticOrderUncheckedCreateWithoutAppointmentInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1728,6 +1765,7 @@ export type DiagnosticOrderCreateWithoutServiceInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1760,6 +1798,7 @@ export type DiagnosticOrderUncheckedCreateWithoutServiceInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1806,6 +1845,7 @@ export type DiagnosticOrderCreateWithoutInvoiceLineInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1838,6 +1878,7 @@ export type DiagnosticOrderUncheckedCreateWithoutInvoiceLineInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1874,6 +1915,7 @@ export type DiagnosticOrderUpdateWithoutInvoiceLineInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1906,6 +1948,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutInvoiceLineInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1926,6 +1969,7 @@ export type DiagnosticOrderCreateWithoutDocumentsInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverTo?: string | null
@@ -1959,6 +2003,7 @@ export type DiagnosticOrderUncheckedCreateWithoutDocumentsInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -1994,6 +2039,7 @@ export type DiagnosticOrderUpdateWithoutDocumentsInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2027,6 +2073,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutDocumentsInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2052,6 +2099,7 @@ export type DiagnosticOrderCreateManyTenantInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -2071,6 +2119,7 @@ export type DiagnosticOrderUpdateWithoutTenantInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2103,6 +2152,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutTenantInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2129,6 +2179,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutTenantInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2154,6 +2205,7 @@ export type DiagnosticOrderCreateManyPatientInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -2173,6 +2225,7 @@ export type DiagnosticOrderUpdateWithoutPatientInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2205,6 +2258,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutPatientInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2231,6 +2285,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutPatientInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2256,6 +2311,7 @@ export type DiagnosticOrderCreateManyOrderedByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -2282,6 +2338,7 @@ export type DiagnosticOrderCreateManyCompletedByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   handedOverAt?: Date | string | null
   handedOverByUserId?: string | null
@@ -2307,6 +2364,7 @@ export type DiagnosticOrderCreateManyHandedOverByInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -2325,6 +2383,7 @@ export type DiagnosticOrderUpdateWithoutOrderedByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2357,6 +2416,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutOrderedByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2383,6 +2443,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutOrderedByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2402,6 +2463,7 @@ export type DiagnosticOrderUpdateWithoutCompletedByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2435,6 +2497,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutCompletedByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2461,6 +2524,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutCompletedByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2479,6 +2543,7 @@ export type DiagnosticOrderUpdateWithoutHandedOverByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2512,6 +2577,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutHandedOverByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2538,6 +2604,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutHandedOverByInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2562,6 +2629,7 @@ export type DiagnosticOrderCreateManyDepartmentInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -2581,6 +2649,7 @@ export type DiagnosticOrderUpdateWithoutDepartmentInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2613,6 +2682,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutDepartmentInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2639,6 +2709,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutDepartmentInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2664,6 +2735,7 @@ export type DiagnosticOrderCreateManyAppointmentInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -2683,6 +2755,7 @@ export type DiagnosticOrderUpdateWithoutAppointmentInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2715,6 +2788,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutAppointmentInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2741,6 +2815,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutAppointmentInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2766,6 +2841,7 @@ export type DiagnosticOrderCreateManyServiceInput = {
   description: string
   status?: $Enums.DiagnosticOrderStatus
   resultNote?: string | null
+  noFileReason?: string | null
   completedAt?: Date | string | null
   completedByUserId?: string | null
   handedOverAt?: Date | string | null
@@ -2785,6 +2861,7 @@ export type DiagnosticOrderUpdateWithoutServiceInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   handedOverTo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2817,6 +2894,7 @@ export type DiagnosticOrderUncheckedUpdateWithoutServiceInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2843,6 +2921,7 @@ export type DiagnosticOrderUncheckedUpdateManyWithoutServiceInput = {
   description?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDiagnosticOrderStatusFieldUpdateOperationsInput | $Enums.DiagnosticOrderStatus
   resultNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  noFileReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   handedOverAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2900,6 +2979,7 @@ export type DiagnosticOrderSelect<ExtArgs extends runtime.Types.Extensions.Inter
   description?: boolean
   status?: boolean
   resultNote?: boolean
+  noFileReason?: boolean
   completedAt?: boolean
   completedByUserId?: boolean
   handedOverAt?: boolean
@@ -2937,6 +3017,7 @@ export type DiagnosticOrderSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   description?: boolean
   status?: boolean
   resultNote?: boolean
+  noFileReason?: boolean
   completedAt?: boolean
   completedByUserId?: boolean
   handedOverAt?: boolean
@@ -2972,6 +3053,7 @@ export type DiagnosticOrderSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   description?: boolean
   status?: boolean
   resultNote?: boolean
+  noFileReason?: boolean
   completedAt?: boolean
   completedByUserId?: boolean
   handedOverAt?: boolean
@@ -3007,6 +3089,7 @@ export type DiagnosticOrderSelectScalar = {
   description?: boolean
   status?: boolean
   resultNote?: boolean
+  noFileReason?: boolean
   completedAt?: boolean
   completedByUserId?: boolean
   handedOverAt?: boolean
@@ -3016,7 +3099,7 @@ export type DiagnosticOrderSelectScalar = {
   updatedAt?: boolean
 }
 
-export type DiagnosticOrderOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "departmentId" | "orderedByUserId" | "referralSource" | "referrerName" | "referrerClinic" | "referrerPhone" | "serviceId" | "invoiceLineId" | "legacyUnbilled" | "description" | "status" | "resultNote" | "completedAt" | "completedByUserId" | "handedOverAt" | "handedOverByUserId" | "handedOverTo" | "createdAt" | "updatedAt", ExtArgs["result"]["diagnosticOrder"]>
+export type DiagnosticOrderOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "departmentId" | "orderedByUserId" | "referralSource" | "referrerName" | "referrerClinic" | "referrerPhone" | "serviceId" | "invoiceLineId" | "legacyUnbilled" | "description" | "status" | "resultNote" | "noFileReason" | "completedAt" | "completedByUserId" | "handedOverAt" | "handedOverByUserId" | "handedOverTo" | "createdAt" | "updatedAt", ExtArgs["result"]["diagnosticOrder"]>
 export type DiagnosticOrderInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   tenant?: boolean | Prisma.TenantDefaultArgs<ExtArgs>
   appointment?: boolean | Prisma.DiagnosticOrder$appointmentArgs<ExtArgs>
@@ -3140,6 +3223,12 @@ export type $DiagnosticOrderPayload<ExtArgs extends runtime.Types.Extensions.Int
      * Typed when the result is attached. One report per order.
      */
     resultNote: string | null
+    /**
+     * Why a finished test has no report attached. Null means it has one — or
+     * that it was finished before the rule existed. See the migration
+     * `a_finished_test_has_a_report`.
+     */
+    noFileReason: string | null
     completedAt: Date | null
     completedByUserId: string | null
     /**
@@ -3605,6 +3694,7 @@ export interface DiagnosticOrderFieldRefs {
   readonly description: Prisma.FieldRef<"DiagnosticOrder", 'String'>
   readonly status: Prisma.FieldRef<"DiagnosticOrder", 'DiagnosticOrderStatus'>
   readonly resultNote: Prisma.FieldRef<"DiagnosticOrder", 'String'>
+  readonly noFileReason: Prisma.FieldRef<"DiagnosticOrder", 'String'>
   readonly completedAt: Prisma.FieldRef<"DiagnosticOrder", 'DateTime'>
   readonly completedByUserId: Prisma.FieldRef<"DiagnosticOrder", 'String'>
   readonly handedOverAt: Prisma.FieldRef<"DiagnosticOrder", 'DateTime'>

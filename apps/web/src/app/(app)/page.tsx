@@ -19,6 +19,7 @@ import { Pagination } from '@/components/pagination';
 import { SendForTestDialog } from '@/components/send-for-test-dialog';
 import { RecordResultDialog } from '@/components/record-result-dialog';
 import { PaymentDialog } from '@/components/payment-dialog';
+import { CollectAcrossDialog } from '@/components/collect-across-dialog';
 import { PrintReceiptButton } from '@/components/receipt-button';
 import { firstDoableStep, SENDABLE, secondaryStep, stepLabel } from '@/components/next-step';
 import { DATE_RE, DayPicker, dayLabel } from '@/components/day-picker';
@@ -295,6 +296,12 @@ function DayBoardScreen() {
    */
   const [acting, setActing] = useState<string | null>(null);
   const [collecting, setCollecting] = useState<Invoice | null>(null);
+  /** A patient with more than one bill owing — settled together, oldest first. */
+  const [collectingAcross, setCollectingAcross] = useState<{
+    patient: { id: string; name: string; uhid: string };
+    invoiceIds: string[];
+    duePaise: number;
+  } | null>(null);
   const [recording, setRecording] = useState<{ row: DayBoardRow; orderId: string } | null>(null);
 
   /**
@@ -495,8 +502,25 @@ function DayBoardScreen() {
             await load();
             break;
 
+          /*
+           * ONE BILL OPENS THE BILL. SEVERAL OPEN THE PATIENT.
+           *
+           * A single bill still goes to `PaymentDialog`, which can also
+           * discount, waive and defer it — losing that for the common case
+           * would be a worse trade than the one being fixed. Several bills go
+           * to the collect-together dialog, because those decisions are
+           * per-bill and belong on the finance desk.
+           */
           case 'COLLECT':
-            setCollecting(await api.invoice(step.invoiceId));
+            if (step.invoiceIds.length === 1) {
+              setCollecting(await api.invoice(step.invoiceIds[0]!));
+            } else {
+              setCollectingAcross({
+                patient: row.patient,
+                invoiceIds: step.invoiceIds,
+                duePaise: step.duePaise,
+              });
+            }
             break;
 
           case 'START':
@@ -990,8 +1014,46 @@ function DayBoardScreen() {
                         {' · '}
                         {genderInitial(r.patient.gender)}
                       </td>
-                      <td className="px-4 py-3 text-ink-60">
+                      <td
+                        /*
+                          CAPPED, SO THREE DOCTORS GO DOWN AND NOT ACROSS.
+
+                          This table is `w-full` inside `overflow-x-auto` and
+                          already carries ~790px of fixed-width columns, so it
+                          overflows the moment an auto column's content gets
+                          wide. Listing every doctor here — added 30 Oct 2026 —
+                          made this the widest of them, and a fuller day is far
+                          likelier to hold a three-doctor row: which is exactly
+                          the report, that a busy day scrolls sideways while a
+                          quiet previous day does not.
+
+                          A ceiling rather than a truncation: the names still
+                          all show, the row just gets taller. A taller row is
+                          readable; a sideways scroll hides the Action column,
+                          which is the one thing the board exists to offer.
+                        */
+                        className="max-w-[190px] px-4 py-3 text-ink-60"
+                        /* The full list for a reader who wants it in one line,
+                           without the cell having to be that wide. */
+                        title={r.withWhom ?? undefined}
+                      >
                         {r.withWhom ?? '—'}
+                        {/*
+                          SEEING MORE THAN ONE DOCTOR TODAY.
+
+                          Reported 30 Oct 2026 (point 37): this cell showed one
+                          name however many doctors the patient was booked with,
+                          so the desk could not tell a three-doctor visit from an
+                          ordinary one — and that is the row whose tokens and
+                          bills look wrong. The names are all here now; this
+                          counts them, because by the third name a reader stops
+                          counting and starts skimming.
+                        */}
+                        {r.doctorCount > 1 && (
+                          <span className="ml-1.5 whitespace-nowrap rounded-pill bg-clinical-tint px-1.5 py-0.5 text-[11px] font-semibold text-clinical">
+                            {r.doctorCount} doctors
+                          </span>
+                        )}
                         {/*
                           WHAT THEY WERE SENT FOR, under who sent them.
 
@@ -1022,10 +1084,17 @@ function DayBoardScreen() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-60">
-                        {r.paymentMethods.length === 0 ? (
-                          <span className="text-ink-20">—</span>
-                        ) : (
+                        {r.paymentMethods.length > 0 ? (
                           r.paymentMethods.map(payMethodLabel).join(', ')
+                        ) : r.feeWaived ? (
+                          /* WRITTEN OFF, not unanswered. A waiver produces no
+                             payment row, so this column had nothing to print
+                             and showed a hyphen — which reads as data that
+                             failed to load rather than as a decision somebody
+                             took and signed for. */
+                          <span className="text-ink-60">Waived</span>
+                        ) : (
+                          <span className="text-ink-20">—</span>
                         )}
                       </td>
                       {showsMoney && (
@@ -1190,6 +1259,21 @@ function DayBoardScreen() {
         />
       )}
 
+      {collectingAcross && (
+        /* Several bills, one handover. Opened instead of the dialog above when
+           a patient owes on more than one — see the COLLECT case in `onDo`. */
+        <CollectAcrossDialog
+          patient={collectingAcross.patient}
+          invoiceIds={collectingAcross.invoiceIds}
+          duePaise={collectingAcross.duePaise}
+          onCollected={() => void load()}
+          onClose={() => {
+            setCollectingAcross(null);
+            void load();
+          }}
+        />
+      )}
+
       {recording && (
         <RecordResultDialog
           row={recording.row}
@@ -1312,19 +1396,22 @@ function NextStepAction({
             <>
               <span className="font-mono tabular-nums"> {formatPaise(step.duePaise)}</span>
               {/*
-                WHICH BILL THIS IS, when there is more than one.
+                NO BILL COUNT ON THE BUTTON. It used to read "· 1 of 3".
 
-                A visit with a test on it has two invoices, and the Due column
-                beside this button sums them. Without this the row read
-                "₹1,000.00 due … Collect ₹500.00" and the desk could not tell
-                whether the button was wrong or the column was.
+                That label existed for one reason: the button could only open
+                the oldest bill while the Due column beside it summed all three,
+                so without it the two figures looked like a contradiction.
+                Collect now settles them together and carries the SAME figure as
+                the column, so the label had no job left — and it cost real
+                room. This cell is 190px wide and wraps, so "Collect ₹1,000.00 ·
+                3 bills" pushed the escape button onto a second line and left
+                the row taller and ragged than every other row, which is how it
+                was reported from the clinic.
+
+                How many bills the money is spread across is said in the dialog
+                that opens, where there is space for it and where the desk is
+                about to act on it.
               */}
-              {step.billsOwing > 1 && (
-                <span className="text-[11px] font-normal opacity-70">
-                  {' '}
-                  · 1 of {step.billsOwing}
-                </span>
-              )}
             </>
           )}
         </button>

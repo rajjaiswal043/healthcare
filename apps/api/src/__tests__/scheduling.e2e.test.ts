@@ -510,6 +510,199 @@ describe('check-in and the queue', () => {
   });
 
   /**
+   * ONE PATIENT, TWO ROOMS, ONE HOUR.
+   *
+   * Reported from the clinic on 29 Oct 2026: the same person was booked with
+   * three doctors at the same time. Both duplicate checks were scoped to one
+   * DOCTOR — "is this patient already with Dr Rao today" — so a second
+   * consultant never saw the first. Three tokens, three consultation bills,
+   * and a Collect button reading "1 of 3".
+   *
+   * The rule is OVERLAP, not "same day": an orthopaedic consultant at 10:00
+   * and a physiotherapist at 11:30 is an ordinary morning.
+   */
+  describe('a patient already somewhere else', () => {
+    /**
+     * A second consultant, created once and taken away afterwards.
+     *
+     * Cleaned up because this clinic's doctor list is asserted exactly
+     * elsewhere in this file — leaving one behind turned a tenant-isolation
+     * test into a count that drifted with however many ran before it.
+     */
+    let other: string;
+
+    beforeAll(async () => {
+      const [row] = await ownerQuery<{ id: string }>(
+        fx.main.id,
+        `INSERT INTO practitioner
+           (tenant_id, full_name, prefix, registration_number, specialty,
+            overbook_per_session, updated_at)
+         VALUES ($1, 'Dr Second Opinion', NULL, 'TEST-0002', 'Physiotherapy', 0, now())
+         RETURNING id`,
+        [fx.main.id],
+      );
+      other = row!.id;
+
+      for (let day = 0; day <= 6; day++) {
+        await ownerQuery(
+          fx.main.id,
+          `INSERT INTO practitioner_schedule
+             (tenant_id, practitioner_id, location_id, day_of_week, start_time, end_time,
+              slot_minutes, capacity_per_slot, visit_types, valid_from, updated_at)
+           VALUES ($1, $2, $3, $4, '09:00', '12:00', 15, 1, '{}',
+                   current_date - interval '30 days', now())`,
+          [fx.main.id, other, fx.main.locationId, day],
+        );
+      }
+    });
+
+    afterAll(async () => {
+      await ownerQuery(fx.main.id, 'DELETE FROM appointment WHERE practitioner_id = $1', [other]);
+      await ownerQuery(fx.main.id, 'DELETE FROM practitioner_schedule WHERE practitioner_id = $1', [
+        other,
+      ]);
+      await ownerQuery(fx.main.id, 'DELETE FROM practitioner WHERE id = $1', [other]);
+    });
+
+    function bookWith(practitionerId: string, startAt: string, patientIndex = 0) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/v1/appointments',
+        headers: { cookie: frontDesk.cookie },
+        payload: {
+          patientId: fx.main.patientIds[patientIndex],
+          practitionerId,
+          locationId: fx.main.locationId,
+          startAt,
+          reasonForVisit: 'Joint pain',
+        },
+      });
+    }
+
+    function walkInWith(practitionerId: string, patientIndex = 0) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/v1/appointments/walk-in',
+        headers: { cookie: frontDesk.cookie },
+        payload: {
+          patientId: fx.main.patientIds[patientIndex],
+          practitionerId,
+          locationId: fx.main.locationId,
+          reasonForVisit: 'Joint pain',
+        },
+      });
+    }
+
+    it('refuses a second doctor at the same time', async () => {
+      const day = await availability(frontDesk);
+      const at = day.slots[0]!.startAt;
+
+      expect((await bookWith(fx.main.practitionerId, at)).statusCode).toBe(201);
+
+      const clash = await bookWith(other, at);
+
+      expect(clash.statusCode).toBe(409);
+      expect(domainCode(clash)).toBe('PATIENT_DOUBLE_BOOKED');
+    });
+
+    it('allows a second doctor at a time that does not overlap', async () => {
+      // The case the rule must NOT break: a consultant, then physio later.
+      const day = await availability(frontDesk);
+
+      expect((await bookWith(fx.main.practitionerId, day.slots[0]!.startAt)).statusCode).toBe(201);
+      expect((await bookWith(other, day.slots[4]!.startAt)).statusCode).toBe(201);
+    });
+
+    it('treats back-to-back slots as not overlapping', async () => {
+      // 09:00-09:15 and 09:15-09:30 touch at the boundary. Half-open on both
+      // sides, so touching is not overlapping.
+      const day = await availability(frontDesk);
+
+      expect((await bookWith(fx.main.practitionerId, day.slots[0]!.startAt)).statusCode).toBe(201);
+      expect((await bookWith(other, day.slots[1]!.startAt)).statusCode).toBe(201);
+    });
+
+    /**
+     * THE BACK DOOR INTO A DOUBLE BOOKING.
+     *
+     * A no-show is not a live status, so while one stands the desk can quite
+     * correctly book the patient elsewhere at the same hour. Undoing it then
+     * revived the first appointment without looking, putting the patient in two
+     * rooms at once by a route the booking guard never sees.
+     *
+     * Found on 30 Oct 2026 while confirming no path was left that could still
+     * double-book, rather than reported — nobody had hit it yet.
+     */
+    it('refuses to undo a no-show when the patient was rebooked in that hour', async () => {
+      const day = await availability(frontDesk);
+      const at = day.slots[0]!.startAt;
+
+      const first = await bookWith(fx.main.practitionerId, at, 1);
+      expect(first.statusCode).toBe(201);
+
+      // Written off, which frees the hour.
+      const absent = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+      expect(absent.statusCode).toBe(200);
+
+      // So this is allowed, and must stay allowed.
+      expect((await bookWith(other, at, 1)).statusCode).toBe(201);
+
+      const undo = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/undo-no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      expect(undo.statusCode).toBe(409);
+      expect(domainCode(undo)).toBe('PATIENT_DOUBLE_BOOKED');
+    });
+
+    it('still undoes a no-show when nothing else was booked', async () => {
+      // The 28 Oct flow this must not break: written off at eleven, walks in at
+      // half past, and gets their own appointment back with its token and bill.
+      const first = await bookWith(
+        fx.main.practitionerId,
+        (await availability(frontDesk)).slots[0]!.startAt,
+      );
+      expect(first.statusCode).toBe(201);
+
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      const undo = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/undo-no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      expect(undo.statusCode).toBe(200);
+      expect(undo.json().status).toBe('BOOKED');
+      expect(undo.json().tokenNumber).toBe(first.json().tokenNumber);
+    });
+
+    it('refuses a walk-in for somebody already walked in elsewhere', async () => {
+      /*
+       * Both walk-ins, because they are the only bookings that land on NOW.
+       * `book` uses DAY, a week out, so a booking could never clash with a
+       * walk-in whatever the rule said.
+       */
+      expect((await walkInWith(fx.main.practitionerId, 2)).statusCode).toBe(201);
+
+      const clash = await walkInWith(other, 2);
+
+      expect(clash.statusCode).toBe(409);
+      expect(domainCode(clash)).toBe('PATIENT_DOUBLE_BOOKED');
+    });
+  });
+
+  /**
    * Out at a department is not out of the clinic.
    *
    * Reported from the clinic on 28 Oct 2026: the same person showed as being

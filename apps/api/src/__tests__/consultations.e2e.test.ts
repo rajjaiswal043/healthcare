@@ -1237,7 +1237,17 @@ describe('whose consultation you may touch', () => {
         patientId: fx.main.patientIds[1],
         practitionerId: colleaguePractitionerId,
         locationId: fx.main.locationId,
-        startAt: day.json().slots[0].startAt,
+        /*
+         * A LATER slot, not the same one. `openConsultation` above put this
+         * patient in the first doctor's 09:00, and since 29 Oct 2026 a patient
+         * cannot be in two rooms at the same time — see `patientBusyBetween`.
+         *
+         * The rule is overlap, not "same day", so what this test is actually
+         * about is untouched: two doctors still each hold their own visit for
+         * this patient on this day, and ownership is still per appointment. It
+         * was never the simultaneity that mattered here, only the two visits.
+         */
+        startAt: day.json().slots[4].startAt,
       },
     });
     expect(booked.statusCode).toBe(201);

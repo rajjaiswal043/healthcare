@@ -1791,6 +1791,10 @@ model DiagnosticOrder {
 
   /// Typed when the result is attached. One report per order.
   resultNote        String?   @map("result_note") @db.VarChar(2000)
+  /// Why a finished test has no report attached. Null means it has one — or
+  /// that it was finished before the rule existed. See the migration
+  /// `a_finished_test_has_a_report`.
+  noFileReason      String?   @map("no_file_reason") @db.VarChar(300)
   completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
   completedByUserId String?   @map("completed_by_user_id") @db.Uuid
 

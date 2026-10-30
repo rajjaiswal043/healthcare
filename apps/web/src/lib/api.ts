@@ -261,11 +261,16 @@ export interface RowMoney {
  */
 export type NextStep =
   /**
-   * `duePaise` is THIS bill's balance. A visit with a test on it has two bills
-   * and the row's Due column sums both, so `billsOwing` lets the button say
-   * "1 of 2" rather than appearing to contradict the column beside it.
+   * `duePaise` is THE PATIENT's balance across every bill still owing, and
+   * `invoiceIds` lists them oldest first — the order the money is applied in.
+   *
+   * It used to be one bill's balance, so the button read "Collect ₹500 · 1 of
+   * 2" beside a Due column showing ₹1,000. Since 29 Oct 2026 the desk settles
+   * them together, so the button and the column carry the same figure and the
+   * label is gone. `billsOwing` stays for the dialog, which still says what
+   * the money is being spread across.
    */
-  | { kind: 'COLLECT'; invoiceId: string; duePaise: number; billsOwing: number }
+  | { kind: 'COLLECT'; invoiceIds: string[]; duePaise: number; billsOwing: number }
   | { kind: 'CHECK_IN'; appointmentId: string }
   | { kind: 'START'; appointmentId: string }
   | { kind: 'RESUME'; appointmentId: string }
@@ -302,7 +307,13 @@ export interface DayBoardRow {
   /** The department that finished their tests — "X-ray done". Null while any is pending. */
   testsDoneIn: string | null;
   token: number | null;
+  /**
+   * EVERY doctor they are booked with, comma-separated — or the department for
+   * a test-only visit. One name until 30 Oct 2026, which hid the rest.
+   */
   withWhom: string | null;
+  /** How many doctors this patient is seeing today. Zero for a test-only row. */
+  doctorCount: number;
   /**
    * What they were sent for, up to three. Live tests only.
    *
@@ -318,6 +329,14 @@ export interface DayBoardRow {
   testFee: FeeTag;
   /** How they paid today — empty when nothing has been collected. */
   paymentMethods: string[];
+  /**
+   * Whether a charge of theirs was WRITTEN OFF rather than paid.
+   *
+   * A waiver produces no payment row, so the Method column showed a hyphen and
+   * read as missing data rather than as a decision somebody took. Reported from
+   * the clinic, 30 Oct 2026.
+   */
+  feeWaived: boolean;
   /** Null without `invoice:read`. See `RowMoney`. */
   money: RowMoney | null;
   /** What to do with this patient next, most blocking first. See `NextStep`. */
@@ -1189,6 +1208,30 @@ export interface InvoiceLine {
 /** Why a compensating entry exists — null on money-in. */
 export type PaymentCorrectionKind = 'PATIENT_REFUND' | 'RECORDED_IN_ERROR';
 
+/**
+ * What came back from settling several of a patient's bills at once.
+ *
+ * `allocated` is in the order the money was applied — oldest bill first — and
+ * carries one entry per bill that took some, each with the payment it created
+ * so its receipt can be printed. A bill that was already settled is absent
+ * rather than present with zero.
+ */
+export interface CollectedAcrossBills {
+  collectedPaise: number;
+  outstandingBeforePaise: number;
+  outstandingAfterPaise: number;
+  /** How many bills this money closed outright. */
+  billsSettled: number;
+  allocated: Array<{
+    invoiceId: string;
+    invoiceNumber: string;
+    amountPaise: number;
+    paymentId: string;
+    /** What this bill still owes after its share. */
+    balancePaise: number;
+  }>;
+}
+
 export interface PaymentRow {
   id: string;
   direction: 'IN' | 'REFUND';
@@ -1637,10 +1680,18 @@ export const api = {
   attachResult: (orderId: string, file: File) =>
     upload<ClinicalDocument>(`/diagnostics/orders/${orderId}/documents`, file),
 
-  completeDiagnosticOrder: (id: string, resultNote: string) =>
+  /**
+   * Mark a test done.
+   *
+   * `noFileReason` is required by the server when nothing is attached — a note
+   * is the remark about a report, not the report, and a test reading COMPLETED
+   * with no image behind it was reported from the clinic on 30 Oct 2026. Sent
+   * only in that case; with a file attached there is no question to answer.
+   */
+  completeDiagnosticOrder: (id: string, resultNote: string, noFileReason?: string) =>
     request<DiagnosticOrder>(`/diagnostics/orders/${id}/complete`, {
       method: 'PATCH',
-      body: JSON.stringify({ resultNote }),
+      body: JSON.stringify({ resultNote, ...(noFileReason ? { noFileReason } : {}) }),
     }),
 
   /**
@@ -1757,6 +1808,19 @@ export const api = {
   revokeDisplay: (id: string) =>
     request<{ id: string; isActive: boolean }>(`/display-devices/${id}`, { method: 'DELETE' }),
   /**
+   * Turn a screen that was turned off back on, with a NEW key — returned once,
+   * exactly as pairing does.
+   *
+   * Not the old key: turning a screen off usually means it left the building or
+   * its key got into a screenshot, so reviving that credential would make "off"
+   * mean nothing. See `reissue` on the server.
+   */
+  reissueDisplayKey: (id: string) =>
+    request<{ id: string; name: string; isActive: boolean; accessKey: string }>(
+      `/display-devices/${id}/key`,
+      { method: 'POST' },
+    ),
+  /**
    * Move a booking to another time, another doctor, or both.
    *
    * `practitionerId` omitted keeps the doctor it was booked with, which is
@@ -1822,6 +1886,22 @@ export const api = {
 
   collectPayment: (id: string, input: { mode: string; amountPaise: number; reference?: string }) =>
     request<Invoice>(`/invoices/${id}/payments`, { method: 'POST', body: JSON.stringify(input) }),
+
+  /**
+   * One handover of money against several of a patient's bills.
+   *
+   * The bills are named so the desk settles exactly what it had on screen, and
+   * the money fills them oldest first. One receipt per bill comes back — three
+   * bills, three slips. See `collectAcross` on the server.
+   */
+  collectAcrossBills: (
+    patientId: string,
+    input: { mode: string; amountPaise: number; reference?: string; invoiceIds: string[] },
+  ) =>
+    request<CollectedAcrossBills>(`/patients/${patientId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   refundPayment: (
     id: string,

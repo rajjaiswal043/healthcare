@@ -11,6 +11,7 @@ import {
 import { IconAlert, IconCalendar, IconUserPlus } from '@/components/icons';
 import { useAuth } from '@/components/auth-provider';
 import { looksLikeAPersonName } from '@/lib/person-name';
+import { formatClockRange, formatClockTime, parseClockTime } from '@/lib/clock-time';
 
 /** 0 = Sunday, matching the schedule rows and JavaScript's getDay(). */
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -317,6 +318,19 @@ function DoctorCard({
     endTime: '13:00',
     slotMinutes: '15',
   });
+
+  /*
+   * The typed boxes hold whatever was typed; these hold what it MEANS.
+   *
+   * The screen took 24-hour `09:00` and nothing else until 30 Oct 2026, so a
+   * clinic that thinks in "9 to 1" translated every session by hand. Both
+   * formats are read now — see `parseClockTime` — while the API goes on
+   * receiving 24-hour `HH:MM`, which is what the column and the availability
+   * engine use. Null means "not a time", which disables Add rather than sending
+   * something the server would have to guess at.
+   */
+  const startAt = parseClockTime(session.startTime);
+  const endAt = parseClockTime(session.endTime);
 
   const [editing, setEditing] = useState(false);
   const [profile, setProfile] = useState({
@@ -699,9 +713,7 @@ function DoctorCard({
                   className="flex items-center gap-2 rounded-pill border border-ink/12 bg-white px-3 py-1 text-[12.5px]"
                 >
                   <span className="font-semibold">{DAYS[s.dayOfWeek]}</span>
-                  <span className="font-mono">
-                    {s.startTime}–{s.endTime}
-                  </span>
+                  <span className="font-mono">{formatClockRange(s.startTime, s.endTime)}</span>
                   <span className="text-ink-40">{s.slotMinutes}m</span>
                   <button
                     type="button"
@@ -740,8 +752,14 @@ function DoctorCard({
               className="field-input mt-1 w-[100px] font-mono"
               value={session.startTime}
               onChange={(e) => setSession({ ...session, startTime: e.target.value })}
-              placeholder="09:00"
+              placeholder="9:00 AM or 09:00"
             />
+            {/* WHAT IT UNDERSTOOD. A parser that silently turns "1:00" into one
+                in the MORNING when the doctor meant the afternoon is worse than
+                one that refuses, so the reading is shown rather than assumed. */}
+            <span className="field-hint">
+              {startAt === null ? 'Not a time' : formatClockTime(startAt)}
+            </span>
           </label>
 
           <label className="block">
@@ -750,8 +768,11 @@ function DoctorCard({
               className="field-input mt-1 w-[100px] font-mono"
               value={session.endTime}
               onChange={(e) => setSession({ ...session, endTime: e.target.value })}
-              placeholder="13:00"
+              placeholder="1:00 PM or 13:00"
             />
+            <span className="field-hint">
+              {endAt === null ? 'Not a time' : formatClockTime(endAt)}
+            </span>
           </label>
 
           <label className="block">
@@ -772,14 +793,14 @@ function DoctorCard({
           <button
             type="button"
             className="btn-secondary"
-            disabled={busy === `add-${d.id}` || !locationId}
+            disabled={busy === `add-${d.id}` || !locationId || startAt === null || endAt === null}
             onClick={() =>
               void onRun(`add-${d.id}`, () =>
                 api.addSchedule(d.id, {
                   locationId,
                   dayOfWeek: Number(session.dayOfWeek),
-                  startTime: session.startTime,
-                  endTime: session.endTime,
+                  startTime: startAt!,
+                  endTime: endAt!,
                   slotMinutes: Number(session.slotMinutes),
                 }),
               )

@@ -596,3 +596,35 @@ describe('a price change does not reach what is already billed', () => {
     await ownerQuery(fx.main.id, `DELETE FROM invoice WHERE id = $1`, [invoice!.id]);
   });
 });
+
+/**
+ * A TEST IN THE CATALOGUE HAS A NAME, NOT A NUMBER.
+ *
+ * Reported from the clinic on 30 Oct 2026 from two screens that write the same
+ * column: Settings → Departments → add a test, and Settings → Prices. Both took
+ * `@MinLength(2)` and nothing more, so "12" and "@@" became the name of a test
+ * — which then appears on a patient's bill, on the department's worklist and in
+ * an ordering dropdown, where nobody can read it.
+ *
+ * The rule is TWO LETTERS, not "no digits": a price list is full of "2D Echo"
+ * and "12-lead ECG", and banning numerals would refuse half of it to catch
+ * "999". See `IsCatalogueName`.
+ */
+describe('naming a test', () => {
+  // No cleanup needed: the file's `beforeEach` empties `service` already.
+
+  it.each(['12', '999', '0', '@@', '...', '--'])('refuses %j as a test name', async (name) => {
+    const res = await addTest(fx.main.departmentId, { name, pricePaise: 45000 });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it.each(['2D Echo', '12-lead ECG', 'X-Ray Chest PA', 'Vitamin B12'])(
+    'still accepts %j, which is a real test',
+    async (name) => {
+      const res = await addTest(fx.main.departmentId, { name, pricePaise: 45000 });
+
+      expect(res.statusCode).toBe(201);
+    },
+  );
+});

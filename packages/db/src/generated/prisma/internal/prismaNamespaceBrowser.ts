@@ -710,6 +710,7 @@ export const DiagnosticOrderScalarFieldEnum = {
   description: 'description',
   status: 'status',
   resultNote: 'resultNote',
+  noFileReason: 'noFileReason',
   completedAt: 'completedAt',
   completedByUserId: 'completedByUserId',
   handedOverAt: 'handedOverAt',

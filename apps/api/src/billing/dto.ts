@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsEnum,
   IsInt,
   IsOptional,
@@ -10,6 +13,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { IsClinicalText } from '../common/is-clinical-text.decorator.js';
 
 export enum PaymentModeDto {
   CASH = 'CASH',
@@ -69,6 +73,22 @@ export class CollectPaymentDto {
   reference?: string;
 }
 
+/**
+ * One handover of money against several of a patient's bills.
+ *
+ * The bills are named explicitly rather than discovered on the server, so the
+ * desk settles exactly what it had on screen — see `collectAcross`.
+ */
+export class CollectAcrossBillsDto extends CollectPaymentDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  // Bare, as everywhere else here: these ids are uuidv7, and asking for
+  // version 4 would refuse every one of them.
+  @IsUUID(undefined, { each: true })
+  invoiceIds!: string[];
+}
+
 /** Why a compensating entry exists. See `payment.correction_kind`. */
 export enum PaymentCorrectionKindDto {
   PATIENT_REFUND = 'PATIENT_REFUND',
@@ -105,9 +125,16 @@ export class RefundDto {
   @Max(MAX_PAISE)
   amountPaise!: number;
 
-  /** Required. Money leaving with no explanation is money nobody can account for. */
+  /**
+   * Required. Money leaving with no explanation is money nobody can account for.
+   *
+   * AND IT HAS TO BE WORDS. `@MinLength(3)` accepted "123" and "@@@", reported
+   * from the clinic on 30 Oct 2026 — which satisfies the letter of "required"
+   * while defeating its entire purpose. This is the field somebody reads months
+   * later when they are asking why money left the drawer.
+   */
   @IsString()
-  @MinLength(3)
+  @IsClinicalText()
   @MaxLength(300)
   reason!: string;
 

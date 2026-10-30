@@ -27,7 +27,12 @@ const TECHNICIAN = holding('diagnostic:result');
 const ADMIN = () => true;
 const NOBODY = () => false;
 
-const COLLECT: NextStep = { kind: 'COLLECT', invoiceId: 'inv-1', duePaise: 50000, billsOwing: 1 };
+const COLLECT: NextStep = {
+  kind: 'COLLECT',
+  invoiceIds: ['inv-1'],
+  duePaise: 50000,
+  billsOwing: 1,
+};
 const CHECK_IN: NextStep = { kind: 'CHECK_IN', appointmentId: 'appt-1' };
 const START: NextStep = { kind: 'START', appointmentId: 'appt-1' };
 const RESUME: NextStep = { kind: 'RESUME', appointmentId: 'appt-1' };
@@ -61,8 +66,16 @@ describe('the one button each person gets', () => {
     expect(firstDoableStep([RESUME, FINISH], DESK, true)).toEqual(FINISH);
   });
 
-  it('will not finish a visit on a past day', () => {
-    expect(firstDoableStep([FINISH], DESK, false)).toBeNull();
+  it('still finishes a visit on a past day', () => {
+    /*
+     * Was `toBeNull()` until 30 Oct 2026.
+     *
+     * Reported from the clinic: patients seen on a previous day sat in "ready
+     * to close" with nothing on the row that could clear them, because
+     * finishing and closing were both filtered out of a past day. Recording
+     * that a visit ENDED is exactly what a past day has to be able to say.
+     */
+    expect(firstDoableStep([FINISH], DESK, false)).toEqual(FINISH);
   });
 
   it('gives somebody who can do everything the blocking step', () => {
@@ -153,11 +166,13 @@ describe('the words on the button', () => {
     expect(firstDoableStep([CLOSE_VISIT], TECHNICIAN, true)).toBeNull();
   });
 
-  it('will not move a patient through a day that has already happened', () => {
-    // Closing a visit from last Tuesday would record today's decision against
-    // a patient who left days ago.
+  it('will not move a patient onward through a day that has already happened', () => {
+    // Bringing a patient back from tests last Tuesday would put them in a
+    // queue that finished days ago.
     expect(firstDoableStep([BRING_BACK], DESK, false)).toBeNull();
-    expect(firstDoableStep([CLOSE_VISIT], DESK, false)).toBeNull();
+
+    // Closing one, though, is how a past day gets tidied — see PAST_SAFE.
+    expect(firstDoableStep([CLOSE_VISIT], DESK, false)).toEqual(CLOSE_VISIT);
   });
 });
 
@@ -213,12 +228,37 @@ describe('the way out, beside the way on', () => {
     expect(secondaryStep([CANCEL_TEST], DOCTOR, true, null)).toEqual(CANCEL_TEST);
   });
 
-  it('will not do any of it on a day that has already happened', () => {
-    // Finishing, closing or declining against a patient who went home days ago
-    // would record today's decision on the wrong day.
-    expect(secondaryStep([RESUME, FINISH], ADMIN, false, null)).toBeNull();
-    expect(secondaryStep([COLLECT, CLOSE_VISIT], ADMIN, false, COLLECT)).toBeNull();
+  it('ends a visit on a past day, but never touches its bill', () => {
+    /*
+     * The line drawn on 30 Oct 2026, Narveer's call.
+     *
+     * Finishing and closing RECORD THAT A VISIT ENDED, which is what the
+     * clinic needed to clear a previous day's "ready to close". Declining or
+     * cancelling a test takes a charge OFF A BILL, and backing money out of
+     * yesterday belongs to the finance desk, which has a reason field and an
+     * audit trail built for it — not to a quiet button on a board row.
+     */
+    expect(secondaryStep([RESUME, FINISH], ADMIN, false, null)).toEqual(FINISH);
+    expect(secondaryStep([COLLECT, CLOSE_VISIT], ADMIN, false, COLLECT)).toEqual(CLOSE_VISIT);
+
     expect(secondaryStep([COLLECT, DECLINE_TEST], ADMIN, false, COLLECT)).toBeNull();
+    expect(secondaryStep([COLLECT, CANCEL_TEST], ADMIN, false, COLLECT)).toBeNull();
+  });
+
+  it('offers the way out of a test before ending the visit around it', () => {
+    /*
+     * Reported from the clinic on 30 Oct 2026 as the decline option having
+     * been removed. It had not been removed — the server lists CLOSE_VISIT and
+     * FINISH before DECLINE_TEST, and the old `find` took whichever came
+     * first, so on any row that could also be closed the way out of the test
+     * was never drawn. See SECONDARY_RANK.
+     */
+    expect(secondaryStep([CLOSE_VISIT, DECLINE_TEST], ADMIN, true, null)).toEqual(DECLINE_TEST);
+    expect(secondaryStep([FINISH, DECLINE_TEST], ADMIN, true, null)).toEqual(DECLINE_TEST);
+    expect(secondaryStep([CLOSE_VISIT, CANCEL_TEST], ADMIN, true, null)).toEqual(CANCEL_TEST);
+
+    // And with no test on the row, closing still gets the slot.
+    expect(secondaryStep([CLOSE_VISIT], ADMIN, true, null)).toEqual(CLOSE_VISIT);
   });
 });
 

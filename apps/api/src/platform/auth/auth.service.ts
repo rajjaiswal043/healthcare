@@ -19,6 +19,30 @@ import { loadEnv } from '../../config/env.js';
 const MAX_FAILED_ATTEMPTS = 8;
 const LOCKOUT_MINUTES = 15;
 
+/**
+ * The clinic slug as the database stores it.
+ *
+ * `auth_lookup_user` matches the slug exactly, so `Sunrise-Clinic` and
+ * `sunrise-clinic ` both came back as "Invalid credentials" while the password
+ * was perfectly correct. The sign-in page made that worse rather than
+ * obvious: its branding lookup lowercases the slug before asking, so the page
+ * resolved the clinic, showed its real name and logo — telling you the slug was
+ * right — and then refused the login. Reported 29 Oct 2026.
+ *
+ * Mobile keyboards capitalise the first letter of an autofocused field, so on a
+ * phone this fired before the user had made a mistake at all.
+ *
+ * Safe to fold case here: `onboarding.service.ts` is the only path that creates
+ * a tenant and it rejects anything but `^[a-z0-9][a-z0-9-]{1,62}$`, so no
+ * existing clinic has an uppercase slug to be locked out of. A slug is a
+ * URL identifier meant for subdomains, and those are case-insensitive anyway.
+ *
+ * The email needed no equivalent — it already matches case-insensitively.
+ */
+function tenantSlugAsStored(tenantSlug: string): string {
+  return tenantSlug.trim().toLowerCase();
+}
+
 export interface LoginResult {
   accessToken: string;
   refreshToken: string;
@@ -65,6 +89,7 @@ export class AuthService {
     meta: RequestMeta,
   ): Promise<LoginResult | MfaRequired> {
     const env = loadEnv();
+    const slug = tenantSlugAsStored(tenantSlug);
 
     // Runs before tenant context exists — see auth_lookup_user in the migration
     // for why this one lookup is SECURITY DEFINER.
@@ -81,7 +106,7 @@ export class AuthService {
         locked_until: Date | null;
         full_name: string;
       }>
-    >`SELECT * FROM auth_lookup_user(${tenantSlug}, ${email})`;
+    >`SELECT * FROM auth_lookup_user(${slug}, ${email})`;
 
     const row = rows[0];
 
@@ -136,7 +161,7 @@ export class AuthService {
         mfaRequired: true,
         enrolmentSecret: secret,
         otpauthUrl: generateURI({
-          issuer: `HealthCloud (${tenantSlug})`,
+          issuer: `HealthCloud (${slug})`,
           label: email,
           secret,
         }),
@@ -252,6 +277,8 @@ export class AuthService {
     totpCode: string,
     meta: RequestMeta,
   ): Promise<LoginResult | MfaRequired> {
+    const slug = tenantSlugAsStored(tenantSlug);
+
     const rows = await this.prisma.client.$queryRaw<
       Array<{
         user_id: string;
@@ -259,7 +286,7 @@ export class AuthService {
         password_hash: string;
         mfa_secret: string | null;
       }>
-    >`SELECT * FROM auth_lookup_user(${tenantSlug}, ${email})`;
+    >`SELECT * FROM auth_lookup_user(${slug}, ${email})`;
 
     const row = rows[0];
     if (!row || !(await verifyPassword(password, row.password_hash)) || !row.mfa_secret) {
@@ -275,7 +302,7 @@ export class AuthService {
       tx.user.update({ where: { id: row.user_id }, data: { mfaEnabledAt: new Date() } }),
     );
 
-    return this.login(tenantSlug, email, password, totpCode, meta);
+    return this.login(slug, email, password, totpCode, meta);
   }
 
   /**

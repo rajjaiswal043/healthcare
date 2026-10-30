@@ -1620,7 +1620,21 @@ function InlineRegister({
   const [mobile, setMobile] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState(DEFAULT_STATE);
-  const [consent, setConsent] = useState(true);
+  /**
+   * CONSENT STARTS UNTICKED.
+   *
+   * It defaulted to `true`, so the box was already ticked when the form opened
+   * and a clerk who never read it out still submitted "the patient consents".
+   * That is not consent — DPDP wants an affirmative act, and the main
+   * registration form says so in as many words: a tick that appears by itself
+   * is not one, which is why consent is excluded from its draft restore.
+   *
+   * Found on 30 Oct 2026 while checking a report that consent was MISSING from
+   * this flow. It was present; it was answered for the patient in advance,
+   * which is worse than missing because the record then claims something
+   * nobody did. Submit is already gated on this being ticked.
+   */
+  const [consent, setConsent] = useState(false);
 
   const [weak, setWeak] = useState<Array<{ id: string; name: string; uhid: string }>>([]);
   const [blocking, setBlocking] = useState<Array<{ id: string; name: string; uhid: string }>>([]);

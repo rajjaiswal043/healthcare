@@ -295,6 +295,27 @@ export class ClinicSetupService {
     });
   }
 
+  /**
+   * A DOCTOR WHOSE VISITS NOBODY CAN BILL.
+   *
+   * Reported from the clinic on 30 Oct 2026: a doctor could be added with both
+   * fees left blank. Blank is not meaningless — `planVisit` falls back to the
+   * catalogue price for `CONS-NEW` / `CONS-FOLLOWUP`, and a doctor-level fee is
+   * an OVERRIDE of it, which is deliberate: consultants in one clinic charge
+   * differently and a single clinic-wide fee is the first thing that would need
+   * working around. So blank fees stay legal.
+   *
+   * The harm is narrower than "blank": it is no doctor fee AND no catalogue
+   * price, where `planVisit` returns null and the visit silently raises no bill
+   * at all. The pay-first gate then passes because there is nothing to pay.
+   * Narveer's call, 30 Oct 2026: refuse exactly that case and leave the
+   * fallback alone.
+   *
+   * GATED ON THE CLINIC BILLING AT ALL. Billing is opt-in per tenant, and a
+   * clinic with an empty catalogue is not misconfigured, it is simply not
+   * charging through this system yet — refusing its doctors would block setup
+   * for a clinic that never wanted invoices.
+   */
   async createPractitioner(
     tenantId: string,
     input: {
@@ -311,6 +332,8 @@ export class ClinicSetupService {
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       if (input.userId) await assertLoginLinkable(tx, input.userId);
+
+      await assertVisitsCanBePriced(tx, input);
 
       const created = await tx.practitioner.create({
         data: {
@@ -1288,6 +1311,56 @@ async function linkableLogins(tx: TenantClient, onlyUserId?: string) {
  * The rule is decided by `linkableLogins` alone. What follows a refusal only
  * chooses the sentence — it never lets through a login the rule turned away.
  */
+/**
+ * Refuse a doctor whose consultations nobody could bill. See
+ * `createPractitioner` for why blank fees themselves are legal.
+ */
+async function assertVisitsCanBePriced(
+  tx: TenantClient,
+  input: { consultationFeePaise?: number | null; followUpFeePaise?: number | null },
+) {
+  /*
+   * Does this clinic charge through the system at all?
+   *
+   * An empty catalogue is a clinic that has not started billing, not a broken
+   * one. Checked first so a non-billing clinic can add doctors freely.
+   */
+  const billsAnything = await tx.service.findFirst({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  if (!billsAnything) return;
+
+  const missing: string[] = [];
+
+  for (const [field, code, label] of [
+    ['consultationFeePaise', 'CONS-NEW', 'consultation'],
+    ['followUpFeePaise', 'CONS-FOLLOWUP', 'follow-up'],
+  ] as const) {
+    // A fee on the doctor is an override and settles it, zero included: a
+    // deliberate zero is a free consultation, which is a real thing a clinic
+    // does and not the same as having no price at all.
+    if (input[field] !== undefined && input[field] !== null) continue;
+
+    const fallback = await tx.service.findFirst({
+      where: { code, isActive: true },
+      select: { id: true },
+    });
+    if (!fallback) missing.push(label);
+  }
+
+  if (missing.length === 0) return;
+
+  throw new ConflictException({
+    code: 'VISIT_FEE_MISSING',
+    message:
+      `This clinic bills for visits, but there is no ${missing.join(' or ')} price for this doctor ` +
+      'and none in the service list to fall back on — their visits would raise no bill at all. ' +
+      `Give them a ${missing.join(' and ')} fee, or add one to the service list.`,
+    missing,
+  });
+}
+
 async function assertLoginLinkable(tx: TenantClient, userId: string) {
   const [eligible] = await linkableLogins(tx, userId);
   if (eligible) return eligible;
