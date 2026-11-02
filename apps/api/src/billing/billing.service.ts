@@ -1353,11 +1353,204 @@ export class BillingService {
     });
   }
 
-  /** Write the charge off, defer it, or void the invoice. All need a reason. */
+  /**
+   * FORGIVE PART OR ALL OF A CHARGE.
+   *
+   * Narveer's case, 2 Nov 2026: a relative pays at the desk, the doctor sees
+   * him afterwards and wants to make the visit complimentary. Two or three a
+   * day.
+   *
+   * ALREADY PAID IS HANDLED HERE RATHER THAN BY THE CALLER. Forgiving money
+   * that has already been collected means handing it back AND writing it off,
+   * and doing that as two calls leaves a window where the bill reads "owing"
+   * — if the second half then fails, the clinic has created a debt for
+   * somebody it just refunded. Both rows go in one transaction or neither
+   * does.
+   *
+   * The refund is recorded as a real PATIENT_REFUND so the drawer still
+   * reconciles: money physically left the till.
+   */
+  async writeOff(
+    tenantId: string,
+    id: string,
+    input: { amountPaise: number; reason: string },
+    meta: RequestMeta,
+  ) {
+    const waivedByUserId = meta.actorUserId;
+    if (!waivedByUserId) throw new BadRequestException('A waiver needs an author.');
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      await lockInvoice(tx, id);
+
+      const invoice = await tx.invoice.findUnique({
+        where: { id },
+        select: { id: true, status: true, totalPaise: true, patientId: true },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+
+      if (invoice.status === 'CANCELLED') {
+        throw new ConflictException({
+          code: 'INVOICE_CANCELLED',
+          message: 'This invoice is cancelled. There is nothing left to forgive.',
+        });
+      }
+
+      const { paidPaise, refundedPaise, writtenOffPaise } = await this.totals(
+        tx,
+        id,
+        invoice.totalPaise,
+      );
+
+      /*
+       * The ceiling is the whole charge, less what has already been forgiven —
+       * NOT the outstanding balance. A bill that has been paid in full has a
+       * balance of zero and is exactly the case this was built for.
+       */
+      const forgivable = invoice.totalPaise - writtenOffPaise;
+      if (input.amountPaise > forgivable) {
+        throw new ConflictException({
+          code: 'WRITE_OFF_EXCEEDS_CHARGE',
+          message:
+            forgivable <= 0
+              ? 'The whole of this bill has already been written off.'
+              : `Only ${formatPaise(forgivable)} is left to write off on this bill.`,
+          forgivablePaise: forgivable,
+        });
+      }
+
+      /*
+       * Money already in the till, up to what is being forgiven, goes back.
+       * Anything beyond that was never collected, so there is nothing to
+       * return — the write-off alone cancels the debt.
+       */
+      const held = paidPaise - refundedPaise;
+      const toRefund = Math.min(held, input.amountPaise);
+
+      if (toRefund > 0) {
+        await tx.payment.create({
+          data: {
+            tenantId,
+            invoiceId: id,
+            direction: 'REFUND',
+            mode: 'CASH',
+            amountPaise: toRefund,
+            reason: input.reason,
+            correctionKind: 'PATIENT_REFUND',
+            collectedByUserId: waivedByUserId,
+          },
+        });
+      }
+
+      const writeOff = await tx.invoiceWriteOff.create({
+        data: {
+          tenantId,
+          invoiceId: id,
+          amountPaise: input.amountPaise,
+          reason: input.reason,
+          waivedByUserId,
+        },
+        select: { id: true },
+      });
+
+      await this.restatus(tx, id, invoice.totalPaise);
+
+      await this.audit.record(tx, tenantId, {
+        action: 'invoice.write_off',
+        resourceType: 'Invoice',
+        resourceId: id,
+        patientId: invoice.patientId,
+        changedFields: toRefund > 0 ? ['writeOffs', 'payments', 'status'] : ['writeOffs', 'status'],
+        reason: input.reason,
+        ...meta,
+      });
+
+      return { ...(await this.view(tx, id)), writeOffId: writeOff.id, refundedPaise: toRefund };
+    });
+  }
+
+  /**
+   * UNDO A WAIVER PUT ON THE WRONG BILL.
+   *
+   * Voided, never deleted: what was given away and then taken back is as much
+   * a part of the history as the waiver itself, and a clinic that can quietly
+   * remove one can quietly remove any of them.
+   *
+   * The money is NOT re-collected. Voiding says the forgiveness was a mistake,
+   * which puts the charge back on the bill as owing — collecting it is a
+   * separate act by whoever is standing at the desk.
+   */
+  async voidWriteOff(
+    tenantId: string,
+    id: string,
+    writeOffId: string,
+    reason: string,
+    meta: RequestMeta,
+  ) {
+    const voidedByUserId = meta.actorUserId;
+    if (!voidedByUserId) throw new BadRequestException('Undoing a waiver needs an author.');
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      await lockInvoice(tx, id);
+
+      const invoice = await tx.invoice.findUnique({
+        where: { id },
+        select: { id: true, totalPaise: true, patientId: true },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+
+      const writeOff = await tx.invoiceWriteOff.findUnique({
+        where: { id: writeOffId },
+        select: { id: true, invoiceId: true, voidedAt: true },
+      });
+      if (!writeOff || writeOff.invoiceId !== id) {
+        throw new NotFoundException('Waiver not found on this bill.');
+      }
+
+      if (writeOff.voidedAt) {
+        throw new ConflictException({
+          code: 'ALREADY_VOIDED',
+          message: 'This waiver has already been undone.',
+        });
+      }
+
+      await tx.invoiceWriteOff.update({
+        where: { id: writeOffId },
+        data: { voidedAt: new Date(), voidedByUserId, voidReason: reason },
+      });
+
+      await this.restatus(tx, id, invoice.totalPaise);
+
+      await this.audit.record(tx, tenantId, {
+        action: 'invoice.void_write_off',
+        resourceType: 'Invoice',
+        resourceId: id,
+        patientId: invoice.patientId,
+        changedFields: ['writeOffs', 'status'],
+        reason,
+        ...meta,
+      });
+
+      return this.view(tx, id);
+    });
+  }
+
+  /**
+   * Defer the charge or void the invoice. Both need a reason.
+   *
+   * WAIVED IS NO LONGER SET HERE — 2 Nov 2026. Forgiving a charge went through
+   * this method when it was all-or-nothing, and it refused any bill that had
+   * been paid. It is now `writeOff`, which takes an amount and handles the
+   * already-paid case, and WAIVED is the status that falls out when a waiver
+   * clears the balance.
+   *
+   * The union is narrowed deliberately rather than left wide: two ways to
+   * waive a bill would drift apart, and the compiler is a cheaper guard
+   * against that than a comment.
+   */
   async setException(
     tenantId: string,
     id: string,
-    status: 'WAIVED' | 'DEFERRED' | 'CANCELLED',
+    status: 'DEFERRED' | 'CANCELLED',
     reason: string,
     meta: RequestMeta,
   ) {
@@ -1756,10 +1949,27 @@ export class BillingService {
     const paidPaise = sum(payments.filter((p) => p.direction === 'IN'));
     const refundedPaise = sum(payments.filter((p) => p.direction === 'REFUND'));
 
+    /**
+     * What was forgiven rather than paid.
+     *
+     * Voided waivers are excluded here rather than deleted, so a write-off put
+     * on the wrong bill stops counting the moment it is undone while the
+     * record of both the mistake and the correction survives.
+     */
+    const liveWriteOffs = await tx.invoiceWriteOff.findMany({
+      where: { invoiceId, voidedAt: null },
+      select: { amountPaise: true },
+    });
+    const writtenOffPaise = liveWriteOffs.reduce((n, w) => n + w.amountPaise, 0);
+
     return {
       paidPaise,
       refundedPaise,
-      balancePaise: totalPaise - (paidPaise - refundedPaise),
+      writtenOffPaise,
+      /* Forgiven money settles a bill exactly as collected money does — the
+         difference is only where it came from, which is what keeps the two
+         separable in the finance report. */
+      balancePaise: totalPaise - (paidPaise - refundedPaise) - writtenOffPaise,
     };
   }
 
@@ -1793,13 +2003,60 @@ export class BillingService {
    * until the month-end.
    */
   private async restatus(tx: TenantClient, id: string, totalPaise: number): Promise<void> {
-    const { paidPaise, refundedPaise } = await this.totals(tx, id, totalPaise);
+    const { paidPaise, refundedPaise, writtenOffPaise } = await this.totals(tx, id, totalPaise);
     const net = paidPaise - refundedPaise;
+    const settled = net + writtenOffPaise;
 
-    const status =
-      net >= totalPaise && totalPaise > 0 ? 'PAID' : net > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
+    /**
+     * WAIVED IS NOW A DERIVED END-STATE, not a separate act — 2 Nov 2026.
+     *
+     * A bill cleared with any forgiven money reads WAIVED rather than PAID,
+     * which is what keeps the board's "Waived" in the Method column and the
+     * `feeWaived` flag working exactly as they did when waiving was its own
+     * endpoint. A bill cleared entirely in cash is still PAID.
+     *
+     * Partly forgiven and still owing stays UNPAID or PARTIALLY_PAID with a
+     * smaller balance — the waiver reduced the debt, it did not settle it.
+     */
+    const cleared = settled >= totalPaise && totalPaise > 0;
+    const status = cleared
+      ? writtenOffPaise > 0
+        ? 'WAIVED'
+        : 'PAID'
+      : settled > 0
+        ? 'PARTIALLY_PAID'
+        : 'UNPAID';
 
-    await tx.invoice.update({ where: { id }, data: { status } });
+    /**
+     * `invoice_exception_is_explained` requires a WAIVED invoice to carry a
+     * reason AND an authoriser on the invoice row itself. The waiver that
+     * closed the bill is the one that answers for it, so its words are copied
+     * up — and cleared again if a void takes the status back off WAIVED, so a
+     * bill never sits there explaining a decision that no longer stands.
+     */
+    const closing =
+      status === 'WAIVED'
+        ? await tx.invoiceWriteOff.findFirst({
+            where: { invoiceId: id, voidedAt: null },
+            orderBy: { waivedAt: 'desc' },
+            select: { reason: true, waivedByUserId: true },
+          })
+        : null;
+
+    await tx.invoice.update({
+      where: { id },
+      data: {
+        status,
+        ...(status === 'WAIVED' && closing
+          ? { reason: closing.reason, authorisedByUserId: closing.waivedByUserId }
+          : {}),
+        /* `status` here is only ever PAID, UNPAID, PARTIALLY_PAID or WAIVED —
+           DEFERRED and CANCELLED are set by `setException` and never reached
+           by this arithmetic, so anything that is not WAIVED has no exception
+           left to explain. */
+        ...(status === 'WAIVED' ? {} : { reason: null, authorisedByUserId: null }),
+      },
+    });
   }
 
   private async view(tx: TenantClient, id: string) {
@@ -1817,6 +2074,10 @@ export class BillingService {
           include: { diagnosticOrder: { select: { id: true, status: true } } },
         },
         payments: { orderBy: { collectedAt: 'asc' } },
+        /* Voided ones included deliberately: the dialog shows what was
+           forgiven AND what was taken back, which is the history the table
+           exists for. `totals` is what ignores the voided rows. */
+        writeOffs: { orderBy: { waivedAt: 'asc' } },
         appointment: {
           select: {
             id: true,
@@ -1849,6 +2110,11 @@ export class BillingService {
 
     const paidPaise = sum(invoice.payments.filter((p) => p.direction === 'IN'));
     const refundedPaise = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
+    /* Live waivers only. The voided ones are still returned for the history,
+       but they no longer settle anything. */
+    const writtenOffPaise = invoice.writeOffs
+      .filter((w) => w.voidedAt === null)
+      .reduce((n, w) => n + w.amountPaise, 0);
 
     /**
      * FR-BIL-13 — who did this, in words.
@@ -1910,11 +2176,13 @@ export class BillingService {
       })),
       paidPaise,
       refundedPaise,
-      balancePaise: invoice.totalPaise - (paidPaise - refundedPaise),
+      /** Forgiven and still standing. Voided waivers are excluded. */
+      writtenOffPaise,
+      balancePaise: invoice.totalPaise - (paidPaise - refundedPaise) - writtenOffPaise,
       /** True when the visit may proceed to the queue. */
       settled:
         (SETTLED as readonly string[]).includes(invoice.status) ||
-        invoice.totalPaise - (paidPaise - refundedPaise) <= 0,
+        invoice.totalPaise - (paidPaise - refundedPaise) - writtenOffPaise <= 0,
 
       /**
        * The queue already calls this visit an emergency.

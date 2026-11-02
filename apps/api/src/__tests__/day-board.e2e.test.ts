@@ -540,23 +540,70 @@ describe('closing a visit', () => {
     expect(row?.closed_by_user_id).not.toBeNull();
   });
 
-  it('refuses a visit the doctor has not finished', async () => {
+  it('closes a visit the doctor never finished, without finishing it', async () => {
+    /*
+     * REVERSED ON 2 NOV 2026, Narveer's call.
+     *
+     * This used to refuse anything that was not FULFILLED, and that refusal
+     * was the whole of the "cannot end the patient's journey" report: a visit
+     * abandoned halfway could never be ended by anybody, because the doctor
+     * never pressed OPD done and nothing else would accept it.
+     *
+     * The status is deliberately NOT advanced. `closed_at` says the patient
+     * left; the status says how far the visit got. Collapsing the two here
+     * would record that a doctor finished a consultation they walked away
+     * from — see the 22 Oct split.
+     */
     const id = await visit('IN_PROGRESS', 0);
 
-    const res = await close(id);
-    expect(res.statusCode).toBe(409);
-    expect(res.json().error.details?.code).toBe('NOT_FINISHED');
+    expect((await close(id)).statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ status: string; closed_at: string | null }>(
+      fx.main.id,
+      `SELECT status, closed_at FROM appointment WHERE id = $1`,
+      [id],
+    );
+
+    expect(row?.closed_at).not.toBeNull();
+    expect(row?.status).toBe('IN_PROGRESS');
   });
 
-  it('refuses while a test is still out', async () => {
-    // Closing here would leave a film nobody is waiting for, on a visit
-    // nobody is watching.
-    const id = await visit('FULFILLED', 0);
-    await test('PENDING', 0, id);
+  it('refuses a booking nobody ever kept', async () => {
+    // The line that is left. A patient who never checked in has no visit to
+    // close — writing them off is the verb that fits, not closing.
+    const id = await visit('BOOKED', 0);
 
     const res = await close(id);
     expect(res.statusCode).toBe(409);
-    expect(res.json().error.details?.code).toBe('TEST_STILL_PENDING');
+    expect(res.json().error.details?.code).toBe('NOT_STARTED');
+  });
+
+  it('closes a visit with a test still out, and leaves the test alone', async () => {
+    /*
+     * ALSO REVERSED ON 2 NOV 2026.
+     *
+     * The old rule read well — closing here leaves a film nobody is waiting
+     * for — but it made "At a department" the one stage with no exit, and that
+     * is the stage patients are most likely to walk out of: told to go for an
+     * X-ray, they go home instead.
+     *
+     * The order stays PENDING rather than being cancelled. What the doctor
+     * asked for is a clinical record, and closing a visit is not the same
+     * decision as withdrawing a request — the board now draws both buttons so
+     * the desk can say which one it means.
+     */
+    const id = await visit('FULFILLED', 0);
+    const orderId = await test('PENDING', 0, id);
+
+    expect((await close(id)).statusCode).toBe(200);
+
+    const [order] = await ownerQuery<{ status: string }>(
+      fx.main.id,
+      `SELECT status FROM diagnostic_order WHERE id = $1`,
+      [orderId],
+    );
+
+    expect(order?.status).toBe('PENDING');
   });
 
   /**
@@ -1115,7 +1162,18 @@ describe('what a row says to do next', () => {
   it('asks the doctor to start once they are waiting', async () => {
     await visit('ARRIVED', 0);
 
-    expect(kinds((await board()).rows[0]!)).toEqual(['START']);
+    /*
+     * MARK_NO_SHOW beside it since 2 Nov 2026, Narveer's call.
+     *
+     * A patient who checks in and leaves before anybody sees them had no
+     * ending at all: no visit happened, so there is nothing to close, and the
+     * row sat in "waiting" until the day turned over and it became stuck.
+     *
+     * Last, and `NEVER_PRIMARY` in the browser keeps it in the quiet slot —
+     * somebody who is merely late must not be one misplaced click from being
+     * written off.
+     */
+    expect(kinds((await board()).rows[0]!)).toEqual(['START', 'MARK_NO_SHOW']);
   });
 
   /**
@@ -1226,7 +1284,11 @@ describe('what a row says to do next', () => {
      * used to be a dead end here. It is last, so the row still TELLS you to
      * collect; the browser draws it as the quiet button beside that.
      */
-    expect(kinds((await board()).rows[0]!)).toEqual(['COLLECT', 'DECLINE_TEST']);
+    /* CLOSE_VISIT between them since 2 Nov 2026: "At a department" had no way
+       to end the visit at all, which is the stage a patient is most likely to
+       walk out of. The browser draws the two quiet buttons stacked, one for
+       the test and one for the visit, so neither hides the other. */
+    expect(kinds((await board()).rows[0]!)).toEqual(['COLLECT', 'CLOSE_VISIT', 'DECLINE_TEST']);
 
     const [invoice] = await ownerQuery<{ id: string }>(
       fx.main.id,
@@ -1245,8 +1307,8 @@ describe('what a row says to do next', () => {
      * the same act the finance desk's own Decline button has always done,
      * which leaves a credit on the bill for finance to settle.
      */
-    expect(kinds(after)).toEqual(['RECORD_RESULT']);
-    expect(after.nextSteps[0]!.orderId).toBe(orderId);
+    expect(kinds(after)).toEqual(['CLOSE_VISIT', 'RECORD_RESULT']);
+    expect(after.nextSteps[1]!.orderId).toBe(orderId);
   });
 
   /**
@@ -1499,7 +1561,7 @@ describe('a visit nobody attended', () => {
    * stayed in "ready to close" forever, because nobody goes back to formally
    * close a Tuesday three weeks ago.
    */
-  async function visitDaysAgo(days: number, status: string, closed: boolean): Promise<void> {
+  async function visitDaysAgo(days: number, status: string, closed: boolean): Promise<string> {
     /*
      * PATIENT 1, AND A DAY OF ITS OWN PER TEST.
      *
@@ -1510,7 +1572,7 @@ describe('a visit nobody attended', () => {
      * bucket into whichever visit ranked highest and quietly broke two
      * unrelated assertions about a no-show.
      */
-    await ownerQuery(
+    const rows = await ownerQuery<{ id: string }>(
       fx.main.id,
       `INSERT INTO appointment (tenant_id, patient_id, practitioner_id, location_id,
                                 start_at, end_at, queue_date, status, visit_type,
@@ -1522,7 +1584,8 @@ describe('a visit nobody attended', () => {
                    - ($5 || ' days')::interval)::date),
                $6::appointment_status, 'NEW',
                CASE WHEN $7 THEN now() - ($5 || ' days')::interval ELSE NULL END,
-               now())`,
+               now())
+       RETURNING id`,
       [
         fx.main.id,
         fx.main.patientIds[1],
@@ -1533,6 +1596,10 @@ describe('a visit nobody attended', () => {
         closed,
       ],
     );
+
+    // Handed back so a test can hang an order off the visit. Ignored by the
+    // callers that only need the row to exist.
+    return rows[0]!.id;
   }
 
   /** That patient's row on that day, whoever else was in the clinic. */
@@ -1551,6 +1618,28 @@ describe('a visit nobody attended', () => {
     expect((await rowDaysAgo(11)).bucket).toBe('DONE');
   });
 
+  it('moves off the live stage the moment it is closed, whatever stage that was', async () => {
+    /*
+     * The half of the 2 Nov change that would have made the rest look broken.
+     *
+     * `bucketForAppointment` only consulted `closed_at` inside its FULFILLED
+     * case, which was fine while FULFILLED was the only closeable status. Now
+     * that a visit can be closed from with-the-doctor or from a department,
+     * a closed row kept its live bucket without this: the desk pressed Close
+     * visit, the write succeeded, and the patient stayed sitting exactly where
+     * they were, as though the button did nothing.
+     *
+     * On a day of its own, not day 0: this file has no `beforeEach` and the
+     * board is one row per patient per day, so sharing today with the
+     * ready-to-close test below would merge both visits into a single row and
+     * the placement list would answer about the wrong one.
+     */
+    await visitDaysAgo(18, 'IN_PROGRESS', true);
+
+    // NOT_FINISHED without the hoist, because the status never advanced.
+    expect((await rowDaysAgo(18)).bucket).toBe('DONE');
+  });
+
   it('is still waiting to be closed on the day itself', async () => {
     // The line between the two. The doctor has finished, but the patient is
     // still in the building, which is the whole of the 22 Oct split.
@@ -1567,6 +1656,29 @@ describe('a visit nobody attended', () => {
     expect(stepKinds(await rowDaysAgo(12))).not.toContain('REOPEN_VISIT');
   });
 
+  it('offers to close a past visit nobody ever closed', async () => {
+    /*
+     * THE 30 OCT REGRESSION, pinned.
+     *
+     * Two changes shipped that day to fix one report, and the second undid the
+     * first. Bucketing a past fulfilled visit as DONE moved these rows out of
+     * READY_TO_CLOSE — the only branch that pushed CLOSE_VISIT — and into one
+     * that pushed REOPEN_VISIT alone, gated on a close that had never
+     * happened. So the rows offered NOTHING, which is the single most common
+     * row on any past day.
+     *
+     * Reported on 2 Nov 2026 as the done option not reaching the admin. It was
+     * not a permission problem: the step was absent from the payload, so no
+     * role could see it.
+     */
+    await visitDaysAgo(16, 'FULFILLED', false);
+
+    const row = await rowDaysAgo(16);
+
+    expect(row.bucket).toBe('DONE');
+    expect(stepKinds(row)).toContain('CLOSE_VISIT');
+  });
+
   it('still offers to reopen one that really was closed', async () => {
     await visitDaysAgo(13, 'FULFILLED', true);
 
@@ -1576,15 +1688,68 @@ describe('a visit nobody attended', () => {
     expect(stepKinds(row)).toContain('REOPEN_VISIT');
   });
 
-  it('lets a visit left half-open on a past day be closed', async () => {
-    // Arrived, and then the day ended around them. Until 30 Oct 2026 the board
-    // offered NOTHING on these rows, so they could never be tidied.
+  it('writes off a patient nobody ever saw on a past day', async () => {
+    /*
+     * Arrived, and then the day ended around them.
+     *
+     * The board offered CLOSE_VISIT here from 30 Oct 2026, and the server
+     * refused it every time — `closeVisit` would not touch a visit that was
+     * not FULFILLED, so the one button on the row errored in front of whoever
+     * pressed it. That is the worst shape a bug can take on this board.
+     *
+     * Writing them off is the honest verb: no consultation happened, so there
+     * is no visit to close. Narveer's call, 2 Nov 2026.
+     */
     await visitDaysAgo(14, 'ARRIVED', false);
 
     const row = await rowDaysAgo(14);
 
     expect(row.bucket).toBe('NOT_FINISHED');
+    expect(stepKinds(row)).toEqual(['MARK_NO_SHOW']);
+  });
+
+  it('does not leave a patient waiting for a film on a day that has gone', async () => {
+    /*
+     * THE THIRD DEAD END, found while reproducing the other two.
+     *
+     * "Back from tests" means the patient is sitting outside with their film,
+     * waiting to be called in — a fact about right now. On a past day nobody
+     * is waiting anywhere, and the only step that bucket offers is Bring back
+     * in, which a past day rightly refuses. The row rendered completely empty.
+     *
+     * Dropping the bucket once the day has gone lets the row fall through to
+     * what the visit actually is, which does have an ending.
+     */
+    const appointmentId = await visitDaysAgo(17, 'AWAITING_TESTS', false);
+
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO diagnostic_order (tenant_id, patient_id, department_id, ordered_by_user_id,
+                                     appointment_id, description, status, referral_source,
+                                     legacy_unbilled, completed_at, completed_by_user_id,
+                                     created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5::uuid, 'Knee X-ray', 'COMPLETED', 'INTERNAL',
+               true, now() - interval '17 days', $4::uuid,
+               now() - interval '17 days', now())`,
+      [fx.main.id, fx.main.patientIds[1], departmentId, orderedByUserId, appointmentId],
+    );
+
+    const row = await rowDaysAgo(17);
+
+    expect(row.bucket).not.toBe('BACK_FROM_TESTS');
     expect(stepKinds(row)).toContain('CLOSE_VISIT');
+  });
+
+  it('closes a visit the doctor was in the middle of on a past day', async () => {
+    // The other half of NOT_FINISHED. They were with the doctor, so a visit
+    // did happen and closing is what records that it ended. Not OPD done:
+    // that would write a consultation outcome days after the fact.
+    await visitDaysAgo(15, 'IN_PROGRESS', false);
+
+    const row = await rowDaysAgo(15);
+
+    expect(row.bucket).toBe('NOT_FINISHED');
+    expect(stepKinds(row)).toEqual(['CLOSE_VISIT']);
   });
 
   it('is still merely expected on the day itself', async () => {
@@ -1631,7 +1796,19 @@ describe('a visit nobody attended', () => {
     const board = await boardOn(await clinicDaysAgo(0));
 
     expect(board.rows[0]!.bucket).toBe('WAITING');
-    expect(stepKinds(board.rows[0]!)).not.toContain('MARK_NO_SHOW');
+
+    /*
+     * It IS still offered, as of 2 Nov 2026 — but never as the thing to do.
+     *
+     * This assertion used to read `not.toContain`, from when the step existed
+     * only for a patient who had not arrived. A patient who checked in and
+     * then left is a real and common ending, and it needs the same verb.
+     *
+     * What keeps it safe is `NEVER_PRIMARY` in the browser, not its absence
+     * here: Start is what the row tells you to do, and writing somebody off
+     * takes a deliberate press on the quiet button.
+     */
+    expect(stepKinds(board.rows[0]!)).toEqual(['START', 'MARK_NO_SHOW']);
   });
 });
 

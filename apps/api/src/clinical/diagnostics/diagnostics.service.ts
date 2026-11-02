@@ -929,23 +929,47 @@ export class DiagnosticsService {
       }
 
       /*
-       * A note without a file is allowed only once somebody has said why.
+       * A NOTE ON ITS OWN IS ENOUGH — Narveer's call, 2 Nov 2026.
        *
-       * Checked after the empty case so the thinner record still gets the
-       * plainer message — "write something" before "explain yourself".
+       * This used to refuse a note with no file until somebody also said WHY
+       * there was no file, which is the rule added on 30 Oct after the
+       * department was reported closing X-rays with no image behind them.
+       *
+       * Relaxed after seeing it in use: the extra field was being met as an
+       * obstacle rather than answered, and a department that cannot close a
+       * test it has genuinely done starts recording nothing at all. The
+       * trade is accepted knowingly — a test can again be finished on a line
+       * of remarks alone.
+       *
+       * `no_file_reason` and its CHECK stay. The field is now optional rather
+       * than gone, so a thin record can still explain itself, and every reason
+       * already recorded still means exactly what it said. Nothing is
+       * backfilled or rewritten.
        */
-      if (!hasFile && !why) {
+
+      /**
+       * Said, or not said. Never said badly.
+       *
+       * `diagnostic_order_no_file_reason_is_said` permits NULL but requires at
+       * least three characters once a value is present — so with the field now
+       * optional, an empty box or a stray keystroke would reach the database
+       * and come back as a constraint violation, which is a 500 and tells the
+       * department nothing. Refused here instead, in words.
+       */
+      if (why !== undefined && why.length > 0 && why.length < 3) {
         throw new BadRequestException({
-          code: 'RESULT_HAS_NO_FILE',
-          message:
-            'Attach the report, or say why there is no file to attach — ' +
-            'remarks on their own do not record what the test found.',
+          code: 'NO_FILE_REASON_TOO_SHORT',
+          message: 'Say why there is no file in a few words, or leave the box empty.',
         });
       }
 
-      // Not kept when there IS a file: it would be an answer to a question
-      // nobody asked, and a later reader would wonder which to believe.
-      const storedWhy = hasFile ? null : (why ?? null);
+      /*
+       * Not kept when there IS a file: it would be an answer to a question
+       * nobody asked, and a later reader would wonder which to believe. An
+       * empty box is NOT an answer either, so it stores as null rather than as
+       * a blank the CHECK would reject.
+       */
+      const storedWhy = hasFile || !why ? null : why;
 
       const order = await tx.diagnosticOrder.update({
         where: { id: orderId },
@@ -1156,6 +1180,176 @@ export class DiagnosticsService {
    * questions about it, and a report that cannot tell "we called it off" from
    * "they refused" cannot tell a clinical decision from a commercial one.
    */
+  /**
+   * CORRECT A TEST THAT IS ALREADY AT A DEPARTMENT.
+   *
+   * Narveer's requirement, 2 Nov 2026: a film is ordered as "X-ray left knee",
+   * the doctor meant "AP and lateral", and there was no way to say so. Until
+   * now nothing wrote `description` after creation — the only verbs were
+   * complete, decline, undecline, handover and cancel — so a typo could only be
+   * fixed by cancelling the order and raising another, which on a billed test
+   * drags the bill through a removal and a re-charge anyway.
+   *
+   * THE CHARGE IS REPLACED, NOT EDITED. Changing the test or its price removes
+   * the old invoice line and raises a new one through `chargeDiagnosticTest`,
+   * which is exactly what `undecline` does. A second path that edited a line's
+   * price in place would be a second way a test's charge comes to exist, and
+   * the two would drift.
+   *
+   * NEVER ON A SETTLED TEST. Money already taken cannot be corrected from a
+   * board row; that is a refund, and it belongs on the bill where there is a
+   * reason field and an audit trail built for it. Narveer's call.
+   */
+  async updateOrder(
+    tenantId: string,
+    orderId: string,
+    input: { description?: string; serviceId?: string; pricePaise?: number },
+    meta: RequestMeta,
+  ) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const existing = await tx.diagnosticOrder.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          status: true,
+          patientId: true,
+          appointmentId: true,
+          departmentId: true,
+          serviceId: true,
+          description: true,
+          invoiceLineId: true,
+          legacyUnbilled: true,
+        },
+      });
+      if (!existing) throw new NotFoundException('No such order.');
+
+      if (existing.status !== 'PENDING') {
+        throw new BadRequestException({
+          code: 'ORDER_NOT_PENDING',
+          message:
+            existing.status === 'COMPLETED'
+              ? 'That test has already been done. Its record cannot be rewritten after the fact.'
+              : 'That test is no longer open, so there is nothing to change.',
+        });
+      }
+
+      /*
+       * A paid test is off limits, whichever field is being changed — not only
+       * the price. Re-pointing a settled charge at a different test would leave
+       * the patient having paid for something the record no longer says they
+       * had.
+       */
+      const billed = await tx.diagnosticOrder.findUnique({
+        where: { id: orderId },
+        select: DIAGNOSTIC_BILLING_SELECT,
+      });
+      if (billed && diagnosticBillingState(billed).status === 'SETTLED') {
+        throw new BadRequestException({
+          code: 'ORDER_SETTLED',
+          message:
+            'This test has been paid for. Changing it now is a refund on the bill, ' +
+            'not an edit here.',
+        });
+      }
+
+      const description = input.description?.trim();
+      if (description !== undefined && description.length === 0) {
+        throw new BadRequestException({
+          code: 'DESCRIPTION_IS_EMPTY',
+          message: 'Say what the test is.',
+        });
+      }
+
+      /*
+       * The charge is only disturbed when the test or the price actually
+       * changes. A pure wording fix leaves the bill exactly as it was, which is
+       * the common case and must not produce a removal and a re-charge in the
+       * audit trail for no reason.
+       */
+      const serviceChanged =
+        input.serviceId !== undefined && input.serviceId !== existing.serviceId;
+      const priceChanged = input.pricePaise !== undefined;
+      const rechargeNeeded = (serviceChanged || priceChanged) && !existing.legacyUnbilled;
+
+      let invoiceLineId = existing.invoiceLineId;
+      let departmentId = existing.departmentId;
+
+      if (serviceChanged || priceChanged) {
+        const serviceId = input.serviceId ?? existing.serviceId;
+        if (!serviceId) {
+          throw new BadRequestException({
+            code: 'ORDER_HAS_NO_TEST',
+            message:
+              'This order was raised as free text, so it has no catalogue test or price to change. ' +
+              'Cancel it and raise it again.',
+          });
+        }
+
+        if (rechargeNeeded && existing.invoiceLineId) {
+          // Unlink before removing: the foreign key is RESTRICT, so the order
+          // has to let go of the line first. Same order as `declineOrder`.
+          await tx.diagnosticOrder.update({
+            where: { id: orderId },
+            data: { invoiceLineId: null },
+          });
+          await this.billing.removeDiagnosticLine(tx, tenantId, existing.invoiceLineId, meta);
+          invoiceLineId = null;
+        }
+
+        if (serviceChanged) {
+          const service = await tx.service.findUnique({
+            where: { id: serviceId },
+            select: { id: true, departmentId: true },
+          });
+          if (!service) throw new NotFoundException('No such test.');
+          if (service.departmentId) departmentId = service.departmentId;
+        }
+
+        if (rechargeNeeded) {
+          const charge = await this.billing.chargeDiagnosticTest(
+            tx,
+            tenantId,
+            {
+              patientId: existing.patientId,
+              visitAppointmentId: existing.appointmentId,
+              serviceId,
+              description: description ?? existing.description ?? '',
+              ...(input.pricePaise === undefined ? {} : { pricePaise: input.pricePaise }),
+            },
+            meta,
+          );
+          invoiceLineId = charge.lineId;
+        }
+      }
+
+      const order = await tx.diagnosticOrder.update({
+        where: { id: orderId },
+        data: {
+          ...(description === undefined ? {} : { description }),
+          ...(input.serviceId === undefined ? {} : { serviceId: input.serviceId }),
+          departmentId,
+          invoiceLineId,
+        },
+        select: ORDER_SELECT,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'diagnostic_order.update',
+        resourceType: 'DiagnosticOrder',
+        resourceId: orderId,
+        patientId: existing.patientId,
+        changedFields: [
+          ...(description === undefined ? [] : ['description']),
+          ...(serviceChanged ? ['serviceId', 'departmentId'] : []),
+          ...(rechargeNeeded ? ['invoiceLineId'] : []),
+        ],
+        ...meta,
+      });
+
+      return order;
+    });
+  }
+
   async declineOrder(tenantId: string, orderId: string, meta: RequestMeta) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const existing = await tx.diagnosticOrder.findUnique({

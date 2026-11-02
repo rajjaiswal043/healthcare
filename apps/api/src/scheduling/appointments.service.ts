@@ -646,36 +646,50 @@ export class AppointmentsService {
         });
       }
 
-      if (appt.status !== 'FULFILLED') {
+      /**
+       * WHICH STAGES MAY BE CLOSED — Narveer's call, 2 Nov 2026.
+       *
+       * Closing used to require FULFILLED, and that was the whole of the
+       * "cannot end the patient's journey" report. A visit abandoned halfway
+       * had no way out at all: the doctor never pressed OPD done, so the
+       * status stayed IN_PROGRESS or AWAITING_TESTS forever and every button
+       * on the row was refused.
+       *
+       * So: any stage where a visit actually started may be closed. What is
+       * refused is the three where there is nothing to close — a booking
+       * nobody kept, one already written off, and one already cancelled.
+       *
+       * THE STATUS IS NOT TOUCHED by closing. `closed_at` says the patient
+       * left; the status says how far the visit got. That is the 22 Oct split,
+       * and collapsing the two here would record that a doctor finished a
+       * consultation they actually abandoned.
+       */
+      const CLOSEABLE = ['IN_PROGRESS', 'AWAITING_TESTS', 'FULFILLED'];
+      if (!CLOSEABLE.includes(appt.status)) {
         throw new ConflictException({
-          code: 'NOT_FINISHED',
+          code: 'NOT_STARTED',
           message:
-            appt.status === 'AWAITING_TESTS'
-              ? 'They are still out for a test. Bring them back before closing the visit.'
-              : 'The doctor has not finished with this patient yet.',
+            appt.status === 'BOOKED'
+              ? 'This patient never checked in, so there is no visit to close.'
+              : `A visit that is ${appt.status.toLowerCase().replace('_', ' ')} cannot be closed.`,
         });
       }
 
       /**
-       * A test still running keeps the visit open.
+       * A PENDING TEST NO LONGER BLOCKS THE CLOSE.
        *
-       * The board never offers the button in this state — a pending order puts
-       * the patient at a department, not in the close queue — but the rule
-       * belongs on the server as well: closing here would leave a film that
-       * nobody is waiting for, on a visit nobody is watching.
+       * It used to, and the reasoning was sound on its own terms: closing here
+       * leaves a film nobody is waiting for. But it made "At a department" a
+       * dead end, which is the state a patient is most likely to walk out of —
+       * they are told to go for an X-ray, they go home instead, and the desk
+       * was left with a row it could not clear by any route.
+       *
+       * The order is deliberately left PENDING rather than cancelled. What was
+       * asked for is a clinical record, and closing a visit is not the same
+       * decision as withdrawing a request. The board now shows the way out of
+       * the test beside the way out of the visit, so the desk can do both —
+       * see `secondaryStep` and the two slots it fills.
        */
-      const pending = await tx.diagnosticOrder.count({
-        where: { appointmentId: id, status: 'PENDING' },
-      });
-      if (pending > 0) {
-        throw new ConflictException({
-          code: 'TEST_STILL_PENDING',
-          message:
-            pending === 1
-              ? 'A test on this visit has not come back yet.'
-              : `${pending} tests on this visit have not come back yet.`,
-        });
-      }
 
       const updated = await tx.appointment.update({
         where: { id },
@@ -967,9 +981,30 @@ export class AppointmentsService {
     return toView(updated, tz);
   }
 
-  /** Did not turn up (FR-APT-09). */
+  /**
+   * Did not turn up (FR-APT-09).
+   *
+   * ALSO FROM ARRIVED, since 2 Nov 2026. A patient who checked in and left
+   * before anybody saw them was a dead end: the board offered nothing on a
+   * waiting row once the day had passed, and this endpoint refused the only
+   * verb that fits. Narveer's call — write it off rather than close it, since
+   * no visit happened.
+   *
+   * `checkedInAt` IS DELIBERATELY LEFT ALONE. They did arrive, and that is a
+   * fact worth keeping; clearing it to make the row tidy would delete
+   * something that happened. A no-show carrying a check-in time is exactly
+   * what "left before being seen" looks like, and the pair stays readable in
+   * the no-show figures rather than quietly inflating them.
+   */
   async markNoShow(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    return this.transition(tenantId, id, 'BOOKED', 'NO_SHOW', { noShowAt: new Date() }, meta);
+    return this.transition(
+      tenantId,
+      id,
+      ['BOOKED', 'ARRIVED'],
+      'NO_SHOW',
+      { noShowAt: new Date() },
+      meta,
+    );
   }
 
   /**
@@ -1295,7 +1330,14 @@ export class AppointmentsService {
   private async transition(
     tenantId: string,
     id: string,
-    from: string,
+    /**
+     * The status, or statuses, this transition may run from.
+     *
+     * A list rather than one value since 2 Nov 2026, for `markNoShow`: a
+     * patient who checked in and left before anybody saw them is written off
+     * from ARRIVED, not from BOOKED.
+     */
+    from: string | readonly string[],
     to: string,
     extra: Record<string, unknown>,
     meta: RequestMeta,
@@ -1327,10 +1369,13 @@ export class AppointmentsService {
       const appt = await tx.appointment.findUnique({ where: { id } });
       if (!appt) throw new NotFoundException('Appointment not found');
 
-      if (appt.status !== from) {
+      const allowedFrom = typeof from === 'string' ? [from] : from;
+      if (!allowedFrom.includes(appt.status)) {
         throw new ConflictException({
           code: 'INVALID_TRANSITION',
-          message: `Expected the appointment to be ${from.toLowerCase()}, but it is ${appt.status.toLowerCase()}.`,
+          message: `Expected the appointment to be ${allowedFrom
+            .map((s) => s.toLowerCase())
+            .join(' or ')}, but it is ${appt.status.toLowerCase()}.`,
         });
       }
 

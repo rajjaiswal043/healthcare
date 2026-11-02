@@ -80,6 +80,9 @@ export function PaymentDialog({
   const [amount, setAmount] = useState(() => (initial.balancePaise / 100).toFixed(2));
   const [reference, setReference] = useState('');
   const [exception, setException] = useState<'waive' | 'defer' | null>(null);
+  /* How much of the charge to forgive. Set when the form is opened, from
+     whatever is left to forgive, because the common case is all of it. */
+  const [waiveAmount, setWaiveAmount] = useState('0');
 
   /**
    * Correcting money already recorded — FR-BIL-11.
@@ -191,6 +194,8 @@ export function PaymentDialog({
   const canCollect = can('payment:collect');
   const mayWaive = can('invoice:waive');
   const mayDefer = can('invoice:defer');
+  /** What is left to forgive — the whole charge, less anything already waived. */
+  const forgivablePaise = invoice.totalPaise - invoice.writtenOffPaise;
   const mayCorrect = can('payment:refund');
 
   const apply = (updated: Invoice) => {
@@ -258,18 +263,50 @@ export function PaymentDialog({
   async function submitException() {
     if (!exception || reason.trim().length < 3) return;
 
+    /*
+     * A waiver now carries an AMOUNT. Part of a bill can be forgiven — the
+     * X-ray made free and the consultation still charged — which the old
+     * all-or-nothing waive could not express.
+     */
+    const paise = Math.round(Number(waiveAmount) * 100);
+    if (exception === 'waive' && (!Number.isFinite(paise) || paise <= 0)) {
+      setError('Enter how much to write off.');
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
       apply(
         exception === 'waive'
-          ? await api.waiveInvoice(invoice.id, reason.trim())
+          ? await api.writeOffInvoice(invoice.id, { amountPaise: paise, reason: reason.trim() })
           : await api.deferInvoice(invoice.id, reason.trim()),
       );
       setException(null);
       setReason('');
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not record that.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Undo a waiver put on the wrong bill.
+   *
+   * The charge goes back on as owing; the money is NOT re-collected, because
+   * undoing a mistake and taking a payment are two different acts.
+   */
+  async function undoWriteOff(writeOffId: string) {
+    const why = window.prompt('Why is this waiver being undone?')?.trim();
+    if (!why || why.length < 3) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      apply(await api.voidInvoiceWriteOff(invoice.id, writeOffId, why));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not undo that.');
     } finally {
       setBusy(false);
     }
@@ -620,20 +657,39 @@ export function PaymentDialog({
             </section>
           )}
 
-          {!settled && (mayWaive || mayDefer) && (
+          {/*
+            WAIVING IS NOT GATED ON `!settled` — 2 Nov 2026.
+
+            It used to be, and that hid the button in exactly the case Narveer
+            described: the relative had already paid at the desk, so the bill
+            was settled and there was no way to make it free. Forgiving a paid
+            charge hands the money back and writes it off in one call, so the
+            bill never passes through "owing".
+
+            Deferring stays behind `!settled` — there is nothing to postpone on
+            a bill that is already paid.
+          */}
+          {((mayWaive && forgivablePaise > 0) || (!settled && mayDefer)) && (
             <section className="border-t border-ink/8 pt-4">
               {exception === null ? (
                 <div className="flex flex-wrap gap-2">
-                  {mayWaive && (
+                  {mayWaive && forgivablePaise > 0 && (
                     <button
                       type="button"
                       className="btn-secondary !py-1.5 text-[12.5px]"
-                      onClick={() => setException('waive')}
+                      onClick={() => {
+                        setException('waive');
+                        // The common case is the whole thing.
+                        setWaiveAmount((forgivablePaise / 100).toFixed(2));
+                      }}
                     >
-                      Waive the charge
+                      {/* Named for the decision, not the accounting. "Waive the
+                          charge" is what the books call it; "make this free" is
+                          what the person standing there is actually doing. */}
+                      Make this free
                     </button>
                   )}
-                  {mayDefer && (
+                  {!settled && mayDefer && (
                     <button
                       type="button"
                       className="btn-secondary !py-1.5 text-[12.5px]"
@@ -645,8 +701,30 @@ export function PaymentDialog({
                 </div>
               ) : (
                 <div>
+                  {exception === 'waive' && (
+                    <div className="mb-3">
+                      <p className="mono-label mb-1">
+                        How much to write off? <span className="text-coral">*</span>
+                      </p>
+                      <input
+                        className="field-input"
+                        inputMode="decimal"
+                        value={waiveAmount}
+                        onChange={(e) => setWaiveAmount(e.target.value)}
+                      />
+                      {/* Part of a bill can be forgiven — the X-ray made free
+                          and the consultation still charged. Defaulted to all
+                          of it because that is the usual case. */}
+                      <p className="mt-1 text-[12px] text-ink-40">
+                        Up to {formatPaise(forgivablePaise)}.
+                        {invoice.paidPaise - invoice.refundedPaise > 0 &&
+                          ' Anything already paid is handed back at the same time.'}
+                      </p>
+                    </div>
+                  )}
+
                   <p className="mono-label mb-2">
-                    {exception === 'waive' ? 'Why is this being waived?' : 'Why defer payment?'}{' '}
+                    {exception === 'waive' ? 'Why is this being made free?' : 'Why defer payment?'}{' '}
                     <span className="text-coral">*</span>
                   </p>
 
@@ -698,11 +776,62 @@ export function PaymentDialog({
                       disabled={busy || reason.trim().length < 3}
                       onClick={() => void submitException()}
                     >
-                      {exception === 'waive' ? 'Waive this charge' : 'Defer payment'}
+                      {exception === 'waive' ? 'Make this free' : 'Defer payment'}
                     </button>
                   </div>
                 </div>
               )}
+            </section>
+          )}
+
+          {/*
+            WHAT WAS GIVEN AWAY, and by whom.
+
+            Shown apart from the payments rather than mixed in, because they are
+            different facts: a payment is money that moved, a waiver is money
+            that was never going to. Voided ones stay in the list, struck
+            through — a clinic that can quietly remove one can quietly remove
+            any of them.
+          */}
+          {invoice.writeOffs.length > 0 && (
+            <section>
+              <p className="mono-label mb-2">Made free</p>
+              <ul className="space-y-2">
+                {invoice.writeOffs.map((w) => (
+                  <li
+                    key={w.id}
+                    className="flex items-start justify-between gap-3 rounded-card border border-ink/8 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className={[
+                          'font-mono text-[13px] font-semibold tabular-nums',
+                          w.voidedAt ? 'text-ink-40 line-through' : 'text-ink',
+                        ].join(' ')}
+                      >
+                        {formatPaise(w.amountPaise)}
+                      </p>
+                      <p className="mt-0.5 break-words text-[12px] text-ink-60">{w.reason}</p>
+                      {w.voidedAt && (
+                        <p className="mt-0.5 break-words text-[12px] text-coral">
+                          Undone — {w.voidReason}
+                        </p>
+                      )}
+                    </div>
+
+                    {mayWaive && !w.voidedAt && (
+                      <button
+                        type="button"
+                        className="btn-ghost shrink-0 !px-2.5 !py-1 !text-[12px]"
+                        disabled={busy}
+                        onClick={() => void undoWriteOff(w.id)}
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 

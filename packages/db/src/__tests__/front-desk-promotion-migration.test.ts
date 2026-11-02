@@ -28,8 +28,21 @@ const EDITED = '01930000-0000-7000-8000-0000000002b1';
 
 const fromCode = (key: string) => SYSTEM_ROLES.find((r) => r.key === key)!.permissions;
 
-/** The front desk as it shipped BEFORE this change — what the migration looks for. */
-const OLD_FRONT_DESK = fromCode('front_desk').filter((p) => p !== 'promotion:apply');
+/**
+ * The front desk as it shipped BEFORE this change — what the migration looks for.
+ *
+ * Derived from the live set by removing everything granted to this role SINCE
+ * 22 Sep 2026, not just the permission this migration adds. The list therefore
+ * grows every time the front desk gains something, and that is the trade: the
+ * alternative is a frozen literal that stops describing the role at all.
+ *
+ * `invoice:waive` joined on 2 Nov 2026 — see 20261102130000. Without removing
+ * it here, this baseline claims the front desk could forgive a charge six
+ * weeks before the permission existed, the migration's exact-match test finds
+ * nothing, and all three cases below fail.
+ */
+const GRANTED_SINCE: string[] = ['promotion:apply', 'invoice:waive'];
+const OLD_FRONT_DESK = fromCode('front_desk').filter((p) => !GRANTED_SINCE.includes(p));
 
 let owner: pg.Client;
 

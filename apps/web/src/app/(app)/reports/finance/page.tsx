@@ -136,7 +136,7 @@ export default function FinanceReportPage() {
 
       {report && (
         <>
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-5">
             <Stat label="Collected" value={formatPaise(report.collections.collectedPaise)} />
             <Stat
               label="Refunded"
@@ -146,6 +146,23 @@ export default function FinanceReportPage() {
                   : '—'
               }
               {...(report.collections.refundedPaise > 0 ? { tone: 'coral' as const } : {})}
+            />
+            {/*
+              WHAT THE CLINIC GAVE AWAY.
+
+              Beside the takings rather than inside them: no money moved, so it
+              is not part of Net. It is here because "how much did we make free
+              this month" was a question nobody could answer — the decision was
+              recorded on each bill and totalled nowhere.
+            */}
+            <Stat
+              label="Made free"
+              value={
+                report.collections.writtenOffPaise > 0
+                  ? formatPaise(report.collections.writtenOffPaise)
+                  : '—'
+              }
+              {...(report.collections.writtenOffPaise > 0 ? { tone: 'amber' as const } : {})}
             />
             <Stat label="Net" value={formatPaise(report.collections.netPaise)} tone="green" />
             <Stat

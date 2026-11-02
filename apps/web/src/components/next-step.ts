@@ -180,12 +180,21 @@ export function stepLabel(step: NextStep): string {
       return 'Record result';
     case 'RECEIPT':
       return 'Receipt';
+    /*
+     * ONE LABEL FOR BOTH, since 2 Nov 2026.
+     *
+     * These used to read "Patient declined" and "Cancel test" — the patient's
+     * words where there was a charge to take off, the clinic's where there was
+     * not. That distinction still matters and is still made, but INSIDE the
+     * dialog this button now opens: the row cannot say "edit" and "withdraw"
+     * in one word, and Narveer asked for both behind one press.
+     *
+     * The withdrawal keeps its own wording in `EditTestDialog`, so a report
+     * can still tell a clinical decision from a commercial one.
+     */
     case 'DECLINE_TEST':
-      /* The patient's words, not the clinic's. "Cancel" would read as the
-         clinic changing its mind about a test it still thinks is needed. */
-      return 'Patient declined';
     case 'CANCEL_TEST':
-      return 'Cancel test';
+      return 'Edit/Cancel test';
     case 'REOPEN_VISIT':
       return 'Reopen visit';
     case 'MARK_NO_SHOW':
@@ -225,7 +234,24 @@ const NEVER_PRIMARY = new Set<NextStep['kind']>([
  * next: it is what somebody presses when the normal path is blocked and the
  * patient is standing in front of them.
  */
-const SECONDARY = new Set<NextStep['kind']>([
+/**
+ * THE TWO KINDS OF QUIET BUTTON, which must never compete.
+ *
+ * One slot served both until 2 Nov 2026, and a single rank decided between
+ * them — so whichever category ranked lower simply vanished. Both halves of
+ * that were reported from the clinic within three days of each other: first
+ * "the decline option has gone", then "the done option is not coming to
+ * admin". They were the same bug seen from opposite ends, and reordering the
+ * rank only ever moved which one was broken.
+ *
+ * They are different questions. One is what to do about a TEST, the other is
+ * how to end the VISIT, and a row can legitimately need both — a patient at a
+ * department who walks out needs the test withdrawn AND the visit closed.
+ * Ranking them against each other was the mistake; they now get a slot each.
+ */
+const TEST_ESCAPE = new Set<NextStep['kind']>(['DECLINE_TEST', 'CANCEL_TEST']);
+
+const VISIT_END = new Set<NextStep['kind']>([
   'FINISH',
   /**
    * Closing sits here for the same reason finishing does, and one more.
@@ -237,8 +263,14 @@ const SECONDARY = new Set<NextStep['kind']>([
    * unreachable by the one role that needs it.
    */
   'CLOSE_VISIT',
-  'DECLINE_TEST',
-  'CANCEL_TEST',
+  /**
+   * Written off rather than closed, for a patient nobody saw.
+   *
+   * A waiting row has no visit to end — they checked in and left — so the
+   * honest ending is the no-show, not a close. It belongs in this slot for the
+   * same reason the other two do: it is how the row stops being open.
+   */
+  'MARK_NO_SHOW',
   'REOPEN_VISIT',
 ]);
 
@@ -257,11 +289,12 @@ const SECONDARY = new Set<NextStep['kind']>([
  * REOPEN_VISIT is last: it is the undo, and an undo should never be sitting
  * where the next real action belongs.
  */
-const SECONDARY_RANK: Array<NextStep['kind']> = [
+const WITHIN_SLOT_RANK: Array<NextStep['kind']> = [
   'DECLINE_TEST',
   'CANCEL_TEST',
   'CLOSE_VISIT',
   'FINISH',
+  'MARK_NO_SHOW',
   'REOPEN_VISIT',
 ];
 
@@ -283,32 +316,34 @@ const SECONDARY_RANK: Array<NextStep['kind']> = [
  * Never returns the step already being shown as the primary, so a front desk
  * row showing OPD done does not also show it a second time.
  */
-export function secondaryStep(
+export function secondarySteps(
   steps: NextStep[],
   can: (permission: string) => boolean,
   isToday: boolean,
   primary: NextStep | null,
-): NextStep | null {
-  const offered = steps.filter(
-    (step) =>
-      SECONDARY.has(step.kind) &&
-      step.kind !== primary?.kind &&
-      (isToday || PAST_SAFE.has(step.kind)) &&
-      can(NEEDS[step.kind]),
-  );
+): NextStep[] {
+  const pick = (slot: Set<NextStep['kind']>): NextStep | null =>
+    steps
+      .filter(
+        (step) =>
+          slot.has(step.kind) &&
+          step.kind !== primary?.kind &&
+          (isToday || PAST_SAFE.has(step.kind)) &&
+          can(NEEDS[step.kind]),
+      )
+      /*
+       * Ranked only against its OWN slot.
+       *
+       * Within a slot a rank is still needed — a row can offer both Close
+       * visit and OPD done — but it no longer decides between categories, so
+       * nothing can be evicted by a button that answers a different question.
+       */
+      .sort((a, b) => WITHIN_SLOT_RANK.indexOf(a.kind) - WITHIN_SLOT_RANK.indexOf(b.kind))[0] ??
+    null;
 
   /*
-   * Picked by SECONDARY_RANK, not by the server's order.
-   *
-   * There is one quiet button, and the server lists CLOSE_VISIT and FINISH
-   * before DECLINE_TEST — so on any row that could also be closed or finished,
-   * `find` returned Close and the way out of the test was never drawn at all.
-   * Reported from the clinic on 30 Oct 2026 as the decline option having gone
-   * missing; it had not gone, it was being outranked.
+   * The test first, then the visit. A pending test is what is holding the
+   * visit open, so it reads top-down in the order the desk would act.
    */
-  return (
-    [...offered].sort(
-      (a, b) => SECONDARY_RANK.indexOf(a.kind) - SECONDARY_RANK.indexOf(b.kind),
-    )[0] ?? null
-  );
+  return [pick(TEST_ESCAPE), pick(VISIT_END)].filter((s): s is NextStep => s !== null);
 }

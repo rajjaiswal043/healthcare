@@ -30,6 +30,8 @@ import {
   InvoiceExceptionDto,
   CorrectPaymentModeDto,
   RefundDto,
+  VoidWriteOffDto,
+  WriteOffDto,
 } from './dto.js';
 
 @Controller()
@@ -191,16 +193,47 @@ export class BillingController {
     return this.billing.correctPaymentMode(tenantId, id, { ...dto }, meta(req, user));
   }
 
-  @Post('invoices/:id/waive')
+  /**
+   * Forgive part or all of a charge.
+   *
+   * REPLACES `invoices/:id/waive`, which could only write off a whole bill and
+   * refused one that had been paid — so the desk had to refund first, which
+   * flipped the bill back to UNPAID and left the patient apparently owing what
+   * he had just been handed back. Narveer's call, 2 Nov 2026.
+   *
+   * Writing off the full balance still ends at `WAIVED`, so the board's
+   * "Waived" column and every report that reads that status are unchanged.
+   */
+  @Post('invoices/:id/write-offs')
   @RequirePermissions(PERMISSIONS.INVOICE_WAIVE)
-  async waive(
+  async writeOff(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() dto: InvoiceExceptionDto,
+    @Body() dto: WriteOffDto,
     @Req() req: FastifyRequest,
   ) {
-    return this.billing.setException(tenantId, id, 'WAIVED', dto.reason, meta(req, user));
+    return this.billing.writeOff(tenantId, id, { ...dto }, meta(req, user));
+  }
+
+  /**
+   * Undo one, because it went on the wrong bill.
+   *
+   * Behind the same permission as making one: whoever may forgive a charge may
+   * take the forgiveness back, and the alternative was editing the database by
+   * hand.
+   */
+  @Post('invoices/:id/write-offs/:writeOffId/void')
+  @RequirePermissions(PERMISSIONS.INVOICE_WAIVE)
+  async voidWriteOff(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('writeOffId', new ParseUUIDPipe()) writeOffId: string,
+    @Body() dto: VoidWriteOffDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.voidWriteOff(tenantId, id, writeOffId, dto.reason, meta(req, user));
   }
 
   @Post('invoices/:id/defer')

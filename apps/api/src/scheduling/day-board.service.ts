@@ -831,6 +831,16 @@ export class DayBoardService {
        * apart.
        */
       visitClosed: boolean;
+      /**
+       * The real status of the visit the row's buttons point at.
+       *
+       * Needed because a past day collapses ARRIVED, IN_PROGRESS and
+       * AWAITING_TESTS into one NOT_FINISHED bucket, and the three do not end
+       * the same way: a patient nobody ever saw is written off, while one the
+       * doctor was with is closed. Without this the branch has to guess, and
+       * guessing is what drew a Close visit button the server refused.
+       */
+      visitStatus: string | null;
       token: number | null;
       /**
        * EVERY doctor this patient is seeing today, in appointment-time order.
@@ -901,6 +911,7 @@ export class DayBoardService {
           appointmentId: null,
           appointmentRank: Number.MAX_SAFE_INTEGER,
           visitClosed: false,
+          visitStatus: null,
           token: null,
           doctors: new Set<string>(),
           department: null,
@@ -960,6 +971,7 @@ export class DayBoardService {
           // Tracked with the id, not separately: it is a fact about the visit
           // the row's buttons point at, and the wrong one aims them all wrong.
           row.visitClosed = a.closedAt !== null;
+          row.visitStatus = a.status;
         }
         row.token ??= a.tokenNumber;
         if (!row.earliest || a.startAt < row.earliest) row.earliest = a.startAt;
@@ -1034,7 +1046,20 @@ export class DayBoardService {
          * is still running — a patient with the knee done and the spine still
          * on the machine has not finished at the department.
          */
-        if (r.visitIsAway && r.hasCompletedTest && r.pendingOrderId === null) {
+        /**
+         * ONLY ON THE DAY ITSELF, since 2 Nov 2026.
+         *
+         * "Back from tests" means the patient is sitting outside with their
+         * film, waiting to be called in again — a fact about right now. On a
+         * day that has gone they are not waiting anywhere, and the only step
+         * this bucket offers is Bring back in, which a past day rightly
+         * refuses. The result was a row with no button at all: reported as
+         * patients from previous days that could not be cleared.
+         *
+         * Dropping the bucket lets the row fall through to what the visit
+         * actually is — NOT_FINISHED — which does have a way to end it.
+         */
+        if (!dayHasPassed && r.visitIsAway && r.hasCompletedTest && r.pendingOrderId === null) {
           r.buckets.add('BACK_FROM_TESTS');
         }
 
@@ -1100,6 +1125,7 @@ export class DayBoardService {
             bucket,
             appointmentId: r.appointmentId,
             visitClosed: r.visitClosed,
+            visitStatus: r.visitStatus,
             owed: unpaid?.get(r.patient.id) ?? null,
             visitFeePending: r.visitFee === 'PENDING',
             pendingOrderId: r.pendingOrderId,
@@ -1182,6 +1208,14 @@ function stepsFor(row: {
   appointmentId: string | null;
   /** Really closed, not merely reading as closed. Gates REOPEN_VISIT. */
   visitClosed: boolean;
+  /**
+   * How far the visit actually got, for the days that hide it.
+   *
+   * NOT_FINISHED covers ARRIVED, IN_PROGRESS and AWAITING_TESTS at once, and
+   * they do not end the same way — the first is written off, the other two are
+   * closed. Reading the bucket alone is what drew a refused button.
+   */
+  visitStatus: string | null;
   owed: { invoiceIds: string[]; duePaise: number; billsOwing: number } | null;
   /** This VISIT'S own bill, which is the one the check-in gate reads. */
   visitFeePending: boolean;
@@ -1234,6 +1268,30 @@ function stepsFor(row: {
        * already waited in once.
        */
       steps.push({ kind: 'BRING_BACK', appointmentId: row.appointmentId });
+      /**
+       * AND A WAY TO END IT, for the patient who took their film home.
+       *
+       * Bringing them back in is what the row is FOR, so it stays the primary.
+       * But a patient whose X-ray is back and who has left is a real and
+       * common ending, and until 2 Nov 2026 it had no button: the row insisted
+       * on calling in somebody who was no longer in the building.
+       */
+      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
+    } else if (row.bucket === 'AT_DEPARTMENT') {
+      /**
+       * THE STAGE PATIENTS WALK OUT OF — and it had no exit at all.
+       *
+       * There was no branch here. A patient sent for an X-ray who goes home
+       * instead sat under "At a department" with nothing but Collect, and no
+       * role could clear them: the server refused a close while a test was
+       * pending, and the board never offered one anyway.
+       *
+       * The test is deliberately NOT cancelled by closing. What the doctor
+       * asked for is a clinical record, and the way out of the test is drawn
+       * beside this one, so the desk can withdraw it explicitly if that is
+       * what happened.
+       */
+      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
     } else if (row.bucket === 'DONE') {
       /**
        * The way back, for the row somebody pressed by mistake.
@@ -1251,6 +1309,24 @@ function stepsFor(row: {
        */
       if (row.visitClosed) {
         steps.push({ kind: 'REOPEN_VISIT', appointmentId: row.appointmentId });
+      } else {
+        /**
+         * READS AS DONE, WAS NEVER CLOSED — the 30 Oct regression.
+         *
+         * A fulfilled visit on a past day buckets DONE without anybody having
+         * closed it. The branch offered only REOPEN_VISIT, gated on a real
+         * close that had never happened, so these rows offered NOTHING: the
+         * single most common row on any past day, and no way to tidy it.
+         *
+         * Adding CLOSE_VISIT here is what makes the matching `PAST_SAFE` entry
+         * mean anything — that change shipped the same day and had no step to
+         * act on, because the rows it was written for had been moved out of
+         * READY_TO_CLOSE and into this branch.
+         *
+         * `closeVisit` accepts a fulfilled visit on any date, so this is a
+         * button the server honours.
+         */
+        steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
       }
     } else if (row.bucket === 'NOT_FINISHED') {
       /**
@@ -1270,8 +1346,20 @@ function stepsFor(row: {
        * Not FINISH: that moves IN_PROGRESS to FULFILLED and would be writing a
        * consultation outcome days later. Closing records that the visit ended,
        * which is the part that is actually true.
+       *
+       * WHICH ENDING DEPENDS ON HOW FAR THE VISIT GOT — 2 Nov 2026. This
+       * branch used to push CLOSE_VISIT for all three statuses it covers, and
+       * for two of them the server refused it: `closeVisit` would not touch a
+       * visit that was not FULFILLED, so the button errored in front of
+       * whoever pressed it. Closing now accepts a started visit, and the one
+       * status it still refuses — ARRIVED, nobody ever saw them — is written
+       * off instead, which is what actually happened.
        */
-      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
+      if (row.visitStatus === 'ARRIVED') {
+        steps.push({ kind: 'MARK_NO_SHOW', appointmentId: row.appointmentId });
+      } else {
+        steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
+      }
     } else if (row.bucket === 'READY_TO_CLOSE') {
       /**
        * The last button of the visit.
@@ -1285,6 +1373,19 @@ function stepsFor(row: {
       steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
     } else if (row.bucket === 'WAITING') {
       steps.push({ kind: 'START', appointmentId: row.appointmentId });
+      /**
+       * THEY CHECKED IN AND LEFT, which is not the same as never coming.
+       *
+       * No visit happened, so there is nothing to close — Narveer's call on
+       * 2 Nov 2026 was to write these off rather than close them. `markNoShow`
+       * now accepts ARRIVED for exactly this, and keeps `checked_in_at`, so
+       * the record still says they walked in.
+       *
+       * Never the primary: a patient who is merely waiting must not be one
+       * misplaced click from being written off. `NEVER_PRIMARY` keeps it in
+       * the quiet slot beside Start.
+       */
+      steps.push({ kind: 'MARK_NO_SHOW', appointmentId: row.appointmentId });
     } else if (row.bucket === 'WITH_DOCTOR') {
       steps.push({ kind: 'RESUME', appointmentId: row.appointmentId });
       /**
@@ -1392,6 +1493,18 @@ function bucketForAppointment(
   closedAt: Date | null,
   dayHasPassed: boolean,
 ): DayBucket {
+  /**
+   * A CLOSED VISIT IS DONE, whatever stage it was closed at.
+   *
+   * This used to live inside the FULFILLED case alone, which was fine while
+   * FULFILLED was the only status that could be closed. Since 2 Nov 2026 a
+   * visit can be closed from with-the-doctor or from a department too, and
+   * without this hoist such a row kept its live bucket: the desk pressed Close
+   * visit, the write succeeded, and the patient stayed sitting under "At a
+   * department" as though nothing had happened.
+   */
+  if (closedAt) return 'DONE';
+
   switch (status) {
     case 'BOOKED':
       /* Booked and not checked in. On the day itself that is somebody who has
@@ -1410,7 +1523,6 @@ function bucketForAppointment(
     case 'AWAITING_TESTS':
       return dayHasPassed ? 'NOT_FINISHED' : 'AT_DEPARTMENT';
     case 'FULFILLED':
-      if (closedAt) return 'DONE';
       /*
        * The doctor finished. Whether the patient has LEFT is a separate fact —
        * that is the whole of the 22 Oct split — so on the day itself an

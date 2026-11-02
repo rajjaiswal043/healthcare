@@ -285,6 +285,27 @@ export type Invoice = Prisma.InvoiceModel
  */
 export type InvoiceLine = Prisma.InvoiceLineModel
 /**
+ * Model InvoiceWriteOff
+ * A charge forgiven, in whole or in part. FHIR: Account.guarantor write-off.
+ * 
+ * DELIBERATELY NOT A `Payment` ROW. A payment is one TENDER against an
+ * invoice, and a waiver is not a tender — no money moves, nothing reaches the
+ * drawer, and nothing has to reconcile against a bank statement.
+ * 
+ * The reason it lives here rather than as a third `PaymentDirection` is
+ * concrete rather than philosophical. Three places in the finance report read
+ * `direction === 'IN' ? amount : -amount`, so a third direction would be
+ * counted as money handed BACK, and every waiver would quietly reduce reported
+ * collections. There are 21 sites reading `direction`; one missed is a
+ * misreported figure rather than an error anybody sees. A separate table
+ * cannot be swept into that arithmetic by accident, and the finance report
+ * gains the figure because somebody chose to add it.
+ * 
+ * Rows are never updated except to void one, and never deleted: how much was
+ * given away, by whom and why is exactly the history this table exists for.
+ */
+export type InvoiceWriteOff = Prisma.InvoiceWriteOffModel
+/**
  * Model Payment
  * One tender against an invoice. FHIR: PaymentReconciliation.
  */

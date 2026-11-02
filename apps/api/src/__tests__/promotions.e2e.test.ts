@@ -1814,14 +1814,22 @@ describe('two desks on the same bill at once', () => {
     });
   }
 
-  function exception(invoiceId: string, kind: 'waive' | 'defer') {
+  function exception(invoiceId: string, kind: 'defer') {
     return app.inject({
       method: 'POST',
       url: `/api/v1/invoices/${invoiceId}/${kind}`,
       headers: { cookie: admin.cookie },
-      payload: {
-        reason: kind === 'waive' ? 'Staff or staff family' : 'Corporate or company account',
-      },
+      payload: { reason: 'Corporate or company account' },
+    });
+  }
+
+  /** Forgive a charge. Replaced `exception(id, 'waive')` on 2 Nov 2026. */
+  function writeOff(invoiceId: string, amountPaise: number) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/write-offs`,
+      headers: { cookie: admin.cookie },
+      payload: { amountPaise, reason: 'Staff or staff family' },
     });
   }
 
@@ -1863,19 +1871,37 @@ describe('two desks on the same bill at once', () => {
    * waits, finds the money, and is refused — the clinic never holds cash
    * against a bill it wrote off.
    */
-  it('refuses to waive a bill while it is being paid', async () => {
+  it('waits for a payment in flight, then forgives the charge and hands it back', async () => {
+    /*
+     * This used to assert a 409 HAS_PAYMENTS: waiving refused any bill with
+     * money against it, so a waiver racing a payment lost. Since 2 Nov 2026 a
+     * paid bill CAN be forgiven — that is the whole point of the change — so
+     * the race no longer has a loser.
+     *
+     * The lock is still exactly what is under test, and it matters more now
+     * than it did. The write-off reads what has been collected in order to
+     * decide how much to hand back. Without `lockInvoice` serialising the two,
+     * it would read the balance BEFORE the payment landed, refund nothing, and
+     * leave the clinic holding money against a bill it had just written off —
+     * the unattributed cash the old refusal existed to prevent.
+     */
     const { invoice } = await bookedVisit();
     await slowInserts('test_slow_payment', 'payment');
 
     const paying = pay(invoice.id, CONSULT_FEE);
     await pause(400);
-    const waiving = exception(invoice.id, 'waive');
+    const waiving = writeOff(invoice.id, CONSULT_FEE);
     const [paid, waived] = await Promise.all([paying, waiving]);
 
     expect(paid.statusCode).toBe(201);
-    expect(waived.statusCode).toBe(409);
-    expect(domainCode(waived)).toBe('HAS_PAYMENTS');
-    expect(await statusOf(invoice.id)).toBe('PAID');
+    expect(waived.statusCode).toBe(201);
+    expect(await statusOf(invoice.id)).toBe('WAIVED');
+
+    // The money that landed a moment earlier went back out, rather than
+    // sitting in the till against a forgiven bill.
+    expect(waived.json<{ refundedPaise: number }>().refundedPaise).toBe(CONSULT_FEE);
+    // `refunded` sums the refund rows, so this is the money, not the count.
+    expect(await refunded(invoice.id)).toBe(CONSULT_FEE);
   });
 
   /**
