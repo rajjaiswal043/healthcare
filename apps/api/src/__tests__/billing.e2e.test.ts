@@ -700,11 +700,16 @@ describe('the pay-first gate', () => {
 
     const waived = await app.inject({
       method: 'POST',
-      url: `/api/v1/invoices/${invoice.id}/waive`,
+      url: `/api/v1/invoices/${invoice.id}/write-offs`,
       headers: { cookie: admin.cookie },
-      payload: { reason: 'Staff family, waived by the medical director' },
+      payload: {
+        amountPaise: invoice.totalPaise,
+        reason: 'Staff family, waived by the medical director',
+      },
     });
     expect(waived.statusCode).toBe(201);
+    // Forgiving the whole charge still ends at WAIVED, so the pay-first gate
+    // and everything else reading that status are unchanged.
     expect(waived.json().status).toBe('WAIVED');
 
     expect((await checkIn(appointmentId)).statusCode).toBe(200);
@@ -989,9 +994,12 @@ describe('the correction trail on an invoice', () => {
 
     await app.inject({
       method: 'POST',
-      url: `/api/v1/invoices/${invoice.id}/waive`,
+      url: `/api/v1/invoices/${invoice.id}/write-offs`,
       headers: { cookie: admin.cookie },
-      payload: { reason: 'Staff family, waived by the medical director' },
+      payload: {
+        amountPaise: invoice.totalPaise,
+        reason: 'Staff family, waived by the medical director',
+      },
     });
 
     const res = await app.inject({
@@ -1058,6 +1066,61 @@ describe('the day-end report separates the two kinds', () => {
     // report today changes behind somebody's back.
     expect(report.refundedPaise).toBe(report.patientRefundedPaise + report.reversedInErrorPaise);
   });
+
+  it('never counts a forgiven charge as money in the drawer', async () => {
+    /*
+     * THE REGRESSION THIS FEATURE COULD MOST EASILY HAVE CAUSED.
+     *
+     * A waiver that reached the day-end totals under a payment mode would show
+     * cash that was never in the till, and the clinic's count would not
+     * reconcile — by exactly the amount of its own generosity, which is the
+     * hardest kind of discrepancy to explain.
+     *
+     * This is the test that justifies `invoice_write_off` being its own table
+     * rather than a third `PaymentDirection`: with a direction, three places
+     * in this report would have swept it into `direction !== 'IN'` and counted
+     * it as money handed back.
+     */
+    const invoice = await invoiceFor(await book());
+
+    const waived = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/write-offs`,
+      headers: { cookie: admin.cookie },
+      payload: { amountPaise: invoice.totalPaise, reason: 'Complimentary for a relative' },
+    });
+    expect(waived.statusCode).toBe(201);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/reports/finance',
+      headers: { cookie: admin.cookie },
+    });
+
+    const collections = res.json<{
+      collections: {
+        collectedPaise: number;
+        refundedPaise: number;
+        writtenOffPaise: number;
+        netPaise: number;
+        byMode: Array<{ mode: string; collectedPaise: number; refundedPaise: number }>;
+      };
+    }>().collections;
+
+    // Counted, and counted in its own column.
+    expect(collections.writtenOffPaise).toBe(invoice.totalPaise);
+
+    // Nothing was collected and nothing was handed back, so the money the
+    // clinic is up by must not move either.
+    expect(collections.netPaise).toBe(collections.collectedPaise - collections.refundedPaise);
+
+    // And it belongs to no tender, because none was given.
+    const fromModes = collections.byMode.reduce(
+      (n, m) => n + m.collectedPaise + m.refundedPaise,
+      0,
+    );
+    expect(fromModes).toBe(collections.collectedPaise + collections.refundedPaise);
+  });
 });
 
 // --- editing ----------------------------------------------------------------
@@ -1102,20 +1165,132 @@ describe('changing a bill', () => {
     expect(domainCode(res)).toBe('ALREADY_PAID');
   });
 
-  it('refuses to waive a bill with money against it', async () => {
+  it('forgives a bill that has already been paid, and hands the money back', async () => {
+    /*
+     * REVERSED ON 2 NOV 2026, Narveer's case.
+     *
+     * Waiving used to refuse any bill with money against it — the reasoning
+     * being that the clinic would otherwise hold cash with nothing to
+     * attribute it to. Correct as far as it went, but it made the commonest
+     * real case impossible: "my relative paid at the desk, I saw him
+     * afterwards, I want to make it free". Two or three a day.
+     *
+     * The answer is not to refuse but to do BOTH halves at once. Refunding
+     * alone leaves the bill reading UNPAID, so the desk chases somebody for
+     * money it has just handed back; writing off alone leaves the cash
+     * unattributed, which is the original objection. One transaction does the
+     * two together, so neither state can be reached on its own.
+     */
     const invoice = await invoiceFor(await book());
     await pay(invoice.id, 20000);
 
     const res = await app.inject({
       method: 'POST',
-      url: `/api/v1/invoices/${invoice.id}/waive`,
+      url: `/api/v1/invoices/${invoice.id}/write-offs`,
       headers: { cookie: admin.cookie },
-      payload: { reason: 'Discretionary' },
+      payload: { amountPaise: invoice.totalPaise, reason: 'Complimentary for a relative' },
     });
 
-    // Otherwise the clinic is holding cash with nothing to attribute it to.
+    expect(res.statusCode).toBe(201);
+
+    const body = res.json<{
+      status: string;
+      paidPaise: number;
+      refundedPaise: number;
+      writtenOffPaise: number;
+      balancePaise: number;
+    }>();
+
+    expect(body.status).toBe('WAIVED');
+    // The ₹200 that was actually collected went back out. The rest was never
+    // taken, so there was nothing to return — the write-off cancels it.
+    expect(body.refundedPaise).toBe(20000);
+    expect(body.writtenOffPaise).toBe(invoice.totalPaise);
+    expect(body.balancePaise).toBe(0);
+  });
+
+  it('will not forgive more than the charge', async () => {
+    const invoice = await invoiceFor(await book());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/write-offs`,
+      headers: { cookie: admin.cookie },
+      payload: { amountPaise: invoice.totalPaise + 1, reason: 'Complimentary for a relative' },
+    });
+
     expect(res.statusCode).toBe(409);
-    expect(domainCode(res)).toBe('HAS_PAYMENTS');
+    expect(domainCode(res)).toBe('WRITE_OFF_EXCEEDS_CHARGE');
+  });
+
+  it('undoes a waiver put on the wrong bill, and puts the charge back', async () => {
+    // Without this the only fix was editing the database by hand.
+    const invoice = await invoiceFor(await book());
+
+    const made = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/write-offs`,
+      headers: { cookie: admin.cookie },
+      payload: { amountPaise: invoice.totalPaise, reason: 'Complimentary for a relative' },
+    });
+    const writeOffId = made.json<{ writeOffId: string }>().writeOffId;
+
+    const undone = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/write-offs/${writeOffId}/void`,
+      headers: { cookie: admin.cookie },
+      payload: { reason: 'Put on the wrong patient' },
+    });
+
+    expect(undone.statusCode).toBe(201);
+
+    const body = undone.json<{
+      status: string;
+      writtenOffPaise: number;
+      balancePaise: number;
+      reason: string | null;
+      writeOffs: { voidedAt: string | null; voidReason: string | null }[];
+    }>();
+
+    expect(body.status).toBe('UNPAID');
+    expect(body.writtenOffPaise).toBe(0);
+    expect(body.balancePaise).toBe(invoice.totalPaise);
+    // The bill no longer explains a decision that no longer stands.
+    expect(body.reason).toBeNull();
+    // Voided, never deleted: both the waiver and the correction survive.
+    expect(body.writeOffs).toHaveLength(1);
+    expect(body.writeOffs[0]!.voidedAt).not.toBeNull();
+    expect(body.writeOffs[0]!.voidReason).toBe('Put on the wrong patient');
+  });
+
+  it('forgives part of a bill and leaves the rest owing', async () => {
+    // The X-ray made free, the consultation still charged. The old
+    // all-or-nothing waive could not say this at all.
+    const invoice = await invoiceFor(await book());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoice.id}/write-offs`,
+      headers: { cookie: admin.cookie },
+      payload: { amountPaise: 10000, reason: 'Complimentary for a relative' },
+    });
+
+    expect(res.statusCode).toBe(201);
+
+    const body = res.json<{ status: string; balancePaise: number }>();
+
+    /*
+     * PARTIALLY_PAID, although nobody paid anything.
+     *
+     * The status says how much of the bill is SETTLED, and forgiven money
+     * settles it exactly as collected money does — there is no
+     * "partly waived" status and inventing one would mean touching every
+     * reader of this enum. The distinction that matters is kept where it is
+     * useful: `paidPaise` is still zero and `writtenOffPaise` carries the
+     * ₹100, so the finance report can tell takings from giveaways.
+     */
+    expect(body.status).toBe('PARTIALLY_PAID');
+    expect(body.balancePaise).toBe(invoice.totalPaise - 10000);
   });
 });
 

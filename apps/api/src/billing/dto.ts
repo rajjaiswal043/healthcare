@@ -116,6 +116,41 @@ export class CorrectPaymentModeDto {
   reference?: string;
 }
 
+/**
+ * Forgive part or all of a charge.
+ *
+ * No `mode`, unlike a refund: nothing is tendered. Where money has already been
+ * collected the service hands back exactly what it holds, in the same
+ * transaction — see `writeOff`.
+ */
+export class WriteOffDto {
+  @IsInt()
+  @Min(1)
+  @Max(MAX_PAISE)
+  amountPaise!: number;
+
+  /**
+   * Required, and it has to be words.
+   *
+   * The same `@IsClinicalText` as a refund's reason, for the same reason: this
+   * is the field somebody reads at year-end asking why the clinic gave away
+   * what it did, and "123" answers nothing. At two or three a day it is the
+   * only thing standing between a real figure and an unaccountable one.
+   */
+  @IsString()
+  @IsClinicalText()
+  @MaxLength(300)
+  reason!: string;
+}
+
+/** Undo a waiver put on the wrong bill. The reason is why it was wrong. */
+export class VoidWriteOffDto {
+  @IsString()
+  @IsClinicalText()
+  @MaxLength(300)
+  reason!: string;
+}
+
 export class RefundDto {
   @IsEnum(PaymentModeDto)
   mode!: PaymentModeDto;

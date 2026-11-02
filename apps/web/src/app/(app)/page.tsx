@@ -16,12 +16,13 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { Pagination } from '@/components/pagination';
+import { EditTestDialog } from '@/components/edit-test-dialog';
 import { SendForTestDialog } from '@/components/send-for-test-dialog';
 import { RecordResultDialog } from '@/components/record-result-dialog';
 import { PaymentDialog } from '@/components/payment-dialog';
 import { CollectAcrossDialog } from '@/components/collect-across-dialog';
 import { PrintReceiptButton } from '@/components/receipt-button';
-import { firstDoableStep, SENDABLE, secondaryStep, stepLabel } from '@/components/next-step';
+import { firstDoableStep, SENDABLE, secondarySteps, stepLabel } from '@/components/next-step';
 import { DATE_RE, DayPicker, dayLabel } from '@/components/day-picker';
 import { DiagnosticsBoard } from '@/components/diagnostics-board';
 import { worksOneDepartment } from '@/lib/roles';
@@ -303,6 +304,18 @@ function DayBoardScreen() {
     duePaise: number;
   } | null>(null);
   const [recording, setRecording] = useState<{ row: DayBoardRow; orderId: string } | null>(null);
+  /**
+   * A test being corrected or withdrawn — 2 Nov 2026.
+   *
+   * `billed` travels with it because the two withdrawals are different facts:
+   * the server refuses to call an uncharged test "declined", so the dialog
+   * must know which it may offer.
+   */
+  const [editingTest, setEditingTest] = useState<{
+    row: DayBoardRow;
+    orderId: string;
+    billed: boolean;
+  } | null>(null);
 
   /**
    * WHICH DAY, AND HOW "TODAY" IS DECIDED.
@@ -636,45 +649,26 @@ function DayBoardScreen() {
            * off the department's worklist. Finance can put a declined test
            * back if the patient changes their mind at the counter.
            */
-          case 'DECLINE_TEST': {
-            if (
-              !window.confirm(
-                `${row.patient.name} is not having this test. The charge comes off their ` +
-                  'bill and the department stops waiting for them. Continue?',
-              )
-            ) {
-              break;
-            }
-
-            await api.declineDiagnosticOrder(step.orderId);
-            setNotice(
-              `Recorded: ${row.patient.name} declined the test. The charge has been removed.`,
-            );
-            await load();
-            break;
-          }
-
           /**
-           * The same act where there was never a charge.
+           * BOTH OPEN THE DIALOG — Narveer's requirement, 2 Nov 2026.
            *
-           * A free-text order, or one raised before tests were billable, has
-           * nothing to take off — the server refuses to call that "declined",
-           * so withdrawing the request is the only honest verb.
+           * These used to withdraw the test straight from the row behind a
+           * `window.confirm`, which was the only thing anybody could do to a
+           * test already at a department: there was no way to fix a typo on a
+           * film short of cancelling it and raising another.
+           *
+           * The two cases are kept apart in `billed`, not collapsed. The
+           * server refuses to call an uncharged test "declined", so the dialog
+           * has to know which withdrawal it may offer.
            */
-          case 'CANCEL_TEST': {
-            if (
-              !window.confirm(
-                `Cancel the test for ${row.patient.name}? The department stops waiting for them.`,
-              )
-            ) {
-              break;
-            }
-
-            await api.cancelDiagnosticOrder(step.orderId);
-            setNotice(`The test for ${row.patient.name} has been cancelled.`);
-            await load();
+          case 'DECLINE_TEST':
+          case 'CANCEL_TEST':
+            setEditingTest({
+              row,
+              orderId: step.orderId,
+              billed: step.kind === 'DECLINE_TEST',
+            });
             break;
-          }
 
           case 'RECEIPT':
             break;
@@ -1127,7 +1121,22 @@ function DayBoardScreen() {
                       )}
                       {showsActions && (
                         <td className="px-4 py-3">
-                          <span className="flex flex-wrap items-center justify-end gap-1.5">
+                          {/*
+                            ONE BUTTON PER LINE — Narveer's call, 2 Nov 2026.
+
+                            This was `flex-wrap` on a single row, in a 190px
+                            cell. Two buttons fitted only when both labels were
+                            short, so rows wrapped unpredictably: some one line,
+                            some two, the column ragged and the table pushed
+                            wide enough to scroll sideways on a busy day.
+
+                            A column makes it deterministic. Rows with one
+                            action look exactly as they did; rows that need the
+                            way out of a test AND the way out of the visit grow
+                            downwards, which costs height nobody is short of
+                            rather than width everybody is.
+                          */}
+                          <span className="flex flex-col items-end gap-1.5">
                             <NextStepAction
                               row={r}
                               can={can}
@@ -1287,6 +1296,20 @@ function DayBoardScreen() {
         />
       )}
 
+      {editingTest && (
+        <EditTestDialog
+          row={editingTest.row}
+          orderId={editingTest.orderId}
+          billed={editingTest.billed}
+          onClose={() => setEditingTest(null)}
+          onDone={(message) => {
+            setEditingTest(null);
+            setNotice(message);
+            void load();
+          }}
+        />
+      )}
+
       {sendingFor && (
         <SendForTestDialog
           row={sendingFor}
@@ -1364,9 +1387,9 @@ function NextStepAction({
    * Worked out even when there is no primary, because the escape hatch is
    * exactly what a row with nothing else doable on it may still need.
    */
-  const escape = secondaryStep(row.nextSteps, can, isToday, step);
+  const escapes = secondarySteps(row.nextSteps, can, isToday, step);
 
-  if (!step && !escape) return null;
+  if (!step && escapes.length === 0) return null;
 
   if (step?.kind === 'RECEIPT') {
     return (
@@ -1425,9 +1448,18 @@ function NextStepAction({
         that is not going to happen. Both reported on 27 Oct — a doctor and an
         admin could not finish a visit from the board at all, and a patient who
         could not pay for a test had nowhere to go but the finance desk.
+
+        UP TO TWO OF THEM, STACKED, since 2 Nov 2026. A row can need the way
+        out of a test and the way out of the visit at once, and one slot meant
+        one of the two was always hidden — see `secondarySteps`. Stacked rather
+        than side by side on Narveer's call: this cell is 190px and wraps, so a
+        second button in the same line is what made rows ragged and the table
+        scroll sideways. Vertical costs height on the few rows that have both
+        and nothing at all on the rest.
       */}
-      {escape && (
+      {escapes.map((escape) => (
         <button
+          key={escape.kind}
           type="button"
           className="btn-ghost !px-2.5 !py-1 !text-[12px]"
           disabled={busy}
@@ -1435,7 +1467,7 @@ function NextStepAction({
         >
           {stepLabel(escape)}
         </button>
-      )}
+      ))}
     </>
   );
 }
@@ -1476,12 +1508,12 @@ function DayBoardCard({
   onSendForTest: (() => void) | null;
 }) {
   const step = firstDoableStep(row.nextSteps, can, isToday);
-  /* The same way out the table row offers, worked out the same way — see
-     `secondaryStep`. The card used to carry a hand-rolled Done button here,
+  /* The same ways out the table row offers, worked out the same way — see
+     `secondarySteps`. The card used to carry a hand-rolled Done button here,
      which said a different word for the same act and knew nothing about the
      patient who could not pay for their test. */
-  const escape = secondaryStep(row.nextSteps, can, isToday, step);
-  const hasExtra = onSendForTest !== null || escape !== null;
+  const escapes = secondarySteps(row.nextSteps, can, isToday, step);
+  const hasExtra = onSendForTest !== null || escapes.length > 0;
 
   return (
     <li className={`px-4 py-3.5 ${ROW_TONE[row.bucket] ?? ''}`}>
@@ -1594,8 +1626,9 @@ function DayBoardCard({
               </button>
             ))}
 
-          {escape && (
+          {escapes.map((escape) => (
             <button
+              key={escape.kind}
               type="button"
               className="btn-secondary !py-2 !text-[13px]"
               disabled={busy}
@@ -1603,7 +1636,7 @@ function DayBoardCard({
             >
               {stepLabel(escape)}
             </button>
-          )}
+          ))}
 
           {onSendForTest && (
             <button

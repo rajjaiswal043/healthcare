@@ -2619,6 +2619,189 @@ describe('the worklist', () => {
   });
 });
 
+/**
+ * CORRECTING A TEST ALREADY AT A DEPARTMENT — Narveer's requirement, 2 Nov 2026.
+ *
+ * Nothing wrote `description` after creation before this, so "X-ray left knee"
+ * could only become "X-ray left knee, AP and lateral" by cancelling the order
+ * and raising another — which on a billed test drags the bill through a removal
+ * and a re-charge anyway, and loses the record of what was first asked for.
+ */
+describe('editing a test', () => {
+  function edit(session: Session, orderId: string, payload: Record<string, unknown>) {
+    return app.inject({
+      method: 'PATCH',
+      url: `/api/v1/diagnostics/orders/${orderId}`,
+      headers: { cookie: session.cookie },
+      payload,
+    });
+  }
+
+  /** A free-text order: no catalogue test, so no charge. */
+  async function plainOrder(description = 'X-ray left knee'): Promise<string> {
+    const created = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: plainDepartmentId,
+      description,
+    });
+    expect(created.statusCode).toBe(201);
+    return created.json<{ id: string }>().id;
+  }
+
+  it('corrects the wording without touching the bill', async () => {
+    const id = await plainOrder();
+
+    const res = await edit(doctor, id, { description: 'X-ray left knee, AP and lateral' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ description: string }>().description).toBe('X-ray left knee, AP and lateral');
+  });
+
+  it('leaves the charge alone when only the wording changes', async () => {
+    /*
+     * The common case, and the one that must NOT produce a removal and a
+     * re-charge: a billed test whose text is being fixed keeps the same invoice
+     * line, so the bill reads as one charge rather than a correction nobody
+     * made.
+     */
+    const created = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    const [before] = await ownerQuery<{ invoice_line_id: string }>(
+      fx.main.id,
+      `SELECT invoice_line_id FROM diagnostic_order WHERE id = $1`,
+      [id],
+    );
+
+    expect((await edit(doctor, id, { description: 'Left knee, AP and lateral' })).statusCode).toBe(
+      200,
+    );
+
+    const [after] = await ownerQuery<{ invoice_line_id: string }>(
+      fx.main.id,
+      `SELECT invoice_line_id FROM diagnostic_order WHERE id = $1`,
+      [id],
+    );
+    expect(after?.invoice_line_id).toBe(before?.invoice_line_id);
+  });
+
+  it('reprices the test, and the bill follows', async () => {
+    /*
+     * THE ASSERTION THIS FEATURE EXISTS FOR.
+     *
+     * The price lives on an invoice line, not on the order, so a repriced test
+     * that did not move the line would leave the bill and the record
+     * disagreeing — the patient charged one figure and the requisition saying
+     * another.
+     */
+    const created = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    expect((await edit(doctor, id, { pricePaise: 12300 })).statusCode).toBe(200);
+
+    const [line] = await ownerQuery<{ total_paise: number }>(
+      fx.main.id,
+      `SELECT l.total_paise
+         FROM invoice_line l
+         JOIN diagnostic_order o ON o.invoice_line_id = l.id
+        WHERE o.id = $1`,
+      [id],
+    );
+    expect(line?.total_paise).toBe(12300);
+  });
+
+  it('refuses a test that has been paid for', async () => {
+    // Correcting a settled charge is a refund on the bill, not an edit on a
+    // board row. Narveer's call, 2 Nov 2026.
+    const { orderId, invoiceId } = await billedOrderForEditing();
+    await payInvoice(invoiceId);
+
+    const res = await edit(doctor, orderId, { description: 'Both knees' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('ORDER_SETTLED');
+  });
+
+  it('refuses a test that is already done', async () => {
+    const id = await plainOrder();
+    expect(
+      (
+        await app.inject({
+          method: 'PATCH',
+          url: `/api/v1/diagnostics/orders/${id}/complete`,
+          headers: { cookie: diagnosticsUser.cookie },
+          payload: { resultNote: 'No fracture.' },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const res = await edit(doctor, id, { description: 'Too late' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('ORDER_NOT_PENDING');
+  });
+
+  it('refuses an empty description rather than blanking the record', async () => {
+    const id = await plainOrder();
+
+    const res = await edit(doctor, id, { description: '   ' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.details?.code).toBe('DESCRIPTION_IS_EMPTY');
+  });
+
+  it('is refused to the front desk, which cannot order tests either', async () => {
+    const id = await plainOrder();
+
+    expect((await edit(frontDesk, id, { description: 'Not mine to change' })).statusCode).toBe(403);
+  });
+
+  /** A billed order plus the bill it landed on. */
+  async function billedOrderForEditing(): Promise<{ orderId: string; invoiceId: string }> {
+    const created = await order(doctor, {
+      appointmentId: mainVisit,
+      departmentId: xrayDepartmentId,
+      serviceId: kneeXrayId,
+    });
+    expect(created.statusCode).toBe(201);
+
+    const [line] = await ownerQuery<{ invoice_id: string }>(
+      fx.main.id,
+      `SELECT l.invoice_id
+         FROM invoice_line l
+         JOIN diagnostic_order o ON o.invoice_line_id = l.id
+        WHERE o.id = $1`,
+      [created.json<{ id: string }>().id],
+    );
+
+    return { orderId: created.json<{ id: string }>().id, invoiceId: line!.invoice_id };
+  }
+
+  async function payInvoice(invoiceId: string) {
+    const [total] = await ownerQuery<{ total_paise: number }>(
+      fx.main.id,
+      `SELECT total_paise FROM invoice WHERE id = $1`,
+      [invoiceId],
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/payments`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { mode: 'CASH', amountPaise: total!.total_paise },
+    });
+    expect(res.statusCode).toBe(201);
+  }
+});
+
 describe('cancelling', () => {
   it('marks it cancelled rather than deleting it', async () => {
     const created = await order(doctor, {
@@ -2892,15 +3075,64 @@ describe('completing an order', () => {
     expect(res.json<{ status: string }>().status).toBe('COMPLETED');
   });
 
-  it('refuses a note with no file and no reason for there being none', async () => {
+  it('accepts a note with no file and no reason at all', async () => {
+    /*
+     * REVERSED ON 2 NOV 2026, Narveer's call, knowing what it gives back.
+     *
+     * From 30 Oct this was a 400: a note with no file needed somebody to say
+     * why there was no file, after the department was reported closing X-rays
+     * with a line of remarks and no image behind them. Seen in use, the field
+     * was met as an obstacle rather than answered — and a room that cannot
+     * close a test it has genuinely done records nothing at all.
+     *
+     * So remarks alone close a test again. The reason column stays and the
+     * box is still offered; it is simply no longer a gate.
+     */
     const res = await complete(diagnosticsUser, await pendingOrder(), {
       resultNote: 'Hb 11.2, WBC normal.',
     });
 
-    // The reported defect: remarks alone closed the test, so an X-ray could
-    // read COMPLETED with no image behind it.
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ status: string }>().status).toBe('COMPLETED');
+  });
+
+  it('still refuses a reason too short for the database to accept', async () => {
+    /*
+     * `diagnostic_order_no_file_reason_is_said` permits NULL but requires three
+     * characters once a value is present, and the CHECK measures the TRIMMED
+     * value. The DTO's `@MinLength(3)` does not: it counts raw characters, so
+     * `' x '` passes validation and reaches the service as one character.
+     *
+     * That gap is the whole reason the service keeps its own guard. Without it
+     * this request reaches Postgres and comes back as a constraint violation —
+     * a 500 that tells the department nothing. Tested with the input that
+     * actually gets through, not with 'x', which the pipe refuses first.
+     */
+    const res = await complete(diagnosticsUser, await pendingOrder(), {
+      resultNote: 'Hb 11.2, WBC normal.',
+      noFileReason: ' x ',
+    });
+
     expect(res.statusCode).toBe(400);
-    expect(res.json().error.details?.code).toBe('RESULT_HAS_NO_FILE');
+    expect(res.json().error.details?.code).toBe('NO_FILE_REASON_TOO_SHORT');
+  });
+
+  it('treats an empty reason as none given, rather than as a blank', async () => {
+    // The shape the CHECK would reject: present but empty. Stored as null.
+    const id = await pendingOrder();
+    const res = await complete(diagnosticsUser, id, {
+      resultNote: 'Hb 11.2, WBC normal.',
+      noFileReason: '   ',
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ no_file_reason: string | null }>(
+      fx.main.id,
+      `SELECT no_file_reason FROM diagnostic_order WHERE id = $1`,
+      [id],
+    );
+    expect(row?.no_file_reason).toBeNull();
   });
 
   it('stores the stated reason, so it can be asked about later', async () => {

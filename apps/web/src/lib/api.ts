@@ -795,6 +795,9 @@ export interface FinanceReport {
   collections: {
     collectedPaise: number;
     refundedPaise: number;
+    /** Charges forgiven in this range. Not part of `netPaise` — no money moved. */
+    writtenOffPaise: number;
+    writeOffCount: number;
     netPaise: number;
     transactionCount: number;
     byMode: Array<{
@@ -1249,6 +1252,24 @@ export interface PaymentRow {
   collectedBy: { id: string; fullName: string | null };
 }
 
+/**
+ * A charge forgiven, in whole or in part.
+ *
+ * Not a `PaymentRow`: no money moved and nothing reached the drawer. Kept
+ * apart on the server for the same reason — see the `invoice_write_off` table.
+ */
+export interface InvoiceWriteOff {
+  id: string;
+  amountPaise: number;
+  reason: string;
+  waivedByUserId: string;
+  waivedAt: string;
+  /** Set when it was undone. A voided waiver settles nothing. */
+  voidedAt: string | null;
+  voidedByUserId: string | null;
+  voidReason: string | null;
+}
+
 export interface Invoice {
   id: string;
   number: string;
@@ -1259,6 +1280,8 @@ export interface Invoice {
   totalPaise: number;
   paidPaise: number;
   refundedPaise: number;
+  /** Forgiven and still standing. Voided waivers are not counted. */
+  writtenOffPaise: number;
   balancePaise: number;
   /** True when the visit may proceed to the queue. */
   settled: boolean;
@@ -1267,6 +1290,8 @@ export interface Invoice {
   patient: { id: string; uhid: string; name: string; mobile: string };
   lines: InvoiceLine[];
   payments: PaymentRow[];
+  /** Every waiver on this bill, voided ones included — that is the history. */
+  writeOffs: InvoiceWriteOff[];
   appointment: {
     id: string;
     startAt: string;
@@ -1627,6 +1652,23 @@ export const api = {
     request<DiagnosticOrder>(`/diagnostics/orders/${id}/cancel`, { method: 'PATCH' }),
 
   /**
+   * Correct a test already at a department — 2 Nov 2026.
+   *
+   * Before this nothing wrote `description` after creation, so a typo on a film
+   * could only be fixed by cancelling the order and raising another. Changing
+   * the test or the price replaces the invoice line; changing only the wording
+   * leaves the bill alone. Refused once the test has been paid for.
+   */
+  updateDiagnosticOrder: (
+    id: string,
+    input: { description?: string; serviceId?: string; pricePaise?: number },
+  ) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  /**
    * Every completed test this patient has had, for the doctor seeing them now.
    *
    * 403 unless the caller is this encounter's own doctor and it is still that
@@ -1914,8 +1956,27 @@ export const api = {
     },
   ) => request<Invoice>(`/invoices/${id}/refunds`, { method: 'POST', body: JSON.stringify(input) }),
 
-  waiveInvoice: (id: string, reason: string) =>
-    request<Invoice>(`/invoices/${id}/waive`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  /**
+   * Forgive part or all of a charge.
+   *
+   * REPLACED `waiveInvoice` on 2 Nov 2026. That one wrote off the whole bill
+   * and the server refused it once anything had been paid — so making an
+   * already-settled visit free meant refunding first, which put the bill back
+   * to "owing". This takes an amount, and hands back whatever was collected in
+   * the same transaction.
+   */
+  writeOffInvoice: (id: string, input: { amountPaise: number; reason: string }) =>
+    request<Invoice & { writeOffId: string; refundedPaise: number }>(`/invoices/${id}/write-offs`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** Undo one that went on the wrong bill. Voided, never deleted. */
+  voidInvoiceWriteOff: (id: string, writeOffId: string, reason: string) =>
+    request<Invoice>(`/invoices/${id}/write-offs/${writeOffId}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 
   deferInvoice: (id: string, reason: string) =>
     request<Invoice>(`/invoices/${id}/defer`, { method: 'POST', body: JSON.stringify({ reason }) }),

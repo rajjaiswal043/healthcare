@@ -484,7 +484,9 @@ export function DiagnosticsBoard() {
       await api.completeDiagnosticOrder(
         openOrder.id,
         note.trim(),
-        openOrder.documents.length === 0 ? noFileReason.trim() : undefined,
+        openOrder.documents.length === 0 && noFileReason.trim().length > 0
+          ? noFileReason.trim()
+          : undefined,
       );
       setOpenOrder(null);
       setNote('');
@@ -1142,19 +1144,21 @@ export function DiagnosticsBoard() {
                 </div>
 
                 {/*
-                  WHY THERE IS NO FILE — asked only when there is none.
-                  
-                  A note is the remark ABOUT a report, not the report. Since
-                  30 Oct 2026 the server takes a note alone only once somebody
-                  has said why there is no file, so an X-ray cannot read
-                  COMPLETED with no image behind it. Tests that genuinely never
-                  produce a file — a strip read off a card, a reading phoned
-                  over — go through by saying so, and what is said is stored.
+                  WHY THERE IS NO FILE — asked only when there is none, and
+                  optional since 2 Nov 2026.
+
+                  It was required from 30 Oct, after the department was reported
+                  closing X-rays with no image behind them. In use the field was
+                  met as an obstacle rather than answered, and a room that cannot
+                  close a test it has genuinely done records nothing at all — so
+                  the note alone is enough again. Narveer's call, knowing the
+                  trade. The box stays for a record that wants to explain
+                  itself, and what is said is still stored.
                 */}
                 {openOrder.documents.length === 0 && (
                   <div className="mt-4">
                     <label htmlFor="noFileReason" className="field-label">
-                      Why is there no file to attach?
+                      Why is there no file to attach? (optional)
                     </label>
                     <input
                       id="noFileReason"
@@ -1165,8 +1169,7 @@ export function DiagnosticsBoard() {
                       onChange={(e) => setNoFileReason(e.target.value)}
                     />
                     <p className="field-hint">
-                      Attach the report instead if there is one — this is for tests that never
-                      produce a file.
+                      For tests that never produce one. Attach the report instead if there is one.
                     </p>
                   </div>
                 )}
@@ -1179,7 +1182,11 @@ export function DiagnosticsBoard() {
                       busy !== null ||
                       testIsBlocked(openOrder.billing) ||
                       (note.trim() === '' && openOrder.documents.length === 0) ||
-                      (openOrder.documents.length === 0 && noFileReason.trim().length < 3)
+                      /* The reason is optional since 2 Nov 2026, but a floor is
+                         kept on one that IS given: the database CHECK refuses
+                         fewer than three characters, and a button that produces
+                         a 500 is worse than one that waits. */
+                      (noFileReason.trim().length > 0 && noFileReason.trim().length < 3)
                     }
                     onClick={() => void complete()}
                   >

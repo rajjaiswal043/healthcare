@@ -242,6 +242,38 @@ class CompleteOrderDto {
   noFileReason?: string;
 }
 
+/**
+ * Correcting a test already at a department.
+ *
+ * Every field optional, and at least one is expected — a request naming none is
+ * harmless rather than an error: the service writes the same values back.
+ */
+class UpdateDiagnosticOrderDto {
+  /** What exactly was asked for. "X-ray left knee" → "…, AP and lateral". */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  /** A different test from the catalogue. Moves the department with it. */
+  @IsOptional()
+  @IsUUID()
+  serviceId?: string;
+
+  /**
+   * A corrected charge, in paise.
+   *
+   * Refused on a test that has been paid for — see `updateOrder`. Absent means
+   * the price is not being touched, which is NOT the same as the catalogue
+   * price: sending the list price back would record an ordinary correction as
+   * a priced decision somebody made.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pricePaise?: number;
+}
+
 class WorklistQueryDto {
   @IsOptional()
   @IsUUID()
@@ -522,6 +554,29 @@ export class DiagnosticsController {
     @Req() req: FastifyRequest,
   ) {
     return this.diagnostics.cancelOrder(tenantId, id, meta(req, user));
+  }
+
+  /**
+   * Correct a test that is already at a department.
+   *
+   * Behind `diagnostic:order` — the same permission as cancelling one, and for
+   * the same reason: changing what was asked for is the clinical half of the
+   * decision, not the commercial one. The front desk holds neither.
+   *
+   * Narveer's requirement, 2 Nov 2026. Nothing wrote `description` after
+   * creation before this, so a typo on a film could only be fixed by
+   * cancelling the order and raising another.
+   */
+  @Patch('diagnostics/orders/:id')
+  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_ORDER)
+  async update(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateDiagnosticOrderDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.diagnostics.updateOrder(tenantId, id, { ...dto }, meta(req, user));
   }
 }
 

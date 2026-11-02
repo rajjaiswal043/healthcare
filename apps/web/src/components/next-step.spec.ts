@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { DayBucket, NextStep } from '@/lib/api';
-import { firstDoableStep, SENDABLE, secondaryStep, stepLabel } from './next-step';
+import { firstDoableStep, SENDABLE, secondarySteps, stepLabel } from './next-step';
 
 /** A person who holds exactly these permissions. */
 const holding =
@@ -146,6 +146,22 @@ describe('the words on the button', () => {
     // to a receptionist.
     expect(stepLabel(BRING_BACK)).toBe('Bring back in');
     expect(stepLabel(CLOSE_VISIT)).toBe('Close visit');
+
+    /*
+     * ONE LABEL FOR BOTH WAYS OUT OF A TEST — 2 Nov 2026.
+     *
+     * These read "Patient declined" and "Cancel test" until the row's button
+     * started opening a dialog that can also CORRECT the test. The row cannot
+     * say "edit" and "withdraw" in one word, so the distinction moved inside:
+     * `EditTestDialog` still names the withdrawal after what happened, which is
+     * what keeps a clinical decision distinguishable from a commercial one in
+     * the reports.
+     *
+     * Asserted because nothing covered these two before, and the label is the
+     * only visible half of the change.
+     */
+    expect(stepLabel(DECLINE_TEST)).toBe('Edit/Cancel test');
+    expect(stepLabel(CANCEL_TEST)).toBe('Edit/Cancel test');
   });
 
   it('keeps both new steps behind appointment:write', () => {
@@ -191,7 +207,7 @@ describe('the way out, beside the way on', () => {
     const steps = [RESUME, FINISH];
 
     expect(firstDoableStep(steps, DOCTOR, true)).toEqual(RESUME);
-    expect(secondaryStep(steps, DOCTOR, true, RESUME)).toEqual(FINISH);
+    expect(secondarySteps(steps, DOCTOR, true, RESUME)).toEqual([FINISH]);
   });
 
   it('does not show the front desk the same button twice', () => {
@@ -200,7 +216,7 @@ describe('the way out, beside the way on', () => {
     const primary = firstDoableStep(steps, DESK, true);
 
     expect(primary).toEqual(FINISH);
-    expect(secondaryStep(steps, DESK, true, primary)).toBeNull();
+    expect(secondarySteps(steps, DESK, true, primary)).toEqual([]);
   });
 
   it('lets an admin close a visit that still owes money', () => {
@@ -210,7 +226,7 @@ describe('the way out, beside the way on', () => {
     const steps = [COLLECT, CLOSE_VISIT];
 
     expect(firstDoableStep(steps, ADMIN, true)).toEqual(COLLECT);
-    expect(secondaryStep(steps, ADMIN, true, COLLECT)).toEqual(CLOSE_VISIT);
+    expect(secondarySteps(steps, ADMIN, true, COLLECT)).toEqual([CLOSE_VISIT]);
   });
 
   it('offers the way out for a patient who cannot pay for a test', () => {
@@ -218,14 +234,14 @@ describe('the way out, beside the way on', () => {
     // was a dead end on the one screen the clinic works from.
     const steps = [COLLECT, DECLINE_TEST];
 
-    expect(secondaryStep(steps, ADMIN, true, COLLECT)).toEqual(DECLINE_TEST);
+    expect(secondarySteps(steps, ADMIN, true, COLLECT)).toEqual([DECLINE_TEST]);
   });
 
   it('keeps declining with the money permission, not the clinical one', () => {
     // Taking a charge off a bill is the finance desk's act. A doctor holds
     // `diagnostic:order` and gets the cancel verb instead.
-    expect(secondaryStep([DECLINE_TEST], DOCTOR, true, null)).toBeNull();
-    expect(secondaryStep([CANCEL_TEST], DOCTOR, true, null)).toEqual(CANCEL_TEST);
+    expect(secondarySteps([DECLINE_TEST], DOCTOR, true, null)).toEqual([]);
+    expect(secondarySteps([CANCEL_TEST], DOCTOR, true, null)).toEqual([CANCEL_TEST]);
   });
 
   it('ends a visit on a past day, but never touches its bill', () => {
@@ -238,27 +254,69 @@ describe('the way out, beside the way on', () => {
      * yesterday belongs to the finance desk, which has a reason field and an
      * audit trail built for it — not to a quiet button on a board row.
      */
-    expect(secondaryStep([RESUME, FINISH], ADMIN, false, null)).toEqual(FINISH);
-    expect(secondaryStep([COLLECT, CLOSE_VISIT], ADMIN, false, COLLECT)).toEqual(CLOSE_VISIT);
+    expect(secondarySteps([RESUME, FINISH], ADMIN, false, null)).toEqual([FINISH]);
+    expect(secondarySteps([COLLECT, CLOSE_VISIT], ADMIN, false, COLLECT)).toEqual([CLOSE_VISIT]);
 
-    expect(secondaryStep([COLLECT, DECLINE_TEST], ADMIN, false, COLLECT)).toBeNull();
-    expect(secondaryStep([COLLECT, CANCEL_TEST], ADMIN, false, COLLECT)).toBeNull();
+    expect(secondarySteps([COLLECT, DECLINE_TEST], ADMIN, false, COLLECT)).toEqual([]);
+    expect(secondarySteps([COLLECT, CANCEL_TEST], ADMIN, false, COLLECT)).toEqual([]);
   });
 
-  it('offers the way out of a test before ending the visit around it', () => {
+  it('offers the way out of the test AND the way out of the visit', () => {
     /*
-     * Reported from the clinic on 30 Oct 2026 as the decline option having
-     * been removed. It had not been removed — the server lists CLOSE_VISIT and
-     * FINISH before DECLINE_TEST, and the old `find` took whichever came
-     * first, so on any row that could also be closed the way out of the test
-     * was never drawn. See SECONDARY_RANK.
+     * BOTH, which is the fix of 2 Nov 2026.
+     *
+     * These three rows are the bug reported twice from opposite ends. On
+     * 30 Oct it was "the decline option has been removed"; on 2 Nov it was
+     * "the done option is not coming to admin to close the journey". Neither
+     * had been removed — there was one quiet slot and a single rank, so
+     * whichever category ranked lower was never drawn, and reordering the rank
+     * only moved which half was broken.
+     *
+     * They answer different questions, so they no longer compete. A patient at
+     * a department who walks out needs the test withdrawn AND the visit
+     * closed; the desk should not have to choose, press, wait for the row to
+     * reload, and press again.
+     *
+     * The test comes first because a pending test is what is holding the visit
+     * open, so the pair reads top-down in the order somebody would act.
      */
-    expect(secondaryStep([CLOSE_VISIT, DECLINE_TEST], ADMIN, true, null)).toEqual(DECLINE_TEST);
-    expect(secondaryStep([FINISH, DECLINE_TEST], ADMIN, true, null)).toEqual(DECLINE_TEST);
-    expect(secondaryStep([CLOSE_VISIT, CANCEL_TEST], ADMIN, true, null)).toEqual(CANCEL_TEST);
+    expect(secondarySteps([CLOSE_VISIT, DECLINE_TEST], ADMIN, true, null)).toEqual([
+      DECLINE_TEST,
+      CLOSE_VISIT,
+    ]);
+    expect(secondarySteps([FINISH, DECLINE_TEST], ADMIN, true, null)).toEqual([
+      DECLINE_TEST,
+      FINISH,
+    ]);
+    expect(secondarySteps([CLOSE_VISIT, CANCEL_TEST], ADMIN, true, null)).toEqual([
+      CANCEL_TEST,
+      CLOSE_VISIT,
+    ]);
 
-    // And with no test on the row, closing still gets the slot.
-    expect(secondaryStep([CLOSE_VISIT], ADMIN, true, null)).toEqual(CLOSE_VISIT);
+    // One of each at most: a row offering two ways to end the visit still
+    // shows one button, picked within its own slot.
+    expect(secondarySteps([CLOSE_VISIT, FINISH], ADMIN, true, null)).toEqual([CLOSE_VISIT]);
+
+    // And with no test on the row, closing still gets its slot.
+    expect(secondarySteps([CLOSE_VISIT], ADMIN, true, null)).toEqual([CLOSE_VISIT]);
+  });
+
+  it('keeps each role to the buttons its permissions allow', () => {
+    /*
+     * The two halves of the 2 Nov report, pinned to the roles that saw them.
+     *
+     * Which step stole the slot depended on what the person held: DECLINE_TEST
+     * needs `invoice:write` and hit the front desk, CANCEL_TEST needs
+     * `diagnostic:order` and hit the doctor. An administrator holds both,
+     * which is why it reached Narveer as an admin complaint — they were the
+     * one role that lost the button in every variant.
+     */
+    const row = [RESUME, FINISH, DECLINE_TEST];
+
+    // The doctor cannot decline — no `invoice:write` — so they keep OPD done.
+    expect(secondarySteps(row, DOCTOR, true, RESUME)).toEqual([FINISH]);
+    // The admin can do both, and now gets both rather than losing one.
+    expect(secondarySteps(row, ADMIN, true, RESUME)).toEqual([DECLINE_TEST, FINISH]);
   });
 });
 
@@ -323,12 +381,12 @@ describe('escape hatches stay out of the way', () => {
   it('never offers reopening as the thing to do next', () => {
     // A closed visit with nothing else on it. The row should say nothing.
     expect(firstDoableStep([REOPEN_VISIT], ADMIN, true)).toBeNull();
-    expect(secondaryStep([REOPEN_VISIT], ADMIN, true, null)).toEqual(REOPEN_VISIT);
+    expect(secondarySteps([REOPEN_VISIT], ADMIN, true, null)).toEqual([REOPEN_VISIT]);
   });
 
   it('never offers cancelling a test as the thing to do next', () => {
     expect(firstDoableStep([CANCEL_TEST], DOCTOR, true)).toBeNull();
-    expect(secondaryStep([CANCEL_TEST], DOCTOR, true, null)).toEqual(CANCEL_TEST);
+    expect(secondarySteps([CANCEL_TEST], DOCTOR, true, null)).toEqual([CANCEL_TEST]);
   });
 
   it('still lets the front desk finish and close as primaries', () => {
@@ -344,6 +402,6 @@ describe('escape hatches stay out of the way', () => {
     const primary = firstDoableStep(steps, DESK, true);
 
     expect(primary).toEqual(RECEIPT);
-    expect(secondaryStep(steps, DESK, true, primary)).toEqual(REOPEN_VISIT);
+    expect(secondarySteps(steps, DESK, true, primary)).toEqual([REOPEN_VISIT]);
   });
 });

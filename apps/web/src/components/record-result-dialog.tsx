@@ -125,16 +125,21 @@ export function RecordResultDialog({
   const hasResult = note.trim().length >= 2 || documents.length > 0;
 
   /**
-   * A NOTE IS NOT A REPORT.
+   * WHY THERE IS NO FILE — asked, not required. Narveer's call, 2 Nov 2026.
    *
-   * Since 30 Oct 2026 the server takes a note alone only once somebody has said
-   * why there is no file — a test reading COMPLETED with no image behind it was
-   * reported from the clinic. Not every test produces one (a strip test read off
-   * a card, a reading taken verbally), so the exception is explicit and stored
-   * rather than implied by silence.
+   * From 30 Oct the server took a note alone only once somebody had also said
+   * why there was no file, after the department was reported closing X-rays
+   * with no image behind them. In use the extra field was met as an obstacle
+   * rather than answered, so the note alone is enough again and this box is
+   * offered for a record that wants to explain itself.
+   *
+   * `>= 3` is kept as a FLOOR on a reason that IS given, matching the database
+   * CHECK — a one-character answer would be refused by Postgres, and a button
+   * that produces a 500 is worse than one that waits.
    */
-  const needsWhy = documents.length === 0;
-  const canRecord = hasResult && (!needsWhy || noFileReason.trim().length >= 3);
+  const whyOffered = documents.length === 0;
+  const whyTyped = noFileReason.trim().length;
+  const canRecord = hasResult && (whyTyped === 0 || whyTyped >= 3);
 
   async function record() {
     if (!canRecord) return;
@@ -148,7 +153,7 @@ export function RecordResultDialog({
       await api.completeDiagnosticOrder(
         orderId,
         note.trim(),
-        needsWhy ? noFileReason.trim() : undefined,
+        whyOffered && whyTyped > 0 ? noFileReason.trim() : undefined,
       );
       onRecorded(`${row.patient.name}’s result is recorded. The doctor can see it now.`);
     } catch (err) {
@@ -262,9 +267,11 @@ export function RecordResultDialog({
             Appears only with nothing attached, and disappears the moment a file
             is: a question nobody needs to answer should not be on the screen.
           */}
-          {needsWhy && (
+          {whyOffered && (
             <label className="block">
-              <span className="field-label">Why is there no file to attach?</span>
+              {/* "Optional" said in the label, not left to be discovered by
+                  pressing Mark done and watching nothing happen. */}
+              <span className="field-label">Why is there no file to attach? (optional)</span>
               <input
                 value={noFileReason}
                 onChange={(e) => setNoFileReason(e.target.value)}
@@ -274,8 +281,8 @@ export function RecordResultDialog({
                 className="field-input"
               />
               <span className="field-hint">
-                Attach the report instead if there is one — this is for tests that never produce a
-                file.
+                For tests that never produce one — a strip read off a card, a reading phoned over.
+                Attach the report instead if there is one.
               </span>
             </label>
           )}
@@ -304,7 +311,7 @@ export function RecordResultDialog({
               ? 'Attach the film or write the reading first.'
               : canRecord
                 ? 'Marks the test done for everyone.'
-                : 'Say why there is no file to attach.'}
+                : 'A few words, or leave the box empty.'}
           </p>
           <div className="flex gap-2">
             <button type="button" className="btn-ghost" onClick={onClose} disabled={working}>

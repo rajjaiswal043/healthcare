@@ -424,6 +424,7 @@ export const ModelName = {
   Service: 'Service',
   Invoice: 'Invoice',
   InvoiceLine: 'InvoiceLine',
+  InvoiceWriteOff: 'InvoiceWriteOff',
   Payment: 'Payment',
   InvoiceCounter: 'InvoiceCounter',
   QueueCounter: 'QueueCounter',
@@ -450,7 +451,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "tenant" | "platformUser" | "platformSession" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "tenantSeatLimit" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter" | "clinicalDocument" | "diagnosticOrder" | "patientCorrection" | "promotion" | "promotionApplication" | "receiptCounter" | "receipt" | "receiptPrint"
+    modelProps: "tenant" | "platformUser" | "platformSession" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "tenantSeatLimit" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "invoiceWriteOff" | "payment" | "invoiceCounter" | "queueCounter" | "clinicalDocument" | "diagnosticOrder" | "patientCorrection" | "promotion" | "promotionApplication" | "receiptCounter" | "receipt" | "receiptPrint"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2452,6 +2453,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    InvoiceWriteOff: {
+      payload: Prisma.$InvoiceWriteOffPayload<ExtArgs>
+      fields: Prisma.InvoiceWriteOffFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.InvoiceWriteOffFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.InvoiceWriteOffFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        findFirst: {
+          args: Prisma.InvoiceWriteOffFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.InvoiceWriteOffFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        findMany: {
+          args: Prisma.InvoiceWriteOffFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>[]
+        }
+        create: {
+          args: Prisma.InvoiceWriteOffCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        createMany: {
+          args: Prisma.InvoiceWriteOffCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.InvoiceWriteOffCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>[]
+        }
+        delete: {
+          args: Prisma.InvoiceWriteOffDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        update: {
+          args: Prisma.InvoiceWriteOffUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        deleteMany: {
+          args: Prisma.InvoiceWriteOffDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.InvoiceWriteOffUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.InvoiceWriteOffUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>[]
+        }
+        upsert: {
+          args: Prisma.InvoiceWriteOffUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        aggregate: {
+          args: Prisma.InvoiceWriteOffAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateInvoiceWriteOff>
+        }
+        groupBy: {
+          args: Prisma.InvoiceWriteOffGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.InvoiceWriteOffGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.InvoiceWriteOffCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.InvoiceWriteOffCountAggregateOutputType> | number
+        }
+      }
+    }
     Payment: {
       payload: Prisma.$PaymentPayload<ExtArgs>
       fields: Prisma.PaymentFieldRefs
@@ -3833,6 +3908,23 @@ export const InvoiceLineScalarFieldEnum = {
 export type InvoiceLineScalarFieldEnum = (typeof InvoiceLineScalarFieldEnum)[keyof typeof InvoiceLineScalarFieldEnum]
 
 
+export const InvoiceWriteOffScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  invoiceId: 'invoiceId',
+  amountPaise: 'amountPaise',
+  reason: 'reason',
+  waivedByUserId: 'waivedByUserId',
+  waivedAt: 'waivedAt',
+  voidedAt: 'voidedAt',
+  voidedByUserId: 'voidedByUserId',
+  voidReason: 'voidReason',
+  createdAt: 'createdAt'
+} as const
+
+export type InvoiceWriteOffScalarFieldEnum = (typeof InvoiceWriteOffScalarFieldEnum)[keyof typeof InvoiceWriteOffScalarFieldEnum]
+
+
 export const PaymentScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -4618,6 +4710,7 @@ export type GlobalOmitConfig = {
   service?: Prisma.ServiceOmit
   invoice?: Prisma.InvoiceOmit
   invoiceLine?: Prisma.InvoiceLineOmit
+  invoiceWriteOff?: Prisma.InvoiceWriteOffOmit
   payment?: Prisma.PaymentOmit
   invoiceCounter?: Prisma.InvoiceCounterOmit
   queueCounter?: Prisma.QueueCounterOmit
