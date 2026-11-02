@@ -244,6 +244,10 @@ export type FeeTag = 'PAID' | 'PENDING' | null;
 export interface RowMoney {
   billedPaise: number;
   duePaise: number;
+  /** Handed back out of the drawer on this patient's bills today. */
+  refundedPaise: number;
+  /** Forgiven on them. No money moved — the Method column says "Waived". */
+  writtenOffPaise: number;
 }
 
 /**
@@ -368,7 +372,23 @@ export interface DayBoard {
    * Not derived in the browser: it has to be the day's figure whichever tab is
    * open, and the browser only holds what it was sent.
    */
-  money: { billedPaise: number; collectedPaise: number; duePaise: number } | null;
+  /**
+   * The day's money. Null without `invoice:read`.
+   *
+   * `collected − refunded` is what should be in the till at close, counted from
+   * payment rows rather than derived — that is the figure to check a physical
+   * count against. The four do NOT reliably sum to `billed`; see the note on
+   * the server's `DayBoard` type for the three reasons why.
+   */
+  money: {
+    billedPaise: number;
+    collectedPaise: number;
+    /** Handed back out of the drawer. */
+    refundedPaise: number;
+    /** Forgiven. No money moved, so it is in neither figure above. */
+    writtenOffPaise: number;
+    duePaise: number;
+  } | null;
   rows: DayBoardRow[];
 }
 
