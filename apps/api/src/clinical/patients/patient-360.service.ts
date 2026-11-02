@@ -115,6 +115,15 @@ export class Patient360Service {
           },
 
           /**
+           * Forgiven money, which settles a bill as cash does.
+           *
+           * Needed for `invoiceSettlement` below — see `InvoiceSettlementInput`.
+           * Without it a partly waived bill reports the pre-waiver balance, and
+           * this screen is where the desk reads what a patient still owes.
+           */
+          writeOffs: { select: { amountPaise: true, voidedAt: true } },
+
+          /**
            * What the bill was FOR, and whose patient they were.
            *
            * A number, a date and an amount cannot answer "what did we charge

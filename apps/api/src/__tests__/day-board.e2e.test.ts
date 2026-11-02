@@ -62,7 +62,12 @@ interface Row {
   paymentMethods: string[];
   feeWaived: boolean;
   /** Null for a caller without `invoice:read`. */
-  money: { billedPaise: number; duePaise: number } | null;
+  money: {
+    billedPaise: number;
+    duePaise: number;
+    refundedPaise: number;
+    writtenOffPaise: number;
+  } | null;
   nextSteps: Array<{
     kind: string;
     invoiceId?: string;
@@ -77,7 +82,13 @@ interface Board {
   date: string;
   scope: 'CLINIC' | 'OWN';
   counts: Record<string, number>;
-  money: { billedPaise: number; collectedPaise: number; duePaise: number } | null;
+  money: {
+    billedPaise: number;
+    collectedPaise: number;
+    refundedPaise: number;
+    writtenOffPaise: number;
+    duePaise: number;
+  } | null;
   rows: Row[];
 }
 
@@ -132,6 +143,18 @@ afterEach(async () => {
     [fx.main.id],
   );
   await ownerQuery(fx.main.id, 'DELETE FROM invoice_line WHERE tenant_id = $1', [fx.main.id]);
+  /*
+   * BEFORE the invoices, and that ordering is load-bearing.
+   *
+   * `invoice_write_off_invoice_id_fkey` is RESTRICT on purpose — a bill must
+   * not be deletable out from under the record of what was given away on it —
+   * so a leftover waiver makes the invoice DELETE below fail. This file has no
+   * `beforeEach`, so that one failure leaves the whole tenant dirty and the
+   * next thirty tests fail on duplicate appointments and stray COLLECT steps,
+   * nowhere near the cause. Seen on 2 Nov 2026, the first time a test here left
+   * a waiver behind.
+   */
+  await ownerQuery(fx.main.id, 'DELETE FROM invoice_write_off WHERE tenant_id = $1', [fx.main.id]);
   await ownerQuery(fx.main.id, 'DELETE FROM invoice WHERE tenant_id = $1', [fx.main.id]);
   await ownerQuery(
     fx.main.id,
@@ -986,7 +1009,12 @@ describe('the amount column', () => {
 
     const b = await board(frontDesk);
 
-    expect(b.rows[0]!.money).toEqual({ billedPaise: 50000, duePaise: 50000 });
+    expect(b.rows[0]!.money).toEqual({
+      billedPaise: 50000,
+      duePaise: 50000,
+      refundedPaise: 0,
+      writtenOffPaise: 0,
+    });
   });
 
   it('reads nothing charged as zero, not as refused', async () => {
@@ -994,7 +1022,12 @@ describe('the amount column', () => {
     // fact from "you may not know", and the column has to tell them apart.
     await visit('BOOKED', 0);
 
-    expect((await board()).rows[0]!.money).toEqual({ billedPaise: 0, duePaise: 0 });
+    expect((await board()).rows[0]!.money).toEqual({
+      billedPaise: 0,
+      duePaise: 0,
+      refundedPaise: 0,
+      writtenOffPaise: 0,
+    });
   });
 
   it('adds the day up: billed, collected, and what is still owed', async () => {
@@ -1007,7 +1040,13 @@ describe('the amount column', () => {
 
     const b = await board();
 
-    expect(b.money).toEqual({ billedPaise: 80000, collectedPaise: 50000, duePaise: 30000 });
+    expect(b.money).toEqual({
+      billedPaise: 80000,
+      collectedPaise: 50000,
+      refundedPaise: 0,
+      writtenOffPaise: 0,
+      duePaise: 30000,
+    });
   });
 
   it('leaves a part payment as the remainder', async () => {
@@ -1017,7 +1056,12 @@ describe('the amount column', () => {
 
     const b = await board();
 
-    expect(b.rows[0]!.money).toEqual({ billedPaise: 50000, duePaise: 30000 });
+    expect(b.rows[0]!.money).toEqual({
+      billedPaise: 50000,
+      duePaise: 30000,
+      refundedPaise: 0,
+      writtenOffPaise: 0,
+    });
     expect(b.money!.collectedPaise).toBe(20000);
   });
 
@@ -1034,7 +1078,12 @@ describe('the amount column', () => {
     const b = await board(frontDesk);
 
     expect(b.rows).toHaveLength(1);
-    expect(b.rows[0]!.money).toEqual({ billedPaise: 30000, duePaise: 30000 });
+    expect(b.rows[0]!.money).toEqual({
+      billedPaise: 30000,
+      duePaise: 30000,
+      refundedPaise: 0,
+      writtenOffPaise: 0,
+    });
   });
 
   /**
@@ -1058,8 +1107,101 @@ describe('the amount column', () => {
     const b = await board();
 
     expect(b.rows[0]!.visitFee).toBe('PENDING');
-    expect(b.rows[0]!.money).toEqual({ billedPaise: 0, duePaise: 0 });
-    expect(b.money).toEqual({ billedPaise: 0, collectedPaise: 0, duePaise: 0 });
+    expect(b.rows[0]!.money).toEqual({
+      billedPaise: 0,
+      duePaise: 0,
+      refundedPaise: 0,
+      writtenOffPaise: 0,
+    });
+    expect(b.money).toEqual({
+      billedPaise: 0,
+      collectedPaise: 0,
+      refundedPaise: 0,
+      writtenOffPaise: 0,
+      duePaise: 0,
+    });
+  });
+
+  it('never reports forgiven money as collected', async () => {
+    /*
+     * THE DEFECT THIS WHOLE FIGURE HAD — 2 Nov 2026, reported by Narveer while
+     * asking for the day to reconcile at close.
+     *
+     * `collectedPaise` was derived as `billed - due`, which was true only while
+     * paying was the one way to clear a balance. A waiver clears it with no
+     * money arriving, so the morning waive-off shipped, every rupee forgiven
+     * started being reported to the front desk as a rupee collected: the live
+     * board read ₹3,000 collected where ₹1,500 had come in.
+     *
+     * A derived total cannot be checked against anything, because it agrees
+     * with itself by construction. This is the assertion that would have caught
+     * it: nothing here pays, so `collected` must stay at zero however much is
+     * forgiven.
+     */
+    await visit('ARRIVED', 0);
+    const invoiceId = await bill(50000);
+
+    const waived = await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/write-offs`,
+      headers: { cookie: admin.cookie },
+      payload: { amountPaise: 20000, reason: 'Complimentary for a relative' },
+    });
+    expect(waived.statusCode).toBe(201);
+
+    const b = await board(frontDesk);
+
+    expect(b.money).toEqual({
+      billedPaise: 50000,
+      // Nobody paid anything. Under the old arithmetic this read 20000.
+      collectedPaise: 0,
+      refundedPaise: 0,
+      writtenOffPaise: 20000,
+      duePaise: 30000,
+    });
+
+    /*
+     * The four add up HERE, on data built entirely through the app in this
+     * test. They do NOT in general: a deferred bill, or an invoice waived
+     * before 2 Nov 2026 with no write-off row behind it, both sit outside these
+     * figures. Asserted for this case only — the first version of the comment
+     * on `DayBoard.money` claimed it as an invariant and the live board was out
+     * by 2,000.
+     */
+    const m = b.money!;
+    expect(m.collectedPaise - m.refundedPaise + m.writtenOffPaise + m.duePaise).toBe(m.billedPaise);
+  });
+
+  it('shows what a partly forgiven bill actually still owes', async () => {
+    /*
+     * `invoiceSettlement` computed its balance from payments alone, so a partly
+     * waived bill reported the PRE-waiver figure — while `totals` subtracted
+     * the waiver. The desk was shown ₹500 due, tried to collect it, and the
+     * server refused it as an overpayment.
+     *
+     * A fully waived bill was always fine: its WAIVED status short-circuits
+     * ahead of the arithmetic. Only the partial case disagreed.
+     */
+    await visit('ARRIVED', 1);
+    const invoiceId = await bill(50000, 1);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/invoices/${invoiceId}/write-offs`,
+      headers: { cookie: admin.cookie },
+      payload: { amountPaise: 20000, reason: 'Complimentary for a relative' },
+    });
+
+    const row = (await board(frontDesk)).rows.find((r) => r.patient.id === fx.main.patientIds[1]);
+
+    expect(row?.money).toEqual({
+      billedPaise: 50000,
+      duePaise: 30000,
+      refundedPaise: 0,
+      // On the ROW, not just the day's header — Narveer's follow-up on 2 Nov
+      // 2026: the header says something was forgiven, this says on whom.
+      writtenOffPaise: 20000,
+    });
   });
 
   /** The consultation bill for today's visit, unpaid. Returns its id. */

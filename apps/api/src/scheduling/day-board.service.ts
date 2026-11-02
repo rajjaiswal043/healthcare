@@ -108,6 +108,22 @@ export interface RowMoney {
   /** Every live bill behind this row. A cancelled one is not a charge. */
   billedPaise: number;
   duePaise: number;
+  /**
+   * Money handed back out of the drawer on this patient's bills today.
+   *
+   * On the row as well as in the day's header, from 2 Nov 2026: the header says
+   * the clinic refunded something, and without this nobody can tell WHO. At
+   * close that is the difference between a figure you can explain and one you
+   * cannot.
+   */
+  refundedPaise: number;
+  /**
+   * Forgiven on this patient's bills. No money moved.
+   *
+   * The Method column already says "Waived" — see `waived` — but that is a
+   * yes-or-no about the whole row, and a part-forgiven bill needs the amount.
+   */
+  writtenOffPaise: number;
 }
 
 /**
@@ -323,7 +339,37 @@ export interface DayBoard {
    * open. `collectedPaise` is derived — billed minus due — so it cannot
    * disagree with the other two.
    */
-  money: { billedPaise: number; collectedPaise: number; duePaise: number } | null;
+  /**
+   * The day's money, over every row on the board. Null without `invoice:read`.
+   *
+   * WHAT RECONCILES IS THE DRAWER, not the billed total. `collected − refunded`
+   * is what should be in the till at close, and it is now counted from payment
+   * rows rather than derived, so it can be checked against a physical count.
+   * That is what this line is for.
+   *
+   * `collected − refunded + writtenOff + due` does NOT reliably come to
+   * `billed`, and it would be a mistake to show it as though it did. Three
+   * things break it, all legitimately:
+   *
+   *   - a DEFERRED bill is billed, not collected, not forgiven, and excluded
+   *     from `due` because deferral counts as settled;
+   *   - an invoice WAIVED before 2 Nov 2026 carries that status with no
+   *     `invoice_write_off` row behind it, so the forgiveness is invisible to
+   *     `writtenOffPaise`;
+   *   - seeded data with a status set directly and no payment rows.
+   *
+   * Checked against the live board on 2 Nov 2026, where the first version of
+   * this comment claimed the four reconciled and they were out by ₹2,000.
+   */
+  money: {
+    billedPaise: number;
+    collectedPaise: number;
+    /** Money handed back out of the drawer. */
+    refundedPaise: number;
+    /** Charges forgiven. No money moved, so it is in neither figure above. */
+    writtenOffPaise: number;
+    duePaise: number;
+  } | null;
   rows: DayBoardRow[];
 }
 
@@ -532,6 +578,9 @@ export class DayBoardService {
          * mine to widen or narrow here; see the review note.
          */
         waived: mayReadMoney ? bills.waived : new Set<string>(),
+        /* Figures, so the same rule as `money`: absent entirely for a caller
+           who may not see amounts. */
+        tally: mayReadMoney ? bills.tally : null,
       });
     });
   }
@@ -601,10 +650,25 @@ export class DayBoardService {
      */
     waived: Set<string>;
     unpaid: Map<string, { invoiceIds: string[]; duePaise: number; billsOwing: number }>;
+    /**
+     * THE DAY'S MONEY AS IT ACTUALLY MOVED, counted from the rows themselves.
+     *
+     * The header used to derive what was collected as `billed - due`, which was
+     * true only while paying was the one way to clear a balance. A waiver
+     * reduces the balance with no money arriving, so every rupee forgiven was
+     * reported to the front desk as a rupee collected — on 2 Nov 2026 the board
+     * claimed 3,000 collected where 1,500 had come in and 900 had gone back
+     * out. Reported by Narveer, who wanted the figures to reconcile at close.
+     *
+     * Counted rather than inferred, so nothing that is not money can inflate
+     * it.
+     */
+    tally: { collectedPaise: number; refundedPaise: number; writtenOffPaise: number };
   }> {
     const visitTags = new Map<string, FeeTag>();
     const waived = new Set<string>();
     const byPatient = new Map<string, RowMoney>();
+    const tally = { collectedPaise: 0, refundedPaise: 0, writtenOffPaise: 0 };
     /**
      * Every bill still owing, oldest first, and what they come to together.
      *
@@ -616,7 +680,7 @@ export class DayBoardService {
       { invoiceIds: string[]; duePaise: number; billsOwing: number }
     >();
     if (appointmentIds.length === 0 && orderIds.length === 0) {
-      return { visitTags, byPatient, unpaid, waived };
+      return { visitTags, byPatient, unpaid, waived, tally };
     }
 
     const invoices = await tx.invoice.findMany({
@@ -644,6 +708,16 @@ export class DayBoardService {
         status: true,
         totalPaise: true,
         payments: { select: { direction: true, amountPaise: true } },
+        /**
+         * Forgiven money — needed twice over.
+         *
+         * `invoiceSettlement` subtracts it, so a partly waived bill shows what
+         * is actually still owed rather than the pre-waiver figure. And the
+         * day's header totals it, because a desk counting the drawer at close
+         * has to be able to tell money that came in from money that was given
+         * away. See `dayMoney`.
+         */
+        writeOffs: { select: { amountPaise: true, voidedAt: true } },
       },
     });
 
@@ -666,8 +740,41 @@ export class DayBoardService {
       // Written off, so no payment will ever explain this bill. See `waived`.
       if (invoice.status === 'WAIVED') waived.add(invoice.patientId);
 
-      const money = byPatient.get(invoice.patientId) ?? { billedPaise: 0, duePaise: 0 };
+      /*
+       * THE DAY'S THREE FIGURES, each counted from what it actually is.
+       *
+       * Money in and money back out are payment rows; forgiven money is a
+       * write-off row and reaches no drawer. Keeping them apart is the whole
+       * point — merged, a waiver reads as a payment and the close-of-day count
+       * cannot be reconciled against the till.
+       */
+      let rowRefunded = 0;
+      for (const p of invoice.payments) {
+        if (p.direction === 'IN') tally.collectedPaise += p.amountPaise;
+        else {
+          tally.refundedPaise += p.amountPaise;
+          rowRefunded += p.amountPaise;
+        }
+      }
+      let rowWrittenOff = 0;
+      for (const w of invoice.writeOffs) {
+        if (w.voidedAt === null) {
+          tally.writtenOffPaise += w.amountPaise;
+          rowWrittenOff += w.amountPaise;
+        }
+      }
+
+      const money = byPatient.get(invoice.patientId) ?? {
+        billedPaise: 0,
+        duePaise: 0,
+        refundedPaise: 0,
+        writtenOffPaise: 0,
+      };
       money.billedPaise += invoice.totalPaise;
+      /* Carried onto the row as well as into the day, so the header's figure
+         can be traced to the patients behind it. */
+      money.refundedPaise += rowRefunded;
+      money.writtenOffPaise += rowWrittenOff;
       if (state.status === 'UNPAID') {
         money.duePaise += state.balancePaise;
         const owing = unpaid.get(invoice.patientId);
@@ -693,7 +800,7 @@ export class DayBoardService {
       byPatient.set(invoice.patientId, money);
     }
 
-    return { visitTags, byPatient, unpaid, waived };
+    return { visitTags, byPatient, unpaid, waived, tally };
   }
 
   /**
@@ -787,6 +894,8 @@ export class DayBoardService {
     paymentMethods: Map<string, { modes: string[]; lastPaymentId: string | null }>;
     /** Patients whose charge was written off. See `billsForDay`. */
     waived: Set<string>;
+    /** The day as it actually moved. Null without `invoice:read`. */
+    tally: { collectedPaise: number; refundedPaise: number; writtenOffPaise: number } | null;
   }): DayBoard {
     const {
       day,
@@ -799,6 +908,7 @@ export class DayBoardService {
       unpaid,
       paymentMethods,
       waived,
+      tally,
     } = input;
 
     /**
@@ -1120,7 +1230,14 @@ export class DayBoardService {
            * reads as "nothing charged" instead of "not allowed to know". The
            * whole field is null when the caller may not see figures at all.
            */
-          money: money ? (money.get(r.patient.id) ?? { billedPaise: 0, duePaise: 0 }) : null,
+          money: money
+            ? (money.get(r.patient.id) ?? {
+                billedPaise: 0,
+                duePaise: 0,
+                refundedPaise: 0,
+                writtenOffPaise: 0,
+              })
+            : null,
           nextSteps: stepsFor({
             bucket,
             appointmentId: r.appointmentId,
@@ -1169,17 +1286,41 @@ export class DayBoardService {
      * normally has its bill cancelled too, which `billsForDay` has already left
      * out.
      */
-    const dayMoney = money
-      ? rows.reduce(
-          (total, row) => ({
-            billedPaise: total.billedPaise + (row.money?.billedPaise ?? 0),
-            collectedPaise: 0,
-            duePaise: total.duePaise + (row.money?.duePaise ?? 0),
-          }),
-          { billedPaise: 0, collectedPaise: 0, duePaise: 0 },
-        )
-      : null;
-    if (dayMoney) dayMoney.collectedPaise = dayMoney.billedPaise - dayMoney.duePaise;
+    const dayMoney =
+      money && tally
+        ? rows.reduce(
+            (total, row) => ({
+              ...total,
+              billedPaise: total.billedPaise + (row.money?.billedPaise ?? 0),
+              duePaise: total.duePaise + (row.money?.duePaise ?? 0),
+            }),
+            {
+              billedPaise: 0,
+              duePaise: 0,
+              /**
+               * COUNTED, NOT DERIVED — 2 Nov 2026.
+               *
+               * This was `billed - due`, which was true only while paying was
+               * the one way to clear a balance. A waiver clears it with no
+               * money arriving, so from the morning of 2 Nov every rupee
+               * forgiven was reported to the front desk as a rupee collected:
+               * the board read ₹3,000 collected where ₹1,500 had come in and
+               * ₹900 had gone back out.
+               *
+               * Reported by Narveer the same day, asking for the figures to
+               * reconcile at close — which is exactly what a derived total
+               * cannot do, because it agrees with itself by construction.
+               */
+              collectedPaise: tally.collectedPaise,
+              /** Money that left the drawer again. Kept apart from collected:
+                  the till held the gross, and merging them hides a reversal. */
+              refundedPaise: tally.refundedPaise,
+              /** Given away. Reached no drawer, so it is in neither of the
+                  two above — see `invoice_write_off`. */
+              writtenOffPaise: tally.writtenOffPaise,
+            },
+          )
+        : null;
 
     return { date: day, timezone: tz, scope, counts, money: dayMoney, rows };
   }

@@ -764,16 +764,40 @@ function DayBoardScreen() {
             {board?.scope === 'OWN' && ' · your list only'}
           </p>
 
-          {/* The day's money, over the whole board rather than the open tab.
-              Billed and collected are the two figures a clinic closes the day
-              on; what is still due is the one somebody has to act on, so it
-              only appears when there is some. */}
+          {/*
+            THE DAY'S MONEY, over the whole board rather than the open tab.
+
+            COUNTED, NOT DERIVED, since 2 Nov 2026. Narveer asked for the day
+            to be reconcilable at close, and the request uncovered that
+            "collected" was being computed as `billed - due` — which reported
+            every forgiven rupee as a collected one.
+
+            `collected − refunded` is the figure to check the till against. The
+            parts do NOT add up to billed in general — a deferred bill and any
+            invoice waived before today both sit outside them — so the line
+            reports each honestly rather than implying a sum.
+
+            Refunded and made free appear only when they are not zero, so an
+            ordinary day still reads as the short sentence it always did.
+          */}
           {board?.money && (
             <p className="text-[13.5px] text-ink-60">
               <span className="font-mono font-semibold tabular-nums text-ink">
                 {formatPaise(board.money.collectedPaise)}
               </span>{' '}
               collected of {formatPaise(board.money.billedPaise)}
+              {board.money.refundedPaise > 0 && (
+                <span className="text-coral">
+                  {' · '}
+                  {formatPaise(board.money.refundedPaise)} refunded
+                </span>
+              )}
+              {board.money.writtenOffPaise > 0 && (
+                <span>
+                  {' · '}
+                  {formatPaise(board.money.writtenOffPaise)} made free
+                </span>
+              )}
               {board.money.duePaise > 0 && (
                 <span className="font-semibold text-amber-text">
                   {' · '}
@@ -1103,6 +1127,29 @@ function DayBoardScreen() {
                               {r.money.duePaise > 0 && (
                                 <span className="block font-mono text-[11.5px] font-semibold tabular-nums text-amber-text">
                                   {formatPaise(r.money.duePaise)} due
+                                </span>
+                              )}
+                              {/*
+                                WHAT WENT BACK, AND WHAT WAS GIVEN AWAY — 2 Nov
+                                2026, Narveer's request alongside the day's
+                                header.
+
+                                The header says the clinic refunded or forgave
+                                something; these say on whom. Without them a
+                                figure at close can be read but not explained,
+                                which is most of the work of reconciling.
+
+                                Only when non-zero, so an ordinary row is the
+                                single figure it has always been.
+                              */}
+                              {r.money.refundedPaise > 0 && (
+                                <span className="block font-mono text-[11.5px] font-semibold tabular-nums text-coral">
+                                  {formatPaise(r.money.refundedPaise)} refunded
+                                </span>
+                              )}
+                              {r.money.writtenOffPaise > 0 && (
+                                <span className="block font-mono text-[11.5px] tabular-nums text-ink-60">
+                                  {formatPaise(r.money.writtenOffPaise)} made free
                                 </span>
                               )}
                             </>
@@ -1588,6 +1635,22 @@ function DayBoardCard({
                 <span className="font-semibold text-amber-text">
                   {' · '}
                   {formatPaise(row.money.duePaise)} due
+                </span>
+              )}
+              {/* The same two figures the table row carries, so the phone and
+                  the desk say the same thing about the same patient. Inline
+                  rather than stacked: this line already wraps on a narrow
+                  screen and a card is read, not scanned down a column. */}
+              {row.money.refundedPaise > 0 && (
+                <span className="font-semibold text-coral">
+                  {' · '}
+                  {formatPaise(row.money.refundedPaise)} refunded
+                </span>
+              )}
+              {row.money.writtenOffPaise > 0 && (
+                <span>
+                  {' · '}
+                  {formatPaise(row.money.writtenOffPaise)} made free
                 </span>
               )}
               {row.paymentMethods.length > 0 && (

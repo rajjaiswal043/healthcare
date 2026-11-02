@@ -58,6 +58,22 @@ export interface InvoiceSettlementInput {
   status: string;
   totalPaise: number;
   payments: Array<{ direction: string; amountPaise: number }>;
+  /**
+   * Forgiven money, which settles a bill exactly as cash does.
+   *
+   * REQUIRED, not optional, and that is the point. A fully waived bill is
+   * caught by its WAIVED status above, so this changes nothing for it — but a
+   * PARTLY waived bill is still UNPAID, and without these rows this function
+   * reported a balance higher than `totals` did. The desk was shown the
+   * pre-waiver figure, tried to collect it, and the server refused it as an
+   * overpayment.
+   *
+   * Making it required means every caller's `select` must fetch it, and the
+   * compiler finds the ones that do not. An optional field would have let the
+   * two figures drift apart again silently, which is how they drifted in the
+   * first place.
+   */
+  writeOffs: Array<{ amountPaise: number; voidedAt: Date | null }>;
 }
 
 export type InvoiceSettlement =
@@ -83,7 +99,12 @@ export function invoiceSettlement(invoice: InvoiceSettlementInput | null): Invoi
 
   const paid = sum(invoice.payments.filter((p) => p.direction === 'IN'));
   const refunded = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
-  const balancePaise = invoice.totalPaise - (paid - refunded);
+  /* Voided waivers excluded, as `totals` does: forgiveness that was taken back
+     settles nothing. */
+  const writtenOff = invoice.writeOffs
+    .filter((w) => w.voidedAt === null)
+    .reduce((n, w) => n + w.amountPaise, 0);
+  const balancePaise = invoice.totalPaise - (paid - refunded) - writtenOff;
 
   if (balancePaise <= 0) return { status: 'SETTLED', invoiceNumber: invoice.number };
   return { status: 'UNPAID', invoiceNumber: invoice.number, balancePaise };
@@ -126,6 +147,7 @@ export interface DiagnosticBillingInput {
       status: string;
       totalPaise: number;
       payments: Array<{ direction: string; amountPaise: number }>;
+      writeOffs: Array<{ amountPaise: number; voidedAt: Date | null }>;
     };
   } | null;
 }
@@ -163,6 +185,9 @@ export const DIAGNOSTIC_BILLING_SELECT = {
           status: true,
           totalPaise: true,
           payments: { select: { direction: true, amountPaise: true } },
+          /* A partly forgiven bill is still UNPAID but owes less. Without this
+             the worklist blocks a test whose balance has been written down. */
+          writeOffs: { select: { amountPaise: true, voidedAt: true } },
         },
       },
     },
@@ -662,6 +687,10 @@ export class BillingService {
         totalPaise: true,
         number: true,
         payments: { select: { direction: true, amountPaise: true } },
+        /* Forgiven money settles a bill as cash does — see
+           `InvoiceSettlementInput`. Without this a partly waived bill blocks a
+           check-in for a balance that is no longer owed. */
+        writeOffs: { select: { amountPaise: true, voidedAt: true } },
       },
     });
 
