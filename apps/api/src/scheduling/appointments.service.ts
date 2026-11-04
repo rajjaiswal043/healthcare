@@ -10,8 +10,6 @@ import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
 import { PERMISSIONS } from '../platform/auth/permissions.js';
 import { BillingService } from '../billing/billing.service.js';
-import { EngagementService } from '../engagement/engagement.service.js';
-import { SERVING_ORDER } from '../engagement/queue-day.js';
 import { AvailabilityService } from './availability.service.js';
 import {
   clinicToday,
@@ -48,11 +46,6 @@ export interface AppointmentView {
   checkedInAt: Date | null;
   calledAt: Date | null;
   completedAt: Date | null;
-  /** What the patient said from their phone — "on my way", "running late". */
-  arrivalIntent: string | null;
-  arrivalIntentAt: Date | null;
-  /** Set once the "time to leave" message has gone. */
-  leaveNowSentAt: Date | null;
   patient: {
     id: string;
     uhid: string;
@@ -70,13 +63,68 @@ type BookInput = {
   patientId: string;
   practitionerId: string;
   locationId: string;
-  departmentId?: string;
   startAt: string;
   visitType?: string;
   reasonForVisit?: string;
 };
 
-const LIVE_STATUSES = ['BOOKED', 'ARRIVED', 'IN_PROGRESS'] as const;
+/**
+ * A visit the clinic is still dealing with, for the "already in this queue"
+ * guard on booking and on walk-in.
+ *
+ * `AWAITING_TESTS` was missing until 28 Oct 2026, and the hole was reported
+ * from the clinic: the moment a doctor sent somebody for an X-ray this guard
+ * stopped seeing them, so the front desk could add the same patient to the same
+ * doctor a second time. They came back from the test and the queue showed one
+ * person being served AND waiting — two live appointments, two tokens and two
+ * consultation bills for one visit.
+ *
+ * Out at a department is not out of the clinic. The states that end a visit are
+ * FULFILLED, CANCELLED and NO_SHOW; everything else is somebody the clinic
+ * still has in its hands.
+ */
+const LIVE_STATUSES = ['BOOKED', 'ARRIVED', 'IN_PROGRESS', 'AWAITING_TESTS'] as const;
+
+/**
+ * A patient already somewhere else at this hour, whoever they are with.
+ *
+ * The duplicate checks either side of this are scoped to ONE DOCTOR — they ask
+ * "is this patient already with Dr Rao today", never "is this patient already
+ * booked at all". So the same person could be put in three rooms at ten
+ * o'clock with three different consultants, which produced three tokens, three
+ * consultation bills and a Collect button reading "1 of 3". Reported from the
+ * clinic, 29 Oct 2026.
+ *
+ * OVERLAP, not "same day". A patient seeing an orthopaedic consultant at 10:00
+ * and a physiotherapist at 11:30 is an ordinary morning and must keep working;
+ * the same patient in two rooms at 10:00 is not a booking, it is a mistake.
+ * Narveer's call, 29 Oct 2026.
+ *
+ * Half-open on both sides: a 10:00-10:15 slot and a 10:15-10:30 one touch at
+ * the boundary and do not overlap, which is what back-to-back means.
+ */
+async function patientBusyBetween(
+  tx: TenantClient,
+  patientId: string,
+  startAt: Date,
+  endAt: Date,
+  ignoreAppointmentId?: string,
+) {
+  return tx.appointment.findFirst({
+    where: {
+      patientId,
+      status: { in: [...LIVE_STATUSES] },
+      startAt: { lt: endAt },
+      endAt: { gt: startAt },
+      ...(ignoreAppointmentId ? { id: { not: ignoreAppointmentId } } : {}),
+    },
+    select: {
+      id: true,
+      startAt: true,
+      practitioner: { select: { fullName: true } },
+    },
+  });
+}
 
 /**
  * The visits the "In the queue" tile counts: every one whose day is not over —
@@ -100,7 +148,6 @@ export class AppointmentsService {
     private readonly audit: AuditService,
     private readonly availability: AvailabilityService,
     private readonly billing: BillingService,
-    private readonly engagement: EngagementService,
   ) {}
 
   /** The clinic's IANA timezone — every wall-clock conversion depends on it. */
@@ -120,13 +167,7 @@ export class AppointmentsService {
    * and two receptionists taking the last 10:15 slot would both pass the check.
    */
   async book(tenantId: string, input: BookInput, meta: RequestMeta): Promise<AppointmentView> {
-    const view = await this.prisma.forTenant(tenantId, (tx) =>
-      this.bookIn(tx, tenantId, input, meta),
-    );
-    // After the commit, and unable to fail the booking: a patient without a
-    // WhatsApp message still has a token on a slip (docs/10, NFR-01).
-    await this.engagement.afterVisitBooked(tenantId, view.id);
-    return view;
+    return this.prisma.forTenant(tenantId, (tx) => this.bookIn(tx, tenantId, input, meta));
   }
 
   /**
@@ -168,6 +209,26 @@ export class AppointmentsService {
           day.unavailableReason ?? 'That time is not part of the doctor’s schedule for this day.',
       });
     }
+    /**
+     * Checked before capacity, because a finished slot is not a full one.
+     *
+     * The availability engine already reports `available: 0` for a slot that
+     * has ended, so without this the refusal below would tell a receptionist
+     * the 09:00 slot is "fully booked" at two in the afternoon — and send them
+     * looking for a cancellation that was never the problem.
+     *
+     * The line sits at the slot's END, matching the engine: a patient three
+     * minutes into their 14:00 appointment can still be booked in.
+     */
+    if (slot.past) {
+      throw new ConflictException({
+        code: 'SLOT_IN_THE_PAST',
+        message:
+          'That appointment time has already passed. Pick a later slot, or add the ' +
+          'patient to today’s queue as a walk-in.',
+      });
+    }
+
     if (slot.available <= 0) {
       throw new ConflictException({ code: 'SLOT_FULL', message: 'That slot is fully booked.' });
     }
@@ -201,6 +262,20 @@ export class AppointmentsService {
       });
     }
 
+    /* And with anybody else. See `patientBusyBetween` — the check above only
+       ever looked at this one doctor. */
+    const clash = await patientBusyBetween(tx, input.patientId, slot.startAt, slot.endAt);
+    if (clash) {
+      throw new ConflictException({
+        code: 'PATIENT_DOUBLE_BOOKED',
+        message:
+          `This patient is already with ${clash.practitioner?.fullName ?? 'another doctor'} ` +
+          `at ${instantToLocalTime(clash.startAt, tz)}. They cannot be in two places at once — ` +
+          'pick a time that does not overlap.',
+        existingAppointmentId: clash.id,
+      });
+    }
+
     /**
      * The token is issued here, at booking — not at check-in.
      *
@@ -219,7 +294,6 @@ export class AppointmentsService {
         patientId: input.patientId,
         practitionerId: input.practitionerId,
         locationId: input.locationId,
-        departmentId: input.departmentId ?? null,
         startAt: slot.startAt,
         endAt: slot.endAt,
         status: 'BOOKED',
@@ -265,24 +339,6 @@ export class AppointmentsService {
       patientId: string;
       practitionerId: string;
       locationId: string;
-      departmentId?: string;
-      reasonForVisit?: string;
-      visitType?: string;
-    },
-    meta: RequestMeta,
-  ): Promise<AppointmentView> {
-    const view = await this.walkInIn(tenantId, input, meta);
-    await this.engagement.afterVisitBooked(tenantId, view.id);
-    return view;
-  }
-
-  private async walkInIn(
-    tenantId: string,
-    input: {
-      patientId: string;
-      practitionerId: string;
-      locationId: string;
-      departmentId?: string;
       reasonForVisit?: string;
       visitType?: string;
     },
@@ -321,6 +377,23 @@ export class AppointmentsService {
         });
       }
 
+      /*
+       * And with anybody else. A walk-in is now, for the next fifteen minutes,
+       * so it clashes with whoever has this patient at this moment — including
+       * somebody they are sitting in front of. See `patientBusyBetween`.
+       */
+      const walkInEnd = new Date(now.getTime() + 15 * 60 * 1000);
+      const clash = await patientBusyBetween(tx, input.patientId, now, walkInEnd);
+      if (clash) {
+        throw new ConflictException({
+          code: 'PATIENT_DOUBLE_BOOKED',
+          message:
+            `This patient is already with ${clash.practitioner?.fullName ?? 'another doctor'} ` +
+            `at ${instantToLocalTime(clash.startAt, tz)}. Finish or cancel that visit first.`,
+          existingAppointmentId: clash.id,
+        });
+      }
+
       /**
        * Created as BOOKED first, then admitted.
        *
@@ -339,7 +412,6 @@ export class AppointmentsService {
           patientId: input.patientId,
           practitionerId: input.practitionerId,
           locationId: input.locationId,
-          departmentId: input.departmentId ?? null,
           // A walk-in has no slot; the window is nominal and exists so the
           // record has a consistent shape with booked appointments.
           startAt: now,
@@ -465,16 +537,7 @@ export class AppointmentsService {
 
   /** Doctor calls the next patient in. */
   async call(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    const view = await this.transition(
-      tenantId,
-      id,
-      'ARRIVED',
-      'IN_PROGRESS',
-      { calledAt: new Date() },
-      meta,
-    );
-    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
-    return view;
+    return this.transition(tenantId, id, 'ARRIVED', 'IN_PROGRESS', { calledAt: new Date() }, meta);
   }
 
   /**
@@ -547,6 +610,156 @@ export class AppointmentsService {
    *
    * Either way they keep their token, their draft note and their invoice.
    */
+  /**
+   * Say the visit is over.
+   *
+   * THE DIFFERENCE FROM `FULFILLED`. That status is the doctor's sign-off and
+   * nothing more. The patient may still be in the building — waiting on a film,
+   * waiting to pay, waiting to be told they can go — and until this was
+   * recorded the board called that "Done" and the front desk had no queue of
+   * people still here. Closing is the desk's act, not the clinician's.
+   *
+   * ONLY FROM FULFILLED. A visit still in progress, or one the patient was sent
+   * out of, has something left to happen; closing it would strand whatever that
+   * is. Refused rather than quietly ignored, because the caller believes they
+   * finished something.
+   *
+   * MONEY IS NOT CHECKED HERE, deliberately (Narveer, 22 Oct 2026). The desk is
+   * the one standing in front of the patient and "they will settle it at the
+   * follow-up" is a real answer a clinic gives. The board shows what is owed
+   * before the button and the bill stays open afterwards, so nothing is lost —
+   * what would be lost is the desk's ability to send somebody home.
+   *
+   * Closing twice is refused: the second caller would overwrite who closed it
+   * and when, which is the only thing this column is for.
+   */
+  async closeVisit(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      if (appt.closedAt) {
+        throw new ConflictException({
+          code: 'ALREADY_CLOSED',
+          message: 'This visit has already been closed.',
+        });
+      }
+
+      /**
+       * WHICH STAGES MAY BE CLOSED — Narveer's call, 2 Nov 2026.
+       *
+       * Closing used to require FULFILLED, and that was the whole of the
+       * "cannot end the patient's journey" report. A visit abandoned halfway
+       * had no way out at all: the doctor never pressed OPD done, so the
+       * status stayed IN_PROGRESS or AWAITING_TESTS forever and every button
+       * on the row was refused.
+       *
+       * So: any stage where a visit actually started may be closed. What is
+       * refused is the three where there is nothing to close — a booking
+       * nobody kept, one already written off, and one already cancelled.
+       *
+       * THE STATUS IS NOT TOUCHED by closing. `closed_at` says the patient
+       * left; the status says how far the visit got. That is the 22 Oct split,
+       * and collapsing the two here would record that a doctor finished a
+       * consultation they actually abandoned.
+       */
+      const CLOSEABLE = ['IN_PROGRESS', 'AWAITING_TESTS', 'FULFILLED'];
+      if (!CLOSEABLE.includes(appt.status)) {
+        throw new ConflictException({
+          code: 'NOT_STARTED',
+          message:
+            appt.status === 'BOOKED'
+              ? 'This patient never checked in, so there is no visit to close.'
+              : `A visit that is ${appt.status.toLowerCase().replace('_', ' ')} cannot be closed.`,
+        });
+      }
+
+      /**
+       * A PENDING TEST NO LONGER BLOCKS THE CLOSE.
+       *
+       * It used to, and the reasoning was sound on its own terms: closing here
+       * leaves a film nobody is waiting for. But it made "At a department" a
+       * dead end, which is the state a patient is most likely to walk out of —
+       * they are told to go for an X-ray, they go home instead, and the desk
+       * was left with a row it could not clear by any route.
+       *
+       * The order is deliberately left PENDING rather than cancelled. What was
+       * asked for is a clinical record, and closing a visit is not the same
+       * decision as withdrawing a request. The board now shows the way out of
+       * the test beside the way out of the visit, so the desk can do both —
+       * see `secondaryStep` and the two slots it fills.
+       */
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: { closedAt: new Date(), closedByUserId: meta.actorUserId ?? null },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.close',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: appt.patientId,
+        changedFields: ['closedAt', 'closedByUserId'],
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
+  }
+
+  /**
+   * Undo a close.
+   *
+   * CLOSING IS A PRESS, SO IT CAN BE A MISPRESS. The board shows a list of
+   * patients and the button that ends a visit sits on every finished row; the
+   * clinic reported closing the wrong one, and until now the only way back was
+   * an edit to the database. A recorded decision has to be correctable by the
+   * people who record it, or they stop trusting the record.
+   *
+   * THE TRAIL KEEPS BOTH EVENTS. `closed_at` is cleared, but `appointment.close`
+   * and `appointment.reopen` both stand in the audit log — so the history reads
+   * "closed at 4:05, reopened at 4:06 by Asha", which is the truth, rather than
+   * a visit that was never closed at all.
+   *
+   * Same permission as closing: whoever may end a visit may un-end one. The
+   * front desk makes this mistake most often, and sending them to find an
+   * administrator for a thirty-second slip is how a workaround gets invented.
+   */
+  async reopenVisit(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const tz = await this.timezone(tx, tenantId);
+      const appt = await tx.appointment.findUnique({ where: { id } });
+      if (!appt) throw new NotFoundException('Appointment not found');
+
+      if (!appt.closedAt) {
+        throw new ConflictException({
+          code: 'NOT_CLOSED',
+          message: 'This visit is already open.',
+        });
+      }
+
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: { closedAt: null, closedByUserId: null },
+        include: APPOINTMENT_INCLUDE,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'appointment.reopen',
+        resourceType: 'Appointment',
+        resourceId: id,
+        patientId: appt.patientId,
+        changedFields: ['closedAt', 'closedByUserId'],
+        ...meta,
+      });
+
+      return toView(updated, tz);
+    });
+  }
+
   async returnFromTests(
     tenantId: string,
     id: string,
@@ -593,7 +806,7 @@ export class AppointmentsService {
         changedFields: input.seeNext
           ? ['status', 'returnedAt', 'readyAt', 'priorityReasonCode']
           : ['status', 'returnedAt', 'readyAt'],
-        reason: input.seeNext ? 'Back from tests — to be seen next' : 'Back from tests — queued',
+        reason: input.seeNext ? 'Back from tests, to be seen next' : 'Back from tests, queued',
         ...meta,
       });
 
@@ -707,7 +920,7 @@ export class AppointmentsService {
 
   /** Visit finished. */
   async complete(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    const view = await this.transition(
+    return this.transition(
       tenantId,
       id,
       'IN_PROGRESS',
@@ -715,8 +928,6 @@ export class AppointmentsService {
       { completedAt: new Date() },
       meta,
     );
-    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
-    return view;
   }
 
   async cancel(
@@ -725,11 +936,7 @@ export class AppointmentsService {
     reason: string,
     meta: RequestMeta,
   ): Promise<AppointmentView> {
-    const view = await this.prisma.forTenant(tenantId, (tx) =>
-      this.cancelIn(tx, tenantId, id, reason, meta),
-    );
-    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
-    return view;
+    return this.prisma.forTenant(tenantId, (tx) => this.cancelIn(tx, tenantId, id, reason, meta));
   }
 
   private async cancelIn(
@@ -774,18 +981,89 @@ export class AppointmentsService {
     return toView(updated, tz);
   }
 
-  /** Did not turn up (FR-APT-09). */
+  /**
+   * Did not turn up (FR-APT-09).
+   *
+   * ALSO FROM ARRIVED, since 2 Nov 2026. A patient who checked in and left
+   * before anybody saw them was a dead end: the board offered nothing on a
+   * waiting row once the day had passed, and this endpoint refused the only
+   * verb that fits. Narveer's call — write it off rather than close it, since
+   * no visit happened.
+   *
+   * `checkedInAt` IS DELIBERATELY LEFT ALONE. They did arrive, and that is a
+   * fact worth keeping; clearing it to make the row tidy would delete
+   * something that happened. A no-show carrying a check-in time is exactly
+   * what "left before being seen" looks like, and the pair stays readable in
+   * the no-show figures rather than quietly inflating them.
+   */
   async markNoShow(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
-    const view = await this.transition(
+    return this.transition(
       tenantId,
       id,
-      'BOOKED',
+      ['BOOKED', 'ARRIVED'],
       'NO_SHOW',
       { noShowAt: new Date() },
       meta,
     );
-    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
-    return view;
+  }
+
+  /**
+   * They turned up after all.
+   *
+   * Marking a no-show was one-way until 28 Oct 2026, reported from the clinic:
+   * a patient written off at eleven who walks in at half past had no route
+   * back. The desk's only option was booking a fresh appointment, which issues
+   * a second token and raises a second consultation bill for one visit.
+   *
+   * Back to BOOKED rather than straight to ARRIVED, so the ordinary check-in
+   * runs next and the pay-first gate is asked exactly as it would have been.
+   * Undoing a mistake must not also be a way around the money.
+   *
+   * `noShowAt` is cleared, because the record now says it did not happen — the
+   * audit entry is where the fact that somebody marked it lives.
+   */
+  async undoNoShow(tenantId: string, id: string, meta: RequestMeta): Promise<AppointmentView> {
+    return this.transition(
+      tenantId,
+      id,
+      'NO_SHOW',
+      'BOOKED',
+      { noShowAt: null },
+      meta,
+      /*
+       * NOT BACK INTO A CLASH.
+       *
+       * A no-show is not a live status, so while it stood the desk could quite
+       * correctly book this patient elsewhere at the same hour — that is the
+       * whole point of writing them off. Reviving it without looking would then
+       * put them in two rooms at ten o'clock by the back door, which is the
+       * same fault `patientBusyBetween` was added to stop at the front.
+       *
+       * Found while confirming no path could still double-book, 30 Oct 2026.
+       * The appointment excludes ITSELF from the search: it is the row being
+       * revived, not a clash with it.
+       */
+      async (tx, appt) => {
+        const clash = await patientBusyBetween(
+          tx,
+          appt.patientId,
+          appt.startAt,
+          appt.endAt,
+          appt.id,
+        );
+        if (!clash) return;
+
+        const tz = await this.timezone(tx, tenantId);
+        throw new ConflictException({
+          code: 'PATIENT_DOUBLE_BOOKED',
+          message:
+            `This patient was booked with ${clash.practitioner?.fullName ?? 'another doctor'} ` +
+            `at ${instantToLocalTime(clash.startAt, tz)} after being marked absent. ` +
+            'Use that appointment, or cancel it before bringing this one back.',
+          existingAppointmentId: clash.id,
+        });
+      },
+    );
   }
 
   /**
@@ -798,7 +1076,7 @@ export class AppointmentsService {
   async reschedule(
     tenantId: string,
     id: string,
-    input: { startAt: string; reason: string },
+    input: { startAt: string; reason: string; practitionerId?: string },
     meta: RequestMeta,
   ): Promise<AppointmentView> {
     /**
@@ -813,7 +1091,7 @@ export class AppointmentsService {
      * (FOR SHARE, inside `bookIn`). Switching a doctor off takes only the
      * doctor's row, so no lock here waits on anything that waits on it.
      */
-    const view = await this.prisma.forTenant(tenantId, async (tx) => {
+    return this.prisma.forTenant(tenantId, async (tx) => {
       await tx.$queryRaw`SELECT id FROM appointment WHERE id = ${id}::uuid FOR UPDATE`;
       const existing = await tx.appointment.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException('Appointment not found');
@@ -832,9 +1110,17 @@ export class AppointmentsService {
         tenantId,
         {
           patientId: existing.patientId,
-          practitionerId: existing.practitionerId,
+          /*
+           * The same doctor unless a different one was asked for.
+           *
+           * `bookIn` validates the slot against whichever practitioner this
+           * is, so a move to a doctor who is switched off, has no session at
+           * that hour, or is already full is refused by the rules that govern
+           * any other booking. Nothing special is needed here beyond letting
+           * the id through.
+           */
+          practitionerId: input.practitionerId ?? existing.practitionerId,
           locationId: existing.locationId,
-          ...(existing.departmentId ? { departmentId: existing.departmentId } : {}),
           startAt: input.startAt,
           visitType: existing.visitType,
           ...(existing.reasonForVisit ? { reasonForVisit: existing.reasonForVisit } : {}),
@@ -842,11 +1128,6 @@ export class AppointmentsService {
         meta,
       );
     });
-
-    // A new visit, so a new token and a new link. The old link now shows the
-    // visit as cancelled, which is true.
-    await this.engagement.afterVisitBooked(tenantId, view.id);
-    return view;
   }
 
   /**
@@ -956,10 +1237,11 @@ export class AppointmentsService {
         // Serving order, in the database rather than in application code: this
         // is the rule the display board will read too, and two implementations
         // of it would disagree the first time one of them changed.
-        //
-        // Defined once, in SERVING_ORDER, because a patient's live link reads
-        // the same order (engagement/queue-day.ts) and must never disagree.
-        orderBy: SERVING_ORDER.map((o) => ({ ...o })) as never,
+        orderBy: [
+          { prioritySetAt: { sort: 'asc', nulls: 'last' } },
+          { readyAt: { sort: 'asc', nulls: 'last' } },
+          { tokenNumber: 'asc' },
+        ],
       });
 
       const views = rows.map((r) => toView(r, tz));
@@ -969,7 +1251,22 @@ export class AppointmentsService {
         .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
       const waiting = views.filter((v) => v.status === 'ARRIVED');
       const inProgress = views.find((v) => v.status === 'IN_PROGRESS') ?? null;
-      const completed = views.filter((v) => v.status === 'FULFILLED');
+      /**
+       * Most recently finished first, since 27 Oct 2026.
+       *
+       * It used to inherit the serving order, so the first patient of the
+       * morning sat at the top of "Seen today" all day and the one who just
+       * walked out was at the bottom of a list of twenty. This is the only
+       * list on the screen read backwards — the other three are a queue, a
+       * diary and a waiting time, and all three belong in ascending order.
+       *
+       * Sorted on the rows rather than the views, so the ordering reads off
+       * the real `completedAt` rather than anything the view happens to carry.
+       */
+      const completed = rows
+        .filter((r) => r.status === 'FULFILLED')
+        .sort((a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0))
+        .map((r) => toView(r, tz));
       // Out for an X-ray. Not waiting, not finished, and the desk needs to see
       // them or nobody knows who the clinic is still holding a room for.
       const awayForTests = views
@@ -1033,22 +1330,56 @@ export class AppointmentsService {
   private async transition(
     tenantId: string,
     id: string,
-    from: string,
+    /**
+     * The status, or statuses, this transition may run from.
+     *
+     * A list rather than one value since 2 Nov 2026, for `markNoShow`: a
+     * patient who checked in and left before anybody saw them is written off
+     * from ARRIVED, not from BOOKED.
+     */
+    from: string | readonly string[],
     to: string,
     extra: Record<string, unknown>,
     meta: RequestMeta,
+    /**
+     * One more rule, checked inside this transaction with the row in hand.
+     *
+     * Exists for `undoNoShow`, which is the only transition that puts an
+     * appointment BACK into a live status and so is the only one that can
+     * create a clash rather than resolve one.
+     */
+    guard?: (
+      tx: TenantClient,
+      appt: { id: string; patientId: string; startAt: Date; endAt: Date },
+    ) => Promise<void>,
   ): Promise<AppointmentView> {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const tz = await this.timezone(tx, tenantId);
+
+      /*
+       * Locked before it is read, as `reschedule` does.
+       *
+       * Without this, two desks calling the same transition both read the old
+       * status, both pass the check below and both write — and for the one
+       * transition that revives an appointment, both could revive it into a
+       * clash that neither saw.
+       */
+      await tx.$queryRaw`SELECT id FROM appointment WHERE id = ${id}::uuid FOR UPDATE`;
+
       const appt = await tx.appointment.findUnique({ where: { id } });
       if (!appt) throw new NotFoundException('Appointment not found');
 
-      if (appt.status !== from) {
+      const allowedFrom = typeof from === 'string' ? [from] : from;
+      if (!allowedFrom.includes(appt.status)) {
         throw new ConflictException({
           code: 'INVALID_TRANSITION',
-          message: `Expected the appointment to be ${from.toLowerCase()}, but it is ${appt.status.toLowerCase()}.`,
+          message: `Expected the appointment to be ${allowedFrom
+            .map((s) => s.toLowerCase())
+            .join(' or ')}, but it is ${appt.status.toLowerCase()}.`,
         });
       }
+
+      if (guard) await guard(tx, appt);
 
       const updated = await tx.appointment.update({
         where: { id },
@@ -1130,9 +1461,6 @@ function toView(
     checkedInAt: Date | null;
     calledAt: Date | null;
     completedAt: Date | null;
-    arrivalIntent?: string | null;
-    arrivalIntentAt?: Date | null;
-    leaveNowSentAt?: Date | null;
     patientId: string;
     patient: AppointmentView['patient'];
     practitioner: AppointmentView['practitioner'];
@@ -1162,9 +1490,6 @@ function toView(
     checkedInAt: a.checkedInAt,
     calledAt: a.calledAt,
     completedAt: a.completedAt,
-    arrivalIntent: a.arrivalIntent ?? null,
-    arrivalIntentAt: a.arrivalIntentAt ?? null,
-    leaveNowSentAt: a.leaveNowSentAt ?? null,
     patient: a.patient,
     practitioner: a.practitioner,
   };

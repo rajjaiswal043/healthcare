@@ -203,6 +203,16 @@ export const IconReceipt = (p: IconProps) => (
   </Svg>
 );
 
+/** A printer with a sheet coming out of it. For slips sent to paper. */
+export const IconPrinter = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 8V3h10v5" />
+    <path d="M5 8h14a2 2 0 012 2v6h-4" />
+    <path d="M5 16H3v-6a2 2 0 012-2" />
+    <path d="M7 13h10v8H7z" />
+  </Svg>
+);
+
 export const IconBell = (p: IconProps) => (
   <Svg {...p}>
     <path d="M18 15V10a6 6 0 10-12 0v5l-1.5 3h15L18 15z" />
@@ -233,20 +243,5 @@ export const IconRefresh = (p: IconProps) => (
 export const IconArrowLeft = (p: IconProps) => (
   <Svg {...p}>
     <path d="M15 5l-7 7 7 7" />
-  </Svg>
-);
-
-/** Recovery — a heartbeat line. The follow-up board and the recovery panel. */
-export const IconPulse = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M3 12h4l2-5 4 10 2-5h6" />
-  </Svg>
-);
-
-/** A message to the patient's phone. */
-export const IconChat = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
-    <path d="M8.5 11h.01M12 11h.01M15.5 11h.01" />
   </Svg>
 );

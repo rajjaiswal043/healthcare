@@ -71,6 +71,26 @@ export default function PlatformConsole() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  /**
+   * Unlocking a clinic that has locked itself out.
+   *
+   * `unlockFor` is the clinic whose administrators are being listed;
+   * `issuedPassword` is the one moment a plaintext password exists outside the
+   * person it belongs to, so it is held until support dismisses it rather than
+   * closing on its own.
+   */
+  const [unlockFor, setUnlockFor] = useState<Clinic | null>(null);
+  const [admins, setAdmins] = useState<Array<{
+    id: string;
+    email: string;
+    fullName: string;
+  }> | null>(null);
+  const [issuedPassword, setIssuedPassword] = useState<{
+    fullName: string;
+    email: string;
+    password: string;
+  } | null>(null);
+
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -163,6 +183,50 @@ export default function PlatformConsole() {
       await load();
     } catch (err) {
       setError(err instanceof PlatformRequestError ? err.error.message : 'Could not create it.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function openUnlock(clinic: Clinic) {
+    setUnlockFor(clinic);
+    setAdmins(null);
+    setIssuedPassword(null);
+    try {
+      setAdmins((await platformApi.clinicAdministrators(clinic.id)).administrators);
+    } catch (err) {
+      setError(
+        err instanceof PlatformRequestError ? err.error.message : 'Could not load administrators.',
+      );
+      setUnlockFor(null);
+    }
+  }
+
+  async function resetFor(clinic: Clinic, admin: { id: string; fullName: string; email: string }) {
+    if (
+      !window.confirm(
+        `Reset the password for ${admin.fullName} at ${clinic.name}?
+
+` +
+          `They will be signed out everywhere and must choose a new password at their next ` +
+          `sign-in. This clinic will see it in their own audit trail.`,
+      )
+    ) {
+      return;
+    }
+
+    setBusyId(clinic.id);
+    try {
+      const result = await platformApi.resetClinicPassword(clinic.id, admin.id);
+      setIssuedPassword({
+        fullName: result.fullName,
+        email: result.email,
+        password: result.temporaryPassword,
+      });
+    } catch (err) {
+      setError(
+        err instanceof PlatformRequestError ? err.error.message : 'Could not reset the password.',
+      );
     } finally {
       setBusyId(null);
     }
@@ -287,7 +351,7 @@ export default function PlatformConsole() {
               <span className="text-clinical-text">{clinics.length}</span>
             </h1>
             <p className="mt-1 text-[13.5px] text-ink-60">
-              Counts only — this console cannot open a patient, a queue or an invoice.
+              Counts only. This console cannot open a patient, a queue or an invoice.
             </p>
           </div>
 
@@ -320,7 +384,7 @@ export default function PlatformConsole() {
               {issued.clinic.name} is ready
             </p>
             <p className="mt-1 text-[13px] text-ink-60">
-              Send these to the clinic administrator now. The password cannot be shown again — if it
+              Send these to the clinic administrator now. The password cannot be shown again. If it
               is lost, reset it from this console.
             </p>
 
@@ -473,7 +537,7 @@ export default function PlatformConsole() {
                         somebody choosing 4 digits is otherwise guessing what
                         happens at the ten-thousandth patient. */}
                     <p className="mt-0.5 text-[12.5px] text-ink-40">
-                      Longer numbers are written in full — patient{' '}
+                      Longer numbers are written in full: patient{' '}
                       {(10 ** width).toLocaleString('en-IN')} will be{' '}
                       <span className="font-mono">
                         {formatUhid(proposedPrefix, width, 10 ** width)}
@@ -591,6 +655,14 @@ export default function PlatformConsole() {
                   type="button"
                   className="btn-secondary !px-4 !py-1.5 !text-[13px]"
                   disabled={busyId === c.id}
+                  onClick={() => void openUnlock(c)}
+                >
+                  Reset a password
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary !px-4 !py-1.5 !text-[13px]"
+                  disabled={busyId === c.id}
                   onClick={() => void toggleSuspension(c)}
                 >
                   {c.status === 'SUSPENDED' ? 'Restore' : 'Suspend'}
@@ -599,6 +671,110 @@ export default function PlatformConsole() {
             </li>
           ))}
         </ul>
+
+        {/*
+          Unlocking a clinic administrator.
+          The case: the only account at a clinic that can manage users has
+          forgotten its password. There is no self-service reset and nothing
+          here sends email, so without this the route was editing a password
+          hash by hand.
+        */}
+        {unlockFor && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unlockTitle"
+            className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setUnlockFor(null);
+            }}
+          >
+            <div className="card w-full max-w-lg overflow-hidden">
+              <div className="border-b border-ink/8 px-6 py-4">
+                <p className="mono-label">Reset a password</p>
+                <h2 id="unlockTitle" className="mt-1 font-display text-[20px] font-bold">
+                  {unlockFor.name}
+                </h2>
+              </div>
+
+              {issuedPassword ? (
+                /* The one moment a plaintext password exists outside the person
+                   it belongs to. It does not dismiss itself. */
+                <div className="space-y-4 p-6 text-center">
+                  <p className="mono-label !text-clinical-text">
+                    Temporary password for {issuedPassword.fullName}
+                  </p>
+                  <code className="block rounded-panel border border-ink/10 bg-bg-soft p-3 text-center font-mono text-[20px] font-bold tracking-[0.1em]">
+                    {issuedPassword.password}
+                  </code>
+                  <p className="text-[13px] text-ink-60">
+                    Read this to them now. It cannot be shown again. They will choose their own
+                    password at their next sign-in, and have been signed out everywhere.
+                  </p>
+                  <p className="field-hint">
+                    This clinic can see the reset in their own audit trail.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => {
+                      setIssuedPassword(null);
+                      setUnlockFor(null);
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3 p-6">
+                  <p className="text-[13px] text-ink-60">
+                    Only accounts that manage users at this clinic can be reset here. Anyone else
+                    should be reset by their own administrator.
+                  </p>
+
+                  {admins === null ? (
+                    <p className="field-hint">Loading…</p>
+                  ) : admins.length === 0 ? (
+                    <p className="field-hint">
+                      This clinic has no active administrator. It was onboarded without one, or the
+                      account was switched off.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {admins.map((a) => (
+                        <li
+                          key={a.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-ink/10 px-3.5 py-2.5"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-[13.5px] font-semibold">{a.fullName}</span>
+                            <span className="block font-mono text-[11.5px] text-ink-40">
+                              {a.email}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            className="btn-secondary !px-3 !py-1.5 !text-[12.5px]"
+                            disabled={busyId === unlockFor.id}
+                            onClick={() => void resetFor(unlockFor, a)}
+                          >
+                            Reset
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div className="flex justify-end pt-1">
+                    <button type="button" className="btn-ghost" onClick={() => setUnlockFor(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* FR-UID-03 — changing the format after patients exist. */}
         {formatFor && (
@@ -683,7 +859,7 @@ export default function PlatformConsole() {
                         IDs differ only by prefix. */}
                     <p className="mt-0.5 text-[12.5px] text-ink-40">
                       Numbering carries on from {(formatFor.uhidIssued + 1).toLocaleString('en-IN')}{' '}
-                      — it does not restart.
+                      and does not restart.
                     </p>
                   </>
                 )}
@@ -695,8 +871,8 @@ export default function PlatformConsole() {
                   id="formatReason"
                   rows={2}
                   maxLength={300}
-                  className="field-input text-[13.5px]"
-                  placeholder="Dr Vivek asked on the phone — wants DRVIV- instead of DRV"
+                  className="field-input text-[16px] md:text-[13.5px]"
+                  placeholder="Dr Vivek asked on the phone, wants DRVIV- instead of DRV"
                   value={formatReason}
                   onChange={(e) => setFormatReason(e.target.value)}
                 />
@@ -743,7 +919,7 @@ export default function PlatformConsole() {
           <div className="card mt-6 px-6 py-12 text-center">
             <p className="font-display text-[18px] font-bold text-ink">No clinics yet</p>
             <p className="mt-1 text-[13.5px] text-ink-40">
-              Onboard the first one — it takes a name and an administrator.
+              Onboard the first one. It takes a name and an administrator.
             </p>
           </div>
         )}

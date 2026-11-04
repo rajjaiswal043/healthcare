@@ -9,6 +9,8 @@ import {
   type PatientDetail,
 } from '@/lib/api';
 import { IconAlert, IconCheck } from '@/components/icons';
+import { looksLikeAPersonName } from '@/lib/person-name';
+import { INDIAN_STATES } from '@/lib/india';
 
 const GENDERS = ['FEMALE', 'MALE', 'OTHER', 'UNKNOWN'] as const;
 /**
@@ -85,6 +87,28 @@ export function PatientCorrectionDialog({
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
 
+  /**
+   * The age the typed date works out to, or null if there is no usable date.
+   *
+   * Shown beside the field for the same reason the registration screen shows
+   * it: a mistyped year looks exactly like a correct one until somebody reads
+   * the age out loud. A date in the future or an implausible age reads as null
+   * rather than as a negative number.
+   */
+  const derivedAge = (() => {
+    if (!form.birthDate) return null;
+
+    const born = new Date(form.birthDate);
+    if (Number.isNaN(born.getTime())) return null;
+
+    const now = new Date();
+    let years = now.getFullYear() - born.getFullYear();
+    const monthsIn = now.getMonth() - born.getMonth();
+    if (monthsIn < 0 || (monthsIn === 0 && now.getDate() < born.getDate())) years -= 1;
+
+    return years >= 0 && years < 130 ? years : null;
+  })();
+
   function set(key: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -153,12 +177,12 @@ export function PatientCorrectionDialog({
       role="dialog"
       aria-modal="true"
       aria-label={`Correct ${patient.name}`}
-      className="fixed inset-0 z-[60] !m-0 grid place-items-center bg-ink/40 p-4"
+      className="fixed inset-0 z-[60] !m-0 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-sm sm:items-center sm:p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="card max-h-[88vh] w-full max-w-2xl overflow-y-auto p-6">
+      <div className="card max-h-[88vh] w-full max-w-2xl overflow-y-auto p-5 max-sm:rounded-b-none sm:p-6">
         <p className="mono-label">Correct a record</p>
         <h2 className="mt-1 font-display text-[21px] font-bold">{patient.name}</h2>
         <p className="field-hint">
@@ -181,7 +205,7 @@ export function PatientCorrectionDialog({
           <div className="mt-4 rounded-panel border border-amber/40 bg-amber-soft/50 px-3.5 py-3">
             <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-text">
               <IconCheck size={13} />
-              Saved — but this now looks like an existing patient
+              Saved, but this now looks like an existing patient
             </p>
             <ul className="mt-1.5 space-y-0.5 text-[12.5px] text-ink-60">
               {duplicates.map((d) => (
@@ -230,17 +254,42 @@ export function PatientCorrectionDialog({
             </select>
           </div>
 
+          {/*
+            ONE OR THE OTHER, AND THE BOX ACTUALLY EMPTIES.
+
+            These two hints were already promising that setting one clears the
+            other, and the server does exactly that — but only for the field
+            that arrives ALONE. This dialog sent both whenever both had changed,
+            so neither branch fired and the patient ended up holding a date of
+            birth AND a contradictory age. Reported from the clinic on 30 Oct
+            2026 as the age box being left behind after filling the date.
+
+            Clearing the sibling here makes the promise true, and means only one
+            of the pair is ever sent. The registration screen solves the same
+            problem with a mode toggle; this keeps both boxes visible, because a
+            correction dialog has to show what is currently recorded.
+          */}
           <Field
             label="Date of birth"
             type="date"
             value={form.birthDate}
-            onChange={(v) => set('birthDate', v)}
-            hint="Setting this clears the recorded age."
+            onChange={(v) => setForm((f) => ({ ...f, birthDate: v, ageYears: '' }))}
+            hint={
+              derivedAge === null
+                ? 'Setting this clears the recorded age.'
+                : `That is ${derivedAge} years old. Clears the recorded age.`
+            }
           />
           <Field
             label="Age"
             value={form.ageYears}
-            onChange={(v) => set('ageYears', v.replace(/\D/g, '').slice(0, 3))}
+            onChange={(v) =>
+              setForm((f) => ({
+                ...f,
+                ageYears: v.replace(/\D/g, '').slice(0, 3),
+                birthDate: '',
+              }))
+            }
             hint="Setting this clears the date of birth."
           />
 
@@ -253,7 +302,12 @@ export function PatientCorrectionDialog({
 
           <Field label="Address" value={form.addressLine} onChange={(v) => set('addressLine', v)} />
           <Field label="City" value={form.city} onChange={(v) => set('city', v)} />
-          <Field label="State" value={form.state} onChange={(v) => set('state', v)} />
+          <Field
+            label="State"
+            value={form.state}
+            onChange={(v) => set('state', v)}
+            options={INDIAN_STATES}
+          />
           <Field
             label="PIN"
             value={form.postalCode}
@@ -294,7 +348,7 @@ export function PatientCorrectionDialog({
           <button
             type="button"
             className="btn-primary"
-            disabled={busy || form.name.trim().length < 2}
+            disabled={busy || !looksLikeAPersonName(form.name)}
             onClick={() => void save()}
           >
             {busy ? 'Saving…' : 'Save correction'}
@@ -314,12 +368,15 @@ function Field({
   onChange,
   type = 'text',
   hint,
+  options,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   hint?: string;
+  /** A fixed set of answers. Given these, the field becomes a list. */
+  options?: readonly string[];
 }) {
   const id = label.toLowerCase().replace(/\s+/g, '-');
 
@@ -328,13 +385,35 @@ function Field({
       <label htmlFor={id} className="field-label">
         {label}
       </label>
-      <input
-        id={id}
-        type={type}
-        className="field-input !py-2"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {options ? (
+        /* A correction screen that lets somebody type a state by hand undoes
+           the dropdown on the registration screen — the register ends up with
+           both "Uttar Pradesh" and "U.P." and no report can group by either.
+           The blank option matters: a patient registered before this field
+           existed has no state, and the dialog must be able to show that
+           without silently inventing one. */
+        <select
+          id={id}
+          className="field-input !py-2"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Not recorded</option>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          id={id}
+          type={type}
+          className="field-input !py-2"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
       {hint && <span className="field-hint block">{hint}</span>}
     </div>
   );

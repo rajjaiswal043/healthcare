@@ -24,18 +24,8 @@ export type EncounterModel = runtime.Types.Result.DefaultSelection<Prisma.$Encou
 
 export type AggregateEncounter = {
   _count: EncounterCountAggregateOutputType | null
-  _avg: EncounterAvgAggregateOutputType | null
-  _sum: EncounterSumAggregateOutputType | null
   _min: EncounterMinAggregateOutputType | null
   _max: EncounterMaxAggregateOutputType | null
-}
-
-export type EncounterAvgAggregateOutputType = {
-  checkInIntervalDays: number | null
-}
-
-export type EncounterSumAggregateOutputType = {
-  checkInIntervalDays: number | null
 }
 
 export type EncounterMinAggregateOutputType = {
@@ -52,7 +42,6 @@ export type EncounterMinAggregateOutputType = {
   prescriptionNote: string | null
   followUpDate: Date | null
   followUpNote: string | null
-  checkInIntervalDays: number | null
   startedAt: Date | null
   signedAt: Date | null
   signedByUserId: string | null
@@ -74,7 +63,6 @@ export type EncounterMaxAggregateOutputType = {
   prescriptionNote: string | null
   followUpDate: Date | null
   followUpNote: string | null
-  checkInIntervalDays: number | null
   startedAt: Date | null
   signedAt: Date | null
   signedByUserId: string | null
@@ -96,7 +84,6 @@ export type EncounterCountAggregateOutputType = {
   prescriptionNote: number
   followUpDate: number
   followUpNote: number
-  checkInIntervalDays: number
   startedAt: number
   signedAt: number
   signedByUserId: number
@@ -105,14 +92,6 @@ export type EncounterCountAggregateOutputType = {
   _all: number
 }
 
-
-export type EncounterAvgAggregateInputType = {
-  checkInIntervalDays?: true
-}
-
-export type EncounterSumAggregateInputType = {
-  checkInIntervalDays?: true
-}
 
 export type EncounterMinAggregateInputType = {
   id?: true
@@ -128,7 +107,6 @@ export type EncounterMinAggregateInputType = {
   prescriptionNote?: true
   followUpDate?: true
   followUpNote?: true
-  checkInIntervalDays?: true
   startedAt?: true
   signedAt?: true
   signedByUserId?: true
@@ -150,7 +128,6 @@ export type EncounterMaxAggregateInputType = {
   prescriptionNote?: true
   followUpDate?: true
   followUpNote?: true
-  checkInIntervalDays?: true
   startedAt?: true
   signedAt?: true
   signedByUserId?: true
@@ -172,7 +149,6 @@ export type EncounterCountAggregateInputType = {
   prescriptionNote?: true
   followUpDate?: true
   followUpNote?: true
-  checkInIntervalDays?: true
   startedAt?: true
   signedAt?: true
   signedByUserId?: true
@@ -219,18 +195,6 @@ export type EncounterAggregateArgs<ExtArgs extends runtime.Types.Extensions.Inte
   /**
    * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
    * 
-   * Select which fields to average
-  **/
-  _avg?: EncounterAvgAggregateInputType
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-   * 
-   * Select which fields to sum
-  **/
-  _sum?: EncounterSumAggregateInputType
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
-   * 
    * Select which fields to find the minimum value
   **/
   _min?: EncounterMinAggregateInputType
@@ -261,8 +225,6 @@ export type EncounterGroupByArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number
   skip?: number
   _count?: EncounterCountAggregateInputType | true
-  _avg?: EncounterAvgAggregateInputType
-  _sum?: EncounterSumAggregateInputType
   _min?: EncounterMinAggregateInputType
   _max?: EncounterMaxAggregateInputType
 }
@@ -281,15 +243,12 @@ export type EncounterGroupByOutputType = {
   prescriptionNote: string | null
   followUpDate: Date | null
   followUpNote: string | null
-  checkInIntervalDays: number | null
   startedAt: Date
   signedAt: Date | null
   signedByUserId: string | null
   createdAt: Date
   updatedAt: Date
   _count: EncounterCountAggregateOutputType | null
-  _avg: EncounterAvgAggregateOutputType | null
-  _sum: EncounterSumAggregateOutputType | null
   _min: EncounterMinAggregateOutputType | null
   _max: EncounterMaxAggregateOutputType | null
 }
@@ -326,7 +285,6 @@ export type EncounterWhereInput = {
   prescriptionNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
-  checkInIntervalDays?: Prisma.IntNullableFilter<"Encounter"> | number | null
   startedAt?: Prisma.DateTimeFilter<"Encounter"> | Date | string
   signedAt?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   signedByUserId?: Prisma.UuidNullableFilter<"Encounter"> | string | null
@@ -339,9 +297,6 @@ export type EncounterWhereInput = {
   diagnoses?: Prisma.DiagnosisListRelationFilter
   prescriptions?: Prisma.PrescriptionListRelationFilter
   addenda?: Prisma.EncounterAddendumListRelationFilter
-  links?: Prisma.PatientLinkListRelationFilter
-  messages?: Prisma.OutboundMessageListRelationFilter
-  recoveryCheckins?: Prisma.RecoveryCheckinListRelationFilter
 }
 
 export type EncounterOrderByWithRelationInput = {
@@ -358,7 +313,6 @@ export type EncounterOrderByWithRelationInput = {
   prescriptionNote?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpDate?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpNote?: Prisma.SortOrderInput | Prisma.SortOrder
-  checkInIntervalDays?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   signedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   signedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -371,9 +325,6 @@ export type EncounterOrderByWithRelationInput = {
   diagnoses?: Prisma.DiagnosisOrderByRelationAggregateInput
   prescriptions?: Prisma.PrescriptionOrderByRelationAggregateInput
   addenda?: Prisma.EncounterAddendumOrderByRelationAggregateInput
-  links?: Prisma.PatientLinkOrderByRelationAggregateInput
-  messages?: Prisma.OutboundMessageOrderByRelationAggregateInput
-  recoveryCheckins?: Prisma.RecoveryCheckinOrderByRelationAggregateInput
 }
 
 export type EncounterWhereUniqueInput = Prisma.AtLeast<{
@@ -393,7 +344,6 @@ export type EncounterWhereUniqueInput = Prisma.AtLeast<{
   prescriptionNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
-  checkInIntervalDays?: Prisma.IntNullableFilter<"Encounter"> | number | null
   startedAt?: Prisma.DateTimeFilter<"Encounter"> | Date | string
   signedAt?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   signedByUserId?: Prisma.UuidNullableFilter<"Encounter"> | string | null
@@ -406,9 +356,6 @@ export type EncounterWhereUniqueInput = Prisma.AtLeast<{
   diagnoses?: Prisma.DiagnosisListRelationFilter
   prescriptions?: Prisma.PrescriptionListRelationFilter
   addenda?: Prisma.EncounterAddendumListRelationFilter
-  links?: Prisma.PatientLinkListRelationFilter
-  messages?: Prisma.OutboundMessageListRelationFilter
-  recoveryCheckins?: Prisma.RecoveryCheckinListRelationFilter
 }, "id" | "appointmentId">
 
 export type EncounterOrderByWithAggregationInput = {
@@ -425,17 +372,14 @@ export type EncounterOrderByWithAggregationInput = {
   prescriptionNote?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpDate?: Prisma.SortOrderInput | Prisma.SortOrder
   followUpNote?: Prisma.SortOrderInput | Prisma.SortOrder
-  checkInIntervalDays?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   signedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   signedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.EncounterCountOrderByAggregateInput
-  _avg?: Prisma.EncounterAvgOrderByAggregateInput
   _max?: Prisma.EncounterMaxOrderByAggregateInput
   _min?: Prisma.EncounterMinOrderByAggregateInput
-  _sum?: Prisma.EncounterSumOrderByAggregateInput
 }
 
 export type EncounterScalarWhereWithAggregatesInput = {
@@ -455,7 +399,6 @@ export type EncounterScalarWhereWithAggregatesInput = {
   prescriptionNote?: Prisma.StringNullableWithAggregatesFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableWithAggregatesFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableWithAggregatesFilter<"Encounter"> | string | null
-  checkInIntervalDays?: Prisma.IntNullableWithAggregatesFilter<"Encounter"> | number | null
   startedAt?: Prisma.DateTimeWithAggregatesFilter<"Encounter"> | Date | string
   signedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Encounter"> | Date | string | null
   signedByUserId?: Prisma.UuidNullableWithAggregatesFilter<"Encounter"> | string | null
@@ -474,7 +417,6 @@ export type EncounterCreateInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -487,9 +429,6 @@ export type EncounterCreateInput = {
   diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateInput = {
@@ -506,7 +445,6 @@ export type EncounterUncheckedCreateInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -516,9 +454,6 @@ export type EncounterUncheckedCreateInput = {
   diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUpdateInput = {
@@ -532,7 +467,6 @@ export type EncounterUpdateInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -545,9 +479,6 @@ export type EncounterUpdateInput = {
   diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateInput = {
@@ -564,7 +495,6 @@ export type EncounterUncheckedUpdateInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -574,9 +504,6 @@ export type EncounterUncheckedUpdateInput = {
   diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterCreateManyInput = {
@@ -593,7 +520,6 @@ export type EncounterCreateManyInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -612,7 +538,6 @@ export type EncounterUpdateManyMutationInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -634,7 +559,6 @@ export type EncounterUncheckedUpdateManyInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -671,16 +595,11 @@ export type EncounterCountOrderByAggregateInput = {
   prescriptionNote?: Prisma.SortOrder
   followUpDate?: Prisma.SortOrder
   followUpNote?: Prisma.SortOrder
-  checkInIntervalDays?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   signedAt?: Prisma.SortOrder
   signedByUserId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-}
-
-export type EncounterAvgOrderByAggregateInput = {
-  checkInIntervalDays?: Prisma.SortOrder
 }
 
 export type EncounterMaxOrderByAggregateInput = {
@@ -697,7 +616,6 @@ export type EncounterMaxOrderByAggregateInput = {
   prescriptionNote?: Prisma.SortOrder
   followUpDate?: Prisma.SortOrder
   followUpNote?: Prisma.SortOrder
-  checkInIntervalDays?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   signedAt?: Prisma.SortOrder
   signedByUserId?: Prisma.SortOrder
@@ -719,16 +637,11 @@ export type EncounterMinOrderByAggregateInput = {
   prescriptionNote?: Prisma.SortOrder
   followUpDate?: Prisma.SortOrder
   followUpNote?: Prisma.SortOrder
-  checkInIntervalDays?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   signedAt?: Prisma.SortOrder
   signedByUserId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-}
-
-export type EncounterSumOrderByAggregateInput = {
-  checkInIntervalDays?: Prisma.SortOrder
 }
 
 export type EncounterScalarRelationFilter = {
@@ -912,52 +825,6 @@ export type EncounterUpdateOneRequiredWithoutAddendaNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.EncounterUpdateToOneWithWhereWithoutAddendaInput, Prisma.EncounterUpdateWithoutAddendaInput>, Prisma.EncounterUncheckedUpdateWithoutAddendaInput>
 }
 
-export type EncounterCreateNestedOneWithoutLinksInput = {
-  create?: Prisma.XOR<Prisma.EncounterCreateWithoutLinksInput, Prisma.EncounterUncheckedCreateWithoutLinksInput>
-  connectOrCreate?: Prisma.EncounterCreateOrConnectWithoutLinksInput
-  connect?: Prisma.EncounterWhereUniqueInput
-}
-
-export type EncounterUpdateOneWithoutLinksNestedInput = {
-  create?: Prisma.XOR<Prisma.EncounterCreateWithoutLinksInput, Prisma.EncounterUncheckedCreateWithoutLinksInput>
-  connectOrCreate?: Prisma.EncounterCreateOrConnectWithoutLinksInput
-  upsert?: Prisma.EncounterUpsertWithoutLinksInput
-  disconnect?: Prisma.EncounterWhereInput | boolean
-  delete?: Prisma.EncounterWhereInput | boolean
-  connect?: Prisma.EncounterWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.EncounterUpdateToOneWithWhereWithoutLinksInput, Prisma.EncounterUpdateWithoutLinksInput>, Prisma.EncounterUncheckedUpdateWithoutLinksInput>
-}
-
-export type EncounterCreateNestedOneWithoutMessagesInput = {
-  create?: Prisma.XOR<Prisma.EncounterCreateWithoutMessagesInput, Prisma.EncounterUncheckedCreateWithoutMessagesInput>
-  connectOrCreate?: Prisma.EncounterCreateOrConnectWithoutMessagesInput
-  connect?: Prisma.EncounterWhereUniqueInput
-}
-
-export type EncounterUpdateOneWithoutMessagesNestedInput = {
-  create?: Prisma.XOR<Prisma.EncounterCreateWithoutMessagesInput, Prisma.EncounterUncheckedCreateWithoutMessagesInput>
-  connectOrCreate?: Prisma.EncounterCreateOrConnectWithoutMessagesInput
-  upsert?: Prisma.EncounterUpsertWithoutMessagesInput
-  disconnect?: Prisma.EncounterWhereInput | boolean
-  delete?: Prisma.EncounterWhereInput | boolean
-  connect?: Prisma.EncounterWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.EncounterUpdateToOneWithWhereWithoutMessagesInput, Prisma.EncounterUpdateWithoutMessagesInput>, Prisma.EncounterUncheckedUpdateWithoutMessagesInput>
-}
-
-export type EncounterCreateNestedOneWithoutRecoveryCheckinsInput = {
-  create?: Prisma.XOR<Prisma.EncounterCreateWithoutRecoveryCheckinsInput, Prisma.EncounterUncheckedCreateWithoutRecoveryCheckinsInput>
-  connectOrCreate?: Prisma.EncounterCreateOrConnectWithoutRecoveryCheckinsInput
-  connect?: Prisma.EncounterWhereUniqueInput
-}
-
-export type EncounterUpdateOneRequiredWithoutRecoveryCheckinsNestedInput = {
-  create?: Prisma.XOR<Prisma.EncounterCreateWithoutRecoveryCheckinsInput, Prisma.EncounterUncheckedCreateWithoutRecoveryCheckinsInput>
-  connectOrCreate?: Prisma.EncounterCreateOrConnectWithoutRecoveryCheckinsInput
-  upsert?: Prisma.EncounterUpsertWithoutRecoveryCheckinsInput
-  connect?: Prisma.EncounterWhereUniqueInput
-  update?: Prisma.XOR<Prisma.XOR<Prisma.EncounterUpdateToOneWithWhereWithoutRecoveryCheckinsInput, Prisma.EncounterUpdateWithoutRecoveryCheckinsInput>, Prisma.EncounterUncheckedUpdateWithoutRecoveryCheckinsInput>
-}
-
 export type EncounterCreateWithoutPatientInput = {
   id?: string
   tenantId: string
@@ -969,7 +836,6 @@ export type EncounterCreateWithoutPatientInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -981,9 +847,6 @@ export type EncounterCreateWithoutPatientInput = {
   diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateWithoutPatientInput = {
@@ -999,7 +862,6 @@ export type EncounterUncheckedCreateWithoutPatientInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1009,9 +871,6 @@ export type EncounterUncheckedCreateWithoutPatientInput = {
   diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterCreateOrConnectWithoutPatientInput = {
@@ -1057,7 +916,6 @@ export type EncounterScalarWhereInput = {
   prescriptionNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
   followUpDate?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   followUpNote?: Prisma.StringNullableFilter<"Encounter"> | string | null
-  checkInIntervalDays?: Prisma.IntNullableFilter<"Encounter"> | number | null
   startedAt?: Prisma.DateTimeFilter<"Encounter"> | Date | string
   signedAt?: Prisma.DateTimeNullableFilter<"Encounter"> | Date | string | null
   signedByUserId?: Prisma.UuidNullableFilter<"Encounter"> | string | null
@@ -1076,7 +934,6 @@ export type EncounterCreateWithoutPractitionerInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1088,9 +945,6 @@ export type EncounterCreateWithoutPractitionerInput = {
   diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateWithoutPractitionerInput = {
@@ -1106,7 +960,6 @@ export type EncounterUncheckedCreateWithoutPractitionerInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1116,9 +969,6 @@ export type EncounterUncheckedCreateWithoutPractitionerInput = {
   diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterCreateOrConnectWithoutPractitionerInput = {
@@ -1158,7 +1008,6 @@ export type EncounterCreateWithoutAppointmentInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1170,9 +1019,6 @@ export type EncounterCreateWithoutAppointmentInput = {
   diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateWithoutAppointmentInput = {
@@ -1188,7 +1034,6 @@ export type EncounterUncheckedCreateWithoutAppointmentInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1198,9 +1043,6 @@ export type EncounterUncheckedCreateWithoutAppointmentInput = {
   diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterCreateOrConnectWithoutAppointmentInput = {
@@ -1230,7 +1072,6 @@ export type EncounterUpdateWithoutAppointmentInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1242,9 +1083,6 @@ export type EncounterUpdateWithoutAppointmentInput = {
   diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateWithoutAppointmentInput = {
@@ -1260,7 +1098,6 @@ export type EncounterUncheckedUpdateWithoutAppointmentInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1270,9 +1107,6 @@ export type EncounterUncheckedUpdateWithoutAppointmentInput = {
   diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterCreateWithoutVitalsInput = {
@@ -1286,7 +1120,6 @@ export type EncounterCreateWithoutVitalsInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1298,9 +1131,6 @@ export type EncounterCreateWithoutVitalsInput = {
   diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateWithoutVitalsInput = {
@@ -1317,7 +1147,6 @@ export type EncounterUncheckedCreateWithoutVitalsInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1326,9 +1155,6 @@ export type EncounterUncheckedCreateWithoutVitalsInput = {
   diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterCreateOrConnectWithoutVitalsInput = {
@@ -1358,7 +1184,6 @@ export type EncounterUpdateWithoutVitalsInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1370,9 +1195,6 @@ export type EncounterUpdateWithoutVitalsInput = {
   diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateWithoutVitalsInput = {
@@ -1389,7 +1211,6 @@ export type EncounterUncheckedUpdateWithoutVitalsInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1398,9 +1219,6 @@ export type EncounterUncheckedUpdateWithoutVitalsInput = {
   diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterCreateWithoutDiagnosesInput = {
@@ -1414,7 +1232,6 @@ export type EncounterCreateWithoutDiagnosesInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1426,9 +1243,6 @@ export type EncounterCreateWithoutDiagnosesInput = {
   vitals?: Prisma.VitalsObservationCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateWithoutDiagnosesInput = {
@@ -1445,7 +1259,6 @@ export type EncounterUncheckedCreateWithoutDiagnosesInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1454,9 +1267,6 @@ export type EncounterUncheckedCreateWithoutDiagnosesInput = {
   vitals?: Prisma.VitalsObservationUncheckedCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterCreateOrConnectWithoutDiagnosesInput = {
@@ -1486,7 +1296,6 @@ export type EncounterUpdateWithoutDiagnosesInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1498,9 +1307,6 @@ export type EncounterUpdateWithoutDiagnosesInput = {
   vitals?: Prisma.VitalsObservationUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateWithoutDiagnosesInput = {
@@ -1517,7 +1323,6 @@ export type EncounterUncheckedUpdateWithoutDiagnosesInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1526,9 +1331,6 @@ export type EncounterUncheckedUpdateWithoutDiagnosesInput = {
   vitals?: Prisma.VitalsObservationUncheckedUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterCreateWithoutPrescriptionsInput = {
@@ -1542,7 +1344,6 @@ export type EncounterCreateWithoutPrescriptionsInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1554,9 +1355,6 @@ export type EncounterCreateWithoutPrescriptionsInput = {
   vitals?: Prisma.VitalsObservationCreateNestedManyWithoutEncounterInput
   diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateWithoutPrescriptionsInput = {
@@ -1573,7 +1371,6 @@ export type EncounterUncheckedCreateWithoutPrescriptionsInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1582,9 +1379,6 @@ export type EncounterUncheckedCreateWithoutPrescriptionsInput = {
   vitals?: Prisma.VitalsObservationUncheckedCreateNestedManyWithoutEncounterInput
   diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
   addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterCreateOrConnectWithoutPrescriptionsInput = {
@@ -1614,7 +1408,6 @@ export type EncounterUpdateWithoutPrescriptionsInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1626,9 +1419,6 @@ export type EncounterUpdateWithoutPrescriptionsInput = {
   vitals?: Prisma.VitalsObservationUpdateManyWithoutEncounterNestedInput
   diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateWithoutPrescriptionsInput = {
@@ -1645,7 +1435,6 @@ export type EncounterUncheckedUpdateWithoutPrescriptionsInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1654,9 +1443,6 @@ export type EncounterUncheckedUpdateWithoutPrescriptionsInput = {
   vitals?: Prisma.VitalsObservationUncheckedUpdateManyWithoutEncounterNestedInput
   diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterCreateWithoutAddendaInput = {
@@ -1670,7 +1456,6 @@ export type EncounterCreateWithoutAddendaInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1682,9 +1467,6 @@ export type EncounterCreateWithoutAddendaInput = {
   vitals?: Prisma.VitalsObservationCreateNestedManyWithoutEncounterInput
   diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterUncheckedCreateWithoutAddendaInput = {
@@ -1701,7 +1483,6 @@ export type EncounterUncheckedCreateWithoutAddendaInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -1710,9 +1491,6 @@ export type EncounterUncheckedCreateWithoutAddendaInput = {
   vitals?: Prisma.VitalsObservationUncheckedCreateNestedManyWithoutEncounterInput
   diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
   prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
 }
 
 export type EncounterCreateOrConnectWithoutAddendaInput = {
@@ -1742,7 +1520,6 @@ export type EncounterUpdateWithoutAddendaInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1754,9 +1531,6 @@ export type EncounterUpdateWithoutAddendaInput = {
   vitals?: Prisma.VitalsObservationUpdateManyWithoutEncounterNestedInput
   diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateWithoutAddendaInput = {
@@ -1773,7 +1547,6 @@ export type EncounterUncheckedUpdateWithoutAddendaInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1782,393 +1555,6 @@ export type EncounterUncheckedUpdateWithoutAddendaInput = {
   vitals?: Prisma.VitalsObservationUncheckedUpdateManyWithoutEncounterNestedInput
   diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
-}
-
-export type EncounterCreateWithoutLinksInput = {
-  id?: string
-  tenantId: string
-  status?: $Enums.EncounterStatus
-  chiefComplaint?: string | null
-  historyOfPresentIllness?: string | null
-  examinationFindings?: string | null
-  advice?: string | null
-  prescriptionNote?: string | null
-  followUpDate?: Date | string | null
-  followUpNote?: string | null
-  checkInIntervalDays?: number | null
-  startedAt?: Date | string
-  signedAt?: Date | string | null
-  signedByUserId?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  appointment: Prisma.AppointmentCreateNestedOneWithoutEncounterInput
-  patient: Prisma.PatientCreateNestedOneWithoutEncountersInput
-  practitioner: Prisma.PractitionerCreateNestedOneWithoutEncountersInput
-  vitals?: Prisma.VitalsObservationCreateNestedManyWithoutEncounterInput
-  diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
-  prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
-  addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
-}
-
-export type EncounterUncheckedCreateWithoutLinksInput = {
-  id?: string
-  tenantId: string
-  appointmentId: string
-  patientId: string
-  practitionerId: string
-  status?: $Enums.EncounterStatus
-  chiefComplaint?: string | null
-  historyOfPresentIllness?: string | null
-  examinationFindings?: string | null
-  advice?: string | null
-  prescriptionNote?: string | null
-  followUpDate?: Date | string | null
-  followUpNote?: string | null
-  checkInIntervalDays?: number | null
-  startedAt?: Date | string
-  signedAt?: Date | string | null
-  signedByUserId?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  vitals?: Prisma.VitalsObservationUncheckedCreateNestedManyWithoutEncounterInput
-  diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
-  prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
-  addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
-}
-
-export type EncounterCreateOrConnectWithoutLinksInput = {
-  where: Prisma.EncounterWhereUniqueInput
-  create: Prisma.XOR<Prisma.EncounterCreateWithoutLinksInput, Prisma.EncounterUncheckedCreateWithoutLinksInput>
-}
-
-export type EncounterUpsertWithoutLinksInput = {
-  update: Prisma.XOR<Prisma.EncounterUpdateWithoutLinksInput, Prisma.EncounterUncheckedUpdateWithoutLinksInput>
-  create: Prisma.XOR<Prisma.EncounterCreateWithoutLinksInput, Prisma.EncounterUncheckedCreateWithoutLinksInput>
-  where?: Prisma.EncounterWhereInput
-}
-
-export type EncounterUpdateToOneWithWhereWithoutLinksInput = {
-  where?: Prisma.EncounterWhereInput
-  data: Prisma.XOR<Prisma.EncounterUpdateWithoutLinksInput, Prisma.EncounterUncheckedUpdateWithoutLinksInput>
-}
-
-export type EncounterUpdateWithoutLinksInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
-  chiefComplaint?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  appointment?: Prisma.AppointmentUpdateOneRequiredWithoutEncounterNestedInput
-  patient?: Prisma.PatientUpdateOneRequiredWithoutEncountersNestedInput
-  practitioner?: Prisma.PractitionerUpdateOneRequiredWithoutEncountersNestedInput
-  vitals?: Prisma.VitalsObservationUpdateManyWithoutEncounterNestedInput
-  diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
-  prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
-  addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
-}
-
-export type EncounterUncheckedUpdateWithoutLinksInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
-  patientId?: Prisma.StringFieldUpdateOperationsInput | string
-  practitionerId?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
-  chiefComplaint?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  vitals?: Prisma.VitalsObservationUncheckedUpdateManyWithoutEncounterNestedInput
-  diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
-  prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
-  addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
-}
-
-export type EncounterCreateWithoutMessagesInput = {
-  id?: string
-  tenantId: string
-  status?: $Enums.EncounterStatus
-  chiefComplaint?: string | null
-  historyOfPresentIllness?: string | null
-  examinationFindings?: string | null
-  advice?: string | null
-  prescriptionNote?: string | null
-  followUpDate?: Date | string | null
-  followUpNote?: string | null
-  checkInIntervalDays?: number | null
-  startedAt?: Date | string
-  signedAt?: Date | string | null
-  signedByUserId?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  appointment: Prisma.AppointmentCreateNestedOneWithoutEncounterInput
-  patient: Prisma.PatientCreateNestedOneWithoutEncountersInput
-  practitioner: Prisma.PractitionerCreateNestedOneWithoutEncountersInput
-  vitals?: Prisma.VitalsObservationCreateNestedManyWithoutEncounterInput
-  diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
-  prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
-  addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinCreateNestedManyWithoutEncounterInput
-}
-
-export type EncounterUncheckedCreateWithoutMessagesInput = {
-  id?: string
-  tenantId: string
-  appointmentId: string
-  patientId: string
-  practitionerId: string
-  status?: $Enums.EncounterStatus
-  chiefComplaint?: string | null
-  historyOfPresentIllness?: string | null
-  examinationFindings?: string | null
-  advice?: string | null
-  prescriptionNote?: string | null
-  followUpDate?: Date | string | null
-  followUpNote?: string | null
-  checkInIntervalDays?: number | null
-  startedAt?: Date | string
-  signedAt?: Date | string | null
-  signedByUserId?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  vitals?: Prisma.VitalsObservationUncheckedCreateNestedManyWithoutEncounterInput
-  diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
-  prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
-  addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedCreateNestedManyWithoutEncounterInput
-}
-
-export type EncounterCreateOrConnectWithoutMessagesInput = {
-  where: Prisma.EncounterWhereUniqueInput
-  create: Prisma.XOR<Prisma.EncounterCreateWithoutMessagesInput, Prisma.EncounterUncheckedCreateWithoutMessagesInput>
-}
-
-export type EncounterUpsertWithoutMessagesInput = {
-  update: Prisma.XOR<Prisma.EncounterUpdateWithoutMessagesInput, Prisma.EncounterUncheckedUpdateWithoutMessagesInput>
-  create: Prisma.XOR<Prisma.EncounterCreateWithoutMessagesInput, Prisma.EncounterUncheckedCreateWithoutMessagesInput>
-  where?: Prisma.EncounterWhereInput
-}
-
-export type EncounterUpdateToOneWithWhereWithoutMessagesInput = {
-  where?: Prisma.EncounterWhereInput
-  data: Prisma.XOR<Prisma.EncounterUpdateWithoutMessagesInput, Prisma.EncounterUncheckedUpdateWithoutMessagesInput>
-}
-
-export type EncounterUpdateWithoutMessagesInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
-  chiefComplaint?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  appointment?: Prisma.AppointmentUpdateOneRequiredWithoutEncounterNestedInput
-  patient?: Prisma.PatientUpdateOneRequiredWithoutEncountersNestedInput
-  practitioner?: Prisma.PractitionerUpdateOneRequiredWithoutEncountersNestedInput
-  vitals?: Prisma.VitalsObservationUpdateManyWithoutEncounterNestedInput
-  diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
-  prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
-  addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
-}
-
-export type EncounterUncheckedUpdateWithoutMessagesInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
-  patientId?: Prisma.StringFieldUpdateOperationsInput | string
-  practitionerId?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
-  chiefComplaint?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  vitals?: Prisma.VitalsObservationUncheckedUpdateManyWithoutEncounterNestedInput
-  diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
-  prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
-  addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
-}
-
-export type EncounterCreateWithoutRecoveryCheckinsInput = {
-  id?: string
-  tenantId: string
-  status?: $Enums.EncounterStatus
-  chiefComplaint?: string | null
-  historyOfPresentIllness?: string | null
-  examinationFindings?: string | null
-  advice?: string | null
-  prescriptionNote?: string | null
-  followUpDate?: Date | string | null
-  followUpNote?: string | null
-  checkInIntervalDays?: number | null
-  startedAt?: Date | string
-  signedAt?: Date | string | null
-  signedByUserId?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  appointment: Prisma.AppointmentCreateNestedOneWithoutEncounterInput
-  patient: Prisma.PatientCreateNestedOneWithoutEncountersInput
-  practitioner: Prisma.PractitionerCreateNestedOneWithoutEncountersInput
-  vitals?: Prisma.VitalsObservationCreateNestedManyWithoutEncounterInput
-  diagnoses?: Prisma.DiagnosisCreateNestedManyWithoutEncounterInput
-  prescriptions?: Prisma.PrescriptionCreateNestedManyWithoutEncounterInput
-  addenda?: Prisma.EncounterAddendumCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageCreateNestedManyWithoutEncounterInput
-}
-
-export type EncounterUncheckedCreateWithoutRecoveryCheckinsInput = {
-  id?: string
-  tenantId: string
-  appointmentId: string
-  patientId: string
-  practitionerId: string
-  status?: $Enums.EncounterStatus
-  chiefComplaint?: string | null
-  historyOfPresentIllness?: string | null
-  examinationFindings?: string | null
-  advice?: string | null
-  prescriptionNote?: string | null
-  followUpDate?: Date | string | null
-  followUpNote?: string | null
-  checkInIntervalDays?: number | null
-  startedAt?: Date | string
-  signedAt?: Date | string | null
-  signedByUserId?: string | null
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  vitals?: Prisma.VitalsObservationUncheckedCreateNestedManyWithoutEncounterInput
-  diagnoses?: Prisma.DiagnosisUncheckedCreateNestedManyWithoutEncounterInput
-  prescriptions?: Prisma.PrescriptionUncheckedCreateNestedManyWithoutEncounterInput
-  addenda?: Prisma.EncounterAddendumUncheckedCreateNestedManyWithoutEncounterInput
-  links?: Prisma.PatientLinkUncheckedCreateNestedManyWithoutEncounterInput
-  messages?: Prisma.OutboundMessageUncheckedCreateNestedManyWithoutEncounterInput
-}
-
-export type EncounterCreateOrConnectWithoutRecoveryCheckinsInput = {
-  where: Prisma.EncounterWhereUniqueInput
-  create: Prisma.XOR<Prisma.EncounterCreateWithoutRecoveryCheckinsInput, Prisma.EncounterUncheckedCreateWithoutRecoveryCheckinsInput>
-}
-
-export type EncounterUpsertWithoutRecoveryCheckinsInput = {
-  update: Prisma.XOR<Prisma.EncounterUpdateWithoutRecoveryCheckinsInput, Prisma.EncounterUncheckedUpdateWithoutRecoveryCheckinsInput>
-  create: Prisma.XOR<Prisma.EncounterCreateWithoutRecoveryCheckinsInput, Prisma.EncounterUncheckedCreateWithoutRecoveryCheckinsInput>
-  where?: Prisma.EncounterWhereInput
-}
-
-export type EncounterUpdateToOneWithWhereWithoutRecoveryCheckinsInput = {
-  where?: Prisma.EncounterWhereInput
-  data: Prisma.XOR<Prisma.EncounterUpdateWithoutRecoveryCheckinsInput, Prisma.EncounterUncheckedUpdateWithoutRecoveryCheckinsInput>
-}
-
-export type EncounterUpdateWithoutRecoveryCheckinsInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
-  chiefComplaint?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  appointment?: Prisma.AppointmentUpdateOneRequiredWithoutEncounterNestedInput
-  patient?: Prisma.PatientUpdateOneRequiredWithoutEncountersNestedInput
-  practitioner?: Prisma.PractitionerUpdateOneRequiredWithoutEncountersNestedInput
-  vitals?: Prisma.VitalsObservationUpdateManyWithoutEncounterNestedInput
-  diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
-  prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
-  addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-}
-
-export type EncounterUncheckedUpdateWithoutRecoveryCheckinsInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  appointmentId?: Prisma.StringFieldUpdateOperationsInput | string
-  patientId?: Prisma.StringFieldUpdateOperationsInput | string
-  practitionerId?: Prisma.StringFieldUpdateOperationsInput | string
-  status?: Prisma.EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
-  chiefComplaint?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  historyOfPresentIllness?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  examinationFindings?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  advice?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
-  signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  vitals?: Prisma.VitalsObservationUncheckedUpdateManyWithoutEncounterNestedInput
-  diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
-  prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
-  addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterCreateManyPatientInput = {
@@ -2184,7 +1570,6 @@ export type EncounterCreateManyPatientInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -2203,7 +1588,6 @@ export type EncounterUpdateWithoutPatientInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2215,9 +1599,6 @@ export type EncounterUpdateWithoutPatientInput = {
   diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateWithoutPatientInput = {
@@ -2233,7 +1614,6 @@ export type EncounterUncheckedUpdateWithoutPatientInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2243,9 +1623,6 @@ export type EncounterUncheckedUpdateWithoutPatientInput = {
   diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateManyWithoutPatientInput = {
@@ -2261,7 +1638,6 @@ export type EncounterUncheckedUpdateManyWithoutPatientInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2282,7 +1658,6 @@ export type EncounterCreateManyPractitionerInput = {
   prescriptionNote?: string | null
   followUpDate?: Date | string | null
   followUpNote?: string | null
-  checkInIntervalDays?: number | null
   startedAt?: Date | string
   signedAt?: Date | string | null
   signedByUserId?: string | null
@@ -2301,7 +1676,6 @@ export type EncounterUpdateWithoutPractitionerInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2313,9 +1687,6 @@ export type EncounterUpdateWithoutPractitionerInput = {
   diagnoses?: Prisma.DiagnosisUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateWithoutPractitionerInput = {
@@ -2331,7 +1702,6 @@ export type EncounterUncheckedUpdateWithoutPractitionerInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2341,9 +1711,6 @@ export type EncounterUncheckedUpdateWithoutPractitionerInput = {
   diagnoses?: Prisma.DiagnosisUncheckedUpdateManyWithoutEncounterNestedInput
   prescriptions?: Prisma.PrescriptionUncheckedUpdateManyWithoutEncounterNestedInput
   addenda?: Prisma.EncounterAddendumUncheckedUpdateManyWithoutEncounterNestedInput
-  links?: Prisma.PatientLinkUncheckedUpdateManyWithoutEncounterNestedInput
-  messages?: Prisma.OutboundMessageUncheckedUpdateManyWithoutEncounterNestedInput
-  recoveryCheckins?: Prisma.RecoveryCheckinUncheckedUpdateManyWithoutEncounterNestedInput
 }
 
 export type EncounterUncheckedUpdateManyWithoutPractitionerInput = {
@@ -2359,7 +1726,6 @@ export type EncounterUncheckedUpdateManyWithoutPractitionerInput = {
   prescriptionNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   followUpDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   followUpNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  checkInIntervalDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   signedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   signedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2377,9 +1743,6 @@ export type EncounterCountOutputType = {
   diagnoses: number
   prescriptions: number
   addenda: number
-  links: number
-  messages: number
-  recoveryCheckins: number
 }
 
 export type EncounterCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2387,9 +1750,6 @@ export type EncounterCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensi
   diagnoses?: boolean | EncounterCountOutputTypeCountDiagnosesArgs
   prescriptions?: boolean | EncounterCountOutputTypeCountPrescriptionsArgs
   addenda?: boolean | EncounterCountOutputTypeCountAddendaArgs
-  links?: boolean | EncounterCountOutputTypeCountLinksArgs
-  messages?: boolean | EncounterCountOutputTypeCountMessagesArgs
-  recoveryCheckins?: boolean | EncounterCountOutputTypeCountRecoveryCheckinsArgs
 }
 
 /**
@@ -2430,27 +1790,6 @@ export type EncounterCountOutputTypeCountAddendaArgs<ExtArgs extends runtime.Typ
   where?: Prisma.EncounterAddendumWhereInput
 }
 
-/**
- * EncounterCountOutputType without action
- */
-export type EncounterCountOutputTypeCountLinksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.PatientLinkWhereInput
-}
-
-/**
- * EncounterCountOutputType without action
- */
-export type EncounterCountOutputTypeCountMessagesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.OutboundMessageWhereInput
-}
-
-/**
- * EncounterCountOutputType without action
- */
-export type EncounterCountOutputTypeCountRecoveryCheckinsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.RecoveryCheckinWhereInput
-}
-
 
 export type EncounterSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -2466,7 +1805,6 @@ export type EncounterSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
-  checkInIntervalDays?: boolean
   startedAt?: boolean
   signedAt?: boolean
   signedByUserId?: boolean
@@ -2479,9 +1817,6 @@ export type EncounterSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   diagnoses?: boolean | Prisma.Encounter$diagnosesArgs<ExtArgs>
   prescriptions?: boolean | Prisma.Encounter$prescriptionsArgs<ExtArgs>
   addenda?: boolean | Prisma.Encounter$addendaArgs<ExtArgs>
-  links?: boolean | Prisma.Encounter$linksArgs<ExtArgs>
-  messages?: boolean | Prisma.Encounter$messagesArgs<ExtArgs>
-  recoveryCheckins?: boolean | Prisma.Encounter$recoveryCheckinsArgs<ExtArgs>
   _count?: boolean | Prisma.EncounterCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["encounter"]>
 
@@ -2499,7 +1834,6 @@ export type EncounterSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
-  checkInIntervalDays?: boolean
   startedAt?: boolean
   signedAt?: boolean
   signedByUserId?: boolean
@@ -2524,7 +1858,6 @@ export type EncounterSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
-  checkInIntervalDays?: boolean
   startedAt?: boolean
   signedAt?: boolean
   signedByUserId?: boolean
@@ -2549,7 +1882,6 @@ export type EncounterSelectScalar = {
   prescriptionNote?: boolean
   followUpDate?: boolean
   followUpNote?: boolean
-  checkInIntervalDays?: boolean
   startedAt?: boolean
   signedAt?: boolean
   signedByUserId?: boolean
@@ -2557,7 +1889,7 @@ export type EncounterSelectScalar = {
   updatedAt?: boolean
 }
 
-export type EncounterOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "practitionerId" | "status" | "chiefComplaint" | "historyOfPresentIllness" | "examinationFindings" | "advice" | "prescriptionNote" | "followUpDate" | "followUpNote" | "checkInIntervalDays" | "startedAt" | "signedAt" | "signedByUserId" | "createdAt" | "updatedAt", ExtArgs["result"]["encounter"]>
+export type EncounterOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "appointmentId" | "patientId" | "practitionerId" | "status" | "chiefComplaint" | "historyOfPresentIllness" | "examinationFindings" | "advice" | "prescriptionNote" | "followUpDate" | "followUpNote" | "startedAt" | "signedAt" | "signedByUserId" | "createdAt" | "updatedAt", ExtArgs["result"]["encounter"]>
 export type EncounterInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   appointment?: boolean | Prisma.AppointmentDefaultArgs<ExtArgs>
   patient?: boolean | Prisma.PatientDefaultArgs<ExtArgs>
@@ -2566,9 +1898,6 @@ export type EncounterInclude<ExtArgs extends runtime.Types.Extensions.InternalAr
   diagnoses?: boolean | Prisma.Encounter$diagnosesArgs<ExtArgs>
   prescriptions?: boolean | Prisma.Encounter$prescriptionsArgs<ExtArgs>
   addenda?: boolean | Prisma.Encounter$addendaArgs<ExtArgs>
-  links?: boolean | Prisma.Encounter$linksArgs<ExtArgs>
-  messages?: boolean | Prisma.Encounter$messagesArgs<ExtArgs>
-  recoveryCheckins?: boolean | Prisma.Encounter$recoveryCheckinsArgs<ExtArgs>
   _count?: boolean | Prisma.EncounterCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type EncounterIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2592,9 +1921,6 @@ export type $EncounterPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     diagnoses: Prisma.$DiagnosisPayload<ExtArgs>[]
     prescriptions: Prisma.$PrescriptionPayload<ExtArgs>[]
     addenda: Prisma.$EncounterAddendumPayload<ExtArgs>[]
-    links: Prisma.$PatientLinkPayload<ExtArgs>[]
-    messages: Prisma.$OutboundMessagePayload<ExtArgs>[]
-    recoveryCheckins: Prisma.$RecoveryCheckinPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -2626,12 +1952,6 @@ export type $EncounterPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     prescriptionNote: string | null
     followUpDate: Date | null
     followUpNote: string | null
-    /**
-     * How often to ask the patient how they are, until `followUpDate`. Null is
-     * off. Scheduled into `recovery_checkin` at signing, so the rows exist only
-     * for a note that is final. CHECK 1–30. See docs/10.
-     */
-    checkInIntervalDays: number | null
     startedAt: Date
     /**
      * Set together, exactly once. Enforced by a CHECK constraint in the
@@ -3043,9 +2363,6 @@ export interface Prisma__EncounterClient<T, Null = never, ExtArgs extends runtim
   diagnoses<T extends Prisma.Encounter$diagnosesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Encounter$diagnosesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DiagnosisPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   prescriptions<T extends Prisma.Encounter$prescriptionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Encounter$prescriptionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PrescriptionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   addenda<T extends Prisma.Encounter$addendaArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Encounter$addendaArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$EncounterAddendumPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  links<T extends Prisma.Encounter$linksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Encounter$linksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PatientLinkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  messages<T extends Prisma.Encounter$messagesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Encounter$messagesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OutboundMessagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  recoveryCheckins<T extends Prisma.Encounter$recoveryCheckinsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Encounter$recoveryCheckinsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$RecoveryCheckinPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -3088,7 +2405,6 @@ export interface EncounterFieldRefs {
   readonly prescriptionNote: Prisma.FieldRef<"Encounter", 'String'>
   readonly followUpDate: Prisma.FieldRef<"Encounter", 'DateTime'>
   readonly followUpNote: Prisma.FieldRef<"Encounter", 'String'>
-  readonly checkInIntervalDays: Prisma.FieldRef<"Encounter", 'Int'>
   readonly startedAt: Prisma.FieldRef<"Encounter", 'DateTime'>
   readonly signedAt: Prisma.FieldRef<"Encounter", 'DateTime'>
   readonly signedByUserId: Prisma.FieldRef<"Encounter", 'String'>
@@ -3588,78 +2904,6 @@ export type Encounter$addendaArgs<ExtArgs extends runtime.Types.Extensions.Inter
   take?: number
   skip?: number
   distinct?: Prisma.EncounterAddendumScalarFieldEnum | Prisma.EncounterAddendumScalarFieldEnum[]
-}
-
-/**
- * Encounter.links
- */
-export type Encounter$linksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the PatientLink
-   */
-  select?: Prisma.PatientLinkSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the PatientLink
-   */
-  omit?: Prisma.PatientLinkOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.PatientLinkInclude<ExtArgs> | null
-  where?: Prisma.PatientLinkWhereInput
-  orderBy?: Prisma.PatientLinkOrderByWithRelationInput | Prisma.PatientLinkOrderByWithRelationInput[]
-  cursor?: Prisma.PatientLinkWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.PatientLinkScalarFieldEnum | Prisma.PatientLinkScalarFieldEnum[]
-}
-
-/**
- * Encounter.messages
- */
-export type Encounter$messagesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the OutboundMessage
-   */
-  select?: Prisma.OutboundMessageSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the OutboundMessage
-   */
-  omit?: Prisma.OutboundMessageOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.OutboundMessageInclude<ExtArgs> | null
-  where?: Prisma.OutboundMessageWhereInput
-  orderBy?: Prisma.OutboundMessageOrderByWithRelationInput | Prisma.OutboundMessageOrderByWithRelationInput[]
-  cursor?: Prisma.OutboundMessageWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.OutboundMessageScalarFieldEnum | Prisma.OutboundMessageScalarFieldEnum[]
-}
-
-/**
- * Encounter.recoveryCheckins
- */
-export type Encounter$recoveryCheckinsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the RecoveryCheckin
-   */
-  select?: Prisma.RecoveryCheckinSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the RecoveryCheckin
-   */
-  omit?: Prisma.RecoveryCheckinOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.RecoveryCheckinInclude<ExtArgs> | null
-  where?: Prisma.RecoveryCheckinWhereInput
-  orderBy?: Prisma.RecoveryCheckinOrderByWithRelationInput | Prisma.RecoveryCheckinOrderByWithRelationInput[]
-  cursor?: Prisma.RecoveryCheckinWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.RecoveryCheckinScalarFieldEnum | Prisma.RecoveryCheckinScalarFieldEnum[]
 }
 
 /**

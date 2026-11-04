@@ -1,107 +1,1774 @@
 'use client';
 
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/components/auth-provider';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  IconCalendar,
-  IconChevronRight,
-  IconClock,
-  IconSearch,
-  IconUserPlus,
-} from '@/components/icons';
+  api,
+  ApiRequestError,
+  type DayBoard,
+  type DayBoardRow,
+  type DayBucket,
+  type FeeTag,
+  type Invoice,
+  type NextStep,
+  type RowTest,
+} from '@/lib/api';
+import { useAuth } from '@/components/auth-provider';
+import { Pagination } from '@/components/pagination';
+import { EditTestDialog } from '@/components/edit-test-dialog';
+import { SendForTestDialog } from '@/components/send-for-test-dialog';
+import { RecordResultDialog } from '@/components/record-result-dialog';
+import { PaymentDialog } from '@/components/payment-dialog';
+import { CollectAcrossDialog } from '@/components/collect-across-dialog';
+import { PrintReceiptButton } from '@/components/receipt-button';
+import { firstDoableStep, SENDABLE, secondarySteps, stepLabel } from '@/components/next-step';
+import { DATE_RE, DayPicker, dayLabel } from '@/components/day-picker';
+import { DiagnosticsBoard } from '@/components/diagnostics-board';
+import { worksOneDepartment } from '@/lib/roles';
+import { formatAge, formatPaise, genderInitial, payMethodLabel } from '@/lib/format';
+import { IconAlert, IconSearch, IconUserPlus, IconUsers } from '@/components/icons';
+
+/** How often the board refreshes while somebody is actually looking at it. */
+const POLL_MS = 30000;
+const PAGE_SIZE = 12;
+
+type TabKey =
+  | 'everyone'
+  | 'expected'
+  | 'waiting'
+  | 'with-doctor'
+  | 'at-department'
+  | 'back-from-tests'
+  | 'ready-to-close'
+  | 'done';
+
+const TABS: Array<{ key: TabKey; label: string; bucket: DayBucket | null }> = [
+  { key: 'everyone', label: 'Everyone', bucket: null },
+  { key: 'expected', label: 'Expected', bucket: 'EXPECTED' },
+  { key: 'waiting', label: 'Waiting', bucket: 'WAITING' },
+  { key: 'with-doctor', label: 'With the doctor', bucket: 'WITH_DOCTOR' },
+  { key: 'at-department', label: 'At a department', bucket: 'AT_DEPARTMENT' },
+  /* The film is in and the patient is in the corridor. The queue the clinic
+     had and the board could not see. */
+  { key: 'back-from-tests', label: 'Back from tests', bucket: 'BACK_FROM_TESTS' },
+  /* The doctor has finished and nobody has sent them home yet. The front
+     desk's queue, and the reason "Done" now means what it says. */
+  { key: 'ready-to-close', label: 'Ready to close', bucket: 'READY_TO_CLOSE' },
+  { key: 'done', label: 'Done', bucket: 'DONE' },
+];
+
+const COUNT_KEY: Record<DayBucket, keyof DayBoard['counts']> = {
+  EXPECTED: 'expected',
+  WAITING: 'waiting',
+  WITH_DOCTOR: 'with_doctor',
+  AT_DEPARTMENT: 'at_department',
+  BACK_FROM_TESTS: 'back_from_tests',
+  READY_TO_CLOSE: 'ready_to_close',
+  DONE: 'done',
+  NOT_FINISHED: 'not_finished',
+  DID_NOT_COME: 'did_not_come',
+  NOT_ATTENDING: 'not_attending',
+};
+
+const BUCKET_LABEL: Record<DayBucket, string> = {
+  EXPECTED: 'Expected',
+  WAITING: 'Waiting',
+  WITH_DOCTOR: 'With the doctor',
+  AT_DEPARTMENT: 'At a department',
+  BACK_FROM_TESTS: 'Back from tests',
+  READY_TO_CLOSE: 'Ready to close',
+  DONE: 'Done',
+  NOT_FINISHED: 'Not finished',
+  DID_NOT_COME: 'Did not come',
+  NOT_ATTENDING: 'Not attending',
+};
 
 /**
- * The landing screen: four doors.
+ * THE WHOLE ROW, tinted by where the patient is in the clinic.
  *
- * It used to end with a "How your data is protected" section — RLS isolation,
- * DPDP consent, audit logging — written for the clinic owner reading over a
- * receptionist's shoulder. Narveer had it removed on 25 Aug 2026. The
- * guarantees are real and enforced in the database; a staff console is just not
- * where they get argued, and a receptionist opening this screen forty times a
- * day does not need telling each time that her keystrokes are logged.
+ * A chip in the last column answers "what stage is this patient at" only once
+ * you have found the chip. A doctor scanning twenty-eight rows for "which of
+ * these have I finished" was reading twenty-eight chips. The tint answers it
+ * from across the desk.
+ *
+ * ONE COLOUR PER STAGE, and each is the journey rather than decoration:
+ *
+ *   EXPECTED       plain white — not in the building yet, nothing to see
+ *   WAITING        amber — somebody is sitting out there, which is the one
+ *                  state that is nobody's fault and everybody's problem
+ *   WITH_DOCTOR    clinical teal — in the room, being seen
+ *   AT_DEPARTMENT  grey — still here, but not in the OPD; out at a machine
+ *   DONE           iris — finished and gone
+ *
+ * NOT GREEN FOR DONE, twice over. `clinical` is itself a teal-green, so
+ * finished and with-the-doctor were two greens a metre from a doctor's eyes.
+ * And green already means MONEY on this very row — a paid fee, a settled bill
+ * — so spending it on a second meaning made both weaker.
+ *
+ * Every tint is held under a tenth so text contrast is untouched, and the Stage
+ * chip still carries the word for anybody who cannot separate two of them.
  */
-export default function HomePage() {
-  const { can } = useAuth();
-
-  const actions = [
-    {
-      href: '/queue',
-      permission: 'appointment:read',
-      icon: <IconClock size={20} />,
-      title: "Today's queue",
-      body: 'Who is waiting, who is with the doctor, who has been seen.',
-      meta: 'Live, refreshes itself',
-    },
-    {
-      href: '/appointments/new',
-      permission: 'appointment:write',
-      icon: <IconCalendar size={20} />,
-      title: 'Book an appointment',
-      body: 'Pick a doctor and a slot — or add a walk-in straight to the queue.',
-      meta: 'Walk-ins welcome',
-    },
-    {
-      href: '/patients/register',
-      permission: 'patient:write',
-      icon: <IconUserPlus size={20} />,
-      title: 'Register a patient',
-      body: 'One screen, keyboard-first. Duplicate check runs as you type.',
-      meta: 'Under 2 minutes',
-    },
-    {
-      href: '/patients',
-      permission: 'patient:read',
-      icon: <IconSearch size={20} />,
-      title: 'Find a patient',
-      body: 'Search by name, mobile, UHID or ABHA number — one box, no filters.',
-      meta: 'Fuzzy name matching',
-    },
-  ].filter((a) => can(a.permission));
+/**
+ * What a patient still has to get through, test by test.
+ *
+ * ONE VISIT CAN CROSS SEVERAL DEPARTMENTS — an X-ray, then bloods, then physio
+ * — and the row used to name only the FIRST department ordered, for the whole
+ * visit. The board said "X-ray" while the patient stood in pathology. Reported
+ * from the clinic, 28 Oct 2026.
+ *
+ * So the heading is where they are due NOW, and each test carries its own
+ * state. A tick is one that is back; a name on its own is one still running;
+ * and UNPAID is called out because it is the one the desk can actually fix —
+ * no department releases a result against an unpaid bill, so that test is not
+ * merely owed for, it is stopped.
+ *
+ * Shared by the table and the phone card deliberately. Two copies of this is
+ * two places for the same row to say different things.
+ */
+function TestLines({ tests, department }: { tests: RowTest[]; department: string | null }) {
+  if (tests.length === 0) return null;
 
   return (
-    <div className="space-y-8">
-      <header>
-        <p className="eyebrow">Front desk</p>
-        <h1 className="mt-2 font-display text-[32px] font-bold">
-          Good to see you, <em className="accent-words">let&rsquo;s begin</em>
-        </h1>
-        {/* The second sentence here used to read "Everything you do here is
-            attributed to your account and logged" — gone with the rest of the
-            data-handling copy. */}
-        <p className="mt-1.5 max-w-xl text-[14.5px] text-ink-60">
-          Register a patient or pull up an existing record.
-        </p>
+    <span className="mt-0.5 block text-[12px] text-ink-40">
+      {department && (
+        <span className="font-semibold text-ink-60">
+          {department}
+          {' \u00b7 '}
+        </span>
+      )}
+      {tests.map((t, i) => (
+        <span key={`${t.description}-${i}`}>
+          {i > 0 && ', '}
+          {t.done && <span className="text-iris-text">{'\u2713 '}</span>}
+          <span className={t.done ? 'text-ink-20 line-through' : ''}>{t.description}</span>
+          {t.unpaid && <span className="font-semibold text-coral-text">{' unpaid'}</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+const ROW_TONE: Partial<Record<DayBucket, string>> = {
+  WAITING: 'bg-amber-soft/35 hover:bg-amber-soft/55',
+  WITH_DOCTOR: 'bg-clinical-tint/60 hover:bg-clinical-tint/80',
+  /* A cool blue rather than the grey this used to be. Grey is what every
+     switched-off thing in this console wears, and "at the X-ray" is a live
+     stage of a visit, not a disabled one. */
+  AT_DEPARTMENT: 'bg-sky-soft/45 hover:bg-sky-soft/70',
+  /* Warmer and deeper than WAITING, and next to it on purpose: both are people
+     waiting on a doctor, but this one has already waited once. */
+  BACK_FROM_TESTS: 'bg-peach-soft/50 hover:bg-peach-soft/75',
+  /* Nothing clinical left, nobody has sent them home. Pale grey is right here
+     and nowhere else: this row IS inert, it is paperwork. */
+  READY_TO_CLOSE: 'bg-ink/[0.045] hover:bg-ink/[0.07]',
+  DONE: 'bg-iris-soft/60 hover:bg-iris-soft/80',
+  /* Quieter than everything above it. Nothing happened in this row, and it
+     must not pull the eye away from the rows where something did. */
+  DID_NOT_COME: 'bg-ink/[0.03] hover:bg-ink/[0.06]',
+  NOT_FINISHED: 'bg-amber-soft/30 hover:bg-amber-soft/50',
+};
+
+/**
+ * The same five colours as the rows, on the chip that names them.
+ *
+ * Chip and row agree deliberately: the tint says where the patient is from
+ * across the desk, the chip says it in a word for anybody close enough to read
+ * — and two different colour schemes for one fact would be worse than none.
+ *
+ * AT_DEPARTMENT used to be a second teal, a shade off WITH_DOCTOR, which made
+ * "in the room" and "out at the X-ray machine" the hardest pair on the board to
+ * tell apart — and they are the two a doctor most needs to tell apart.
+ */
+const BUCKET_TONE: Record<DayBucket, string> = {
+  EXPECTED: 'bg-ink/8 text-ink-60',
+  WAITING: 'bg-amber-soft text-amber-text',
+  WITH_DOCTOR: 'bg-clinical-soft text-clinical-text',
+  AT_DEPARTMENT: 'bg-sky-soft text-sky-text',
+  BACK_FROM_TESTS: 'bg-peach-soft text-peach-text',
+  READY_TO_CLOSE: 'bg-ink/14 text-ink-60',
+  // Iris, not green: green is money settled on this very row, and `clinical` is
+  // itself a teal-green — so finished needs a hue of its own to be seen at all.
+  DONE: 'bg-iris-soft text-iris-text',
+  /* Coral, the same colour a cancelled visit wears on the patient's record:
+     this is the one stage that means nothing happened. Soft rather than loud,
+     because it is a fact about a past day, not a problem to act on. */
+  DID_NOT_COME: 'bg-coral-soft text-coral-text',
+  /* Amber, the colour of something still waiting on somebody — which is what
+     an unclosed visit is, even a day later. Not coral: nothing went wrong
+     clinically, the paperwork was just never done. */
+  NOT_FINISHED: 'bg-amber-soft text-amber-text',
+  NOT_ATTENDING: 'bg-ink/8 text-ink-20',
+};
+
+/**
+ * The home screen: everybody in the clinic today, as a table.
+ *
+ * It was four cards linking to pages already in the left menu. Those went on 29
+ * Sep 2026, replaced by the thing people were opening this screen to find out.
+ *
+ * **One row per patient.** Somebody who sees a doctor and has an X-ray the same
+ * day is one person in the building, and appears once carrying both tags.
+ *
+ * **The tab and the page live in the URL**, so Back walks between them, a
+ * refresh stays put, and a row opened from page 2 comes back to page 2. The
+ * search box does not: it is a way of finding a row on a screen you are already
+ * looking at, not a place you navigate to.
+ *
+ * **What a doctor sees is decided by the server**, not by hiding rows here —
+ * their response contains only their own patients, and this renders whatever it
+ * is given.
+ */
+/**
+ * Home, which is a different board depending on what you do here.
+ *
+ * SOMEBODY WHOSE ONLY JOB IS DIAGNOSTICS GETS THEIR WORKLIST. A technician
+ * signing in has no use for a list of who is expected at the front desk: their
+ * day is the films waiting to be taken, and the patient board is a screen they
+ * would have to navigate away from every single morning. Same theme, same
+ * chrome, same filters and day picker along the top — a different list.
+ *
+ * THE TEST IS "ONLY", AND THAT MATTERS. A login that holds diagnostics AND the
+ * front desk, which is the ordinary arrangement in a small clinic where one
+ * person does both, keeps the patient board: it is the wider of the two jobs
+ * and the worklist is one click away under Diagnostics. Only a login that does
+ * nothing else is given the narrower home.
+ *
+ * Decided on roles rather than permissions. Diagnostics holds `patient:read`
+ * and `appointment:read` like everybody else — it is what somebody DOES here
+ * that decides which list they should open on, and the role is the only honest
+ * record of that.
+ */
+export default function HomePage() {
+  const { session } = useAuth();
+
+  const diagnosticsOnly = worksOneDepartment(session?.roles);
+
+  // `useSearchParams` needs a boundary, or the build refuses to prerender this
+  // route at all. Both boards read the day off the URL, so both need one.
+  return (
+    <Suspense fallback={<BoardSkeleton />}>
+      {diagnosticsOnly ? <DiagnosticsBoard /> : <DayBoardScreen />}
+    </Suspense>
+  );
+}
+
+/** `YYYY-MM-DD`, and nothing else. A URL is somewhere anybody can type. */
+function DayBoardScreen() {
+  const { can, session } = useAuth();
+  const params = useSearchParams();
+  const router = useRouter();
+
+  const [board, setBoard] = useState<DayBoard | null>(null);
+  const [query, setQuery] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+
+  /**
+   * The clinic's own today, as the server reported it.
+   *
+   * Learned rather than computed: the first load with no date comes back
+   * stamped with the day the clinic is having, in its own timezone. Used only
+   * to recognise that a date picked from the calendar IS today, so the board
+   * can drop back to the live, polling view instead of pinning itself to a
+   * date that will be yesterday by tomorrow morning.
+   *
+   * Null when somebody opened a dated URL directly and we have never asked for
+   * today. Everything still works — the Today button clears the parameter,
+   * which needs no knowledge of the date at all.
+   */
+  const [serverToday, setServerToday] = useState<string | null>(null);
+
+  /**
+   * Sending somebody for a test from the row, without reopening the
+   * consultation. `notice` is held until dismissed: the sentence it carries
+   * says money has been added to a patient's bill, which is not something to
+   * flash past.
+   */
+  const [sendingFor, setSendingFor] = useState<DayBoardRow | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  /**
+   * The row being acted on, and what it opened.
+   *
+   * `acting` is the patient id rather than a boolean, so one row's button says
+   * "…" while the rest of the board stays usable — a desk with twelve people on
+   * screen should not freeze because one of them is being checked in.
+   */
+  const [acting, setActing] = useState<string | null>(null);
+  const [collecting, setCollecting] = useState<Invoice | null>(null);
+  /** A patient with more than one bill owing — settled together, oldest first. */
+  const [collectingAcross, setCollectingAcross] = useState<{
+    patient: { id: string; name: string; uhid: string };
+    invoiceIds: string[];
+    duePaise: number;
+  } | null>(null);
+  const [recording, setRecording] = useState<{ row: DayBoardRow; orderId: string } | null>(null);
+  /**
+   * A test being corrected or withdrawn — 2 Nov 2026.
+   *
+   * `billed` travels with it because the two withdrawals are different facts:
+   * the server refuses to call an uncharged test "declined", so the dialog
+   * must know which it may offer.
+   */
+  const [editingTest, setEditingTest] = useState<{
+    row: DayBoardRow;
+    orderId: string;
+    billed: boolean;
+  } | null>(null);
+
+  /**
+   * WHICH DAY, AND HOW "TODAY" IS DECIDED.
+   *
+   * No `date` in the URL means today — and that is the whole definition. The
+   * clinic runs on IST and the browser may not, so asking the server for "no
+   * date" and letting it resolve its own today is the only way to be right for
+   * a desk in Pune and a laptop set to London. Nothing here does date
+   * arithmetic to work out what today is; it only steps a day at a time from
+   * the date the server sent back.
+   *
+   * It lives in the URL beside `tab` and `page`, so a day survives a refresh
+   * and can be sent to somebody.
+   */
+  const dateParam = params.get('date');
+  const date = dateParam && DATE_RE.test(dateParam) ? dateParam : null;
+
+  /**
+   * A link to this board, keeping the day being looked at.
+   *
+   * The tabs and the paging used to write `/?tab=x` and nothing else, so
+   * changing the tab while reading a PAST day silently threw you back to
+   * today. The date picker already carried the tab the other way, so the two
+   * directions disagreed. Reported from the clinic, 28 Oct 2026.
+   *
+   * Today stays the ABSENCE of a date, as everywhere else on this screen: the
+   * live board has to be the plain URL, or a tab left open overnight would go
+   * on showing yesterday.
+   */
+  const boardHref = useCallback(
+    (nextTab: string, nextPage = 1) => {
+      const qs = new URLSearchParams();
+      if (nextTab) qs.set('tab', nextTab);
+      if (date) qs.set('date', date);
+      if (nextPage > 1) qs.set('page', String(nextPage));
+
+      const query = qs.toString();
+      return query ? `/?${query}` : '/';
+    },
+    [date],
+  );
+  const isToday = date === null;
+
+  const tab: TabKey = TABS.find((t) => t.key === params.get('tab'))?.key ?? 'everyone';
+  const pageParam = Number(params.get('page') ?? '1');
+  const requestedPage = Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
+
+  // Read through a ref inside the interval, so the timer is never torn down and
+  // rebuilt just because a render produced a new function.
+  const loadRef = useRef<() => void>(() => {});
+
+  const load = useCallback(async () => {
+    try {
+      const next = await api.dayBoard(date ?? undefined);
+      setBoard(next);
+      if (date === null) setServerToday(next.date);
+      setRefreshedAt(new Date());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not load that day.');
+    }
+  }, [date]);
+
+  useEffect(() => {
+    loadRef.current = () => void load();
+  }, [load]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  /**
+   * Refresh every 30 seconds — but only while this tab is on screen, and only
+   * on today.
+   *
+   * A board left open on a background tab polled all afternoon for nobody, and
+   * browsers throttle those timers anyway, so the first thing somebody saw on
+   * returning was stale. Coming back refetches immediately rather than waiting
+   * out the interval, which is the case that reads as "it did not update".
+   *
+   * A past day does not change, so polling one is a request a minute for an
+   * answer that cannot move. The Refresh button is still there for the rare
+   * case of somebody editing history from another screen.
+   */
+  useEffect(() => {
+    if (!isToday) return;
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (timer === null) timer = setInterval(() => loadRef.current(), POLL_MS);
+    };
+    const stop = () => {
+      if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadRef.current();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [isToday]);
+
+  const active = TABS.find((t) => t.key === tab) ?? TABS[0]!;
+
+  const filtered = useMemo(() => {
+    const rows = (board?.rows ?? []).filter((r) =>
+      active.bucket === null ? r.bucket !== 'NOT_ATTENDING' : r.bucket === active.bucket,
+    );
+
+    const needle = query.trim().toLowerCase();
+    if (!needle) return rows;
+
+    return rows.filter(
+      (r) =>
+        r.patient.name.toLowerCase().includes(needle) ||
+        r.patient.uhid.toLowerCase().includes(needle) ||
+        String(r.token ?? '').includes(needle) ||
+        (r.withWhom ?? '').toLowerCase().includes(needle),
+    );
+  }, [board, active.bucket, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Clamped rather than trusted: a page number can come from a URL somebody
+  // edited, or from a filter that just shortened the list under them.
+  const page = Math.min(requestedPage, totalPages);
+  const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const first = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const last = first + shown.length - 1;
+
+  /**
+   * Go to a day, keeping the tab and dropping the page.
+   *
+   * The page is dropped deliberately: page 4 of Tuesday is not page 4 of
+   * Wednesday, and landing on an empty page reads as an empty day.
+   *
+   * `null` means today, which is the absence of the parameter rather than a
+   * date — see the note on `dateParam`. Picking today's own date from the
+   * calendar lands on the same URL as the Today button, so the board starts
+   * polling again instead of sitting still on a date that happens to be today.
+   */
+  const goToDay = useCallback(
+    (to: string | null) => {
+      const next = new URLSearchParams();
+      const tabParam = params.get('tab');
+      if (tabParam) next.set('tab', tabParam);
+      if (to !== null && to !== serverToday) next.set('date', to);
+
+      const qs = next.toString();
+      router.push(qs ? `/?${qs}` : '/');
+    },
+    [params, router, serverToday],
+  );
+
+  /**
+   * Doing the step.
+   *
+   * Three shapes, and the difference is the point of the whole exercise:
+   *
+   *   CHECK_IN happens where you are standing — one call, one refresh, no
+   *   screen in between, because there is nothing to decide;
+   *
+   *   COLLECT and RECORD_RESULT open a dialog OVER the board, because there is
+   *   something to decide and the board behind it is the context;
+   *
+   *   START and RESUME navigate, because writing a consultation is not dialog
+   *   work and never will be.
+   *
+   * RECEIPT is absent here: it is rendered as its own button, since printing
+   * owns a hidden sheet and a print log of its own.
+   */
+  const doStep = useCallback(
+    async (row: DayBoardRow, step: NextStep) => {
+      setActing(row.patient.id);
+      setError(null);
+
+      try {
+        switch (step.kind) {
+          case 'CHECK_IN':
+            await api.checkIn(step.appointmentId);
+            setNotice(`${row.patient.name} is checked in.`);
+            await load();
+            break;
+
+          /*
+           * ONE BILL OPENS THE BILL. SEVERAL OPEN THE PATIENT.
+           *
+           * A single bill still goes to `PaymentDialog`, which can also
+           * discount, waive and defer it — losing that for the common case
+           * would be a worse trade than the one being fixed. Several bills go
+           * to the collect-together dialog, because those decisions are
+           * per-bill and belong on the finance desk.
+           */
+          case 'COLLECT':
+            if (step.invoiceIds.length === 1) {
+              setCollecting(await api.invoice(step.invoiceIds[0]!));
+            } else {
+              setCollectingAcross({
+                patient: row.patient,
+                invoiceIds: step.invoiceIds,
+                duePaise: step.duePaise,
+              });
+            }
+            break;
+
+          case 'START':
+          case 'RESUME': {
+            // Opening and resuming are the same call — the server returns the
+            // encounter that exists, or makes one.
+            const encounter = await api.openEncounter(step.appointmentId);
+            router.push(`/consultations/${encounter.id}`);
+            break;
+          }
+
+          case 'BRING_BACK':
+            await api.bringBackFromTests(step.appointmentId);
+            setNotice(
+              `${row.patient.name} is back in the waiting list, ahead of people who have not ` +
+                'been seen yet.',
+            );
+            await load();
+            break;
+
+          case 'FINISH':
+            await api.completeVisit(step.appointmentId);
+            setNotice(`${row.patient.name}’s visit is finished.`);
+            await load();
+            break;
+
+          /**
+           * The row was closed by mistake.
+           *
+           * Confirmed, because it puts a patient the clinic had finished with
+           * back onto the live board — and somebody reading the board has to
+           * be able to trust that a row being there means work.
+           */
+          case 'REOPEN_VISIT': {
+            if (
+              !window.confirm(
+                `Reopen ${row.patient.name}’s visit? It goes back to Ready to close and ` +
+                  'the clinic sees them as still here.',
+              )
+            ) {
+              break;
+            }
+
+            await api.reopenVisit(step.appointmentId);
+            setNotice(`${row.patient.name}’s visit is open again.`);
+            await load();
+            break;
+          }
+
+          /**
+           * They never came.
+           *
+           * Confirmed, because it is written to the record and it frees the
+           * slot: a patient marked off in error has to be booked again rather
+           * than simply un-marked.
+           */
+          case 'MARK_NO_SHOW': {
+            if (
+              !window.confirm(
+                `Mark ${row.patient.name} as not having come? Their slot is freed and the ` +
+                  'visit is recorded as missed.',
+              )
+            ) {
+              break;
+            }
+
+            await api.markNoShow(step.appointmentId);
+            setNotice(`${row.patient.name} is recorded as not having come.`);
+            await load();
+            break;
+          }
+
+          case 'CLOSE_VISIT': {
+            /**
+             * WARNED, NOT REFUSED.
+             *
+             * Closing with a balance is allowed on purpose — the desk is the
+             * one standing in front of the patient, and "they will settle it
+             * at the follow-up" is a real answer a clinic gives. What is not
+             * allowed is doing it without being told, so the amount is in the
+             * question rather than in a message afterwards. The bill stays
+             * open either way; the finance desk keeps chasing it.
+             */
+            const due = row.money?.duePaise ?? 0;
+            if (
+              due > 0 &&
+              !window.confirm(
+                `${formatPaise(due)} is still due from ${row.patient.name}. ` +
+                  'Close the visit anyway? The bill stays open.',
+              )
+            ) {
+              break;
+            }
+
+            await api.closeVisit(step.appointmentId);
+            setNotice(
+              due > 0
+                ? `${row.patient.name}’s visit is closed. ${formatPaise(due)} is still owed.`
+                : `${row.patient.name}’s visit is closed.`,
+            );
+            await load();
+            break;
+          }
+
+          case 'RECORD_RESULT':
+            setRecording({ row, orderId: step.orderId });
+            break;
+
+          /**
+           * "I cannot pay for it today."
+           *
+           * Confirmed, because it takes a charge off a bill and the request
+           * off the department's worklist. Finance can put a declined test
+           * back if the patient changes their mind at the counter.
+           */
+          /**
+           * BOTH OPEN THE DIALOG — Narveer's requirement, 2 Nov 2026.
+           *
+           * These used to withdraw the test straight from the row behind a
+           * `window.confirm`, which was the only thing anybody could do to a
+           * test already at a department: there was no way to fix a typo on a
+           * film short of cancelling it and raising another.
+           *
+           * The two cases are kept apart in `billed`, not collapsed. The
+           * server refuses to call an uncharged test "declined", so the dialog
+           * has to know which withdrawal it may offer.
+           */
+          case 'DECLINE_TEST':
+          case 'CANCEL_TEST':
+            setEditingTest({
+              row,
+              orderId: step.orderId,
+              billed: step.kind === 'DECLINE_TEST',
+            });
+            break;
+
+          case 'RECEIPT':
+            break;
+        }
+      } catch (err) {
+        setError(
+          err instanceof ApiRequestError ? err.error.message : `Could not ${stepLabel(step)}.`,
+        );
+      } finally {
+        setActing(null);
+      }
+    },
+    [load, router],
+  );
+
+  /**
+   * The day on screen, as a date string.
+   *
+   * From the BOARD, not from the URL: on today the URL has no date at all, and
+   * the server's answer is the only thing that knows what the clinic's today
+   * is. Falls back to the URL while the first load is in flight, so the picker
+   * is never momentarily blank on a dated link.
+   */
+  const shownDate = board?.date ?? date ?? '';
+
+  const mayOrderTests = can('diagnostic:order');
+
+  /**
+   * Figures, not permission, decide the column.
+   *
+   * `board.money` is null for a caller the server would not send amounts to, so
+   * the column simply does not exist for a doctor or a nurse rather than being
+   * rendered empty. Keyed on the payload instead of a second `can()` check, so
+   * there is one rule and it is the server's.
+   */
+  const showsMoney = board?.money != null;
+
+  /** What the current tab and search add up to, which is not the whole day. */
+  const shownMoney = showsMoney
+    ? filtered.reduce(
+        (total, row) => ({
+          billedPaise: total.billedPaise + (row.money?.billedPaise ?? 0),
+          duePaise: total.duePaise + (row.money?.duePaise ?? 0),
+        }),
+        { billedPaise: 0, duePaise: 0 },
+      )
+    : null;
+
+  /**
+   * Sending somebody for a test belongs to today.
+   *
+   * Ordering an X-ray against a visit from last Tuesday raises a charge on a
+   * bill nobody is standing at the desk to pay, and puts a patient who went
+   * home days ago on the department's worklist. Money actions are a different
+   * matter — an unpaid bill from last Tuesday is still owed, which is half the
+   * reason to look at last Tuesday at all.
+   */
+  const mayAct = isToday;
+  const showsSendForTest = mayOrderTests && mayAct;
+
+  /**
+   * Whether the actions column exists at all.
+   *
+   * Decided over the whole filtered list rather than the page on screen, so the
+   * table does not grow and lose a column as somebody pages through it.
+   * `firstDoableStep` is cheap — a find over at most a handful of steps.
+   */
+  const showsActions =
+    showsSendForTest || filtered.some((r) => firstDoableStep(r.nextSteps, can, isToday) !== null);
+
+  const columns = (active.bucket === null ? 9 : 8) + (showsActions ? 1 : 0) + (showsMoney ? 1 : 0);
+  const notAttending = board?.counts.not_attending ?? 0;
+
+  return (
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {/* One line instead of three. The eyebrow and the count each had a row
+            of their own, which cost about 60px above a table people open forty
+            times a day to scan. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="font-display text-[24px] font-bold">
+            {/* Named rather than "Today", because on any other day "Today"
+                would be a lie on the one screen people trust for where their
+                patients are. */}
+            {isToday ? 'Today' : dayLabel(shownDate)} at {session?.tenant.name ?? 'the clinic'}
+          </h1>
+          <p className="text-[13.5px] text-ink-60">
+            {board
+              ? `${board.counts.total} ${
+                  board.counts.total === 1 ? 'patient' : 'patients'
+                } expected`
+              : 'Loading…'}
+            {board?.scope === 'OWN' && ' · your list only'}
+          </p>
+
+          {/*
+            THE DAY'S MONEY, over the whole board rather than the open tab.
+
+            COUNTED, NOT DERIVED, since 2 Nov 2026. Narveer asked for the day
+            to be reconcilable at close, and the request uncovered that
+            "collected" was being computed as `billed - due` — which reported
+            every forgiven rupee as a collected one.
+
+            `collected − refunded` is the figure to check the till against. The
+            parts do NOT add up to billed in general — a deferred bill and any
+            invoice waived before today both sit outside them — so the line
+            reports each honestly rather than implying a sum.
+
+            Refunded and made free appear only when they are not zero, so an
+            ordinary day still reads as the short sentence it always did.
+          */}
+          {board?.money && (
+            <p className="text-[13.5px] text-ink-60">
+              <span className="font-mono font-semibold tabular-nums text-ink">
+                {formatPaise(board.money.collectedPaise)}
+              </span>{' '}
+              collected of {formatPaise(board.money.billedPaise)}
+              {board.money.refundedPaise > 0 && (
+                <span className="text-coral">
+                  {' · '}
+                  {formatPaise(board.money.refundedPaise)} refunded
+                </span>
+              )}
+              {board.money.writtenOffPaise > 0 && (
+                <span>
+                  {' · '}
+                  {formatPaise(board.money.writtenOffPaise)} made free
+                </span>
+              )}
+              {board.money.duePaise > 0 && (
+                <span className="font-semibold text-amber-text">
+                  {' · '}
+                  {formatPaise(board.money.duePaise)} due
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+
+        <DayPicker
+          shownDate={shownDate}
+          isToday={isToday}
+          onPick={goToDay}
+          refreshedAt={refreshedAt}
+          onRefresh={() => void load()}
+        />
+
+        {/*
+          REGISTERING SOMEBODY, FROM THE SCREEN THEY ARE ALREADY ON.
+
+          The commonest thing that happens at a front desk is a patient walking
+          in who is not on the board — and the board was the one screen with no
+          way to add them.
+
+          ALONE ON THE RIGHT. Everything to its left — the day, the date picker,
+          the refresh time — is a way of LOOKING at the day; this is the one
+          control that changes it, so it is pushed away from them rather than
+          filed among them. `ml-auto` on the button itself, so it stays at the
+          right edge whether or not the rest has wrapped.
+
+          Registration runs into booking, so this is the whole walk-in flow and
+          not just a form.
+        */}
+        {can('patient:write') && (
+          <Link
+            href="/patients/register"
+            className="btn-primary ml-auto whitespace-nowrap !py-1.5 !text-[12.5px]"
+          >
+            <IconUserPlus size={14} />
+            Register a patient
+          </Link>
+        )}
       </header>
 
-      {actions.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {actions.map((a) => (
-            <Link
-              key={a.href}
-              href={a.href}
-              className="card group relative overflow-hidden p-6 transition-all hover:-translate-y-0.5 hover:shadow"
-            >
-              <span
-                aria-hidden="true"
-                className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-clinical-tint transition-transform duration-300 group-hover:scale-125"
-              />
-              <div className="relative">
-                <span className="grid h-11 w-11 place-items-center rounded-panel bg-clinical text-white shadow-sm">
-                  {a.icon}
-                </span>
-                <h2 className="mt-4 font-display text-[19px] font-bold">{a.title}</h2>
-                <p className="mt-1 text-[14px] text-ink-60">{a.body}</p>
-                <p className="mono-label mt-4 flex items-center gap-1.5 !text-clinical-text">
-                  {a.meta}
-                  <span className="transition-transform group-hover:translate-x-0.5">
-                    <IconChevronRight size={12} />
-                  </span>
-                </p>
-              </div>
-            </Link>
-          ))}
+      {notice && (
+        <div className="flex items-start justify-between gap-3 rounded-card border border-clinical/30 bg-clinical-tint p-3 text-[13.5px]">
+          <span>{notice}</span>
+          <button
+            type="button"
+            className="shrink-0 text-ink-40 hover:text-ink"
+            aria-label="Dismiss"
+            onClick={() => setNotice(null)}
+          >
+            &times;
+          </button>
         </div>
       )}
+
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-card border border-coral/30 bg-coral/8 p-3 text-[13.5px] text-coral-text"
+        >
+          <span className="mt-0.5 shrink-0">
+            <IconAlert size={14} />
+          </span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Stage first, then person: which part of the day, then who in it. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <nav aria-label="Stage" className="flex flex-wrap gap-1.5">
+          {TABS.map((t) => {
+            const count =
+              t.bucket === null
+                ? (board?.counts.total ?? 0)
+                : (board?.counts[COUNT_KEY[t.bucket]] ?? 0);
+            const on = tab === t.key;
+
+            return (
+              <Link
+                key={t.key}
+                href={boardHref(t.key)}
+                scroll={false}
+                aria-current={on ? 'page' : undefined}
+                className={[
+                  'flex items-center gap-2 rounded-pill border-[1.5px] px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
+                  on
+                    ? 'border-clinical bg-clinical text-white'
+                    : 'border-ink/12 bg-card text-ink-60 hover:border-ink/25 hover:bg-bg-soft',
+                ].join(' ')}
+              >
+                {t.label}
+                <span
+                  className={[
+                    'rounded-pill px-1.5 text-[12px] font-bold tabular-nums',
+                    on ? 'bg-white/20' : 'bg-ink/8 text-ink',
+                  ].join(' ')}
+                >
+                  {count}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Its own full-width row on a phone — 230px beside six tabs is how a
+            390px screen ends up scrolling sideways. Unchanged from md up. */}
+        <label className="relative ml-auto w-full md:w-auto">
+          <span className="sr-only">Find someone on this list</span>
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-20">
+            <IconSearch size={14} />
+          </span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name, UHID or token"
+            className="field-input !w-full !py-2 !pl-9 text-[16px] md:!w-[230px] md:!py-1.5 md:text-[13px]"
+          />
+        </label>
+      </div>
+
+      {!board ? (
+        <BoardSkeleton />
+      ) : (
+        <>
+          <div className="card overflow-hidden">
+            {/*
+              PHONE FIRST, THEN THE TABLE.
+
+              Ten columns inside a sideways scroll means reading a name and
+              swiping right to reach its button — on the screen the whole clinic
+              lands on. Below `md` each patient is a card instead.
+
+              THE TABLE'S MARKUP IS UNTOUCHED, and hidden rather than rebuilt
+              responsively. A desk at 1280px must render exactly what it
+              rendered yesterday, and the only way to be certain of that is for
+              its markup to be the same markup. The cost is the rows appearing
+              in two places; the rule that keeps that honest is that both read
+              the same `shown` array and the same helpers — `Fee`, `Chip`,
+              `ROW_TONE`, `NextStepAction` — so a fee tag is still defined once.
+            */}
+            <ul className="divide-y divide-ink/6 md:hidden">
+              {shown.map((r) => (
+                <DayBoardCard
+                  key={r.patient.id}
+                  row={r}
+                  showsStage={active.bucket === null}
+                  showsMoney={showsMoney}
+                  can={can}
+                  isToday={isToday}
+                  busy={acting === r.patient.id}
+                  onDo={(step) => void doStep(r, step)}
+                  onSendForTest={
+                    showsSendForTest && r.appointmentId && SENDABLE.has(r.bucket)
+                      ? () => setSendingFor(r)
+                      : null
+                  }
+                />
+              ))}
+
+              {shown.length === 0 && (
+                <li className="px-4 py-12 text-center text-[13.5px] text-ink-40">
+                  {query.trim()
+                    ? `Nobody on this list matches “${query.trim()}”.`
+                    : isToday
+                      ? emptyMessage(active.bucket)
+                      : `Nothing on this list for ${dayLabel(shownDate)}.`}
+                </li>
+              )}
+            </ul>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-[13.5px]">
+                <thead>
+                  <tr className="border-b border-ink/8 bg-bg-soft text-left">
+                    <Th className="w-[74px]">Time</Th>
+                    <Th className="w-[70px]">Token</Th>
+                    <Th>Patient</Th>
+                    <Th className="w-[96px]">Age / Sex</Th>
+                    <Th>With</Th>
+                    <Th>Here for</Th>
+                    <Th>Payment</Th>
+                    <Th className="w-[120px]">Method</Th>
+                    {showsMoney && <Th className="w-[112px] text-right">Amount</Th>}
+                    {active.bucket === null && <Th className="w-[130px]">Stage</Th>}
+                    {/* Said out loud since 27 Oct 2026. It was sr-only, on the
+                        reasoning that a column of buttons explains itself — but
+                        a blank cell above a header row reads as something that
+                        failed to load, which is how it was reported. */}
+                    {showsActions && <Th className="w-[190px]">Action</Th>}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {shown.map((r) => (
+                    <tr
+                      key={r.patient.id}
+                      className={[
+                        'border-b border-ink/6 transition-colors last:border-0',
+                        ROW_TONE[r.bucket] ?? 'hover:bg-clinical-tint/60',
+                      ].join(' ')}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-[12.5px] tabular-nums text-ink-60">
+                        {r.time ?? '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {r.token === null ? (
+                          // A walk-in test never had a token: tokens belong to a
+                          // doctor's queue, and this patient is not in one.
+                          <span className="text-ink-20">—</span>
+                        ) : (
+                          <span className="badge-neutral font-mono tabular-nums">#{r.token}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/patients/${r.patient.id}`}
+                          className="font-semibold text-ink underline-offset-2 hover:text-clinical-text hover:underline"
+                        >
+                          {r.patient.name}
+                        </Link>
+                        <span className="block font-mono text-[11.5px] text-ink-40">
+                          {r.patient.uhid}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-ink-60">
+                        {r.patient.ageYears === null ? '—' : formatAge(r.patient)}
+                        {' · '}
+                        {genderInitial(r.patient.gender)}
+                      </td>
+                      <td
+                        /*
+                          CAPPED, SO THREE DOCTORS GO DOWN AND NOT ACROSS.
+
+                          This table is `w-full` inside `overflow-x-auto` and
+                          already carries ~790px of fixed-width columns, so it
+                          overflows the moment an auto column's content gets
+                          wide. Listing every doctor here — added 30 Oct 2026 —
+                          made this the widest of them, and a fuller day is far
+                          likelier to hold a three-doctor row: which is exactly
+                          the report, that a busy day scrolls sideways while a
+                          quiet previous day does not.
+
+                          A ceiling rather than a truncation: the names still
+                          all show, the row just gets taller. A taller row is
+                          readable; a sideways scroll hides the Action column,
+                          which is the one thing the board exists to offer.
+                        */
+                        className="max-w-[190px] px-4 py-3 text-ink-60"
+                        /* The full list for a reader who wants it in one line,
+                           without the cell having to be that wide. */
+                        title={r.withWhom ?? undefined}
+                      >
+                        {r.withWhom ?? '—'}
+                        {/*
+                          SEEING MORE THAN ONE DOCTOR TODAY.
+
+                          Reported 30 Oct 2026 (point 37): this cell showed one
+                          name however many doctors the patient was booked with,
+                          so the desk could not tell a three-doctor visit from an
+                          ordinary one — and that is the row whose tokens and
+                          bills look wrong. The names are all here now; this
+                          counts them, because by the third name a reader stops
+                          counting and starts skimming.
+                        */}
+                        {r.doctorCount > 1 && (
+                          <span className="ml-1.5 whitespace-nowrap rounded-pill bg-clinical-tint px-1.5 py-0.5 text-[11px] font-semibold text-clinical">
+                            {r.doctorCount} doctors
+                          </span>
+                        )}
+                        {/*
+                          WHAT THEY WERE SENT FOR, under who sent them.
+
+                          The department as well as the test: "at a department"
+                          without saying which one is half an answer, and the
+                          desk is the one pointing the patient down the
+                          corridor.
+                        */}
+                        <TestLines tests={r.tests} department={r.testDepartment} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="flex flex-wrap gap-1.5">
+                          {r.hasVisit && (
+                            <Chip tone="bg-clinical-soft text-clinical-text">Doctor visit</Chip>
+                          )}
+                          {r.hasTest && (
+                            <Chip tone="bg-clinical-tint text-clinical-text">Test</Chip>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="flex flex-wrap gap-1.5">
+                          <Fee label="Fee" state={r.visitFee} />
+                          <Fee label="Tests" state={r.testFee} />
+                          {r.visitFee === null && r.testFee === null && (
+                            <span className="text-ink-20">—</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-ink-60">
+                        {r.paymentMethods.length > 0 ? (
+                          r.paymentMethods.map(payMethodLabel).join(', ')
+                        ) : r.feeWaived ? (
+                          /* WRITTEN OFF, not unanswered. A waiver produces no
+                             payment row, so this column had nothing to print
+                             and showed a hyphen — which reads as data that
+                             failed to load rather than as a decision somebody
+                             took and signed for. */
+                          <span className="text-ink-60">Waived</span>
+                        ) : (
+                          <span className="text-ink-20">—</span>
+                        )}
+                      </td>
+                      {showsMoney && (
+                        <td className="whitespace-nowrap px-4 py-3 text-right">
+                          {r.money && r.money.billedPaise > 0 ? (
+                            <>
+                              <span className="font-mono font-semibold tabular-nums">
+                                {formatPaise(r.money.billedPaise)}
+                              </span>
+                              {/* Only what is still owed gets the colour. A
+                                  settled bill needs no second line. */}
+                              {r.money.duePaise > 0 && (
+                                <span className="block font-mono text-[11.5px] font-semibold tabular-nums text-amber-text">
+                                  {formatPaise(r.money.duePaise)} due
+                                </span>
+                              )}
+                              {/*
+                                WHAT WENT BACK, AND WHAT WAS GIVEN AWAY — 2 Nov
+                                2026, Narveer's request alongside the day's
+                                header.
+
+                                The header says the clinic refunded or forgave
+                                something; these say on whom. Without them a
+                                figure at close can be read but not explained,
+                                which is most of the work of reconciling.
+
+                                Only when non-zero, so an ordinary row is the
+                                single figure it has always been.
+                              */}
+                              {r.money.refundedPaise > 0 && (
+                                <span className="block font-mono text-[11.5px] font-semibold tabular-nums text-coral">
+                                  {formatPaise(r.money.refundedPaise)} refunded
+                                </span>
+                              )}
+                              {r.money.writtenOffPaise > 0 && (
+                                <span className="block font-mono text-[11.5px] tabular-nums text-ink-60">
+                                  {formatPaise(r.money.writtenOffPaise)} made free
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            // Nothing charged, which is not the same as nothing
+                            // collected — a clinic that has priced nothing
+                            // raises no bill at all.
+                            <span className="text-ink-20">—</span>
+                          )}
+                        </td>
+                      )}
+                      {active.bucket === null && (
+                        <td className="px-4 py-3">
+                          <Chip tone={BUCKET_TONE[r.bucket]}>{BUCKET_LABEL[r.bucket]}</Chip>
+                        </td>
+                      )}
+                      {showsActions && (
+                        <td className="px-4 py-3">
+                          {/*
+                            ONE BUTTON PER LINE — Narveer's call, 2 Nov 2026.
+
+                            This was `flex-wrap` on a single row, in a 190px
+                            cell. Two buttons fitted only when both labels were
+                            short, so rows wrapped unpredictably: some one line,
+                            some two, the column ragged and the table pushed
+                            wide enough to scroll sideways on a busy day.
+
+                            A column makes it deterministic. Rows with one
+                            action look exactly as they did; rows that need the
+                            way out of a test AND the way out of the visit grow
+                            downwards, which costs height nobody is short of
+                            rather than width everybody is.
+                          */}
+                          <span className="flex flex-col items-end gap-1.5">
+                            <NextStepAction
+                              row={r}
+                              can={can}
+                              isToday={isToday}
+                              busy={acting === r.patient.id}
+                              onDo={(step) => void doStep(r, step)}
+                            />
+
+                            {/*
+                              CLOSING THE OPD.
+
+                              Offered beside the primary rather than as it: the
+                              doctor's one button stays "open the consultation",
+                              because finishing a visit cannot be undone and
+                              should not be what a misplaced click does. For the
+                              front desk, who hold no `consultation:write`, Done
+                              IS the primary — and then this would be the same
+                              button twice, so it is left out.
+                            */}
+                            {/* Beside the next step, not instead of it: sending
+                                for a test is something the doctor decides to
+                                add, not the thing the patient is waiting for.
+                                Only for somebody actually here — ordering a
+                                test for a patient who has not arrived raises a
+                                bill for a visit that may never happen. */}
+                            {showsSendForTest && r.appointmentId && SENDABLE.has(r.bucket) && (
+                              <button
+                                type="button"
+                                className="btn-ghost !px-2 !py-1 !text-[12px]"
+                                disabled={acting === r.patient.id}
+                                onClick={() => setSendingFor(r)}
+                              >
+                                Send for a test
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+
+                  {shown.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={columns}
+                        className="px-4 py-12 text-center text-[13.5px] text-ink-40"
+                      >
+                        {query.trim()
+                          ? `Nobody on this list matches “${query.trim()}”.`
+                          : isToday
+                            ? emptyMessage(active.bucket)
+                            : `Nothing on this list for ${dayLabel(shownDate)}.`}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+
+                {/*
+                  THE TOTAL UNDER THE COLUMN, for everything the tab matches —
+                  not just the page on screen, which would make the figure
+                  change as somebody paged through it.
+
+                  The day's total is in the header above; this one answers "how
+                  much is sitting in the waiting room" and "what did we take off
+                  the people who have gone home", which is what the tabs are
+                  for.
+                */}
+                {shownMoney && shown.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-[1.5px] border-ink/10 bg-bg-soft">
+                      <td colSpan={8} className="px-4 py-2.5 text-[12.5px] text-ink-60">
+                        {active.label} · {filtered.length}{' '}
+                        {filtered.length === 1 ? 'patient' : 'patients'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                        <span className="font-mono font-semibold tabular-nums">
+                          {formatPaise(shownMoney.billedPaise)}
+                        </span>
+                        {shownMoney.duePaise > 0 && (
+                          <span className="block font-mono text-[11.5px] font-semibold tabular-nums text-amber-text">
+                            {formatPaise(shownMoney.duePaise)} due
+                          </span>
+                        )}
+                      </td>
+                      {/* The stage and action columns, left empty. */}
+                      {columns > 9 && <td colSpan={columns - 9} />}
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="field-hint !mt-0" role="status">
+              {filtered.length === 0
+                ? 'Nothing to show'
+                : `Showing ${first}–${last} of ${filtered.length}`}
+              {notAttending > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1.5 text-ink-40">
+                  <IconUsers size={12} />
+                  {notAttending} cancelled or did not turn up
+                </span>
+              )}
+            </p>
+
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              hrefFor={(n) => boardHref(tab, n)}
+              label="Day board pages"
+            />
+          </div>
+        </>
+      )}
+
+      {collecting && (
+        /* The same dialog the queue and the finance desk use, rather than a
+           third one that would drift from both. */
+        <PaymentDialog
+          invoice={collecting}
+          onSettled={setCollecting}
+          onClose={() => {
+            setCollecting(null);
+            // Money changes what the row needs next — a settled bill turns
+            // Collect into Check in — so the board is re-read, not patched.
+            void load();
+          }}
+        />
+      )}
+
+      {collectingAcross && (
+        /* Several bills, one handover. Opened instead of the dialog above when
+           a patient owes on more than one — see the COLLECT case in `onDo`. */
+        <CollectAcrossDialog
+          patient={collectingAcross.patient}
+          invoiceIds={collectingAcross.invoiceIds}
+          duePaise={collectingAcross.duePaise}
+          onCollected={() => void load()}
+          onClose={() => {
+            setCollectingAcross(null);
+            void load();
+          }}
+        />
+      )}
+
+      {recording && (
+        <RecordResultDialog
+          row={recording.row}
+          orderId={recording.orderId}
+          onClose={() => setRecording(null)}
+          onRecorded={(message) => {
+            setRecording(null);
+            setNotice(message);
+            void load();
+          }}
+        />
+      )}
+
+      {editingTest && (
+        <EditTestDialog
+          row={editingTest.row}
+          orderId={editingTest.orderId}
+          billed={editingTest.billed}
+          onClose={() => setEditingTest(null)}
+          onDone={(message) => {
+            setEditingTest(null);
+            setNotice(message);
+            void load();
+          }}
+        />
+      )}
+
+      {sendingFor && (
+        <SendForTestDialog
+          row={sendingFor}
+          onClose={() => setSendingFor(null)}
+          onSent={(message) => {
+            setSendingFor(null);
+            setNotice(message);
+            void load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A day either side, in `YYYY-MM-DD`.
+ *
+ * Stepped through UTC midday on purpose. Building a Date from a bare date
+ * string and adding 24 hours lands an hour out either side of a daylight-saving
+ * change in any zone that has one — India has none today, but the clinic
+ * timezone is a column in the database, and a board that skipped a day in a
+ * clinic abroad would be an exceptionally quiet bug.
+ */
+function emptyMessage(bucket: DayBucket | null): string {
+  switch (bucket) {
+    case 'EXPECTED':
+      return 'Nobody else is booked for today.';
+    case 'WAITING':
+      return 'Nobody is waiting.';
+    case 'WITH_DOCTOR':
+      return 'No consultation is in progress.';
+    case 'AT_DEPARTMENT':
+      return 'Nobody is having a test.';
+    case 'BACK_FROM_TESTS':
+      return 'Nobody is waiting with a result.';
+    case 'READY_TO_CLOSE':
+      return 'Nobody is waiting to be sent home.';
+    case 'DONE':
+      return 'Nobody has finished yet.';
+    default:
+      return 'Nothing booked today, and nobody has walked in.';
+  }
+}
+
+/**
+ * The one button this person gets on this row.
+ *
+ * Nothing at all when there is nothing for them to do — an empty cell, not a
+ * disabled button, because a greyed-out control invites somebody to work out
+ * why and there is no answer worth reading.
+ *
+ * A receipt is its own component: printing owns a hidden sheet and a server
+ * print log, and routing it through the same handler as the others would mean
+ * duplicating both.
+ */
+function NextStepAction({
+  row,
+  can,
+  isToday,
+  busy,
+  onDo,
+}: {
+  row: DayBoardRow;
+  can: (permission: string) => boolean;
+  isToday: boolean;
+  busy: boolean;
+  onDo: (step: NextStep) => void;
+}) {
+  const step = firstDoableStep(row.nextSteps, can, isToday);
+  /**
+   * The quiet button beside it: finishing a visit for somebody whose primary
+   * is Open, or the way out for a patient who cannot pay for their test.
+   *
+   * Worked out even when there is no primary, because the escape hatch is
+   * exactly what a row with nothing else doable on it may still need.
+   */
+  const escapes = secondarySteps(row.nextSteps, can, isToday, step);
+
+  if (!step && escapes.length === 0) return null;
+
+  if (step?.kind === 'RECEIPT') {
+    return (
+      <PrintReceiptButton
+        paymentId={step.paymentId}
+        className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+        label="Receipt"
+        iconSize={13}
+      />
+    );
+  }
+
+  return (
+    <>
+      {step && (
+        <button
+          type="button"
+          className="btn-secondary !px-3 !py-1 !text-[12.5px]"
+          disabled={busy}
+          onClick={() => onDo(step)}
+        >
+          {busy ? '…' : stepLabel(step)}
+          {/* The figure, on the one step that is about money. Reading "Collect"
+              and then meeting an amount in a dialog is a surprise; reading
+              "Collect ₹500" is an instruction. */}
+          {step.kind === 'COLLECT' && !busy && (
+            <>
+              <span className="font-mono tabular-nums"> {formatPaise(step.duePaise)}</span>
+              {/*
+                NO BILL COUNT ON THE BUTTON. It used to read "· 1 of 3".
+
+                That label existed for one reason: the button could only open
+                the oldest bill while the Due column beside it summed all three,
+                so without it the two figures looked like a contradiction.
+                Collect now settles them together and carries the SAME figure as
+                the column, so the label had no job left — and it cost real
+                room. This cell is 190px wide and wraps, so "Collect ₹1,000.00 ·
+                3 bills" pushed the escape button onto a second line and left
+                the row taller and ragged than every other row, which is how it
+                was reported from the clinic.
+
+                How many bills the money is spread across is said in the dialog
+                that opens, where there is space for it and where the desk is
+                about to act on it.
+              */}
+            </>
+          )}
+        </button>
+      )}
+
+      {/*
+        THE WAY OUT, beside the way on.
+
+        A ghost button rather than a second `btn-secondary`: the row still has
+        one thing it is telling you to do, and this is the thing you press when
+        that is not going to happen. Both reported on 27 Oct — a doctor and an
+        admin could not finish a visit from the board at all, and a patient who
+        could not pay for a test had nowhere to go but the finance desk.
+
+        UP TO TWO OF THEM, STACKED, since 2 Nov 2026. A row can need the way
+        out of a test and the way out of the visit at once, and one slot meant
+        one of the two was always hidden — see `secondarySteps`. Stacked rather
+        than side by side on Narveer's call: this cell is 190px and wraps, so a
+        second button in the same line is what made rows ragged and the table
+        scroll sideways. Vertical costs height on the few rows that have both
+        and nothing at all on the rest.
+      */}
+      {escapes.map((escape) => (
+        <button
+          key={escape.kind}
+          type="button"
+          className="btn-ghost !px-2.5 !py-1 !text-[12px]"
+          disabled={busy}
+          onClick={() => onDo(escape)}
+        >
+          {stepLabel(escape)}
+        </button>
+      ))}
+    </>
+  );
+}
+
+/**
+ * One patient, as a card, for a phone.
+ *
+ * The same facts as the table row, ordered by what somebody standing up reads
+ * first: who it is, then where they are, then what is owed, then the one thing
+ * to do about it. The token keeps the prominence it has on the worklist — it is
+ * what the patient is called by.
+ *
+ * Tinted by stage with `ROW_TONE`, exactly as the row is, so the two layouts
+ * say the same thing in the same colours.
+ *
+ * The action is full width at the bottom. A 26px button in a table cell is fine
+ * under a mouse; under a thumb, on the screen that takes the clinic's money, it
+ * is not.
+ */
+function DayBoardCard({
+  row,
+  showsStage,
+  showsMoney,
+  can,
+  isToday,
+  busy,
+  onDo,
+  onSendForTest,
+}: {
+  row: DayBoardRow;
+  showsStage: boolean;
+  showsMoney: boolean;
+  can: (permission: string) => boolean;
+  isToday: boolean;
+  busy: boolean;
+  onDo: (step: NextStep) => void;
+  /** Null when this row may not be sent for a test. */
+  onSendForTest: (() => void) | null;
+}) {
+  const step = firstDoableStep(row.nextSteps, can, isToday);
+  /* The same ways out the table row offers, worked out the same way — see
+     `secondarySteps`. The card used to carry a hand-rolled Done button here,
+     which said a different word for the same act and knew nothing about the
+     patient who could not pay for their test. */
+  const escapes = secondarySteps(row.nextSteps, can, isToday, step);
+  const hasExtra = onSendForTest !== null || escapes.length > 0;
+
+  return (
+    <li className={`px-4 py-3.5 ${ROW_TONE[row.bucket] ?? ''}`}>
+      <div className="flex items-start gap-3">
+        {/* The number they are called by, and the time they are here for. */}
+        <div className="w-[52px] shrink-0 text-center">
+          {row.token === null ? (
+            <span className="mono-label block !text-ink-20">walk-in</span>
+          ) : (
+            <span className="block font-mono text-[19px] font-bold leading-none tabular-nums">
+              #{row.token}
+            </span>
+          )}
+          {row.time && (
+            <span className="mt-1 block font-mono text-[11px] tabular-nums text-ink-40">
+              {row.time}
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/patients/${row.patient.id}`}
+            className="block truncate text-[15px] font-semibold text-ink"
+          >
+            {row.patient.name}
+          </Link>
+
+          <p className="mt-0.5 text-[12px] text-ink-40">
+            <span className="font-mono">{row.patient.uhid}</span>
+            {row.patient.ageYears !== null && (
+              <>
+                {' · '}
+                {formatAge(row.patient)} {genderInitial(row.patient.gender)}
+              </>
+            )}
+            {row.withWhom ? ` · ${row.withWhom}` : ''}
+            {/* Same answer as the table's, on the layout a phone gets. */}
+            <TestLines tests={row.tests} department={row.testDepartment} />
+          </p>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {showsStage && <Chip tone={BUCKET_TONE[row.bucket]}>{BUCKET_LABEL[row.bucket]}</Chip>}
+            {/*
+              WHAT THEY CAME FOR, and whether it is finished.
+              The chips used to say "Doctor visit" and "Test" whatever had
+              happened, so a row that was entirely finished looked identical to
+              one that had not started. They now carry the stage in the same
+              words the buttons use, and turn iris when they do.
+            */}
+            {row.hasVisit &&
+              (row.opdDone ? (
+                <Chip tone="bg-iris-soft text-iris-text">OPD done</Chip>
+              ) : (
+                <Chip tone="bg-clinical-soft text-clinical-text">Doctor visit</Chip>
+              ))}
+            {row.hasTest &&
+              (row.testsDoneIn ? (
+                <Chip tone="bg-iris-soft text-iris-text">{row.testsDoneIn} done</Chip>
+              ) : (
+                <Chip tone="bg-clinical-tint text-clinical-text">Test</Chip>
+              ))}
+            <Fee label="Fee" state={row.visitFee} />
+            <Fee label="Tests" state={row.testFee} />
+          </div>
+
+          {/* Money on its own line, right where the eye lands after the tags. */}
+          {showsMoney && row.money && row.money.billedPaise > 0 && (
+            <p className="mt-1.5 font-mono text-[12.5px] tabular-nums text-ink-60">
+              {formatPaise(row.money.billedPaise)}
+              {row.money.duePaise > 0 && (
+                <span className="font-semibold text-amber-text">
+                  {' · '}
+                  {formatPaise(row.money.duePaise)} due
+                </span>
+              )}
+              {/* The same two figures the table row carries, so the phone and
+                  the desk say the same thing about the same patient. Inline
+                  rather than stacked: this line already wraps on a narrow
+                  screen and a card is read, not scanned down a column. */}
+              {row.money.refundedPaise > 0 && (
+                <span className="font-semibold text-coral">
+                  {' · '}
+                  {formatPaise(row.money.refundedPaise)} refunded
+                </span>
+              )}
+              {row.money.writtenOffPaise > 0 && (
+                <span>
+                  {' · '}
+                  {formatPaise(row.money.writtenOffPaise)} made free
+                </span>
+              )}
+              {row.paymentMethods.length > 0 && (
+                <span className="text-ink-40">
+                  {' '}
+                  · {row.paymentMethods.map(payMethodLabel).join(', ')}
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Full width, thumb height. The primary action first, the extras after. */}
+      {(step || hasExtra) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {step &&
+            (step.kind === 'RECEIPT' ? (
+              <PrintReceiptButton
+                paymentId={step.paymentId}
+                className="btn-secondary flex-1 !py-2 !text-[13px]"
+                label="Receipt"
+                iconSize={14}
+              />
+            ) : (
+              <button
+                type="button"
+                className="btn-primary flex-1 !py-2 !text-[13px]"
+                disabled={busy}
+                onClick={() => onDo(step)}
+              >
+                {busy ? '…' : stepLabel(step)}
+                {step.kind === 'COLLECT' && !busy && (
+                  <span className="font-mono tabular-nums"> {formatPaise(step.duePaise)}</span>
+                )}
+              </button>
+            ))}
+
+          {escapes.map((escape) => (
+            <button
+              key={escape.kind}
+              type="button"
+              className="btn-secondary !py-2 !text-[13px]"
+              disabled={busy}
+              onClick={() => onDo(escape)}
+            >
+              {stepLabel(escape)}
+            </button>
+          ))}
+
+          {onSendForTest && (
+            <button
+              type="button"
+              className="btn-secondary !py-2 !text-[13px]"
+              disabled={busy}
+              onClick={onSendForTest}
+            >
+              Send for a test
+            </button>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <th scope="col" className={`mono-label px-4 py-2.5 ${className}`}>
+      {children}
+    </th>
+  );
+}
+
+function Chip({ children, tone }: { children: React.ReactNode; tone: string }) {
+  return (
+    <span
+      className={`whitespace-nowrap rounded-pill px-2 py-0.5 text-[11.5px] font-semibold ${tone}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * "Fee paid" / "Fee pending", and nothing at all when nothing was charged.
+ *
+ * The third state is the important one: billing is opt-in per clinic, so a
+ * clinic that has priced nothing would otherwise open this screen to a wall of
+ * "pending" against patients who owe it nothing.
+ */
+function Fee({ label, state }: { label: string; state: FeeTag }) {
+  if (state === null) return null;
+
+  return (
+    <Chip
+      tone={state === 'PAID' ? 'bg-green-soft text-green-text' : 'bg-amber-soft text-amber-text'}
+    >
+      {label} {state === 'PAID' ? 'paid' : 'pending'}
+    </Chip>
+  );
+}
+
+function BoardSkeleton() {
+  return (
+    <div className="card overflow-hidden p-4">
+      <div className="space-y-3">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center gap-4">
+            <div className="skeleton h-4 w-12" />
+            <div className="skeleton h-4 w-10" />
+            <div className="skeleton h-4 flex-1" />
+            <div className="skeleton h-4 w-20" />
+            <div className="skeleton h-4 w-28" />
+            <div className="skeleton h-4 w-24" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

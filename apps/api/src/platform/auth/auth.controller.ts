@@ -46,7 +46,7 @@ class ChangePasswordDto {
    * people who type on a shared clinic PC in a hurry.
    */
   @IsString()
-  @MinLength(12, { message: 'Use at least 12 characters — length matters more than symbols.' })
+  @MinLength(12, { message: 'Use at least 12 characters. Length matters more than symbols.' })
   @MaxLength(200)
   newPassword!: string;
 }
@@ -149,6 +149,8 @@ export class AuthController {
       permissions: user.permissions,
       fullName: profile.fullName,
       roles: profile.roles,
+      /** The room this person works in — diagnostics only. Null otherwise. */
+      department: profile.department,
       // The console gates every screen on this, so it has to survive a reload —
       // a gate that only exists in the login response is one refresh away from
       // being bypassed.

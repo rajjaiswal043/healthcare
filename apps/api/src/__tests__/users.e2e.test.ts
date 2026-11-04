@@ -195,6 +195,161 @@ describe('adding somebody', () => {
   });
 });
 
+/**
+ * A member of diagnostics staff works in a department — and only they do.
+ *
+ * The X-ray technician is not the pathology technician, and their worklist opens
+ * on their own room. Without this, a diagnostics login got every department's
+ * tests and filtered them by hand; the column is nullable because every other
+ * role genuinely has no room, so the rule has to live where the roles are known
+ * rather than in a NOT NULL that a receptionist would fail.
+ */
+describe('which room somebody works in', () => {
+  it('insists on one for diagnostics staff', async () => {
+    const res = await createUser({ roleKeys: ['diagnostics'] });
+
+    expect(res.statusCode).toBe(400);
+    expect(domainCode(res)).toBe('DEPARTMENT_REQUIRED');
+  });
+
+  it('records it, and hands it back on the staff list and on sign-in', async () => {
+    const created = await createUser({
+      email: 'made-tech@main.test',
+      fullName: 'Made Technician',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    expect(created.statusCode).toBe(201);
+
+    const listed = (await listUsers()).json<{
+      users: Array<{ email: string; department: { id: string } | null }>;
+    }>().users;
+    expect(listed.find((u) => u.email === 'made-tech@main.test')?.department?.id).toBe(
+      fx.main.departmentId,
+    );
+
+    /* On the profile too, because that is what the worklist reads to decide
+       which department to open on — a screen that had to fetch the whole staff
+       directory to answer it would be asking an administrator's question. */
+    const them = await login(
+      app,
+      fx.main.slug,
+      'made-tech@main.test',
+      created.json<{ temporaryPassword: string }>().temporaryPassword,
+    );
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: { cookie: them.cookie },
+    });
+    expect(me.json<{ department: { id: string } | null }>().department?.id).toBe(
+      fx.main.departmentId,
+    );
+  });
+
+  it('refuses a room that has been retired', async () => {
+    // A login whose room is closed gets an empty worklist for a reason nobody
+    // can see from any screen.
+    await ownerQuery(fx.main.id, `UPDATE department SET is_active = false WHERE id = $1`, [
+      fx.main.departmentId,
+    ]);
+
+    try {
+      const res = await createUser({
+        roleKeys: ['diagnostics'],
+        departmentId: fx.main.departmentId,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(domainCode(res)).toBe('DEPARTMENT_INACTIVE');
+    } finally {
+      await ownerQuery(fx.main.id, `UPDATE department SET is_active = true WHERE id = $1`, [
+        fx.main.departmentId,
+      ]);
+    }
+  });
+
+  it('can be set on somebody who never had one', async () => {
+    /* The case every technician created before the column existed is in: the
+       role is right, the room is empty, and without this there is no screen
+       anywhere that can fill it. */
+    const created = await createUser({
+      email: 'made-roomless-tech@main.test',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    await ownerQuery(fx.main.id, `UPDATE app_user SET department_id = NULL WHERE id = $1`, [id]);
+
+    const saved = await updateUser(id, { departmentId: fx.main.departmentId });
+    expect(saved.statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE id = $1`,
+      [id],
+    );
+    expect(row?.department_id).toBe(fx.main.departmentId);
+  });
+
+  it('survives an edit that does not mention it', async () => {
+    // Correcting a typo in a name must not empty somebody's room.
+    const created = await createUser({
+      email: 'made-stays@main.test',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    expect((await updateUser(id, { fullName: 'Made Stays Put' })).statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE id = $1`,
+      [id],
+    );
+    expect(row?.department_id).toBe(fx.main.departmentId);
+  });
+
+  it('is cleared when the diagnostics role is withdrawn', async () => {
+    // Somebody moved to the front desk should not still be filed under X-ray.
+    const created = await createUser({
+      email: 'made-moved@main.test',
+      roleKeys: ['diagnostics'],
+      departmentId: fx.main.departmentId,
+    });
+    const id = created.json<{ id: string }>().id;
+
+    expect((await updateUser(id, { roleKeys: ['nurse'] })).statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE id = $1`,
+      [id],
+    );
+    expect(row?.department_id).toBeNull();
+  });
+
+  it('leaves it null for a role that has no room', async () => {
+    // A nurse belongs to no department, and sending one does not give her one:
+    // the field is read only for the role that has it.
+    const created = await createUser({
+      email: 'made-roomless@main.test',
+      roleKeys: ['nurse'],
+      departmentId: fx.main.departmentId,
+    });
+    expect(created.statusCode).toBe(201);
+
+    const [row] = await ownerQuery<{ department_id: string | null }>(
+      fx.main.id,
+      `SELECT department_id FROM app_user WHERE email = $1`,
+      ['made-roomless@main.test'],
+    );
+    expect(row?.department_id).toBeNull();
+  });
+});
+
 // --- editing --------------------------------------------------------------
 
 /**
@@ -700,5 +855,69 @@ describe('the approver list', () => {
   it('refuses an unauthenticated caller', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/users/approvers' });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+/**
+ * A member of staff needs a name, not a number.
+ *
+ * Reported by the front desk on 28 Sep 2026: "12345" was accepted as a staff
+ * name and created the account. `@MinLength(2)` was the only rule on the field,
+ * and a five-digit string satisfies it.
+ *
+ * The account this produces is worse than untidy. Nobody can search for that
+ * person, the audit trail names them "12345" against every patient record they
+ * touch, and a prescription signed by them prints a number where the clinician
+ * should be.
+ *
+ * The rule lives in `IsPersonName`, whose own cases are in
+ * `src/common/__tests__/is-person-name.test.ts`. These tests prove it is wired
+ * into the endpoints — the rule being right and the rule being applied are two
+ * different facts, and only one of them is visible from here.
+ */
+describe('a staff name has to be a name', () => {
+  it('refuses a number', async () => {
+    const res = await createUser({ email: 'numeric@main.test', fullName: '12345' });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain('two letters');
+  });
+
+  it('refuses punctuation with no letters in it', async () => {
+    const res = await createUser({ email: 'dots@main.test', fullName: '...' });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses a mobile number, which is the mistake that actually happens', async () => {
+    const res = await createUser({ email: 'mobile@main.test', fullName: '9876543210' });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('still accepts a short real name', async () => {
+    const res = await createUser({ email: 'ram@main.test', fullName: 'Ram' });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('still accepts a name written in Devanagari', async () => {
+    // An Indian product that refused this while accepting "..." would be
+    // exactly backwards.
+    const res = await createUser({ email: 'devanagari@main.test', fullName: 'नरवीर सिंह' });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('refuses a number on edit as well as on create', async () => {
+    // The update DTO carried its own copy of the old rule, so fixing only the
+    // create path would leave the account renameable to "12345" afterwards.
+    const created = await createUser({ email: 'renamed@main.test', fullName: 'Valid Name' });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ id: string }>().id;
+
+    const res = await updateUser(id, { fullName: '4321' });
+
+    expect(res.statusCode).toBe(400);
   });
 });

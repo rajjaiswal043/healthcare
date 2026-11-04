@@ -78,6 +78,7 @@ export const ModelName = {
   Service: 'Service',
   Invoice: 'Invoice',
   InvoiceLine: 'InvoiceLine',
+  InvoiceWriteOff: 'InvoiceWriteOff',
   Payment: 'Payment',
   InvoiceCounter: 'InvoiceCounter',
   QueueCounter: 'QueueCounter',
@@ -88,10 +89,7 @@ export const ModelName = {
   PromotionApplication: 'PromotionApplication',
   ReceiptCounter: 'ReceiptCounter',
   Receipt: 'Receipt',
-  ReceiptPrint: 'ReceiptPrint',
-  PatientLink: 'PatientLink',
-  OutboundMessage: 'OutboundMessage',
-  RecoveryCheckin: 'RecoveryCheckin'
+  ReceiptPrint: 'ReceiptPrint'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -221,6 +219,8 @@ export const PatientScalarFieldEnum = {
   state: 'state',
   postalCode: 'postalCode',
   bloodGroup: 'bloodGroup',
+  allergies: 'allergies',
+  allergiesReviewedAt: 'allergiesReviewedAt',
   emergencyContactName: 'emergencyContactName',
   emergencyContactMobile: 'emergencyContactMobile',
   abhaNumber: 'abhaNumber',
@@ -283,6 +283,7 @@ export const UserScalarFieldEnum = {
   lastLoginAt: 'lastLoginAt',
   failedLoginCount: 'failedLoginCount',
   lockedUntil: 'lockedUntil',
+  departmentId: 'departmentId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -351,7 +352,6 @@ export const DepartmentScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
   name: 'name',
-  isDiagnostic: 'isDiagnostic',
   displayOrder: 'displayOrder',
   isActive: 'isActive',
   createdAt: 'createdAt',
@@ -370,7 +370,6 @@ export const PractitionerScalarFieldEnum = {
   hprId: 'hprId',
   qualification: 'qualification',
   specialty: 'specialty',
-  departmentId: 'departmentId',
   userId: 'userId',
   previousUserId: 'previousUserId',
   overbookPerSession: 'overbookPerSession',
@@ -430,7 +429,6 @@ export const AppointmentScalarFieldEnum = {
   patientId: 'patientId',
   practitionerId: 'practitionerId',
   locationId: 'locationId',
-  departmentId: 'departmentId',
   startAt: 'startAt',
   endAt: 'endAt',
   status: 'status',
@@ -450,15 +448,14 @@ export const AppointmentScalarFieldEnum = {
   checkedInAt: 'checkedInAt',
   calledAt: 'calledAt',
   completedAt: 'completedAt',
+  closedAt: 'closedAt',
+  closedByUserId: 'closedByUserId',
   cancelledAt: 'cancelledAt',
   cancelReason: 'cancelReason',
   cancelledByUserId: 'cancelledByUserId',
   noShowAt: 'noShowAt',
   bookedByUserId: 'bookedByUserId',
   reminderSentAt: 'reminderSentAt',
-  arrivalIntent: 'arrivalIntent',
-  arrivalIntentAt: 'arrivalIntentAt',
-  leaveNowSentAt: 'leaveNowSentAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   externalTestNote: 'externalTestNote'
@@ -481,7 +478,6 @@ export const EncounterScalarFieldEnum = {
   prescriptionNote: 'prescriptionNote',
   followUpDate: 'followUpDate',
   followUpNote: 'followUpNote',
-  checkInIntervalDays: 'checkInIntervalDays',
   startedAt: 'startedAt',
   signedAt: 'signedAt',
   signedByUserId: 'signedByUserId',
@@ -508,6 +504,7 @@ export const VitalsObservationScalarFieldEnum = {
   spo2Percent: 'spo2Percent',
   respiratoryRate: 'respiratoryRate',
   notes: 'notes',
+  correctsId: 'correctsId',
   createdAt: 'createdAt'
 } as const
 
@@ -639,6 +636,23 @@ export const InvoiceLineScalarFieldEnum = {
 export type InvoiceLineScalarFieldEnum = (typeof InvoiceLineScalarFieldEnum)[keyof typeof InvoiceLineScalarFieldEnum]
 
 
+export const InvoiceWriteOffScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  invoiceId: 'invoiceId',
+  amountPaise: 'amountPaise',
+  reason: 'reason',
+  waivedByUserId: 'waivedByUserId',
+  waivedAt: 'waivedAt',
+  voidedAt: 'voidedAt',
+  voidedByUserId: 'voidedByUserId',
+  voidReason: 'voidReason',
+  createdAt: 'createdAt'
+} as const
+
+export type InvoiceWriteOffScalarFieldEnum = (typeof InvoiceWriteOffScalarFieldEnum)[keyof typeof InvoiceWriteOffScalarFieldEnum]
+
+
 export const PaymentScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -688,7 +702,10 @@ export const ClinicalDocumentScalarFieldEnum = {
   sizeBytes: 'sizeBytes',
   diagnosticOrderId: 'diagnosticOrderId',
   uploadedByUserId: 'uploadedByUserId',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  removedAt: 'removedAt',
+  removedByUserId: 'removedByUserId',
+  removalReason: 'removalReason'
 } as const
 
 export type ClinicalDocumentScalarFieldEnum = (typeof ClinicalDocumentScalarFieldEnum)[keyof typeof ClinicalDocumentScalarFieldEnum]
@@ -711,6 +728,7 @@ export const DiagnosticOrderScalarFieldEnum = {
   description: 'description',
   status: 'status',
   resultNote: 'resultNote',
+  noFileReason: 'noFileReason',
   completedAt: 'completedAt',
   completedByUserId: 'completedByUserId',
   handedOverAt: 'handedOverAt',
@@ -812,65 +830,6 @@ export const ReceiptPrintScalarFieldEnum = {
 } as const
 
 export type ReceiptPrintScalarFieldEnum = (typeof ReceiptPrintScalarFieldEnum)[keyof typeof ReceiptPrintScalarFieldEnum]
-
-
-export const PatientLinkScalarFieldEnum = {
-  id: 'id',
-  tenantId: 'tenantId',
-  patientId: 'patientId',
-  purpose: 'purpose',
-  appointmentId: 'appointmentId',
-  encounterId: 'encounterId',
-  keyHash: 'keyHash',
-  expiresAt: 'expiresAt',
-  lastSeenAt: 'lastSeenAt',
-  revokedAt: 'revokedAt',
-  createdAt: 'createdAt'
-} as const
-
-export type PatientLinkScalarFieldEnum = (typeof PatientLinkScalarFieldEnum)[keyof typeof PatientLinkScalarFieldEnum]
-
-
-export const OutboundMessageScalarFieldEnum = {
-  id: 'id',
-  tenantId: 'tenantId',
-  patientId: 'patientId',
-  appointmentId: 'appointmentId',
-  encounterId: 'encounterId',
-  kind: 'kind',
-  channel: 'channel',
-  status: 'status',
-  toMobile: 'toMobile',
-  body: 'body',
-  providerRef: 'providerRef',
-  error: 'error',
-  createdByUserId: 'createdByUserId',
-  createdAt: 'createdAt'
-} as const
-
-export type OutboundMessageScalarFieldEnum = (typeof OutboundMessageScalarFieldEnum)[keyof typeof OutboundMessageScalarFieldEnum]
-
-
-export const RecoveryCheckinScalarFieldEnum = {
-  id: 'id',
-  tenantId: 'tenantId',
-  encounterId: 'encounterId',
-  patientId: 'patientId',
-  dueOn: 'dueOn',
-  sentAt: 'sentAt',
-  answeredAt: 'answeredAt',
-  painScore: 'painScore',
-  exercisesDone: 'exercisesDone',
-  note: 'note',
-  flaggedAt: 'flaggedAt',
-  flagReason: 'flagReason',
-  flagClearedAt: 'flagClearedAt',
-  flagClearedByUserId: 'flagClearedByUserId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type RecoveryCheckinScalarFieldEnum = (typeof RecoveryCheckinScalarFieldEnum)[keyof typeof RecoveryCheckinScalarFieldEnum]
 
 
 export const SortOrder = {

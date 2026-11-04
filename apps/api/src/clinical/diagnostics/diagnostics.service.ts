@@ -8,6 +8,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { clinicToday, instantToLocalDate, localToInstant } from '../../scheduling/clinic-time.js';
+import { ageFrom } from '../../common/age.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import {
@@ -40,11 +41,18 @@ export class DiagnosticsService {
     private readonly billing: BillingService,
   ) {}
 
-  /** Departments that do tests. The worklist's filter, and the order form's choices. */
+  /**
+   * Departments that do tests — which is all of them.
+   *
+   * `isDiagnostic` used to narrow this. Every department is a place a patient
+   * is sent for a test now, so the only question left is whether it is still
+   * open: a department that should take no more orders is RETIRED, which says
+   * the same thing once instead of twice.
+   */
   async departments(tenantId: string) {
     const departments = await this.prisma.forTenant(tenantId, (tx) =>
       tx.department.findMany({
-        where: { isActive: true, isDiagnostic: true },
+        where: { isActive: true },
         orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
         select: { id: true, name: true },
       }),
@@ -93,7 +101,7 @@ export class DiagnosticsService {
           isActive: true,
           category: 'DIAGNOSTIC',
           ...(departmentId ? { departmentId } : { departmentId: { not: null } }),
-          department: { isActive: true, isDiagnostic: true },
+          department: { isActive: true },
         },
         orderBy: [{ name: 'asc' }],
         select: {
@@ -127,10 +135,19 @@ export class DiagnosticsService {
       departmentId: string;
       description?: string;
       serviceId?: string;
+      /** What to charge, when it is not the catalogue price. Ignored without a test. */
+      pricePaise?: number;
       referralSource?: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
       referrerName?: string;
       referrerClinic?: string;
       referrerPhone?: string;
+      /**
+       * This really is a second one, not a double-click.
+       *
+       * Set by the screen after it has told whoever is ordering that the same
+       * test, worded the same way, is already on this visit. See the guard.
+       */
+      confirmedRepeat?: boolean;
     },
     meta: RequestMeta,
   ) {
@@ -159,12 +176,42 @@ export class DiagnosticsService {
 
         const appointment = await tx.appointment.findUnique({
           where: { id: input.appointmentId },
-          select: { id: true, patientId: true },
+          select: { id: true, patientId: true, closedAt: true },
         });
         if (!appointment) throw new NotFoundException('No such visit.');
 
         appointmentId = appointment.id;
         patientId = appointment.patientId;
+
+        /**
+         * A VISIT BEING SENT SOMEWHERE IS NOT OVER.
+         *
+         * Ordering a test against a closed visit is allowed and normal — the
+         * doctor finishes, the patient stands up, and the doctor wants a film
+         * after all. What was wrong was leaving `closed_at` set through it:
+         * the record then said the visit had ended while the patient was
+         * standing in X-ray, and when the test finished they slid back into
+         * Done without anybody deciding they were finished.
+         *
+         * Cleared rather than refused, because refusing would make the clinic
+         * reopen the visit first and then order the test — two steps for one
+         * decision, and the board would have to explain why.
+         */
+        if (appointment.closedAt) {
+          await tx.appointment.update({
+            where: { id: appointment.id },
+            data: { closedAt: null, closedByUserId: null },
+          });
+
+          await this.audit.record(tx, tenantId, {
+            action: 'appointment.reopen',
+            resourceType: 'Appointment',
+            resourceId: appointment.id,
+            patientId: appointment.patientId,
+            changedFields: ['closedAt', 'closedByUserId'],
+            ...meta,
+          });
+        }
       } else {
         /**
          * A walk-in never attaches to a visit, and the database agrees: the
@@ -198,24 +245,25 @@ export class DiagnosticsService {
       if (referralSource === 'EXTERNAL_DOCTOR' && !referrerName) {
         throw new BadRequestException({
           code: 'REFERRER_REQUIRED',
-          message: 'Name the doctor who sent them — it is printed on the report.',
+          message: 'Name the doctor who sent them. It is printed on the report.',
         });
       }
 
       const department = await tx.department.findUnique({
         where: { id: input.departmentId },
-        select: { id: true, isDiagnostic: true, isActive: true, name: true },
+        select: { id: true, isActive: true, name: true },
       });
       if (!department) throw new NotFoundException('No such department.');
 
-      // A clinic that sends an X-ray request to "Orthopaedics" has misconfigured
-      // something, and the order would sit on a worklist nobody looks at.
-      if (!department.isDiagnostic) {
-        throw new BadRequestException({
-          code: 'NOT_A_DIAGNOSTIC_DEPARTMENT',
-          message: `“${department.name}” does not do tests. Mark it as a diagnostic department first.`,
-        });
-      }
+      /**
+       * A retired department takes no new work.
+       *
+       * This used to be two refusals: one for a department that was not marked
+       * diagnostic, and one for a department switched off. Every department
+       * does tests now, so there is a single question — is it still open — and
+       * an order addressed to a closed one would sit on a worklist nobody
+       * looks at.
+       */
       if (!department.isActive) {
         throw new BadRequestException({
           code: 'DEPARTMENT_INACTIVE',
@@ -266,49 +314,82 @@ export class DiagnosticsService {
           });
         }
 
-        /**
-         * The same test twice on one visit is a mis-click, not an order.
-         *
-         * Scoped to this VISIT, not to the patient forever: the same knee needs
-         * re-imaging next month, and that must not be refused. Scoped to ACTIVE
-         * orders too — a declined or cancelled one leaves the way clear, which
-         * is what makes `undeclineOrder` and a simple re-order possible at all.
-         *
-         * A genuine repeat inside one visit does exist — bloods after a meal,
-         * an ECG after fresh chest pain — and this refuses it. That is the
-         * clinic's call, taken on 10 Sep 2026; the way to take it is to order
-         * the second one after the first is completed, or to say so in the
-         * description of one order.
-         */
-        const already = await tx.diagnosticOrder.findFirst({
-          where: {
-            serviceId: service.id,
-            status: { in: ['PENDING', 'COMPLETED'] },
-            /**
-             * Scoped to the visit when there is one, and to the patient's day
-             * when there is not. A walk-in has no appointment to group by, so
-             * without the second form the guard would simply never fire on the
-             * flow that most invites double entry — finance taking the money
-             * and raising the request in the same breath.
-             */
-            ...(appointmentId
-              ? { appointmentId }
-              : { patientId, createdAt: { gte: await this.startOfClinicDay(tx, tenantId) } }),
-          },
-          select: { id: true },
-        });
-        if (already) {
-          throw new ConflictException({
-            code: 'TEST_ALREADY_ORDERED',
-            message: `“${service.name}” has already been ordered on this visit.`,
-          });
-        }
-
         serviceId = service.id;
         // The catalogue name is the floor, not the ceiling: the form pre-fills
         // it so the doctor can add "left knee, AP and lateral". If they cleared
         // it, the order still has to say what it is.
         if (!description) description = service.name;
+
+        /**
+         * The same test, WORDED THE SAME WAY, twice on one visit.
+         *
+         * Rewritten 27 Oct 2026, from the clinic, as a live incident: an
+         * orthopaedic patient needs an X-ray of the knee and one of the
+         * shoulder on the same visit, and both are the service called "X-ray".
+         * Matching on the service alone refused the second one, which is the
+         * common case here rather than the edge case.
+         *
+         * So the description is part of the comparison. "X-ray — left knee"
+         * and "X-ray — right shoulder" are two orders and go through without
+         * anybody being asked anything; the same words twice is a double-click
+         * and is still refused.
+         *
+         * The guard is kept rather than dropped because every order raises its
+         * own charge. Without it one slip bills the patient twice, and a
+         * reversal is a finance desk job and an awkward conversation.
+         *
+         * `confirmedRepeat` is the way through for a genuine repeat of the same
+         * thing — bloods after a meal, an ECG after fresh chest pain. The
+         * screen asks first; this does not decide clinical questions.
+         *
+         * Scoped to this VISIT, not to the patient forever: the same knee needs
+         * re-imaging next month, and that must not be refused. Scoped to ACTIVE
+         * orders too — a declined or cancelled one leaves the way clear, which
+         * is what makes `undeclineOrder` and a simple re-order possible at all.
+         */
+        if (!input.confirmedRepeat) {
+          const already = await tx.diagnosticOrder.findFirst({
+            where: {
+              serviceId: service.id,
+              /* Case-insensitive so "Left knee" and "left knee" are the same
+                 order twice, which is what a double-click looks like. */
+              description: { equals: description, mode: 'insensitive' },
+              /*
+               * STILL WAITING, not already done.
+               *
+               * A completed order is one a department actually carried out and
+               * reported, which is the one thing a double-click can never
+               * produce — so including it bought no protection and refused a
+               * real repeat: the same knee imaged again after a procedure,
+               * later in the same visit. Narrowed 28 Oct 2026, which also
+               * makes the code agree with what its own comment had claimed
+               * since September: that the way to repeat a test is to order it
+               * once the first is done.
+               */
+              status: 'PENDING',
+              /**
+               * Scoped to the visit when there is one, and to the patient's day
+               * when there is not. A walk-in has no appointment to group by, so
+               * without the second form the guard would simply never fire on
+               * the flow that most invites double entry — finance taking the
+               * money and raising the request in the same breath.
+               */
+              ...(appointmentId
+                ? { appointmentId }
+                : { patientId, createdAt: { gte: await this.startOfClinicDay(tx, tenantId) } }),
+            },
+            select: { id: true },
+          });
+
+          if (already) {
+            throw new ConflictException({
+              code: 'TEST_ALREADY_ORDERED',
+              message:
+                `“${description}” is already on this visit. ` +
+                'Say which part of the body this one is for, or confirm it is a repeat.',
+            });
+          }
+        }
       }
 
       if (!description || description.length < 2) {
@@ -366,6 +447,11 @@ export class DiagnosticsService {
             visitAppointmentId: appointmentId,
             serviceId,
             description,
+            /* Only when the caller said so. Absent is the catalogue price, and
+               the two must stay distinguishable: sending the list price back as
+               an explicit override would record every ordinary order as a
+               priced decision somebody made. */
+            ...(input.pricePaise === undefined ? {} : { pricePaise: input.pricePaise }),
           },
           meta,
         );
@@ -454,6 +540,8 @@ export class DiagnosticsService {
       referrerName?: string;
       referrerClinic?: string;
       referrerPhone?: string;
+      /** These really are repeats, not a double-click. See `createOrder`. */
+      confirmedRepeat?: boolean;
     },
     meta: RequestMeta,
   ) {
@@ -462,7 +550,7 @@ export class DiagnosticsService {
       if (input.referralSource === 'EXTERNAL_DOCTOR' && !referrerName) {
         throw new BadRequestException({
           code: 'REFERRER_REQUIRED',
-          message: 'Name the doctor who sent them — it is printed on the report.',
+          message: 'Name the doctor who sent them. It is printed on the report.',
         });
       }
 
@@ -511,7 +599,7 @@ export class DiagnosticsService {
             isActive: true,
             category: true,
             departmentId: true,
-            department: { select: { isActive: true, isDiagnostic: true, name: true } },
+            department: { select: { isActive: true, name: true } },
           },
         });
         if (!service) throw new NotFoundException('No such test.');
@@ -522,10 +610,10 @@ export class DiagnosticsService {
             message: `“${service.name}” is not a test this centre offers.`,
           });
         }
-        if (!service.departmentId || !service.department?.isDiagnostic) {
+        if (!service.departmentId || !service.department) {
           throw new BadRequestException({
             code: 'TEST_HAS_NO_DEPARTMENT',
-            message: `Nobody here performs “${service.name}”. Give it a diagnostic department first.`,
+            message: `Nobody here performs “${service.name}”. Give it a department first.`,
           });
         }
         if (!service.department.isActive) {
@@ -535,22 +623,34 @@ export class DiagnosticsService {
           });
         }
 
-        // Same guard as a doctor's order, scoped the way a walk-in has to be:
-        // there is no visit, so it is this patient, on this clinic day.
-        const already = await tx.diagnosticOrder.findFirst({
-          where: {
-            serviceId: service.id,
-            patientId: patient.id,
-            status: { in: ['PENDING', 'COMPLETED'] },
-            createdAt: { gte: dayStart },
-          },
-          select: { id: true },
-        });
-        if (already) {
-          throw new ConflictException({
-            code: 'TEST_ALREADY_ORDERED',
-            message: `“${service.name}” was already ordered for this patient today.`,
+        /*
+         * Same guard as a doctor's order, scoped the way a walk-in has to be:
+         * there is no visit, so it is this patient, on this clinic day.
+         *
+         * No description to compare here — the desk picks catalogue tests from
+         * a list and types nothing — so this one still matches on the service
+         * alone, and `confirmedRepeat` is the whole of the way through.
+         */
+        if (!input.confirmedRepeat) {
+          const already = await tx.diagnosticOrder.findFirst({
+            where: {
+              serviceId: service.id,
+              patientId: patient.id,
+              /* Still waiting, not already done — same reasoning as above. */
+              status: 'PENDING',
+              createdAt: { gte: dayStart },
+            },
+            select: { id: true },
           });
+
+          if (already) {
+            throw new ConflictException({
+              code: 'TEST_ALREADY_ORDERED',
+              message:
+                `“${service.name}” was already ordered for this patient today. ` +
+                'Confirm it is a repeat to order it again.',
+            });
+          }
         }
 
         tests.push({ id: service.id, name: service.name, departmentId: service.departmentId });
@@ -618,19 +718,67 @@ export class DiagnosticsService {
    */
   async worklist(
     tenantId: string,
-    filter: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' | 'DECLINED' },
+    filter: {
+      departmentId?: string;
+      status?: 'PENDING' | 'COMPLETED' | 'DECLINED';
+      /** `2026-10-22` in the clinic's own timezone. Absent means every day. */
+      date?: string;
+    },
   ) {
-    const orders = await this.prisma.forTenant(tenantId, (tx) =>
-      tx.diagnosticOrder.findMany({
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      /**
+       * WHICH DAY'S WORK, in the clinic's own timezone.
+       *
+       * Absent on purpose means EVERY day rather than today, and the default
+       * matters: a pending test ordered yesterday evening is still pending
+       * this morning, and a worklist that silently dropped it would lose a
+       * patient who came back the next day. The date is what a technician
+       * reaches for to answer "what did we do on Tuesday", which is a
+       * different question and one the screen has to ask explicitly.
+       *
+       * Bounded by the ORDER time, because that is when the clinic took the
+       * work on. A test ordered late and completed the next morning belongs to
+       * the day it was asked for — which is the day the patient was here.
+       */
+      const window = filter.date ? await this.clinicDayWindow(tx, tenantId, filter.date) : null;
+
+      const orders = await tx.diagnosticOrder.findMany({
         where: {
           ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
           status: filter.status ?? 'PENDING',
+          ...(window ? { createdAt: { gte: window.from, lt: window.to } } : {}),
         },
         orderBy: { createdAt: 'asc' },
         select: ORDER_SELECT,
-      }),
-    );
-    return { orders: orders.map(toView) };
+      });
+
+      return { orders: orders.map(toView), date: filter.date ?? null };
+    });
+  }
+
+  /**
+   * Midnight to midnight for one clinic day, as instants.
+   *
+   * The clinic's timezone rather than the server's: a clinic in Pune closes at
+   * midnight IST, and a UTC day would put the evening's last three films on
+   * tomorrow's list. `startOfClinicDay` answers the same question for today
+   * only; this answers it for any day the picker can reach.
+   */
+  private async clinicDayWindow(
+    tx: TenantClient,
+    tenantId: string,
+    date: string,
+  ): Promise<{ from: Date; to: Date }> {
+    const tenant = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: { timezone: true },
+    });
+    const timezone = tenant?.timezone ?? 'Asia/Kolkata';
+
+    return {
+      from: localToInstant(date, '00:00', timezone),
+      to: localToInstant(stepDay(date, 1), '00:00', timezone),
+    };
   }
 
   /** What was ordered on one visit — the consultation's view. */
@@ -715,10 +863,29 @@ export class DiagnosticsService {
    * Completing twice is refused rather than silently re-stamped: the second
    * caller would overwrite who did it and when.
    */
+  /**
+   * MARK A TEST DONE.
+   *
+   * A FILE, OR A STATED REASON THERE IS NONE. Until 30 Oct 2026 this refused
+   * only a completely empty result — no note and no file — and accepted
+   * anything beyond that. So a note alone closed the test, and an X-ray could
+   * read COMPLETED with no image behind it. Reported from the clinic.
+   *
+   * A note is not a report. It is the remark ABOUT the report, and a record
+   * claiming the work is finished while holding nothing a clinician can read is
+   * worse than one admitting the work is outstanding.
+   *
+   * Not every test produces a file, though — a strip test read off a card, a
+   * reading taken verbally, a measurement on a slip. Requiring an upload for
+   * those would leave the desk unable to close a test it had genuinely done. So
+   * the exception is explicit and recorded, rather than implied by silence.
+   * Narveer's call, 30 Oct 2026.
+   */
   async completeOrder(
     tenantId: string,
     orderId: string,
     resultNote: string | undefined,
+    noFileReason: string | undefined,
     meta: RequestMeta,
   ) {
     return this.prisma.forTenant(tenantId, async (tx) => {
@@ -751,12 +918,58 @@ export class DiagnosticsService {
       }
 
       const note = resultNote?.trim();
-      if (!note && existing._count.documents === 0) {
+      const why = noFileReason?.trim();
+      const hasFile = existing._count.documents > 0;
+
+      if (!note && !hasFile) {
         throw new BadRequestException({
           code: 'RESULT_IS_EMPTY',
           message: 'Attach a file or write a report before marking the test done.',
         });
       }
+
+      /*
+       * A NOTE ON ITS OWN IS ENOUGH — Narveer's call, 2 Nov 2026.
+       *
+       * This used to refuse a note with no file until somebody also said WHY
+       * there was no file, which is the rule added on 30 Oct after the
+       * department was reported closing X-rays with no image behind them.
+       *
+       * Relaxed after seeing it in use: the extra field was being met as an
+       * obstacle rather than answered, and a department that cannot close a
+       * test it has genuinely done starts recording nothing at all. The
+       * trade is accepted knowingly — a test can again be finished on a line
+       * of remarks alone.
+       *
+       * `no_file_reason` and its CHECK stay. The field is now optional rather
+       * than gone, so a thin record can still explain itself, and every reason
+       * already recorded still means exactly what it said. Nothing is
+       * backfilled or rewritten.
+       */
+
+      /**
+       * Said, or not said. Never said badly.
+       *
+       * `diagnostic_order_no_file_reason_is_said` permits NULL but requires at
+       * least three characters once a value is present — so with the field now
+       * optional, an empty box or a stray keystroke would reach the database
+       * and come back as a constraint violation, which is a 500 and tells the
+       * department nothing. Refused here instead, in words.
+       */
+      if (why !== undefined && why.length > 0 && why.length < 3) {
+        throw new BadRequestException({
+          code: 'NO_FILE_REASON_TOO_SHORT',
+          message: 'Say why there is no file in a few words, or leave the box empty.',
+        });
+      }
+
+      /*
+       * Not kept when there IS a file: it would be an answer to a question
+       * nobody asked, and a later reader would wonder which to believe. An
+       * empty box is NOT an answer either, so it stores as null rather than as
+       * a blank the CHECK would reject.
+       */
+      const storedWhy = hasFile || !why ? null : why;
 
       const order = await tx.diagnosticOrder.update({
         where: { id: orderId },
@@ -765,6 +978,7 @@ export class DiagnosticsService {
           completedAt: new Date(),
           completedByUserId: meta.actorUserId,
           ...(note ? { resultNote: note } : {}),
+          noFileReason: storedWhy,
         },
         select: ORDER_SELECT,
       });
@@ -774,7 +988,12 @@ export class DiagnosticsService {
         resourceType: 'DiagnosticOrder',
         resourceId: orderId,
         patientId: existing.patientId,
-        changedFields: ['status', 'resultNote'],
+        changedFields: storedWhy
+          ? ['status', 'resultNote', 'noFileReason']
+          : ['status', 'resultNote'],
+        // A test closed with no report is the case somebody may have to answer
+        // for later, so the stated reason goes in the audit trail too.
+        ...(storedWhy ? { reason: storedWhy } : {}),
         ...meta,
       });
 
@@ -877,7 +1096,11 @@ export class DiagnosticsService {
           appointmentId: true,
           department: { select: { name: true } },
           service: { select: { name: true } },
-          documents: { select: { id: true, fileName: true }, orderBy: { createdAt: 'asc' } },
+          documents: {
+            where: { removedAt: null },
+            select: { id: true, fileName: true },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       });
 
@@ -957,6 +1180,176 @@ export class DiagnosticsService {
    * questions about it, and a report that cannot tell "we called it off" from
    * "they refused" cannot tell a clinical decision from a commercial one.
    */
+  /**
+   * CORRECT A TEST THAT IS ALREADY AT A DEPARTMENT.
+   *
+   * Narveer's requirement, 2 Nov 2026: a film is ordered as "X-ray left knee",
+   * the doctor meant "AP and lateral", and there was no way to say so. Until
+   * now nothing wrote `description` after creation — the only verbs were
+   * complete, decline, undecline, handover and cancel — so a typo could only be
+   * fixed by cancelling the order and raising another, which on a billed test
+   * drags the bill through a removal and a re-charge anyway.
+   *
+   * THE CHARGE IS REPLACED, NOT EDITED. Changing the test or its price removes
+   * the old invoice line and raises a new one through `chargeDiagnosticTest`,
+   * which is exactly what `undecline` does. A second path that edited a line's
+   * price in place would be a second way a test's charge comes to exist, and
+   * the two would drift.
+   *
+   * NEVER ON A SETTLED TEST. Money already taken cannot be corrected from a
+   * board row; that is a refund, and it belongs on the bill where there is a
+   * reason field and an audit trail built for it. Narveer's call.
+   */
+  async updateOrder(
+    tenantId: string,
+    orderId: string,
+    input: { description?: string; serviceId?: string; pricePaise?: number },
+    meta: RequestMeta,
+  ) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const existing = await tx.diagnosticOrder.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          status: true,
+          patientId: true,
+          appointmentId: true,
+          departmentId: true,
+          serviceId: true,
+          description: true,
+          invoiceLineId: true,
+          legacyUnbilled: true,
+        },
+      });
+      if (!existing) throw new NotFoundException('No such order.');
+
+      if (existing.status !== 'PENDING') {
+        throw new BadRequestException({
+          code: 'ORDER_NOT_PENDING',
+          message:
+            existing.status === 'COMPLETED'
+              ? 'That test has already been done. Its record cannot be rewritten after the fact.'
+              : 'That test is no longer open, so there is nothing to change.',
+        });
+      }
+
+      /*
+       * A paid test is off limits, whichever field is being changed — not only
+       * the price. Re-pointing a settled charge at a different test would leave
+       * the patient having paid for something the record no longer says they
+       * had.
+       */
+      const billed = await tx.diagnosticOrder.findUnique({
+        where: { id: orderId },
+        select: DIAGNOSTIC_BILLING_SELECT,
+      });
+      if (billed && diagnosticBillingState(billed).status === 'SETTLED') {
+        throw new BadRequestException({
+          code: 'ORDER_SETTLED',
+          message:
+            'This test has been paid for. Changing it now is a refund on the bill, ' +
+            'not an edit here.',
+        });
+      }
+
+      const description = input.description?.trim();
+      if (description !== undefined && description.length === 0) {
+        throw new BadRequestException({
+          code: 'DESCRIPTION_IS_EMPTY',
+          message: 'Say what the test is.',
+        });
+      }
+
+      /*
+       * The charge is only disturbed when the test or the price actually
+       * changes. A pure wording fix leaves the bill exactly as it was, which is
+       * the common case and must not produce a removal and a re-charge in the
+       * audit trail for no reason.
+       */
+      const serviceChanged =
+        input.serviceId !== undefined && input.serviceId !== existing.serviceId;
+      const priceChanged = input.pricePaise !== undefined;
+      const rechargeNeeded = (serviceChanged || priceChanged) && !existing.legacyUnbilled;
+
+      let invoiceLineId = existing.invoiceLineId;
+      let departmentId = existing.departmentId;
+
+      if (serviceChanged || priceChanged) {
+        const serviceId = input.serviceId ?? existing.serviceId;
+        if (!serviceId) {
+          throw new BadRequestException({
+            code: 'ORDER_HAS_NO_TEST',
+            message:
+              'This order was raised as free text, so it has no catalogue test or price to change. ' +
+              'Cancel it and raise it again.',
+          });
+        }
+
+        if (rechargeNeeded && existing.invoiceLineId) {
+          // Unlink before removing: the foreign key is RESTRICT, so the order
+          // has to let go of the line first. Same order as `declineOrder`.
+          await tx.diagnosticOrder.update({
+            where: { id: orderId },
+            data: { invoiceLineId: null },
+          });
+          await this.billing.removeDiagnosticLine(tx, tenantId, existing.invoiceLineId, meta);
+          invoiceLineId = null;
+        }
+
+        if (serviceChanged) {
+          const service = await tx.service.findUnique({
+            where: { id: serviceId },
+            select: { id: true, departmentId: true },
+          });
+          if (!service) throw new NotFoundException('No such test.');
+          if (service.departmentId) departmentId = service.departmentId;
+        }
+
+        if (rechargeNeeded) {
+          const charge = await this.billing.chargeDiagnosticTest(
+            tx,
+            tenantId,
+            {
+              patientId: existing.patientId,
+              visitAppointmentId: existing.appointmentId,
+              serviceId,
+              description: description ?? existing.description ?? '',
+              ...(input.pricePaise === undefined ? {} : { pricePaise: input.pricePaise }),
+            },
+            meta,
+          );
+          invoiceLineId = charge.lineId;
+        }
+      }
+
+      const order = await tx.diagnosticOrder.update({
+        where: { id: orderId },
+        data: {
+          ...(description === undefined ? {} : { description }),
+          ...(input.serviceId === undefined ? {} : { serviceId: input.serviceId }),
+          departmentId,
+          invoiceLineId,
+        },
+        select: ORDER_SELECT,
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'diagnostic_order.update',
+        resourceType: 'DiagnosticOrder',
+        resourceId: orderId,
+        patientId: existing.patientId,
+        changedFields: [
+          ...(description === undefined ? [] : ['description']),
+          ...(serviceChanged ? ['serviceId', 'departmentId'] : []),
+          ...(rechargeNeeded ? ['invoiceLineId'] : []),
+        ],
+        ...meta,
+      });
+
+      return order;
+    });
+  }
+
   async declineOrder(tenantId: string, orderId: string, meta: RequestMeta) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const existing = await tx.diagnosticOrder.findUnique({
@@ -970,7 +1363,7 @@ export class DiagnosticsService {
           code: 'ORDER_NOT_PENDING',
           message:
             existing.status === 'COMPLETED'
-              ? 'That test has already been done. Its charge stands — a refund is the finance desk’s call.'
+              ? 'That test has already been done. Its charge stands. A refund is the finance desk’s call.'
               : existing.status === 'DECLINED'
                 ? 'That test was already declined.'
                 : 'That test was cancelled, so there is nothing to decline.',
@@ -1132,7 +1525,7 @@ export class DiagnosticsService {
           code: 'RESULT_NOT_READY',
           message:
             existing.status === 'PENDING'
-              ? 'That test has not been reported yet — there is nothing to hand over.'
+              ? 'That test has not been reported yet. There is nothing to hand over.'
               : 'That test was not done, so there is no report.',
         });
       }
@@ -1148,7 +1541,7 @@ export class DiagnosticsService {
       if (!to) {
         throw new BadRequestException({
           code: 'RECIPIENT_REQUIRED',
-          message: 'Say who took the report — the patient, or whoever collected it.',
+          message: 'Say who took the report: the patient, or whoever collected it.',
         });
       }
 
@@ -1236,9 +1629,15 @@ const ORDER_SELECT = {
   department: { select: { id: true, name: true } },
   /**
    * Which catalogue test this was, when it was one. Deliberately without the
-   * price: the worklist is read by the diagnostics role, which holds no billing
-   * permission, and a department does not need to know what it charges to run
-   * the machine. The fee is served by `catalogue()` to whoever may order.
+   * LIST price: that is a clinic-wide setting, the worklist is read by the
+   * diagnostics role which holds no billing permission, and a department does
+   * not need the price list to run the machine. The fee is served by
+   * `catalogue()` to whoever may order.
+   *
+   * What this particular order was CHARGED is a different fact and does come
+   * back — see `chargedPaise` in `toView`. It is printed on the requisition
+   * slip the patient carries to the department, so withholding it from the
+   * department's own screen would protect nothing.
    */
   service: { select: { id: true, code: true, name: true } },
   /** Who decided the test was needed, and the outside doctor when there is one. */
@@ -1255,7 +1654,48 @@ const ORDER_SELECT = {
    */
   invoiceLineId: true,
   ...DIAGNOSTIC_BILLING_SELECT,
-  patient: { select: { id: true, name: true, uhid: true, gender: true, ageYears: true } },
+  /**
+   * The patient, as the person at the machine needs them.
+   *
+   * MOBILE, because the commonest problem in a department is a patient who
+   * wandered off between paying and being called, and the fix is a phone call
+   * rather than a search of the corridor.
+   *
+   * ALLERGIES, because a radiographer about to give contrast is exactly who
+   * this field was captured for. Two columns, and both matter: `allergies` with
+   * nothing in it and `allergiesReviewedAt` set means somebody asked and the
+   * answer was none, which is a different fact from never having asked. See the
+   * patient_allergies migration.
+   *
+   * This is the line the file's header draws — enough to run the machine
+   * safely, and no diagnosis, prescription or history.
+   */
+  patient: {
+    select: {
+      id: true,
+      name: true,
+      uhid: true,
+      gender: true,
+      ageYears: true,
+      /* Read so the age can be worked out; dropped again by `toView`, which
+         sends the number. See `ageFrom`. */
+      birthDate: true,
+      mobile: true,
+      allergies: true,
+      allergiesReviewedAt: true,
+    },
+  },
+  /**
+   * The visit this came out of, when it came out of one.
+   *
+   * `tokenNumber` so the department calls the patient by the number they are
+   * holding rather than shouting a name across a waiting room, and
+   * `reasonForVisit` so a request that reads "X-ray — left wrist" carries the
+   * "fell off a scooter" that makes sense of it.
+   *
+   * Null for a walk-in test, which has no visit and no token.
+   */
+  appointment: { select: { tokenNumber: true, reasonForVisit: true } },
   orderedBy: { select: { id: true, fullName: true } },
   completedBy: { select: { id: true, fullName: true } },
   /** Whether the patient has actually been given the report (FR-DIA-13). */
@@ -1275,7 +1715,74 @@ const ORDER_SELECT = {
  * at all — so they are reduced to a state here and the raw rows are dropped.
  * Every method that returns an order goes through this.
  */
+/**
+ * The clinic timezone this file falls back to, as `clinicDayWindow` already
+ * does.
+ *
+ * Used for the patient's AGE on a slip or worklist card, and nothing else. The
+ * age has to be worked out against the calendar the clinic lives in — see
+ * `ageFrom`, which read UTC until 30 Oct 2026 and so reported every patient a
+ * year younger on their birthday for the first five and a half hours of each
+ * IST day.
+ *
+ * Named rather than defaulted inside `ageFrom`, so that a wrong zone is visible
+ * at the call site instead of hidden behind a parameter nobody passes. Every
+ * tenant today is Indian and `tenant.timezone` defaults to this; threading the
+ * real value through all eight `toView` callers would add a tenant query per
+ * order, including inside the worklist loop, for a decorative figure.
+ */
+const SLIP_AGE_TIMEZONE = 'Asia/Kolkata';
+
 function toView<T extends DiagnosticBillingInput>(order: T) {
-  const { invoiceLine: _invoiceLine, legacyUnbilled: _legacyUnbilled, ...rest } = order;
-  return { ...rest, billing: diagnosticBillingState(order) };
+  const { invoiceLine, legacyUnbilled: _legacyUnbilled, ...rest } = order;
+
+  /**
+   * The patient's age, worked out, with the birth date left behind.
+   *
+   * The slip and the worklist card draw "47y" and nothing more, and a date of
+   * birth is the field that turns a name into a match against other records.
+   * It is read from the database and stops here.
+   */
+  const patient =
+    'patient' in rest && rest.patient
+      ? (() => {
+          const { birthDate, ...person } = rest.patient as {
+            birthDate?: Date | null;
+            ageYears: number | null;
+          } & Record<string, unknown>;
+
+          return {
+            ...person,
+            ageYears: ageFrom(person.ageYears, birthDate, SLIP_AGE_TIMEZONE),
+          };
+        })()
+      : undefined;
+
+  return {
+    ...rest,
+    ...(patient ? { patient } : {}),
+    /**
+     * What this test was charged, as charged.
+     *
+     * Read off the invoice LINE rather than recomputed from the service, so a
+     * price the clinic has since changed — or one somebody set by hand when
+     * ordering — still prints on the slip as the amount actually owed. Null
+     * for a free-text order, which raises no charge at all.
+     */
+    chargedPaise: invoiceLine?.totalPaise ?? null,
+    billing: diagnosticBillingState(order),
+  };
+}
+
+/**
+ * The next day, as a plain `2026-10-22` string.
+ *
+ * Noon UTC before stepping, so the addition cannot land on a daylight-saving
+ * boundary and come back as the same date. India has no DST, but this is a
+ * date helper and the next clinic to use it may not be in India.
+ */
+function stepDay(date: string, days: number): string {
+  const at = new Date(`${date}T12:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
 }

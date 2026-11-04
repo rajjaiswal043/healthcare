@@ -151,8 +151,18 @@
     @apply mono-label mb-1.5 block;
   }
 
+  /*
+   * 16px ON A PHONE, 15px FROM md UP.
+   *
+   * iOS Safari zooms the whole page when a field smaller than 16px takes
+   * focus, and then leaves it zoomed — so every form in the app jumped and had
+   * to be pinched back. The desktop size is unchanged; this is the one value
+   * where a single pixel is the difference between a form that behaves and one
+   * that fights you.
+   */
   .field-input {
-    @apply w-full rounded-panel border-[1.5px] border-ink/12 bg-white px-3.5 py-2.5 text-[15px]
+    @apply w-full rounded-panel border-[1.5px] border-ink/12 bg-white px-3.5 py-2.5 text-[16px]
+           md:text-[15px]
            text-ink transition-colors placeholder:text-ink-20
            focus:border-clinical/50 focus:outline-none focus:ring-4 focus:ring-clinical/10
            disabled:bg-bg-soft disabled:text-ink-40;

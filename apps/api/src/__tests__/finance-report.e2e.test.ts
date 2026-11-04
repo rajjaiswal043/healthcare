@@ -384,7 +384,7 @@ describe('by department, and where the work came from', () => {
       method: 'POST',
       url: '/api/v1/departments',
       headers: { cookie: admin.cookie },
-      payload: { name: 'Radiology', isDiagnostic: true },
+      payload: { name: 'Radiology' },
     });
     expect(dept.statusCode).toBe(201);
     xrayDepartmentId = dept.json<{ id: string }>().id;

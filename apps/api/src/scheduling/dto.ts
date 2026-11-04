@@ -45,10 +45,6 @@ export class BookAppointmentDto {
   @IsUUID()
   locationId!: string;
 
-  @IsOptional()
-  @IsUUID()
-  departmentId?: string;
-
   /** Slot start as an ISO instant — exactly as the availability endpoint returned it. */
   @IsISO8601()
   startAt!: string;
@@ -72,10 +68,6 @@ export class WalkInDto {
 
   @IsUUID()
   locationId!: string;
-
-  @IsOptional()
-  @IsUUID()
-  departmentId?: string;
 
   @IsOptional()
   @IsEnum(VisitTypeDto)
@@ -102,6 +94,21 @@ export class CancelAppointmentDto {
 export class RescheduleAppointmentDto {
   @IsISO8601()
   startAt!: string;
+
+  /**
+   * A different doctor, when that is what was wrong.
+   *
+   * Optional: most moves are a change of time and keep the doctor, and
+   * omitting it means exactly that. Added 28 Oct 2026 because booking the
+   * wrong consultant was the one slip nothing could put right — not the front
+   * desk, not the administrator. The only way out was to cancel and book
+   * again, which costs the patient their token, raises a second consultation
+   * bill, and leaves a cancellation on their record for a mistake that was
+   * never theirs.
+   */
+  @IsOptional()
+  @IsUUID()
+  practitionerId?: string;
 
   @IsString()
   @MinLength(3)
@@ -160,6 +167,13 @@ export class PrioritiseDto {
   @IsString()
   @MaxLength(200)
   note?: string;
+}
+
+/** The home-page day board. No practitioner: scope comes from who is asking. */
+export class DayBoardQueryDto {
+  @IsOptional()
+  @Matches(DATE_RE, { message: 'date must be YYYY-MM-DD' })
+  date?: string;
 }
 
 export class QueueQueryDto {

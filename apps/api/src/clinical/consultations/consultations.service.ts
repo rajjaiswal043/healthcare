@@ -8,9 +8,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
-import { EngagementService } from '../../engagement/engagement.service.js';
-import { scheduleRecoveryCheckins } from '../../engagement/recovery.js';
-import { instantToLocalDate } from '../../scheduling/clinic-time.js';
+import { clinicToday } from '../../scheduling/clinic-time.js';
 import type {
   AddendumDto,
   DiagnosisInputDto,
@@ -94,7 +92,6 @@ export class ConsultationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly engagement: EngagementService,
   ) {}
 
   /**
@@ -110,13 +107,6 @@ export class ConsultationsService {
    * should be doing.
    */
   async open(tenantId: string, appointmentId: string, meta: RequestMeta) {
-    const view = await this.openIn(tenantId, appointmentId, meta);
-    // Opening calls the patient in, which moves everyone behind them up.
-    await this.engagement.afterQueueMoved(tenantId, view.practitioner.id);
-    return view;
-  }
-
-  private async openIn(tenantId: string, appointmentId: string, meta: RequestMeta) {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const appointment = await tx.appointment.findUnique({
         where: { id: appointmentId },
@@ -237,6 +227,32 @@ export class ConsultationsService {
         userId: meta.actorUserId,
       });
 
+      /**
+       * A review date is a date in the future.
+       *
+       * Checked here rather than in the DTO because "in the past" is a question
+       * about the CLINIC's today, and a DTO has no tenant to ask. The browser
+       * also sets `min` on the field, which is a courtesy; this is the part
+       * that holds. Reported 27 Oct 2026 — the form took any date at all, so a
+       * mistyped year printed "Review on 12 January 2025" on a prescription.
+       *
+       * Today itself is allowed: "come back this evening" is a real
+       * instruction, and the date carries no time to compare against.
+       */
+      if (input.followUpDate !== undefined && input.followUpDate !== '') {
+        const tenant = await tx.tenant.findUniqueOrThrow({
+          where: { id: tenantId },
+          select: { timezone: true },
+        });
+
+        if (input.followUpDate < clinicToday(tenant.timezone)) {
+          throw new ConflictException({
+            code: 'FOLLOW_UP_IN_THE_PAST',
+            message: 'A follow-up date cannot be in the past. Pick today or a later day.',
+          });
+        }
+      }
+
       const data = {
         ...defined('chiefComplaint', input.chiefComplaint),
         ...defined('historyOfPresentIllness', input.historyOfPresentIllness),
@@ -244,7 +260,6 @@ export class ConsultationsService {
         ...defined('advice', input.advice),
         ...defined('prescriptionNote', input.prescriptionNote),
         ...defined('followUpNote', input.followUpNote),
-        ...defined('checkInIntervalDays', input.checkInIntervalDays),
         ...(input.followUpDate === undefined
           ? {}
           : { followUpDate: input.followUpDate === '' ? null : new Date(input.followUpDate) }),
@@ -258,6 +273,91 @@ export class ConsultationsService {
         resourceId: id,
         patientId: draft.patientId,
         changedFields: Object.keys(data),
+        ...meta,
+      });
+
+      return this.view(tx, id);
+    });
+  }
+
+  /**
+   * Correct a reading that was taken wrongly.
+   *
+   * A SUPERSEDING ROW, not an edit. The original stays exactly as it was
+   * written and a new row says what the reading should have been — the same
+   * shape as a payment correction, and for the same reason: somebody will ask
+   * whether a chart was always like that, and an UPDATE destroys the only
+   * evidence either way.
+   *
+   * What it is for is the plausible single value: a pulse of 178 for 78, a
+   * weight of 27 for 72. The CHECK constraints already refuse impossibilities
+   * and `vitals_bp_ordered` refuses a transposed blood pressure; none of them
+   * can see a digit added to a number that stays in range.
+   *
+   * The correction carries the ORIGINAL's `recordedAt`. The observation
+   * happened when it happened; `createdAt` is when somebody noticed. That also
+   * keeps a corrected 10:00 reading from jumping ahead of a real 11:00 one.
+   *
+   * ONLY WHILE THE NOTE IS UNSIGNED, which `loadDraft` enforces. After signing,
+   * the record is closed and an addendum is the way to say something further —
+   * the same rule the narrative already follows.
+   */
+  async correctVitals(
+    tenantId: string,
+    id: string,
+    vitalsId: string,
+    input: RecordVitalsDto,
+    meta: RequestMeta,
+  ) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const draft = await this.loadDraft(tx, id, { as: 'clinical-support' });
+
+      const original = await tx.vitalsObservation.findFirst({
+        where: { id: vitalsId, encounterId: id },
+      });
+
+      // Scoped to this encounter, so a reading from another visit cannot be
+      // reached by guessing an id. RLS already stops another clinic's.
+      if (!original) throw new NotFoundException('Vitals reading not found');
+
+      const alreadyCorrected = await tx.vitalsObservation.findFirst({
+        where: { correctsId: vitalsId },
+        select: { id: true },
+      });
+
+      if (alreadyCorrected) {
+        throw new ConflictException({
+          code: 'ALREADY_CORRECTED',
+          message: 'This reading has already been corrected. Correct the newer one instead.',
+        });
+      }
+
+      const values = Object.entries(input).filter(([, v]) => v !== undefined && v !== '');
+      if (values.length === 0) {
+        throw new BadRequestException({
+          code: 'NOTHING_TO_RECORD',
+          message: 'A correction needs at least one value.',
+        });
+      }
+
+      await tx.vitalsObservation.create({
+        data: {
+          tenantId,
+          encounterId: id,
+          patientId: draft.patientId,
+          recordedAt: original.recordedAt,
+          recordedByUserId: meta.actorUserId ?? null,
+          correctsId: vitalsId,
+          ...Object.fromEntries(values),
+        },
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'encounter.vitals_correct',
+        resourceType: 'VitalsObservation',
+        resourceId: vitalsId,
+        patientId: draft.patientId,
+        changedFields: values.map(([k]) => k),
         ...meta,
       });
 
@@ -438,7 +538,7 @@ export class ConsultationsService {
       throw new BadRequestException('A signature needs an author.');
     }
 
-    const signed = await this.prisma.forTenant(tenantId, async (tx) => {
+    return this.prisma.forTenant(tenantId, async (tx) => {
       const draft = await this.loadDraft(tx, id, {
         as: 'treating-doctor',
         userId: meta.actorUserId,
@@ -457,28 +557,9 @@ export class ConsultationsService {
         });
       }
 
-      const signedRow = await tx.encounter.update({
+      await tx.encounter.update({
         where: { id },
         data: { status: 'SIGNED', signedAt: new Date(), signedByUserId },
-        select: { startedAt: true, followUpDate: true, checkInIntervalDays: true },
-      });
-
-      /**
-       * The recovery schedule, in the same transaction as the signature: a
-       * signed note and its check-ins exist together or not at all. Nothing is
-       * SENT here — the timer sends each one on its day (docs/10).
-       */
-      const { timezone } = await tx.tenant.findUniqueOrThrow({
-        where: { id: tenantId },
-        select: { timezone: true },
-      });
-      await scheduleRecoveryCheckins(tx, {
-        tenantId,
-        encounterId: id,
-        patientId: draft.patientId,
-        visitDate: instantToLocalDate(signedRow.startedAt, timezone),
-        reviewDate: signedRow.followUpDate?.toISOString().slice(0, 10) ?? null,
-        intervalDays: signedRow.checkInIntervalDays,
       });
 
       const appointment = await tx.appointment.findUnique({
@@ -517,10 +598,6 @@ export class ConsultationsService {
 
       return this.view(tx, id);
     });
-
-    // Signing ends the visit and frees the room.
-    await this.engagement.afterQueueMoved(tenantId, signed.practitioner.id);
-    return signed;
   }
 
   /** A correction to a signed note. Appended, never merged into the original. */
@@ -543,7 +620,7 @@ export class ConsultationsService {
       if (encounter.status !== 'SIGNED') {
         throw new ConflictException({
           code: 'NOT_SIGNED',
-          message: 'This consultation is still a draft — edit it directly instead.',
+          message: 'This consultation is still a draft. Edit it directly instead.',
         });
       }
 
@@ -597,11 +674,26 @@ export class ConsultationsService {
       });
       if (!current) throw new NotFoundException('Encounter not found');
 
+      /**
+       * SIGNED IS NO LONGER REQUIRED, changed 28 Oct 2026 after the clinic
+       * reported the two panels disagreeing.
+       *
+       * The tests panel above this one lists every completed test for the
+       * patient, whatever visit produced it. This one listed only SIGNED
+       * consultations. So a patient whose earlier visit was never signed — the
+       * doctor finished and moved on, which happens — saw a previous test at
+       * the top of the screen and "no previous visits" at the bottom, on the
+       * same patient, at the same moment.
+       *
+       * A visit that happened is a fact about the patient whether or not
+       * anybody signed the note. The draft is still marked as one on the way
+       * out, so a reader can tell the difference; what it must not do is claim
+       * the visit never happened.
+       */
       const rows = await tx.encounter.findMany({
         where: {
           patientId: current.patientId,
           id: { not: current.id },
-          status: 'SIGNED',
           startedAt: { lt: current.startedAt },
         },
         orderBy: { startedAt: 'desc' },
@@ -630,7 +722,7 @@ export class ConsultationsService {
               durationDays: true,
             },
           },
-          vitals: { orderBy: { recordedAt: 'desc' }, take: 1 },
+          vitals: { orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }], take: 1 },
           appointment: { select: { id: true } },
         },
       });
@@ -653,7 +745,11 @@ export class ConsultationsService {
             description: true,
             resultNote: true,
             department: { select: { name: true } },
-            documents: { select: { id: true, fileName: true }, orderBy: { createdAt: 'asc' } },
+            documents: {
+              where: { removedAt: null },
+              select: { id: true, fileName: true },
+              orderBy: { createdAt: 'asc' },
+            },
           },
         });
 
@@ -827,7 +923,10 @@ export class ConsultationsService {
             externalTestNote: true,
           },
         },
-        vitals: { orderBy: { recordedAt: 'desc' } },
+        /* `createdAt` breaks the tie: a correction carries its original's
+           `recordedAt`, so without it the two are indistinguishable here and
+           which one wins is up to the planner. */
+        vitals: { orderBy: [{ recordedAt: 'desc' }, { createdAt: 'desc' }] },
         diagnoses: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
         prescriptions: { orderBy: { displayOrder: 'asc' } },
         addenda: { orderBy: { createdAt: 'asc' } },
@@ -836,7 +935,20 @@ export class ConsultationsService {
 
     if (!e) throw new NotFoundException('Consultation not found');
 
-    const latest = e.vitals[0] ?? null;
+    /**
+     * Which readings have been replaced by a correction.
+     *
+     * Derived rather than stored: a row is superseded precisely when another
+     * row names it, and keeping a flag as well would give the same fact two
+     * places to disagree.
+     */
+    const superseded = new Set(
+      e.vitals.map((v) => v.correctsId).filter((id): id is string => id !== null),
+    );
+
+    /* The newest reading that still stands. Not simply the newest row, which
+       may be a correction of an EARLIER set than the one on top. */
+    const latest = e.vitals.find((v) => !superseded.has(v.id)) ?? null;
 
     return {
       id: e.id,
@@ -851,12 +963,11 @@ export class ConsultationsService {
       prescriptionNote: e.prescriptionNote,
       followUpDate: e.followUpDate,
       followUpNote: e.followUpNote,
-      checkInIntervalDays: e.checkInIntervalDays,
       patient: e.patient,
       practitioner: e.practitioner,
       appointment: e.appointment,
-      vitals: e.vitals.map(vitalsView),
-      latestVitals: latest ? vitalsView(latest) : null,
+      vitals: e.vitals.map((v) => vitalsView(v, superseded.has(v.id))),
+      latestVitals: latest ? vitalsView(latest, false) : null,
       diagnoses: e.diagnoses,
       prescriptions: e.prescriptions,
       addenda: e.addenda,
@@ -870,20 +981,24 @@ function num(value: unknown): number | null {
   return Number(value);
 }
 
-function vitalsView(v: {
-  id: string;
-  recordedAt: Date;
-  recordedByUserId: string | null;
-  heightCm: unknown;
-  weightKg: unknown;
-  systolicMmHg: number | null;
-  diastolicMmHg: number | null;
-  pulseBpm: number | null;
-  temperatureC: unknown;
-  spo2Percent: number | null;
-  respiratoryRate: number | null;
-  notes: string | null;
-}) {
+function vitalsView(
+  v: {
+    id: string;
+    recordedAt: Date;
+    recordedByUserId: string | null;
+    heightCm: unknown;
+    weightKg: unknown;
+    systolicMmHg: number | null;
+    diastolicMmHg: number | null;
+    pulseBpm: number | null;
+    temperatureC: unknown;
+    spo2Percent: number | null;
+    respiratoryRate: number | null;
+    notes: string | null;
+    correctsId?: string | null;
+  },
+  superseded = false,
+) {
   const heightCm = num(v.heightCm);
   const weightKg = num(v.weightKg);
 
@@ -900,6 +1015,11 @@ function vitalsView(v: {
     spo2Percent: v.spo2Percent,
     respiratoryRate: v.respiratoryRate,
     notes: v.notes,
+
+    /** The reading this one replaces, when it is a correction. */
+    correctsId: v.correctsId ?? null,
+    /** Whether a later row replaces THIS one. Kept, never silently dropped. */
+    superseded,
 
     /**
      * Derived here, never stored. A stored BMI disagrees with its own height and

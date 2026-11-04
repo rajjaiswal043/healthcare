@@ -23,11 +23,15 @@ import { FinanceReportService } from './finance-report.service.js';
 import { ReceiptsService } from './receipts.service.js';
 import {
   AddLineDto,
+  CollectAcrossBillsDto,
   CollectPaymentDto,
   DayCollectionQueryDto,
   FinanceReportQueryDto,
   InvoiceExceptionDto,
+  CorrectPaymentModeDto,
   RefundDto,
+  VoidWriteOffDto,
+  WriteOffDto,
 } from './dto.js';
 
 @Controller()
@@ -76,6 +80,23 @@ export class BillingController {
     return this.billing.getForAppointment(tenantId, appointmentId);
   }
 
+  /**
+   * Every bill for a visit, not just the consultation's.
+   *
+   * The desk settles a patient, not an invoice: a visit with an X-ray on it has
+   * two bills and the second one used to be on no screen the desk was looking
+   * at. `appointments/:id/invoice` above still returns the consultation's alone
+   * — the queue board links to it and wants exactly that one.
+   */
+  @Get('appointments/:id/invoices')
+  @RequirePermissions(PERMISSIONS.INVOICE_READ)
+  async allForAppointment(
+    @CurrentTenant() tenantId: string,
+    @Param('id', new ParseUUIDPipe()) appointmentId: string,
+  ) {
+    return this.billing.getAllForAppointment(tenantId, appointmentId);
+  }
+
   @Post('invoices/:id/lines')
   @RequirePermissions(PERMISSIONS.INVOICE_WRITE)
   async addLine(
@@ -113,6 +134,27 @@ export class BillingController {
   }
 
   /**
+   * One handover of money against several of this patient's bills.
+   *
+   * Patient-scoped rather than invoice-scoped because the thing being settled
+   * is "what this person owes", not one document — and scoping it to the
+   * patient is also what lets the server refuse a bill that belongs to
+   * somebody else. Same permission as collecting once: it is the same act,
+   * done fewer times. See `collectAcross`.
+   */
+  @Post('patients/:patientId/payments')
+  @RequirePermissions(PERMISSIONS.PAYMENT_COLLECT)
+  async collectAcross(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('patientId', new ParseUUIDPipe()) patientId: string,
+    @Body() dto: CollectAcrossBillsDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.collectAcross(tenantId, patientId, dto, meta(req, user));
+  }
+
+  /**
    * Refunds, waivers and deferrals each sit behind their own permission.
    *
    * Every one of them is a way for money to leave without a service behind it,
@@ -130,16 +172,68 @@ export class BillingController {
     return this.billing.refund(tenantId, id, dto, meta(req, user));
   }
 
-  @Post('invoices/:id/waive')
-  @RequirePermissions(PERMISSIONS.INVOICE_WAIVE)
-  async waive(
+  /**
+   * The money was right; the mode was wrong.
+   *
+   * Behind `payment:refund` like the other corrections, and for the same
+   * reason: it writes a reversal, and the desk must not be able to unwind its
+   * own entries. It takes nothing OUT on balance — the same amount goes
+   * straight back in under the right mode — but the row it writes is a
+   * reversal and belongs with its neighbours.
+   */
+  @Post('invoices/:id/payments/correct-mode')
+  @RequirePermissions(PERMISSIONS.PAYMENT_REFUND)
+  async correctPaymentMode(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() dto: InvoiceExceptionDto,
+    @Body() dto: CorrectPaymentModeDto,
     @Req() req: FastifyRequest,
   ) {
-    return this.billing.setException(tenantId, id, 'WAIVED', dto.reason, meta(req, user));
+    return this.billing.correctPaymentMode(tenantId, id, { ...dto }, meta(req, user));
+  }
+
+  /**
+   * Forgive part or all of a charge.
+   *
+   * REPLACES `invoices/:id/waive`, which could only write off a whole bill and
+   * refused one that had been paid — so the desk had to refund first, which
+   * flipped the bill back to UNPAID and left the patient apparently owing what
+   * he had just been handed back. Narveer's call, 2 Nov 2026.
+   *
+   * Writing off the full balance still ends at `WAIVED`, so the board's
+   * "Waived" column and every report that reads that status are unchanged.
+   */
+  @Post('invoices/:id/write-offs')
+  @RequirePermissions(PERMISSIONS.INVOICE_WAIVE)
+  async writeOff(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: WriteOffDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.writeOff(tenantId, id, { ...dto }, meta(req, user));
+  }
+
+  /**
+   * Undo one, because it went on the wrong bill.
+   *
+   * Behind the same permission as making one: whoever may forgive a charge may
+   * take the forgiveness back, and the alternative was editing the database by
+   * hand.
+   */
+  @Post('invoices/:id/write-offs/:writeOffId/void')
+  @RequirePermissions(PERMISSIONS.INVOICE_WAIVE)
+  async voidWriteOff(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('writeOffId', new ParseUUIDPipe()) writeOffId: string,
+    @Body() dto: VoidWriteOffDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.billing.voidWriteOff(tenantId, id, writeOffId, dto.reason, meta(req, user));
   }
 
   @Post('invoices/:id/defer')

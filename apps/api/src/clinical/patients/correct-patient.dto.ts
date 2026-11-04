@@ -11,6 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { BloodGroupDto, GenderDto } from './dto/register-patient.dto.js';
+import { IsPersonName } from '../../common/is-person-name.decorator.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -36,6 +37,7 @@ export class CorrectPatientDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   name?: string;
 
   /**
@@ -114,6 +116,16 @@ export class CorrectPatientDto {
   @IsOptional()
   @IsEnum(BloodGroupDto)
   bloodGroup?: BloodGroupDto;
+
+  /**
+   * Known allergies, free text. Saving this field at all — even empty — records
+   * that somebody asked, which is what separates "no known allergies" from
+   * "nobody has asked". See the patient_allergies migration.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  allergies?: string;
 
   @IsOptional()
   @IsString()

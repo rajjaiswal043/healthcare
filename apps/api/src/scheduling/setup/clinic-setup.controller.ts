@@ -32,21 +32,14 @@ import {
 } from '../../platform/auth/decorators.js';
 import { PERMISSIONS } from '../../platform/auth/permissions.js';
 import { ClinicSetupService, type RequestMeta } from './clinic-setup.service.js';
+import { IsPersonName } from '../../common/is-person-name.decorator.js';
+import { IsCatalogueName } from '../../common/is-catalogue-name.decorator.js';
 
 class DepartmentDto {
   @IsString()
   @MinLength(2)
   @MaxLength(120)
   name!: string;
-
-  /**
-   * X-ray, pathology. A diagnostic department has no appointment slots and does
-   * not appear at the first step of booking — a doctor sends a patient there
-   * mid-visit rather than anyone booking it.
-   */
-  @IsOptional()
-  @IsBoolean()
-  isDiagnostic?: boolean;
 }
 
 class UpdateDepartmentDto {
@@ -55,10 +48,6 @@ class UpdateDepartmentDto {
   @MinLength(2)
   @MaxLength(120)
   name?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isDiagnostic?: boolean;
 
   @IsOptional()
   @IsInt()
@@ -75,6 +64,7 @@ class PractitionerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName!: string;
 
   @IsOptional()
@@ -105,10 +95,6 @@ class PractitionerDto {
   @MaxLength(120)
   specialty?: string;
 
-  @IsOptional()
-  @IsUUID()
-  departmentId?: string;
-
   /** The doctor's own login, when they have one. */
   @IsOptional()
   @IsUUID()
@@ -137,19 +123,11 @@ class PractitionerDto {
  * it should be. Written out in full instead, so the list of what an edit may
  * touch is a list somebody has to change on purpose.
  *
- * **`departmentId` is absent, and that is the enforcement.** A doctor's
- * department is the anchor two things already treat as permanent: walk-in
- * diagnostics, and the department-wise revenue split in the finance report.
- * Moving a doctor between departments would not re-file the money they earned
- * last quarter — it would silently change what last quarter's report MEANS, and
- * a report whose meaning depends on a setting somebody edited since is not a
- * report. Same principle the patient-ID format follows: history is not rewritten
- * to match a new setting.
- *
- * Absent rather than validated-and-rejected because the global ValidationPipe
- * runs with `forbidNonWhitelisted` — a request carrying `departmentId` is
- * refused with a 400 naming the field, rather than quietly ignored. Quiet
- * ignoring is worse: the caller is told it worked.
+ * **`departmentId` is absent because a doctor no longer has one.** It used to
+ * be here, and this note used to defend keeping it immutable on the grounds
+ * that the finance report split revenue by it. That was wrong on the facts: the
+ * split is by the SERVICE's department — what was billed, not who billed it —
+ * which is untouched. A doctor is described by `specialty`, in one place.
  *
  * **`userId` is absent too**, for a different reason — linking a doctor to a
  * login is a real feature, it simply is not this form, and it needs its own
@@ -161,6 +139,7 @@ class UpdatePractitionerDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName?: string;
 
   @IsOptional()
@@ -248,8 +227,10 @@ class ServiceDto {
   @MaxLength(40)
   code!: string;
 
+  // A name, not a number. "12" and "@@" reached the price list and the
+  // department worklist as the name of a test. See IsCatalogueName.
   @IsString()
-  @MinLength(2)
+  @IsCatalogueName()
   @MaxLength(200)
   name!: string;
 
@@ -297,6 +278,34 @@ class ServiceDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+/**
+ * A test priced inside the department that performs it.
+ *
+ * NO CODE AND NO CATEGORY. The code is generated — it is a permanent reporting
+ * handle nobody should have to invent — and the category is not a choice,
+ * because a department does tests and nothing else.
+ */
+class DepartmentTestDto {
+  // The other screen that writes this column. See IsCatalogueName.
+  @IsString()
+  @IsCatalogueName()
+  @MaxLength(120)
+  name!: string;
+
+  /** Paise. Zero is allowed: a clinic may do a test it does not charge for. */
+  @IsInt()
+  @Min(0)
+  @Max(100_000_000)
+  pricePaise!: number;
+
+  /** Basis points. Zero for almost every clinic — clinical care is GST-exempt. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  taxRateBasisPoints?: number;
 }
 
 /** Every change to a doctor's login link says why — it moves whose notes are whose. */
@@ -351,12 +360,7 @@ export class ClinicSetupController {
     @Body() dto: DepartmentDto,
     @Req() req: FastifyRequest,
   ) {
-    return this.setup.createDepartment(
-      tenantId,
-      dto.name,
-      meta(req, user),
-      dto.isDiagnostic ?? false,
-    );
+    return this.setup.createDepartment(tenantId, dto.name, meta(req, user));
   }
 
   @Patch('departments/:id')
@@ -369,6 +373,26 @@ export class ClinicSetupController {
     @Req() req: FastifyRequest,
   ) {
     return this.setup.updateDepartment(tenantId, id, { ...dto }, meta(req, user));
+  }
+
+  /**
+   * Price a test in this department.
+   *
+   * Behind `tenant:configure` rather than the `schedule:manage` of its
+   * neighbours above, because what it writes is a price. Only the administrator
+   * holds either, so the screen is not split by it — but the permission should
+   * say what the call actually does.
+   */
+  @Post('departments/:id/tests')
+  @RequirePermissions(PERMISSIONS.TENANT_CONFIGURE)
+  async addDepartmentTest(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: DepartmentTestDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.setup.addDepartmentTest(tenantId, id, { ...dto }, meta(req, user));
   }
 
   // --- doctors -------------------------------------------------------------
@@ -506,6 +530,24 @@ export class ClinicSetupController {
     @Req() req: FastifyRequest,
   ) {
     return this.setup.setServiceActive(tenantId, id, dto.isActive, meta(req, user));
+  }
+
+  /**
+   * Delete a service that nothing has used.
+   *
+   * Not the opposite of `POST`: a service that has been billed or ordered is
+   * refused with `SERVICE_IN_USE` and switched off instead. See the service
+   * method for why the database would otherwise accept this quietly.
+   */
+  @Delete('setup/services/:id')
+  @RequirePermissions(PERMISSIONS.TENANT_CONFIGURE)
+  async deleteService(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.setup.deleteService(tenantId, id, meta(req, user));
   }
 
   @Post('setup/services')

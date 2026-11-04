@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, setUnauthorizedHandler, type CurrentSession } from '@/lib/api';
+import { clearDraft } from '@/lib/registration-draft';
 import { roleSignature, type RoleSignature } from '@/lib/role-signature';
 
 type Session = CurrentSession;
@@ -19,7 +20,17 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-const PUBLIC_PATHS = ['/login', '/welcome'];
+/**
+ * Pages anybody may see, session or not.
+ *
+ * A public landing page was tried on 28 Oct 2026 and taken out again the same
+ * day. It is not the page that was wrong — it is that the console lives at
+ * `/`, and its tabs, paging and date links are all written relative to that
+ * (`/?tab=...`), so giving the bare domain to marketing moved the console to
+ * `/home` and put that into every URL. The clean way to have both is a
+ * separate host for the app rather than a second path on this one.
+ */
+const PUBLIC_PATHS = ['/login'];
 
 /**
  * Routes this provider has no business redirecting.
@@ -35,14 +46,11 @@ const PUBLIC_PATHS = ['/login', '/welcome'];
  *   /display   a television in a waiting room. It holds a screen key, not a
  *              user session, and there is nobody there to sign in — redirecting
  *              it puts a login form on a wall in front of patients.
- *   /p         a patient's own link from WhatsApp (docs/10). The key in the URL
- *              is the credential; a login form here would be a clinic's staff
- *              sign-in shown to a patient on their phone.
  *
  * Prefix-matched rather than listed exactly, so a second platform page does not
  * silently reintroduce this.
  */
-const OTHER_REALMS = ['/platform', '/display', '/p'];
+const OTHER_REALMS = ['/platform', '/display'];
 
 function governedByThisProvider(pathname: string): boolean {
   return !OTHER_REALMS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -88,9 +96,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void load();
   }, [load, pathname]);
 
-  // A 401 from any call means the session ended — expired, revoked, or signed
-  // out in another tab. Bounce to sign-in rather than leaving a shell of a page
-  // that silently fails every request.
+  /*
+   * A 401 from any call means the session ENDED — expired, revoked, or signed
+   * out in another tab. Bounce to sign-in rather than leaving a shell of a page
+   * that silently fails every request.
+   *
+   * Straight to /login, deliberately, and not to the landing page like the
+   * case below: this is somebody who was working a moment ago and knows
+   * exactly who they are. Showing them the product's front door would be
+   * answering a question they did not ask.
+   */
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setSession(null);
@@ -101,6 +116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [pathname, router]);
 
+  /*
+   * ARRIVED WITHOUT A SESSION, which is a different thing from losing one.
+   *
+   * Nobody is signed in, so there is nowhere in the console to be.
+   */
   useEffect(() => {
     if (
       !loading &&
@@ -108,10 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       !PUBLIC_PATHS.includes(pathname) &&
       governedByThisProvider(pathname)
     ) {
-      // The bare address is the front door: a visitor with no session meets the
-      // public front page, which links to sign-in. Deeper links still go
-      // straight to sign-in, where the person clearly meant to be.
-      router.replace(pathname === '/' ? '/welcome' : '/login');
+      router.replace('/login');
     }
   }, [loading, session, pathname, router]);
 
@@ -138,6 +155,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.logout();
     } finally {
+      /**
+       * Nothing of this person's work is left on the machine.
+       *
+       * The registration draft holds a patient's name, mobile and address for
+       * somebody who has not consented to anything yet, and the front desk is a
+       * shared computer. Left behind, the next receptionist to sign in would
+       * open Register and find the previous one's half-typed patient already in
+       * the form — which is both confusing and a disclosure nobody authorised.
+       *
+       * Signing out is the one moment the draft is definitely finished with: it
+       * already clears on a completed registration and expires after twelve
+       * hours, and this closes the case in between.
+       */
+      clearDraft();
       setSession(null);
       router.replace('/login');
     }

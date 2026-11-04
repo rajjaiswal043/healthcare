@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiRequestError, type SeatUsage, type StaffUser } from '@/lib/api';
+import { api, ApiRequestError, type Department, type SeatUsage, type StaffUser } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { IconAlert, IconCheck, IconUserPlus, IconUsers } from '@/components/icons';
+import { looksLikeAPersonName } from '@/lib/person-name';
 
 /**
  * Staff accounts for one clinic.
@@ -26,6 +27,18 @@ export default function StaffPage() {
   const [mobile, setMobile] = useState('');
   const [roleKeys, setRoleKeys] = useState<string[]>([]);
 
+  /**
+   * Which room a technician works in.
+   *
+   * Asked for only when the Diagnostics role is chosen, because only that role
+   * has one: the X-ray technician is not the pathology technician, and their
+   * worklist opens on their own department. The server refuses a diagnostics
+   * account without one, so this is the field that stops the refusal happening
+   * in front of somebody.
+   */
+  const [departmentId, setDepartmentId] = useState('');
+  const [departments, setDepartments] = useState<Department[]>([]);
+
   /** The one moment a plaintext password exists outside the person it belongs to. */
   /**
    * The row being edited, and the values in its form.
@@ -47,6 +60,19 @@ export default function StaffPage() {
       setUsers(users);
       setSeats(seats);
       setError(null);
+
+      /**
+       * The rooms, for the Diagnostics field.
+       *
+       * Failure here is not an error to shout about: the rest of the screen
+       * manages staff perfectly well, and the field that needs this says so
+       * itself when the list is empty.
+       */
+      try {
+        setDepartments((await api.setupDepartments()).departments);
+      } catch {
+        setDepartments([]);
+      }
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not load staff.');
     }
@@ -56,8 +82,16 @@ export default function StaffPage() {
     void load();
   }, [load]);
 
+  const needsDepartment = roleKeys.includes('diagnostics');
+
+  /** Whether this existing member of staff is somebody who works in a room. */
+  function worksInADepartment(user: StaffUser): boolean {
+    return user.roles.some((r) => r.key === 'diagnostics');
+  }
+
   async function add() {
-    if (fullName.trim().length < 2 || !email.trim() || roleKeys.length === 0) return;
+    if (!looksLikeAPersonName(fullName) || !email.trim() || roleKeys.length === 0) return;
+    if (needsDepartment && !departmentId) return;
     setBusyId('new');
     setError(null);
     try {
@@ -66,6 +100,7 @@ export default function StaffPage() {
         fullName: fullName.trim(),
         ...(mobile.trim() ? { mobile: mobile.trim() } : {}),
         roleKeys,
+        ...(needsDepartment && departmentId ? { departmentId } : {}),
       });
 
       setIssued({ who: created.fullName, password: created.temporaryPassword });
@@ -74,6 +109,7 @@ export default function StaffPage() {
       setFullName('');
       setMobile('');
       setRoleKeys([]);
+      setDepartmentId('');
       await load();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not add them.');
@@ -82,10 +118,13 @@ export default function StaffPage() {
     }
   }
 
+  const [editDepartmentId, setEditDepartmentId] = useState('');
+
   function startEdit(user: StaffUser) {
     setEditingId(user.id);
     setEditName(user.fullName);
     setEditMobile(user.mobile ?? '');
+    setEditDepartmentId(user.department?.id ?? '');
     setError(null);
   }
 
@@ -99,6 +138,12 @@ export default function StaffPage() {
    * `roleKeys` is deliberately absent. The endpoint would accept it; what
    * somebody may do is a different question from what they are called, and it
    * gets its own screen rather than riding along with a typo fix.
+   *
+   * THE DEPARTMENT IS NOT IN THAT CATEGORY. It is not a permission — it is
+   * where somebody physically works, it changes when they cover another room,
+   * and every technician who was created before the column existed has none at
+   * all. Without it here there is no screen anywhere that can put them in a
+   * room, and their worklist opens on the whole clinic forever.
    */
   async function saveEdit(user: StaffUser) {
     const name = editName.trim();
@@ -108,7 +153,13 @@ export default function StaffPage() {
     }
 
     const saved = await act(user.id, () =>
-      api.updateStaff(user.id, { fullName: name, mobile: editMobile.trim() }),
+      api.updateStaff(user.id, {
+        fullName: name,
+        mobile: editMobile.trim(),
+        // Only for the role that has one; sending it for anybody else would be
+        // asking the server to ignore it.
+        ...(worksInADepartment(user) && editDepartmentId ? { departmentId: editDepartmentId } : {}),
+      }),
     );
     if (saved) setEditingId(null);
   }
@@ -161,8 +212,8 @@ export default function StaffPage() {
           <p className="eyebrow">Settings</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Staff</h1>
           <p className="mt-1 max-w-[62ch] text-[14px] text-ink-60">
-            Everyone who can sign in to this clinic. Accounts are switched off rather than deleted —
-            a name on a signed consultation or an issued receipt has to keep resolving.
+            Everyone who can sign in to this clinic. Accounts are switched off rather than deleted.
+            A name on a signed consultation or an issued receipt has to keep resolving.
           </p>
         </div>
         {!adding && (
@@ -193,7 +244,7 @@ export default function StaffPage() {
           <div className="bg-clinical-tint px-5 py-4">
             <p className="mono-label !text-clinical-text">Temporary password for {issued.who}</p>
             <p className="mt-1 text-[13.5px] text-ink-60">
-              Give this to them now — it cannot be shown again. They will be asked to choose their
+              Give this to them now. It cannot be shown again. They will be asked to choose their
               own password the first time they sign in.
             </p>
           </div>
@@ -255,7 +306,7 @@ export default function StaffPage() {
         <section className="card p-5">
           <h2 className="font-display text-[19px] font-bold">Add someone</h2>
           <p className="mt-1 text-[13px] text-ink-60">
-            They get a temporary password on the next screen. Nothing is emailed — you hand it over.
+            They get a temporary password on the next screen. Nothing is emailed. You hand it over.
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -333,6 +384,43 @@ export default function StaffPage() {
             </div>
           </div>
 
+          {/*
+            APPEARS WITH THE ROLE THAT NEEDS IT.
+
+            Not a field everybody scrolls past: a receptionist has no
+            department and should not be asked to invent one. Only the
+            departments still open are offered — assigning somebody to a
+            retired room produces a login whose worklist is empty for a reason
+            nobody can see, and the server refuses it anyway.
+          */}
+          {needsDepartment && (
+            <div className="mt-4">
+              <label htmlFor="department" className="field-label">
+                Which department do they work in? <span className="text-coral">*</span>
+              </label>
+              <select
+                id="department"
+                className="field-input mt-2 max-w-[320px]"
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+              >
+                <option value="">Choose one…</option>
+                {departments
+                  .filter((d) => d.isActive !== false)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+              </select>
+              {departments.length === 0 && (
+                <p className="field-hint">
+                  No departments yet. Add one under Settings → Departments first.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
@@ -340,8 +428,9 @@ export default function StaffPage() {
               disabled={
                 busyId === 'new' ||
                 !email.trim() ||
-                fullName.trim().length < 2 ||
-                roleKeys.length === 0
+                !looksLikeAPersonName(fullName) ||
+                roleKeys.length === 0 ||
+                (needsDepartment && !departmentId)
               }
               onClick={() => void add()}
             >
@@ -392,6 +481,10 @@ export default function StaffPage() {
                     {u.mobile ? ` · ${u.mobile}` : ''}
                     {' · '}
                     {u.roles.map((r) => r.name).join(', ')}
+                    {/* Which room, for the one role that has one. An
+                        administrator checking whether X-ray is covered should
+                        not have to open the department screen to find out. */}
+                    {u.department ? ` · ${u.department.name}` : ''}
                     {' · '}
                     {u.lastLoginAt
                       ? `last signed in ${new Date(u.lastLoginAt).toLocaleDateString('en-IN')}`
@@ -466,6 +559,36 @@ export default function StaffPage() {
                         />
                         <span className="field-hint">Clear it to remove the number.</span>
                       </label>
+                      {/* Only for somebody who works a machine. A
+                          receptionist has no room, and an empty picker on
+                          their row is a question that cannot be answered. */}
+                      {worksInADepartment(u) && (
+                        <label className="block">
+                          <span className="field-label">
+                            Department <span className="text-coral">*</span>
+                          </span>
+                          <select
+                            className="field-input mt-1"
+                            value={editDepartmentId}
+                            onChange={(e) => setEditDepartmentId(e.target.value)}
+                          >
+                            <option value="">Choose one…</option>
+                            {departments
+                              .filter((d) => d.isActive !== false)
+                              .map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name}
+                                </option>
+                              ))}
+                          </select>
+                          <span className="field-hint">
+                            {u.department
+                              ? 'Their worklist opens on this room.'
+                              : 'Not set. Their worklist opens on every department.'}
+                          </span>
+                        </label>
+                      )}
+
                       {/* Shown, and not editable. The email is the login
                           identifier — changing it changes who the account IS,
                           which is a different act from correcting a name, and

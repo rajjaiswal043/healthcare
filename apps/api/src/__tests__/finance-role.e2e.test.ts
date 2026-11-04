@@ -63,6 +63,25 @@ const EXPECTED_FINANCE_PERMISSIONS = [
   'payment:collect',
   // "Apply an authorised promotion"
   'promotion:apply',
+  /**
+   * FORGIVES A CHARGE — Narveer's call, 2 Nov 2026, and a deliberate
+   * departure from the FR-FIN-01 table below.
+   *
+   * The requirement says refunds, waivers and deferrals stay with the
+   * administrator, written at the 3 Sep demos. What that did not anticipate is
+   * how often the clinic gives a service away: two or three patients a day,
+   * usually decided while the administrator is in a room with somebody else.
+   * The desk took the money anyway and the correction never happened.
+   *
+   * REFUNDS AND DEFERRALS STAY FORBIDDEN, so the rest of the table holds. But
+   * note what this one carries with it: forgiving a charge that has ALREADY
+   * been paid hands the money back in the same transaction, so this desk can
+   * now cause money to leave the till without `payment:refund`. Raised
+   * explicitly before it was granted; accepted on the grounds that every
+   * waiver names who, how much and why, cannot be deleted, and is totalled in
+   * the finance report as "Made free".
+   */
+  'invoice:waive',
   // FR-DIA-12 decision 1, 11 Sep 2026: a walk-in test is priced, paid for and
   // requested at this desk in one action. Deliberately NOT `diagnostic:order`,
   // which would let finance order tests on anybody's consultation.
@@ -70,6 +89,16 @@ const EXPECTED_FINANCE_PERMISSIONS = [
   // "See all financial reporting"
   'report:revenue',
 ].sort();
+
+/**
+ * Granted to Finance AFTER the FR-FIN-01 migrations, by a later one.
+ *
+ * The backfill test replays only the original migrations, so it compares
+ * against this set subtracted. The list grows each time the role gains
+ * something; the alternative is a frozen literal that stops describing the
+ * role, which is how the front desk's own migration test rotted.
+ */
+const GRANTED_SINCE: string[] = ['invoice:waive'];
 
 /**
  * The cannot-do half of the table, plus the three ways money leaves without a
@@ -87,9 +116,10 @@ const FORBIDDEN_FOR_FINANCE = [
   'consultation:write',
   'prescription:write',
   'vitals:write',
-  // "Refunds, waivers and deferrals stay with the administrator"
+  /* "Refunds, waivers and deferrals stay with the administrator" — still true
+     of the first and the last. `invoice:waive` moved to the granted list on
+     2 Nov 2026; see the note there for why, and for what it brings with it. */
   'payment:refund',
-  'invoice:waive',
   'invoice:defer',
   // Applies promotions; cannot invent one.
   'promotion:manage',
@@ -247,7 +277,19 @@ describe('the backfill, for a clinic that already existed', () => {
 
     const finance = await financeRole(TENANT_MAIN);
     expect(finance).toBeDefined();
-    expect([...(finance?.permissions ?? [])].sort()).toEqual(EXPECTED_FINANCE_PERMISSIONS);
+    /*
+     * The FR-FIN-01 migrations create the role as it stood on 11 Sep 2026, so
+     * this compares against that set and not today's. `invoice:waive` is
+     * granted by a LATER migration — 20261102130000 — which this replay does
+     * not run; a clinic that deploys both ends up with the full set, which is
+     * what `GRANTED_SINCE` records.
+     *
+     * Asserting today's set here would quietly turn this into a test of the
+     * newest migration rather than of the backfill it was written for.
+     */
+    expect([...(finance?.permissions ?? [])].sort()).toEqual(
+      EXPECTED_FINANCE_PERMISSIONS.filter((p) => !GRANTED_SINCE.includes(p)),
+    );
 
     const [admin] = await ownerQuery<{ permissions: string[] }>(
       TENANT_MAIN,

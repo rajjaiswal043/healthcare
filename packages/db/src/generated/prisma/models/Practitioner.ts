@@ -14,7 +14,7 @@ import type * as Prisma from "../internal/prismaNamespace.js"
 
 /**
  * Model Practitioner
- * A doctor. FHIR: Practitioner (+ PractitionerRole for the department link).
+ * A doctor. FHIR: Practitioner.
  * 
  * registrationNumber is not optional in spirit: the Telemedicine Guidelines and
  * the Drugs rules both require a doctor's registration number on prescriptions
@@ -52,7 +52,6 @@ export type PractitionerMinAggregateOutputType = {
   hprId: string | null
   qualification: string | null
   specialty: string | null
-  departmentId: string | null
   userId: string | null
   previousUserId: string | null
   overbookPerSession: number | null
@@ -72,7 +71,6 @@ export type PractitionerMaxAggregateOutputType = {
   hprId: string | null
   qualification: string | null
   specialty: string | null
-  departmentId: string | null
   userId: string | null
   previousUserId: string | null
   overbookPerSession: number | null
@@ -92,7 +90,6 @@ export type PractitionerCountAggregateOutputType = {
   hprId: number
   qualification: number
   specialty: number
-  departmentId: number
   userId: number
   previousUserId: number
   overbookPerSession: number
@@ -126,7 +123,6 @@ export type PractitionerMinAggregateInputType = {
   hprId?: true
   qualification?: true
   specialty?: true
-  departmentId?: true
   userId?: true
   previousUserId?: true
   overbookPerSession?: true
@@ -146,7 +142,6 @@ export type PractitionerMaxAggregateInputType = {
   hprId?: true
   qualification?: true
   specialty?: true
-  departmentId?: true
   userId?: true
   previousUserId?: true
   overbookPerSession?: true
@@ -166,7 +161,6 @@ export type PractitionerCountAggregateInputType = {
   hprId?: true
   qualification?: true
   specialty?: true
-  departmentId?: true
   userId?: true
   previousUserId?: true
   overbookPerSession?: true
@@ -273,7 +267,6 @@ export type PractitionerGroupByOutputType = {
   hprId: string | null
   qualification: string | null
   specialty: string | null
-  departmentId: string | null
   userId: string | null
   previousUserId: string | null
   overbookPerSession: number
@@ -316,7 +309,6 @@ export type PractitionerWhereInput = {
   hprId?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   qualification?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   specialty?: Prisma.StringNullableFilter<"Practitioner"> | string | null
-  departmentId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   userId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   previousUserId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   overbookPerSession?: Prisma.IntFilter<"Practitioner"> | number
@@ -325,7 +317,6 @@ export type PractitionerWhereInput = {
   isActive?: Prisma.BoolFilter<"Practitioner"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Practitioner"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Practitioner"> | Date | string
-  department?: Prisma.XOR<Prisma.DepartmentNullableScalarRelationFilter, Prisma.DepartmentWhereInput> | null
   schedules?: Prisma.PractitionerScheduleListRelationFilter
   exceptions?: Prisma.ScheduleExceptionListRelationFilter
   appointments?: Prisma.AppointmentListRelationFilter
@@ -341,7 +332,6 @@ export type PractitionerOrderByWithRelationInput = {
   hprId?: Prisma.SortOrderInput | Prisma.SortOrder
   qualification?: Prisma.SortOrderInput | Prisma.SortOrder
   specialty?: Prisma.SortOrderInput | Prisma.SortOrder
-  departmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   previousUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
@@ -350,7 +340,6 @@ export type PractitionerOrderByWithRelationInput = {
   isActive?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  department?: Prisma.DepartmentOrderByWithRelationInput
   schedules?: Prisma.PractitionerScheduleOrderByRelationAggregateInput
   exceptions?: Prisma.ScheduleExceptionOrderByRelationAggregateInput
   appointments?: Prisma.AppointmentOrderByRelationAggregateInput
@@ -370,7 +359,6 @@ export type PractitionerWhereUniqueInput = Prisma.AtLeast<{
   hprId?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   qualification?: Prisma.StringNullableFilter<"Practitioner"> | string | null
   specialty?: Prisma.StringNullableFilter<"Practitioner"> | string | null
-  departmentId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   previousUserId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
   overbookPerSession?: Prisma.IntFilter<"Practitioner"> | number
   consultationFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
@@ -378,7 +366,6 @@ export type PractitionerWhereUniqueInput = Prisma.AtLeast<{
   isActive?: Prisma.BoolFilter<"Practitioner"> | boolean
   createdAt?: Prisma.DateTimeFilter<"Practitioner"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Practitioner"> | Date | string
-  department?: Prisma.XOR<Prisma.DepartmentNullableScalarRelationFilter, Prisma.DepartmentWhereInput> | null
   schedules?: Prisma.PractitionerScheduleListRelationFilter
   exceptions?: Prisma.ScheduleExceptionListRelationFilter
   appointments?: Prisma.AppointmentListRelationFilter
@@ -394,7 +381,6 @@ export type PractitionerOrderByWithAggregationInput = {
   hprId?: Prisma.SortOrderInput | Prisma.SortOrder
   qualification?: Prisma.SortOrderInput | Prisma.SortOrder
   specialty?: Prisma.SortOrderInput | Prisma.SortOrder
-  departmentId?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   previousUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
@@ -422,7 +408,6 @@ export type PractitionerScalarWhereWithAggregatesInput = {
   hprId?: Prisma.StringNullableWithAggregatesFilter<"Practitioner"> | string | null
   qualification?: Prisma.StringNullableWithAggregatesFilter<"Practitioner"> | string | null
   specialty?: Prisma.StringNullableWithAggregatesFilter<"Practitioner"> | string | null
-  departmentId?: Prisma.UuidNullableWithAggregatesFilter<"Practitioner"> | string | null
   userId?: Prisma.UuidNullableWithAggregatesFilter<"Practitioner"> | string | null
   previousUserId?: Prisma.UuidNullableWithAggregatesFilter<"Practitioner"> | string | null
   overbookPerSession?: Prisma.IntWithAggregatesFilter<"Practitioner"> | number
@@ -450,7 +435,6 @@ export type PractitionerCreateInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  department?: Prisma.DepartmentCreateNestedOneWithoutPractitionersInput
   schedules?: Prisma.PractitionerScheduleCreateNestedManyWithoutPractitionerInput
   exceptions?: Prisma.ScheduleExceptionCreateNestedManyWithoutPractitionerInput
   appointments?: Prisma.AppointmentCreateNestedManyWithoutPractitionerInput
@@ -466,7 +450,6 @@ export type PractitionerUncheckedCreateInput = {
   hprId?: string | null
   qualification?: string | null
   specialty?: string | null
-  departmentId?: string | null
   userId?: string | null
   previousUserId?: string | null
   overbookPerSession?: number
@@ -498,7 +481,6 @@ export type PractitionerUpdateInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  department?: Prisma.DepartmentUpdateOneWithoutPractitionersNestedInput
   schedules?: Prisma.PractitionerScheduleUpdateManyWithoutPractitionerNestedInput
   exceptions?: Prisma.ScheduleExceptionUpdateManyWithoutPractitionerNestedInput
   appointments?: Prisma.AppointmentUpdateManyWithoutPractitionerNestedInput
@@ -514,7 +496,6 @@ export type PractitionerUncheckedUpdateInput = {
   hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
@@ -538,7 +519,6 @@ export type PractitionerCreateManyInput = {
   hprId?: string | null
   qualification?: string | null
   specialty?: string | null
-  departmentId?: string | null
   userId?: string | null
   previousUserId?: string | null
   overbookPerSession?: number
@@ -577,7 +557,6 @@ export type PractitionerUncheckedUpdateManyInput = {
   hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
@@ -586,16 +565,6 @@ export type PractitionerUncheckedUpdateManyInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-}
-
-export type PractitionerListRelationFilter = {
-  every?: Prisma.PractitionerWhereInput
-  some?: Prisma.PractitionerWhereInput
-  none?: Prisma.PractitionerWhereInput
-}
-
-export type PractitionerOrderByRelationAggregateInput = {
-  _count?: Prisma.SortOrder
 }
 
 export type PractitionerCountOrderByAggregateInput = {
@@ -607,7 +576,6 @@ export type PractitionerCountOrderByAggregateInput = {
   hprId?: Prisma.SortOrder
   qualification?: Prisma.SortOrder
   specialty?: Prisma.SortOrder
-  departmentId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   previousUserId?: Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
@@ -633,7 +601,6 @@ export type PractitionerMaxOrderByAggregateInput = {
   hprId?: Prisma.SortOrder
   qualification?: Prisma.SortOrder
   specialty?: Prisma.SortOrder
-  departmentId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   previousUserId?: Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
@@ -653,7 +620,6 @@ export type PractitionerMinOrderByAggregateInput = {
   hprId?: Prisma.SortOrder
   qualification?: Prisma.SortOrder
   specialty?: Prisma.SortOrder
-  departmentId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   previousUserId?: Prisma.SortOrder
   overbookPerSession?: Prisma.SortOrder
@@ -673,48 +639,6 @@ export type PractitionerSumOrderByAggregateInput = {
 export type PractitionerScalarRelationFilter = {
   is?: Prisma.PractitionerWhereInput
   isNot?: Prisma.PractitionerWhereInput
-}
-
-export type PractitionerCreateNestedManyWithoutDepartmentInput = {
-  create?: Prisma.XOR<Prisma.PractitionerCreateWithoutDepartmentInput, Prisma.PractitionerUncheckedCreateWithoutDepartmentInput> | Prisma.PractitionerCreateWithoutDepartmentInput[] | Prisma.PractitionerUncheckedCreateWithoutDepartmentInput[]
-  connectOrCreate?: Prisma.PractitionerCreateOrConnectWithoutDepartmentInput | Prisma.PractitionerCreateOrConnectWithoutDepartmentInput[]
-  createMany?: Prisma.PractitionerCreateManyDepartmentInputEnvelope
-  connect?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-}
-
-export type PractitionerUncheckedCreateNestedManyWithoutDepartmentInput = {
-  create?: Prisma.XOR<Prisma.PractitionerCreateWithoutDepartmentInput, Prisma.PractitionerUncheckedCreateWithoutDepartmentInput> | Prisma.PractitionerCreateWithoutDepartmentInput[] | Prisma.PractitionerUncheckedCreateWithoutDepartmentInput[]
-  connectOrCreate?: Prisma.PractitionerCreateOrConnectWithoutDepartmentInput | Prisma.PractitionerCreateOrConnectWithoutDepartmentInput[]
-  createMany?: Prisma.PractitionerCreateManyDepartmentInputEnvelope
-  connect?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-}
-
-export type PractitionerUpdateManyWithoutDepartmentNestedInput = {
-  create?: Prisma.XOR<Prisma.PractitionerCreateWithoutDepartmentInput, Prisma.PractitionerUncheckedCreateWithoutDepartmentInput> | Prisma.PractitionerCreateWithoutDepartmentInput[] | Prisma.PractitionerUncheckedCreateWithoutDepartmentInput[]
-  connectOrCreate?: Prisma.PractitionerCreateOrConnectWithoutDepartmentInput | Prisma.PractitionerCreateOrConnectWithoutDepartmentInput[]
-  upsert?: Prisma.PractitionerUpsertWithWhereUniqueWithoutDepartmentInput | Prisma.PractitionerUpsertWithWhereUniqueWithoutDepartmentInput[]
-  createMany?: Prisma.PractitionerCreateManyDepartmentInputEnvelope
-  set?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  disconnect?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  delete?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  connect?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  update?: Prisma.PractitionerUpdateWithWhereUniqueWithoutDepartmentInput | Prisma.PractitionerUpdateWithWhereUniqueWithoutDepartmentInput[]
-  updateMany?: Prisma.PractitionerUpdateManyWithWhereWithoutDepartmentInput | Prisma.PractitionerUpdateManyWithWhereWithoutDepartmentInput[]
-  deleteMany?: Prisma.PractitionerScalarWhereInput | Prisma.PractitionerScalarWhereInput[]
-}
-
-export type PractitionerUncheckedUpdateManyWithoutDepartmentNestedInput = {
-  create?: Prisma.XOR<Prisma.PractitionerCreateWithoutDepartmentInput, Prisma.PractitionerUncheckedCreateWithoutDepartmentInput> | Prisma.PractitionerCreateWithoutDepartmentInput[] | Prisma.PractitionerUncheckedCreateWithoutDepartmentInput[]
-  connectOrCreate?: Prisma.PractitionerCreateOrConnectWithoutDepartmentInput | Prisma.PractitionerCreateOrConnectWithoutDepartmentInput[]
-  upsert?: Prisma.PractitionerUpsertWithWhereUniqueWithoutDepartmentInput | Prisma.PractitionerUpsertWithWhereUniqueWithoutDepartmentInput[]
-  createMany?: Prisma.PractitionerCreateManyDepartmentInputEnvelope
-  set?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  disconnect?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  delete?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  connect?: Prisma.PractitionerWhereUniqueInput | Prisma.PractitionerWhereUniqueInput[]
-  update?: Prisma.PractitionerUpdateWithWhereUniqueWithoutDepartmentInput | Prisma.PractitionerUpdateWithWhereUniqueWithoutDepartmentInput[]
-  updateMany?: Prisma.PractitionerUpdateManyWithWhereWithoutDepartmentInput | Prisma.PractitionerUpdateManyWithWhereWithoutDepartmentInput[]
-  deleteMany?: Prisma.PractitionerScalarWhereInput | Prisma.PractitionerScalarWhereInput[]
 }
 
 export type PractitionerCreateNestedOneWithoutSchedulesInput = {
@@ -773,101 +697,6 @@ export type PractitionerUpdateOneRequiredWithoutEncountersNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.PractitionerUpdateToOneWithWhereWithoutEncountersInput, Prisma.PractitionerUpdateWithoutEncountersInput>, Prisma.PractitionerUncheckedUpdateWithoutEncountersInput>
 }
 
-export type PractitionerCreateWithoutDepartmentInput = {
-  id?: string
-  tenantId: string
-  fullName: string
-  prefix?: string | null
-  registrationNumber?: string | null
-  hprId?: string | null
-  qualification?: string | null
-  specialty?: string | null
-  userId?: string | null
-  previousUserId?: string | null
-  overbookPerSession?: number
-  consultationFeePaise?: number | null
-  followUpFeePaise?: number | null
-  isActive?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  schedules?: Prisma.PractitionerScheduleCreateNestedManyWithoutPractitionerInput
-  exceptions?: Prisma.ScheduleExceptionCreateNestedManyWithoutPractitionerInput
-  appointments?: Prisma.AppointmentCreateNestedManyWithoutPractitionerInput
-  encounters?: Prisma.EncounterCreateNestedManyWithoutPractitionerInput
-}
-
-export type PractitionerUncheckedCreateWithoutDepartmentInput = {
-  id?: string
-  tenantId: string
-  fullName: string
-  prefix?: string | null
-  registrationNumber?: string | null
-  hprId?: string | null
-  qualification?: string | null
-  specialty?: string | null
-  userId?: string | null
-  previousUserId?: string | null
-  overbookPerSession?: number
-  consultationFeePaise?: number | null
-  followUpFeePaise?: number | null
-  isActive?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-  schedules?: Prisma.PractitionerScheduleUncheckedCreateNestedManyWithoutPractitionerInput
-  exceptions?: Prisma.ScheduleExceptionUncheckedCreateNestedManyWithoutPractitionerInput
-  appointments?: Prisma.AppointmentUncheckedCreateNestedManyWithoutPractitionerInput
-  encounters?: Prisma.EncounterUncheckedCreateNestedManyWithoutPractitionerInput
-}
-
-export type PractitionerCreateOrConnectWithoutDepartmentInput = {
-  where: Prisma.PractitionerWhereUniqueInput
-  create: Prisma.XOR<Prisma.PractitionerCreateWithoutDepartmentInput, Prisma.PractitionerUncheckedCreateWithoutDepartmentInput>
-}
-
-export type PractitionerCreateManyDepartmentInputEnvelope = {
-  data: Prisma.PractitionerCreateManyDepartmentInput | Prisma.PractitionerCreateManyDepartmentInput[]
-  skipDuplicates?: boolean
-}
-
-export type PractitionerUpsertWithWhereUniqueWithoutDepartmentInput = {
-  where: Prisma.PractitionerWhereUniqueInput
-  update: Prisma.XOR<Prisma.PractitionerUpdateWithoutDepartmentInput, Prisma.PractitionerUncheckedUpdateWithoutDepartmentInput>
-  create: Prisma.XOR<Prisma.PractitionerCreateWithoutDepartmentInput, Prisma.PractitionerUncheckedCreateWithoutDepartmentInput>
-}
-
-export type PractitionerUpdateWithWhereUniqueWithoutDepartmentInput = {
-  where: Prisma.PractitionerWhereUniqueInput
-  data: Prisma.XOR<Prisma.PractitionerUpdateWithoutDepartmentInput, Prisma.PractitionerUncheckedUpdateWithoutDepartmentInput>
-}
-
-export type PractitionerUpdateManyWithWhereWithoutDepartmentInput = {
-  where: Prisma.PractitionerScalarWhereInput
-  data: Prisma.XOR<Prisma.PractitionerUpdateManyMutationInput, Prisma.PractitionerUncheckedUpdateManyWithoutDepartmentInput>
-}
-
-export type PractitionerScalarWhereInput = {
-  AND?: Prisma.PractitionerScalarWhereInput | Prisma.PractitionerScalarWhereInput[]
-  OR?: Prisma.PractitionerScalarWhereInput[]
-  NOT?: Prisma.PractitionerScalarWhereInput | Prisma.PractitionerScalarWhereInput[]
-  id?: Prisma.UuidFilter<"Practitioner"> | string
-  tenantId?: Prisma.UuidFilter<"Practitioner"> | string
-  fullName?: Prisma.StringFilter<"Practitioner"> | string
-  prefix?: Prisma.StringNullableFilter<"Practitioner"> | string | null
-  registrationNumber?: Prisma.StringNullableFilter<"Practitioner"> | string | null
-  hprId?: Prisma.StringNullableFilter<"Practitioner"> | string | null
-  qualification?: Prisma.StringNullableFilter<"Practitioner"> | string | null
-  specialty?: Prisma.StringNullableFilter<"Practitioner"> | string | null
-  departmentId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
-  userId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
-  previousUserId?: Prisma.UuidNullableFilter<"Practitioner"> | string | null
-  overbookPerSession?: Prisma.IntFilter<"Practitioner"> | number
-  consultationFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
-  followUpFeePaise?: Prisma.IntNullableFilter<"Practitioner"> | number | null
-  isActive?: Prisma.BoolFilter<"Practitioner"> | boolean
-  createdAt?: Prisma.DateTimeFilter<"Practitioner"> | Date | string
-  updatedAt?: Prisma.DateTimeFilter<"Practitioner"> | Date | string
-}
-
 export type PractitionerCreateWithoutSchedulesInput = {
   id?: string
   tenantId: string
@@ -885,7 +714,6 @@ export type PractitionerCreateWithoutSchedulesInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  department?: Prisma.DepartmentCreateNestedOneWithoutPractitionersInput
   exceptions?: Prisma.ScheduleExceptionCreateNestedManyWithoutPractitionerInput
   appointments?: Prisma.AppointmentCreateNestedManyWithoutPractitionerInput
   encounters?: Prisma.EncounterCreateNestedManyWithoutPractitionerInput
@@ -900,7 +728,6 @@ export type PractitionerUncheckedCreateWithoutSchedulesInput = {
   hprId?: string | null
   qualification?: string | null
   specialty?: string | null
-  departmentId?: string | null
   userId?: string | null
   previousUserId?: string | null
   overbookPerSession?: number
@@ -947,7 +774,6 @@ export type PractitionerUpdateWithoutSchedulesInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  department?: Prisma.DepartmentUpdateOneWithoutPractitionersNestedInput
   exceptions?: Prisma.ScheduleExceptionUpdateManyWithoutPractitionerNestedInput
   appointments?: Prisma.AppointmentUpdateManyWithoutPractitionerNestedInput
   encounters?: Prisma.EncounterUpdateManyWithoutPractitionerNestedInput
@@ -962,7 +788,6 @@ export type PractitionerUncheckedUpdateWithoutSchedulesInput = {
   hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
@@ -993,7 +818,6 @@ export type PractitionerCreateWithoutExceptionsInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  department?: Prisma.DepartmentCreateNestedOneWithoutPractitionersInput
   schedules?: Prisma.PractitionerScheduleCreateNestedManyWithoutPractitionerInput
   appointments?: Prisma.AppointmentCreateNestedManyWithoutPractitionerInput
   encounters?: Prisma.EncounterCreateNestedManyWithoutPractitionerInput
@@ -1008,7 +832,6 @@ export type PractitionerUncheckedCreateWithoutExceptionsInput = {
   hprId?: string | null
   qualification?: string | null
   specialty?: string | null
-  departmentId?: string | null
   userId?: string | null
   previousUserId?: string | null
   overbookPerSession?: number
@@ -1055,7 +878,6 @@ export type PractitionerUpdateWithoutExceptionsInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  department?: Prisma.DepartmentUpdateOneWithoutPractitionersNestedInput
   schedules?: Prisma.PractitionerScheduleUpdateManyWithoutPractitionerNestedInput
   appointments?: Prisma.AppointmentUpdateManyWithoutPractitionerNestedInput
   encounters?: Prisma.EncounterUpdateManyWithoutPractitionerNestedInput
@@ -1070,7 +892,6 @@ export type PractitionerUncheckedUpdateWithoutExceptionsInput = {
   hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1101,7 +922,6 @@ export type PractitionerCreateWithoutAppointmentsInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  department?: Prisma.DepartmentCreateNestedOneWithoutPractitionersInput
   schedules?: Prisma.PractitionerScheduleCreateNestedManyWithoutPractitionerInput
   exceptions?: Prisma.ScheduleExceptionCreateNestedManyWithoutPractitionerInput
   encounters?: Prisma.EncounterCreateNestedManyWithoutPractitionerInput
@@ -1116,7 +936,6 @@ export type PractitionerUncheckedCreateWithoutAppointmentsInput = {
   hprId?: string | null
   qualification?: string | null
   specialty?: string | null
-  departmentId?: string | null
   userId?: string | null
   previousUserId?: string | null
   overbookPerSession?: number
@@ -1163,7 +982,6 @@ export type PractitionerUpdateWithoutAppointmentsInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  department?: Prisma.DepartmentUpdateOneWithoutPractitionersNestedInput
   schedules?: Prisma.PractitionerScheduleUpdateManyWithoutPractitionerNestedInput
   exceptions?: Prisma.ScheduleExceptionUpdateManyWithoutPractitionerNestedInput
   encounters?: Prisma.EncounterUpdateManyWithoutPractitionerNestedInput
@@ -1178,7 +996,6 @@ export type PractitionerUncheckedUpdateWithoutAppointmentsInput = {
   hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1209,7 +1026,6 @@ export type PractitionerCreateWithoutEncountersInput = {
   isActive?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  department?: Prisma.DepartmentCreateNestedOneWithoutPractitionersInput
   schedules?: Prisma.PractitionerScheduleCreateNestedManyWithoutPractitionerInput
   exceptions?: Prisma.ScheduleExceptionCreateNestedManyWithoutPractitionerInput
   appointments?: Prisma.AppointmentCreateNestedManyWithoutPractitionerInput
@@ -1224,7 +1040,6 @@ export type PractitionerUncheckedCreateWithoutEncountersInput = {
   hprId?: string | null
   qualification?: string | null
   specialty?: string | null
-  departmentId?: string | null
   userId?: string | null
   previousUserId?: string | null
   overbookPerSession?: number
@@ -1271,7 +1086,6 @@ export type PractitionerUpdateWithoutEncountersInput = {
   isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  department?: Prisma.DepartmentUpdateOneWithoutPractitionersNestedInput
   schedules?: Prisma.PractitionerScheduleUpdateManyWithoutPractitionerNestedInput
   exceptions?: Prisma.ScheduleExceptionUpdateManyWithoutPractitionerNestedInput
   appointments?: Prisma.AppointmentUpdateManyWithoutPractitionerNestedInput
@@ -1286,7 +1100,6 @@ export type PractitionerUncheckedUpdateWithoutEncountersInput = {
   hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  departmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
@@ -1298,90 +1111,6 @@ export type PractitionerUncheckedUpdateWithoutEncountersInput = {
   schedules?: Prisma.PractitionerScheduleUncheckedUpdateManyWithoutPractitionerNestedInput
   exceptions?: Prisma.ScheduleExceptionUncheckedUpdateManyWithoutPractitionerNestedInput
   appointments?: Prisma.AppointmentUncheckedUpdateManyWithoutPractitionerNestedInput
-}
-
-export type PractitionerCreateManyDepartmentInput = {
-  id?: string
-  tenantId: string
-  fullName: string
-  prefix?: string | null
-  registrationNumber?: string | null
-  hprId?: string | null
-  qualification?: string | null
-  specialty?: string | null
-  userId?: string | null
-  previousUserId?: string | null
-  overbookPerSession?: number
-  consultationFeePaise?: number | null
-  followUpFeePaise?: number | null
-  isActive?: boolean
-  createdAt?: Date | string
-  updatedAt?: Date | string
-}
-
-export type PractitionerUpdateWithoutDepartmentInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  fullName?: Prisma.StringFieldUpdateOperationsInput | string
-  prefix?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  registrationNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
-  consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  schedules?: Prisma.PractitionerScheduleUpdateManyWithoutPractitionerNestedInput
-  exceptions?: Prisma.ScheduleExceptionUpdateManyWithoutPractitionerNestedInput
-  appointments?: Prisma.AppointmentUpdateManyWithoutPractitionerNestedInput
-  encounters?: Prisma.EncounterUpdateManyWithoutPractitionerNestedInput
-}
-
-export type PractitionerUncheckedUpdateWithoutDepartmentInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  fullName?: Prisma.StringFieldUpdateOperationsInput | string
-  prefix?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  registrationNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
-  consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  schedules?: Prisma.PractitionerScheduleUncheckedUpdateManyWithoutPractitionerNestedInput
-  exceptions?: Prisma.ScheduleExceptionUncheckedUpdateManyWithoutPractitionerNestedInput
-  appointments?: Prisma.AppointmentUncheckedUpdateManyWithoutPractitionerNestedInput
-  encounters?: Prisma.EncounterUncheckedUpdateManyWithoutPractitionerNestedInput
-}
-
-export type PractitionerUncheckedUpdateManyWithoutDepartmentInput = {
-  id?: Prisma.StringFieldUpdateOperationsInput | string
-  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
-  fullName?: Prisma.StringFieldUpdateOperationsInput | string
-  prefix?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  registrationNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  hprId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  qualification?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  specialty?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  userId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  previousUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  overbookPerSession?: Prisma.IntFieldUpdateOperationsInput | number
-  consultationFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  followUpFeePaise?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
-  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 
@@ -1451,7 +1180,6 @@ export type PractitionerSelect<ExtArgs extends runtime.Types.Extensions.Internal
   hprId?: boolean
   qualification?: boolean
   specialty?: boolean
-  departmentId?: boolean
   userId?: boolean
   previousUserId?: boolean
   overbookPerSession?: boolean
@@ -1460,7 +1188,6 @@ export type PractitionerSelect<ExtArgs extends runtime.Types.Extensions.Internal
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  department?: boolean | Prisma.Practitioner$departmentArgs<ExtArgs>
   schedules?: boolean | Prisma.Practitioner$schedulesArgs<ExtArgs>
   exceptions?: boolean | Prisma.Practitioner$exceptionsArgs<ExtArgs>
   appointments?: boolean | Prisma.Practitioner$appointmentsArgs<ExtArgs>
@@ -1477,7 +1204,6 @@ export type PractitionerSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   hprId?: boolean
   qualification?: boolean
   specialty?: boolean
-  departmentId?: boolean
   userId?: boolean
   previousUserId?: boolean
   overbookPerSession?: boolean
@@ -1486,7 +1212,6 @@ export type PractitionerSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  department?: boolean | Prisma.Practitioner$departmentArgs<ExtArgs>
 }, ExtArgs["result"]["practitioner"]>
 
 export type PractitionerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -1498,7 +1223,6 @@ export type PractitionerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   hprId?: boolean
   qualification?: boolean
   specialty?: boolean
-  departmentId?: boolean
   userId?: boolean
   previousUserId?: boolean
   overbookPerSession?: boolean
@@ -1507,7 +1231,6 @@ export type PractitionerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   isActive?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  department?: boolean | Prisma.Practitioner$departmentArgs<ExtArgs>
 }, ExtArgs["result"]["practitioner"]>
 
 export type PractitionerSelectScalar = {
@@ -1519,7 +1242,6 @@ export type PractitionerSelectScalar = {
   hprId?: boolean
   qualification?: boolean
   specialty?: boolean
-  departmentId?: boolean
   userId?: boolean
   previousUserId?: boolean
   overbookPerSession?: boolean
@@ -1530,26 +1252,20 @@ export type PractitionerSelectScalar = {
   updatedAt?: boolean
 }
 
-export type PractitionerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "fullName" | "prefix" | "registrationNumber" | "hprId" | "qualification" | "specialty" | "departmentId" | "userId" | "previousUserId" | "overbookPerSession" | "consultationFeePaise" | "followUpFeePaise" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["practitioner"]>
+export type PractitionerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "fullName" | "prefix" | "registrationNumber" | "hprId" | "qualification" | "specialty" | "userId" | "previousUserId" | "overbookPerSession" | "consultationFeePaise" | "followUpFeePaise" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["practitioner"]>
 export type PractitionerInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  department?: boolean | Prisma.Practitioner$departmentArgs<ExtArgs>
   schedules?: boolean | Prisma.Practitioner$schedulesArgs<ExtArgs>
   exceptions?: boolean | Prisma.Practitioner$exceptionsArgs<ExtArgs>
   appointments?: boolean | Prisma.Practitioner$appointmentsArgs<ExtArgs>
   encounters?: boolean | Prisma.Practitioner$encountersArgs<ExtArgs>
   _count?: boolean | Prisma.PractitionerCountOutputTypeDefaultArgs<ExtArgs>
 }
-export type PractitionerIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  department?: boolean | Prisma.Practitioner$departmentArgs<ExtArgs>
-}
-export type PractitionerIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  department?: boolean | Prisma.Practitioner$departmentArgs<ExtArgs>
-}
+export type PractitionerIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type PractitionerIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
 
 export type $PractitionerPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Practitioner"
   objects: {
-    department: Prisma.$DepartmentPayload<ExtArgs> | null
     schedules: Prisma.$PractitionerSchedulePayload<ExtArgs>[]
     exceptions: Prisma.$ScheduleExceptionPayload<ExtArgs>[]
     appointments: Prisma.$AppointmentPayload<ExtArgs>[]
@@ -1573,8 +1289,12 @@ export type $PractitionerPayload<ExtArgs extends runtime.Types.Extensions.Intern
      */
     hprId: string | null
     qualification: string | null
+    /**
+     * What this doctor does — "Orthopaedics", "Physician". THE one answer:
+     * there used to be a `departmentId` beside it saying the same thing in a
+     * second place, and the screens that mattered already preferred this.
+     */
     specialty: string | null
-    departmentId: string | null
     /**
      * Set when the doctor also signs in â€” lets "my day list" resolve without a
      * separate mapping table. Null for doctors who never use the software.
@@ -1995,7 +1715,6 @@ readonly fields: PractitionerFieldRefs;
  */
 export interface Prisma__PractitionerClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
-  department<T extends Prisma.Practitioner$departmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Practitioner$departmentArgs<ExtArgs>>): Prisma.Prisma__DepartmentClient<runtime.Types.Result.GetResult<Prisma.$DepartmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   schedules<T extends Prisma.Practitioner$schedulesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Practitioner$schedulesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PractitionerSchedulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   exceptions<T extends Prisma.Practitioner$exceptionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Practitioner$exceptionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ScheduleExceptionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   appointments<T extends Prisma.Practitioner$appointmentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Practitioner$appointmentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AppointmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -2037,7 +1756,6 @@ export interface PractitionerFieldRefs {
   readonly hprId: Prisma.FieldRef<"Practitioner", 'String'>
   readonly qualification: Prisma.FieldRef<"Practitioner", 'String'>
   readonly specialty: Prisma.FieldRef<"Practitioner", 'String'>
-  readonly departmentId: Prisma.FieldRef<"Practitioner", 'String'>
   readonly userId: Prisma.FieldRef<"Practitioner", 'String'>
   readonly previousUserId: Prisma.FieldRef<"Practitioner", 'String'>
   readonly overbookPerSession: Prisma.FieldRef<"Practitioner", 'Int'>
@@ -2300,10 +2018,6 @@ export type PractitionerCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Ex
    */
   data: Prisma.PractitionerCreateManyInput | Prisma.PractitionerCreateManyInput[]
   skipDuplicates?: boolean
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.PractitionerIncludeCreateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -2374,10 +2088,6 @@ export type PractitionerUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Ex
    * Limit how many Practitioners to update.
    */
   limit?: number
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.PractitionerIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -2444,25 +2154,6 @@ export type PractitionerDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.
    * Limit how many Practitioners to delete.
    */
   limit?: number
-}
-
-/**
- * Practitioner.department
- */
-export type Practitioner$departmentArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the Department
-   */
-  select?: Prisma.DepartmentSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the Department
-   */
-  omit?: Prisma.DepartmentOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.DepartmentInclude<ExtArgs> | null
-  where?: Prisma.DepartmentWhereInput
 }
 
 /**

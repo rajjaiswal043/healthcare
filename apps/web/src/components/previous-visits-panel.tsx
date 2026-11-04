@@ -22,23 +22,10 @@ import { IconAlert, IconClock } from '@/components/icons';
  * orthopaedic follow-up the answer is usually "the same again", which needs the
  * strength and the frequency to be visible.
  */
-export function PreviousVisitsPanel({
-  encounterId,
-  onCarryForward,
-}: {
-  encounterId: string;
-  /**
-   * FR-P36-24: "the same again" in one click. Given only while the note is a
-   * draft the caller may write; the caller merges and saves, so the doctor
-   * still edits the result before signing.
-   */
-  onCarryForward?: ((prescriptions: PreviousVisit['prescriptions']) => Promise<void>) | undefined;
-}) {
+export function PreviousVisitsPanel({ encounterId }: { encounterId: string }) {
   const [visits, setVisits] = useState<PreviousVisit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [carried, setCarried] = useState<string | null>(null);
-  const [carrying, setCarrying] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -95,6 +82,15 @@ export function PreviousVisitsPanel({
                   {new Date(v.startedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
                 </span>
                 <span className="text-[12.5px] text-ink-40">{v.practitioner.fullName}</span>
+                {/*
+                  Unsigned visits are listed since 28 Oct 2026 — they used to be
+                  left out, so a patient whose earlier consultation was never
+                  signed showed a previous TEST at the top of this screen and
+                  "no previous visits" here. Said out loud rather than hidden,
+                  because a draft note is not the same as a signed one and a
+                  reader has to be able to tell.
+                */}
+                {!v.signedAt && <span className="badge badge-amber">Not signed</span>}
 
                 {v.diagnoses.length > 0 && (
                   <span className="badge-clinical">
@@ -134,33 +130,7 @@ export function PreviousVisitsPanel({
                   {/* The reason this panel exists. */}
                   {v.prescriptions.length > 0 && (
                     <div>
-                      <div className="mb-1 flex items-center justify-between gap-3">
-                        <p className="mono-label">Medicines</p>
-                        {onCarryForward && (
-                          <button
-                            type="button"
-                            className="text-[12.5px] font-semibold text-clinical-text underline underline-offset-2 disabled:opacity-50"
-                            disabled={carrying || carried === v.id}
-                            onClick={() =>
-                              void (async () => {
-                                setCarrying(true);
-                                try {
-                                  await onCarryForward(v.prescriptions);
-                                  setCarried(v.id);
-                                } finally {
-                                  setCarrying(false);
-                                }
-                              })()
-                            }
-                          >
-                            {carried === v.id
-                              ? 'Added to today’s prescription'
-                              : carrying
-                                ? 'Adding…'
-                                : 'Repeat these medicines'}
-                          </button>
-                        )}
-                      </div>
+                      <p className="mono-label mb-1">Medicines</p>
                       <ul className="space-y-0.5">
                         {v.prescriptions.map((p, i) => (
                           <li key={i}>
@@ -169,7 +139,7 @@ export function PreviousVisitsPanel({
                               {p.strength ? ` ${p.strength}` : ''}
                             </span>
                             <span className="text-ink-60">
-                              {' — '}
+                              {' · '}
                               {p.dose} ·{' '}
                               <span className="font-mono text-[12px]">{p.frequency}</span>
                               {p.durationDays ? ` × ${p.durationDays} days` : ''}

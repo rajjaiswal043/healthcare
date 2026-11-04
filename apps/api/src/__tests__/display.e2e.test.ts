@@ -187,6 +187,108 @@ describe('pairing a screen', () => {
   });
 });
 
+/**
+ * TURNING A SCREEN BACK ON.
+ *
+ * Reported from the clinic on 30 Oct 2026: once a paired screen was turned off
+ * there was no way to turn it on again — `revoke` was one-way and nothing ever
+ * set `is_active` back, so the only route was pairing a second screen and
+ * leaving the first in the list forever.
+ *
+ * The part worth testing is not the flag, it is the KEY. `revoke` leaves
+ * `access_key_hash` in place, so the obvious implementation — flip the boolean —
+ * would resurrect the exact credential somebody deliberately killed. The
+ * ordinary reason to turn a screen off is that it left the building or its key
+ * reached a screenshot.
+ */
+describe('turning a screen back on', () => {
+  function turnOn(id: string, session: Session = admin) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/display-devices/${id}/key`,
+      headers: { cookie: session.cookie },
+    });
+  }
+
+  function turnOff(id: string) {
+    return app.inject({
+      method: 'DELETE',
+      url: `/api/v1/display-devices/${id}`,
+      headers: { cookie: admin.cookie },
+    });
+  }
+
+  it('brings the screen back with a working key', async () => {
+    const paired = (await pair()).json();
+    await turnOff(paired.id);
+
+    const back = await turnOn(paired.id);
+
+    expect(back.statusCode).toBe(201);
+    expect((await board(back.json().accessKey as string)).statusCode).toBe(200);
+  });
+
+  it('does NOT bring back the old key', async () => {
+    const paired = (await pair()).json();
+    const oldKey = paired.accessKey as string;
+    await turnOff(paired.id);
+
+    const back = await turnOn(paired.id);
+
+    // The whole point. Reusing it would make "off" mean nothing.
+    expect(back.json().accessKey).not.toBe(oldKey);
+    expect((await board(oldKey)).statusCode).toBe(401);
+  });
+
+  it('reuses the row, so the screen keeps its history', async () => {
+    const paired = (await pair()).json();
+    await turnOff(paired.id);
+
+    const back = await turnOn(paired.id);
+
+    expect(back.json().id).toBe(paired.id);
+    expect(back.json().name).toBe(paired.name);
+
+    const [row] = await ownerQuery<{ is_active: boolean; revoked_at: Date | null }>(
+      fx.main.id,
+      'SELECT is_active, revoked_at FROM display_device WHERE id = $1',
+      [paired.id],
+    );
+    expect(row?.is_active).toBe(true);
+    // Cleared, because it is on again — the audit trail is where "it was off
+    // between these two times" lives.
+    expect(row?.revoked_at).toBeNull();
+  });
+
+  it('refuses a screen that is already on', async () => {
+    const paired = (await pair()).json();
+
+    const again = await turnOn(paired.id);
+
+    // Re-keying a working screen would blank it until somebody walked over and
+    // typed the new key in, which is not what "turn on" can mean.
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('DISPLAY_ALREADY_ON');
+    // And the key it is running on still works.
+    expect((await board(paired.accessKey as string)).statusCode).toBe(200);
+  });
+
+  it('is the administrator’s to do, like pairing', async () => {
+    const paired = (await pair()).json();
+    await turnOff(paired.id);
+
+    for (const session of [frontDesk, doctor]) {
+      expect((await turnOn(paired.id, session)).statusCode).toBe(403);
+    }
+  });
+
+  it('refuses a screen that does not exist', async () => {
+    const res = await turnOn('00000000-0000-7000-8000-000000000000');
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 // --- the screen -------------------------------------------------------------
 
 describe('what the screen reads', () => {

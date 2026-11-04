@@ -16,9 +16,15 @@ export type AllPatientsState =
       total: number;
     };
 
-/** Where page `n` of this list lives. Page 1 is the bare route. */
+/**
+ * Where page `n` of this list lives. Page 1 is the bare route.
+ *
+ * `/patients` since the list and the search became one screen — `/patients/all`
+ * still redirects here, carrying its page number, for the bookmarks that
+ * predate the merge.
+ */
 export function allPatientsHref(page: number): string {
-  return page <= 1 ? '/patients/all' : `/patients/all?page=${page}`;
+  return page <= 1 ? '/patients' : `/patients?page=${page}`;
 }
 
 const count = (n: number) => n.toLocaleString('en-IN');

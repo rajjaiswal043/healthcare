@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type Appointment, type DayAvailability } from '@/lib/api';
+import {
+  api,
+  ApiRequestError,
+  type Appointment,
+  type DayAvailability,
+  type Practitioner,
+} from '@/lib/api';
 import { formatAge, genderInitial } from '@/lib/format';
 import { IconAlert, IconCalendar, IconX } from './icons';
 
@@ -50,15 +56,34 @@ export function AppointmentDialog({
   appointment,
   onClose,
   onDone,
+  onSwitchToMove,
 }: {
   mode: Mode;
   appointment: Appointment;
   onClose: () => void;
   onDone: () => void;
+  /**
+   * Reopen this appointment on the Move flow instead.
+   *
+   * Only meaningful while cancelling, and only a caller holding the dialog's
+   * state can do it — `mode` is a prop, so the dialog cannot switch itself.
+   * Optional, so the nudge simply does not appear where nobody can honour it.
+   */
+  onSwitchToMove?: () => void;
 }) {
   const [date, setDate] = useState(dateKey());
   const [availability, setAvailability] = useState<DayAvailability | null>(null);
   const [slotStart, setSlotStart] = useState('');
+  /**
+   * Who the visit is being moved to, which starts as who it is already with.
+   *
+   * Booking the wrong consultant was the one slip nothing could put right: a
+   * move carried the doctor over, so the only way out was cancel and rebook,
+   * costing the patient their token and raising a second bill. Reported
+   * 28 Oct 2026.
+   */
+  const [practitionerId, setPractitionerId] = useState(appointment.practitioner.id);
+  const [doctors, setDoctors] = useState<Practitioner[]>([]);
   const [reasonCode, setReasonCode] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -81,22 +106,39 @@ export function AppointmentDialog({
     panelRef.current?.focus();
   }, []);
 
+  /* Only for a move. A cancellation has no doctor to pick. */
+  useEffect(() => {
+    if (mode !== 'reschedule') return;
+
+    void (async () => {
+      try {
+        setDoctors((await api.practitioners()).practitioners);
+      } catch {
+        /* The selector simply does not appear. A move to another time still
+           works, which is the commoner case and must not be blocked by a
+           list that failed to load. */
+      }
+    })();
+  }, [mode]);
+
   const loadAvailability = useCallback(async () => {
     if (mode !== 'reschedule') return;
     try {
-      setAvailability(await api.availability(appointment.practitioner.id, date));
+      setAvailability(await api.availability(practitionerId, date));
+      /* The old choice belongs to the old doctor's day. Keeping it would send
+         a slot id that this doctor never had. */
       setSlotStart('');
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not load availability.');
     }
-  }, [mode, appointment.practitioner.id, date]);
+  }, [mode, practitionerId, date]);
 
   useEffect(() => {
     void loadAvailability();
   }, [loadAvailability]);
 
   const reasons = mode === 'cancel' ? CANCEL_REASONS : RESCHEDULE_REASONS;
-  const reason = [reasonCode, note.trim()].filter(Boolean).join(' — ');
+  const reason = [reasonCode, note.trim()].filter(Boolean).join(' · ');
   const ready = reasonCode !== '' && (mode === 'cancel' || slotStart !== '') && !busy;
 
   async function submit() {
@@ -106,7 +148,14 @@ export function AppointmentDialog({
       if (mode === 'cancel') {
         await api.cancelAppointment(appointment.id, reason);
       } else {
-        await api.rescheduleAppointment(appointment.id, slotStart, reason);
+        await api.rescheduleAppointment(
+          appointment.id,
+          slotStart,
+          reason,
+          /* Sent only when it actually changed, so an ordinary move of the hour
+             is recorded as exactly that. */
+          practitionerId === appointment.practitioner.id ? undefined : practitionerId,
+        );
       }
       onDone();
     } catch (err) {
@@ -170,6 +219,37 @@ export function AppointmentDialog({
 
           {mode === 'reschedule' && (
             <section>
+              {/*
+                The doctor, above the day and the hour, because changing it
+                changes which slots exist below. Shown only when there is
+                somebody to change to.
+              */}
+              {doctors.length > 1 && (
+                <div className="mb-4">
+                  <label htmlFor="move-doctor" className="mono-label mb-2 block">
+                    Doctor
+                  </label>
+                  <select
+                    id="move-doctor"
+                    className="field-input"
+                    value={practitionerId}
+                    onChange={(e) => setPractitionerId(e.target.value)}
+                  >
+                    {doctors.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.fullName}
+                      </option>
+                    ))}
+                  </select>
+                  {practitionerId !== appointment.practitioner.id && (
+                    <p className="field-hint">
+                      Moving from {appointment.practitioner.fullName}. The patient keeps this visit
+                      and its bill.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <p className="mono-label mb-2">New day and time</p>
 
               <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-2">
@@ -260,6 +340,39 @@ export function AppointmentDialog({
                 </button>
               ))}
             </div>
+
+            {/*
+              THE DOCTOR BEING AWAY IS USUALLY A REASON TO MOVE, NOT TO CANCEL.
+
+              Reported from the clinic on 30 Oct 2026: "Doctor unavailable" sits
+              on the cancel dialog as well as on Move, and offering it here
+              invites the wrong act — the patient loses their slot entirely when
+              what they wanted was another day.
+
+              A NUDGE, NOT A DELETION. Taking the code off this list would have
+              destroyed the one distinction these codes exist for: whether a
+              slot went unused because the PATIENT cancelled or because the
+              DOCTOR did (see the note above CANCEL_REASONS). A patient who is
+              told their doctor is away and does not want another date is a real
+              cancellation, and recording it as "Patient requested" would be a
+              lie in the only field that could answer the question.
+
+              So the code stays and the better action is offered beside it.
+            */}
+            {mode === 'cancel' && reasonCode === 'Doctor unavailable' && onSwitchToMove && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-tiny bg-clinical-tint px-3 py-2">
+                <p className="text-[12.5px] text-ink-60">
+                  The doctor being away is usually a reason to give this patient another time.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary !px-2.5 !py-1 !text-[12px]"
+                  onClick={onSwitchToMove}
+                >
+                  Move instead
+                </button>
+              </div>
+            )}
 
             <input
               value={note}

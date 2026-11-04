@@ -17,6 +17,8 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { ReceiptButton } from '@/components/receipt-button';
+import { PaymentDialog } from '@/components/payment-dialog';
+import { EmergencySurcharge, mayAddSurcharge } from '@/components/emergency-surcharge';
 import { formatAge, formatPaise, genderInitial, parseRupeesToPaise } from '@/lib/format';
 import {
   IconCheck,
@@ -28,6 +30,8 @@ import {
 } from '@/components/icons';
 import { Banner } from '@/components/banner';
 import { PromotionPanel } from '@/components/promotion-panel';
+import { DEFAULT_STATE, INDIAN_STATES } from '@/lib/india';
+import { SEARCH_CAP } from '@/lib/patient-search';
 
 /**
  * The finance desk — FR-FIN-02.
@@ -80,6 +84,20 @@ export default function FinanceDeskPage() {
 
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  /**
+   * THE OTHER BILLS THIS VISIT HAS.
+   *
+   * A visit makes more than one invoice: the consultation's carries the
+   * appointment, and every test raises its own, because a consultation bill
+   * settled before the doctor will not take another line. The desk used to see
+   * only the first — so the X-ray's bill was on no screen anybody was looking
+   * at, the desk took the money for what was in front of them, and the test
+   * stayed unpaid with the department blocked behind it.
+   *
+   * Holds every bill for the open visit, the one on screen included, so the
+   * strip below can say what is left to settle.
+   */
+  const [visitBills, setVisitBills] = useState<Invoice[]>([]);
   const [services, setServices] = useState<ChargeableService[]>([]);
 
   /**
@@ -116,6 +134,20 @@ export default function FinanceDeskPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
+
+  /**
+   * A bill opened from the list, settled in a dialog over it.
+   *
+   * Separate from `invoice`, which is the bill belonging to a visit this desk is
+   * in the middle of opening. Collecting an existing debt is not a step in that
+   * sequence — the desk is standing still, taking money for something that
+   * already happened — so it does not take the screen over.
+   *
+   * DECLARED UP HERE WITH THE REST. It used to sit further down, below the
+   * `paid && patient` early return, so the hook was skipped on the render that
+   * shows the finished state and React saw the hook count change.
+   */
+  const [collecting, setCollecting] = useState<Invoice | null>(null);
 
   const canBill = can('invoice:write');
   const canCollect = can('payment:collect');
@@ -276,22 +308,33 @@ export default function FinanceDeskPage() {
     })();
   }, [canWalkIn]);
 
-  useEffect(() => {
-    if (!patient) {
+  /**
+   * Every open bill in the clinic, loaded before anybody is searched for.
+   *
+   * This used to be fetched only once a patient had been found, and filtered to
+   * them — which meant the commonest job at this desk, "somebody is standing
+   * here who owes money", began by typing their name. The list IS the work, so
+   * it arrives first and the search is for the cases it does not cover: a new
+   * patient, or one with nothing outstanding yet.
+   *
+   * `reloadOutstanding` rather than an effect on `patient`, because taking a
+   * payment has to remove that bill from the list, and a dependency on the
+   * patient cannot see that happen.
+   */
+  const reloadOutstanding = useCallback(async () => {
+    try {
+      const { invoices } = await api.outstandingInvoices();
+      setOutstanding(invoices);
+    } catch {
+      // The rest of the desk works without this; a failure here must not stop
+      // somebody being registered and seen.
       setOutstanding([]);
-      return;
     }
-    void (async () => {
-      try {
-        const { invoices } = await api.outstandingInvoices();
-        setOutstanding(invoices.filter((i) => i.patient.id === patient.id));
-      } catch {
-        // The rest of the desk works without this; a failure here must not
-        // stop somebody being registered and seen.
-        setOutstanding([]);
-      }
-    })();
-  }, [patient]);
+  }, []);
+
+  useEffect(() => {
+    void reloadOutstanding();
+  }, [reloadOutstanding]);
 
   const refreshInvoice = useCallback(async (id: string) => {
     setInvoice(await api.invoice(id));
@@ -315,8 +358,15 @@ export default function FinanceDeskPage() {
        * dead-ending here.
        */
       try {
-        setInvoice(await api.invoiceForAppointment(visit.id));
+        const { invoices } = await api.invoicesForAppointment(visit.id);
+        setVisitBills(invoices);
+        /* The OLDEST opens by default, which is the consultation's: opening a
+           visit raises that bill first and a test's comes later. The server
+           returns them in issue order precisely so this does not have to guess
+           twice. The rest are a press away in the strip above. */
+        setInvoice(invoices[0] ?? null);
       } catch {
+        setVisitBills([]);
         setInvoice(null);
       }
     } catch (err) {
@@ -383,17 +433,20 @@ export default function FinanceDeskPage() {
    * doctor cards, off the bottom of the screen, and the Open button looks dead.
    */
   const settlingExistingBill = Boolean(invoice) && !appointmentId;
+  const outstandingTotal = outstanding.reduce((sum, o) => sum + o.balancePaise, 0);
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="eyebrow">Finance desk</p>
-        <h1 className="mt-2 font-display text-[30px] font-bold">
-          Take the <em className="accent-words">payment</em>
-        </h1>
-        <p className="mt-1 text-[14px] text-ink-60">
-          Find or register the patient, open today’s visit, raise the bill and collect — then send
-          them to the front desk.
+    <div className="space-y-4">
+      {/* One line instead of four. An eyebrow, a 30px heading and two lines of
+          prose cost about 110px above the list this desk works from all day. */}
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="font-display text-[24px] font-bold">Finance desk</h1>
+        <p className="text-[13.5px] text-ink-60">
+          {outstanding.length === 0
+            ? 'Nothing outstanding. Search for a patient to open today’s visit.'
+            : `${outstanding.length} ${
+                outstanding.length === 1 ? 'bill' : 'bills'
+              } to collect · ${formatPaise(outstandingTotal)} outstanding`}
         </p>
       </header>
 
@@ -434,54 +487,197 @@ export default function FinanceDeskPage() {
       </section>
 
       {/*
-        Bills this patient already owes.
-        
-        Everything else on this screen is about a visit the desk is opening RIGHT
-        NOW. A test bill is not that: the doctor raised it from inside a
-        consultation that started before the patient walked back out to the
-        counter, and until this section existed there was no screen anywhere
-        that could reach it. The patient would have been sent to pay for an
-        X-ray at a desk with no way to find the charge.
+        THE WORK, BEFORE ANY SEARCHING.
+
+        Every open bill in the clinic, as the landing state of this screen.
+        Everything else here is about a visit the desk is opening RIGHT NOW; a
+        test bill is not that — the doctor raised it from inside a consultation
+        that started before the patient walked back out to the counter, and
+        until this list existed no screen anywhere could reach it. The patient
+        would have been sent to pay for an X-ray at a desk with no way to find
+        the charge.
+
+        The commonest job at this desk is "somebody is standing here who owes
+        money", and that used to begin by typing their name into a search box to
+        reach a list the desk could have been shown outright.
+
+        A TABLE, with the same columns and treatment as the day board, because
+        the questions asked of it are comparative: whose bill is this, what for,
+        which doctor, how much. A stack of two-line rows answers them one at a
+        time.
       */}
-      {patient && outstanding.length > 0 && !appointmentId && (
-        <section className="card p-5">
-          <p className="mono-label mb-3">Already owing</p>
-          <ul className="space-y-2">
+      {!appointmentId && !invoice && outstanding.length > 0 && (
+        <section className="card overflow-hidden">
+          {/*
+            PHONE FIRST, THEN THE TABLE.
+
+            Six columns of bill is a sideways scroll on a 390px screen, on the
+            list this desk works from all day. Below `md` each bill is a card
+            with the amount where the eye lands and Collect full width beneath.
+
+            The table's markup is unchanged and hidden, so a desk renders what
+            it rendered before. Both halves read the same `outstanding` array.
+          */}
+          <ul className="divide-y divide-ink/6 md:hidden">
             {outstanding.map((o) => (
-              <li
-                key={o.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-ink/10 px-3.5 py-2.5"
-              >
-                <span className="min-w-0">
-                  <span className="block font-mono text-[13px] text-ink-60">{o.number}</span>
-                  <span className="block text-[13px] text-ink-40">
-                    {new Date(o.issuedAt).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="font-mono text-[14px] font-semibold tabular-nums">
+              <li key={o.id} className="px-4 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/patients/${o.patient.id}`}
+                      className="block truncate text-[15px] font-semibold text-ink"
+                    >
+                      {o.patient.name}
+                    </Link>
+                    <span className="mt-0.5 block font-mono text-[11.5px] text-ink-40">
+                      {o.patient.uhid} · {o.patient.mobile}
+                    </span>
+                  </div>
+
+                  {/* The figure, large and to the right — it is what the desk
+                      is about to ask the patient for. */}
+                  <span className="shrink-0 font-mono text-[16px] font-bold tabular-nums">
                     {formatPaise(o.balancePaise)}
                   </span>
-                  <button
-                    type="button"
-                    className="btn-secondary !py-1.5"
-                    disabled={busy}
-                    onClick={() =>
-                      run(async () => {
-                        setInvoice(await api.invoice(o.id));
-                        setAppointmentId(null);
-                      }, 'Could not open that bill.')
-                    }
-                  >
-                    Open
-                  </button>
-                </span>
+                </div>
+
+                <p className="mt-1.5 text-[12.5px] text-ink-60">
+                  {o.items.length === 0 ? (
+                    <span className="text-ink-20">—</span>
+                  ) : (
+                    <>
+                      {o.items.join(', ')}
+                      {o.itemCount > o.items.length && ` and ${o.itemCount - o.items.length} more`}
+                    </>
+                  )}
+                  {o.reason ? ` · ${o.reason}` : ''}
+                </p>
+
+                <p className="mt-0.5 text-[11.5px] text-ink-40">
+                  {o.doctor ?? 'Walk-in test'}
+                  {' · '}
+                  <span className="font-mono">{o.number}</span>
+                  {' · '}
+                  {new Date(o.issuedAt).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
+                  {o.status === 'PARTIALLY_PAID' && ' · part paid'}
+                </p>
+
+                <button
+                  type="button"
+                  className="btn-primary mt-3 w-full !py-2 !text-[13px]"
+                  disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      setCollecting(await api.invoice(o.id));
+                    }, 'Could not open that bill.')
+                  }
+                >
+                  Collect {formatPaise(o.balancePaise)}
+                </button>
               </li>
             ))}
           </ul>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-[13.5px]">
+              <thead>
+                <tr className="border-b border-ink/8 bg-bg-soft text-left">
+                  <Th>Patient</Th>
+                  <Th>What for</Th>
+                  <Th className="w-[180px]">Doctor</Th>
+                  <Th className="w-[150px]">Bill</Th>
+                  <Th className="w-[110px] text-right">Balance</Th>
+                  <Th className="w-[104px]">
+                    <span className="sr-only">Actions</span>
+                  </Th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {outstanding.map((o) => (
+                  <tr
+                    key={o.id}
+                    className="border-b border-ink/6 transition-colors last:border-0 hover:bg-clinical-tint/60"
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/patients/${o.patient.id}`}
+                        className="font-semibold text-ink underline-offset-2 hover:text-clinical-text hover:underline"
+                      >
+                        {o.patient.name}
+                      </Link>
+                      <span className="block font-mono text-[11.5px] text-ink-40">
+                        {o.patient.uhid} · {o.patient.mobile}
+                      </span>
+                    </td>
+
+                    {/*
+                      WHAT THE MONEY IS FOR, as charged.
+
+                      The descriptions are copied onto the lines at billing
+                      time, so this reads the same in ten years after the
+                      catalogue has been repriced. Four at most come back from
+                      the server, and the count says how many are hidden rather
+                      than letting a truncated list pass as the whole bill.
+                    */}
+                    <td className="px-4 py-3 text-ink-60">
+                      {o.items.length === 0 ? (
+                        <span className="text-ink-20">—</span>
+                      ) : (
+                        <>
+                          {o.items.join(', ')}
+                          {o.itemCount > o.items.length &&
+                            ` and ${o.itemCount - o.items.length} more`}
+                        </>
+                      )}
+                      {/* Why they came, when the visit recorded one. */}
+                      {o.reason && (
+                        <span className="block text-[11.5px] text-ink-40">{o.reason}</span>
+                      )}
+                    </td>
+
+                    {/* Null for a walk-in test, which belongs to no doctor. */}
+                    <td className="px-4 py-3 text-ink-60">
+                      {o.doctor ?? <span className="text-ink-20">Walk-in test</span>}
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-3 text-ink-60">
+                      <span className="font-mono text-[12.5px]">{o.number}</span>
+                      <span className="block text-[11.5px] text-ink-40">
+                        {new Date(o.issuedAt).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                        {o.status === 'PARTIALLY_PAID' && ' · part paid'}
+                      </span>
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-semibold tabular-nums">
+                      {formatPaise(o.balancePaise)}
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        className="btn-primary !px-3.5 !py-1.5 !text-[12.5px]"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            setCollecting(await api.invoice(o.id));
+                          }, 'Could not open that bill.')
+                        }
+                      >
+                        Collect
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
@@ -500,7 +696,7 @@ export default function FinanceDeskPage() {
         (walkInTests.length > 0 || catalogueFailed) && (
           <section className="card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="mono-label">Tests only — no doctor</p>
+              <p className="mono-label">Tests only, no doctor</p>
               {!walkIn && !catalogueFailed && (
                 <button
                   type="button"
@@ -578,7 +774,7 @@ export default function FinanceDeskPage() {
                   <div className="flex flex-wrap gap-2">
                     {(
                       [
-                        ['SELF', 'Nobody — they asked for it'],
+                        ['SELF', 'Nobody (they asked for it)'],
                         ['EXTERNAL_DOCTOR', 'A doctor elsewhere'],
                       ] as const
                     ).map(([value, label]) => (
@@ -753,7 +949,7 @@ export default function FinanceDeskPage() {
                   >
                     <p className="text-[14px] font-semibold text-ink">{d.fullName}</p>
                     <p className="text-[12.5px] text-ink-40">
-                      {d.specialty ?? d.department?.name ?? 'General'}
+                      {d.specialty ?? 'General'}
                       {d.qualification ? ` · ${d.qualification}` : ''}
                     </p>
 
@@ -814,7 +1010,7 @@ export default function FinanceDeskPage() {
                 <IconCheck size={16} />
                 {busy
                   ? 'Opening…'
-                  : `Confirm — open visit with ${doctors.find((d) => d.id === chosenDoctorId)?.fullName ?? 'this doctor'}`}
+                  : `Confirm: open visit with ${doctors.find((d) => d.id === chosenDoctorId)?.fullName ?? 'this doctor'}`}
               </button>
               <button
                 type="button"
@@ -865,6 +1061,55 @@ export default function FinanceDeskPage() {
               </button>
             )}
           </div>
+
+          {/*
+            EVERY BILL THIS VISIT HAS, when there is more than one.
+
+            A consultation and a test are two invoices — the test raises its
+            own, because a consultation bill settled before the doctor will not
+            take another line. The desk used to see only the first, take the
+            money for it, and send the patient away with the X-ray still
+            unpaid and the department blocked behind it. Reported from the
+            clinic: "xray ka UPI nahi liya".
+
+            Shown only for a visit with more than one bill, so the ordinary
+            consultation keeps the screen it has always had.
+          */}
+          {visitBills.length > 1 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {visitBills.map((b) => {
+                const open = invoice?.id === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    aria-pressed={open}
+                    onClick={() =>
+                      void run(
+                        async () => setInvoice(await api.invoice(b.id)),
+                        'Could not open that bill.',
+                      )
+                    }
+                    className={[
+                      'rounded-pill border-[1.5px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
+                      open
+                        ? 'border-clinical bg-clinical-tint text-clinical-text'
+                        : b.settled
+                          ? 'border-ink/12 bg-white text-ink-40 hover:border-ink/25'
+                          : 'border-coral/35 bg-coral/8 text-coral-text hover:border-coral/60',
+                    ].join(' ')}
+                  >
+                    <span className="font-mono">{b.number}</span>
+                    {' · '}
+                    {/* Settled ones stay listed and go quiet: "what did this
+                        visit cost" is one question, and hiding the paid half
+                        makes the remainder unexplainable. */}
+                    {b.settled ? 'paid' : `${formatPaise(b.balancePaise)} due`}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {!invoice ? (
             <Banner tone="info">
@@ -966,7 +1211,7 @@ export default function FinanceDeskPage() {
               {(invoice.appointment?.externalTestNote ??
                 invoice.visitAppointment?.externalTestNote) && (
                 <div className="mt-3 rounded-panel border border-dashed border-ink/20 bg-bg-soft px-3.5 py-3">
-                  <p className="mono-label">Not done here — patient to have elsewhere</p>
+                  <p className="mono-label">Not done here, patient to have elsewhere</p>
                   <p className="mt-1 whitespace-pre-wrap text-[13.5px]">
                     {invoice.appointment?.externalTestNote ??
                       invoice.visitAppointment?.externalTestNote}
@@ -976,9 +1221,44 @@ export default function FinanceDeskPage() {
 
               {canBill && invoice.paidPaise === 0 && invoice.activePromotionApplicationId && (
                 <p className="field-hint mt-2">
-                  Take the discount off before adding or removing charges, then apply it again —
-                  otherwise the discount stays recorded at the old amount.
+                  Take the discount off before adding or removing charges, then apply it again.
+                  Otherwise the discount stays recorded at the old amount.
                 </p>
+              )}
+
+              {/*
+                THE EMERGENCY SURCHARGE.
+
+                Offered, not applied. The queue's EMERGENCY flag is set by
+                whoever holds `queue:prioritise` — often a nurse — and raising a
+                charge needs `invoice:write`; a flag that billed by itself would
+                let the first permission spend the second. So the desk is shown
+                the charge and decides.
+
+                Offered on ANY unpaid bill, not only a flagged one, because the
+                desk knows it is an emergency from the patient in front of them
+                rather than from the queue, and the money is usually taken
+                before anybody gets as far as flagging the queue at all. A visit
+                the queue HAS flagged says so, as a reminder.
+
+                Same two guards as adding any other charge: nothing may be added
+                once money is on the bill, and not at all under an applied
+                discount — `promotion_application` froze its figure and would
+                overstate what the clinic gave away.
+              */}
+              {mayAddSurcharge(canBill, invoice) && (
+                <div className="mt-4">
+                  <EmergencySurcharge
+                    invoice={invoice}
+                    services={services}
+                    busy={busy}
+                    onAdd={(input) =>
+                      run(async () => {
+                        setInvoice(await api.addInvoiceLine(invoice.id, input));
+                      }, 'Could not add the surcharge.')
+                    }
+                  />
+                </div>
               )}
 
               {/* Same guard as removing: changing the charges under an applied
@@ -1038,7 +1318,20 @@ export default function FinanceDeskPage() {
                   onCollect={(input) =>
                     run(async () => {
                       const updated = await api.collectPayment(invoice.id, input);
+                      // The list is the work, so it has to stop showing a bill
+                      // that has just been settled. Refreshed here rather than
+                      // on an effect, because nothing else changes to trigger
+                      // one.
+                      void reloadOutstanding();
                       setInvoice(updated);
+                      /* And the strip above it, or the bill just paid would
+                         still read "₹500 due" beside the one that is open —
+                         which is the same confusion this strip was added to
+                         end. Updated in place rather than refetched: the
+                         server has already told us what this bill now is. */
+                      setVisitBills((bills) =>
+                        bills.map((b) => (b.id === updated.id ? updated : b)),
+                      );
                       if (updated.balancePaise <= 0) setPaid(true);
                     }, 'Could not record the payment.')
                   }
@@ -1062,11 +1355,34 @@ export default function FinanceDeskPage() {
       )}
 
       <p className="text-[12.5px] text-ink-40">Step {step} of 7.</p>
+      {collecting && (
+        /* The same dialog the queue uses to take a payment, rather than a
+           second one that would drift from it. */
+        <PaymentDialog
+          invoice={collecting}
+          onSettled={setCollecting}
+          onClose={() => {
+            setCollecting(null);
+            // Settled bills leave the list; a part payment stays on it with a
+            // smaller balance. Either way the list has to be re-read.
+            void reloadOutstanding();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // --- pieces -----------------------------------------------------------------
+
+/** The same column header as the day board, so the two tables read as one product. */
+function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <th scope="col" className={`mono-label px-4 py-2.5 ${className}`}>
+      {children}
+    </th>
+  );
+}
 
 /** Clinic-local today. The clinic runs on IST; the browser may not. */
 function clinicToday(): string {
@@ -1199,7 +1515,7 @@ function FindPatient({
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        setResults((await api.searchPatients(query)).patients.slice(0, 6));
+        setResults((await api.searchPatients(query)).patients);
       } catch {
         setResults([]);
       } finally {
@@ -1228,7 +1544,11 @@ function FindPatient({
       {searching && <p className="field-hint">Searching…</p>}
 
       {results.length > 0 && (
-        <ul className="mt-2 divide-y divide-ink/6 overflow-hidden rounded-panel border border-ink/10">
+        /* Scrolls, since 27 Oct 2026. It used to show six of however many
+           matched and say nothing about the rest — which on a UHID search is
+           most of them, because every ID in a clinic shares a prefix and
+           typing one matches everybody on file. */
+        <ul className="scrollbar-quiet mt-2 max-h-[264px] divide-y divide-ink/6 overflow-y-auto rounded-panel border border-ink/10">
           {results.map((p) => (
             <li key={p.id}>
               <button
@@ -1252,6 +1572,14 @@ function FindPatient({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Said, not hidden. A capped list that looks complete is worse than one
+          that admits it is capped. */}
+      {results.length >= SEARCH_CAP && (
+        <p className="field-hint">
+          Showing the closest {SEARCH_CAP}. Add a mobile number or a UHID to narrow it.
+        </p>
       )}
 
       <div className="mt-3 flex items-center gap-2">
@@ -1291,7 +1619,22 @@ function InlineRegister({
   const [ageYears, setAgeYears] = useState('');
   const [mobile, setMobile] = useState('');
   const [city, setCity] = useState('');
-  const [consent, setConsent] = useState(true);
+  const [state, setState] = useState(DEFAULT_STATE);
+  /**
+   * CONSENT STARTS UNTICKED.
+   *
+   * It defaulted to `true`, so the box was already ticked when the form opened
+   * and a clerk who never read it out still submitted "the patient consents".
+   * That is not consent — DPDP wants an affirmative act, and the main
+   * registration form says so in as many words: a tick that appears by itself
+   * is not one, which is why consent is excluded from its draft restore.
+   *
+   * Found on 30 Oct 2026 while checking a report that consent was MISSING from
+   * this flow. It was present; it was answered for the patient in advance,
+   * which is worse than missing because the record then claims something
+   * nobody did. Submit is already gated on this being ticked.
+   */
+  const [consent, setConsent] = useState(false);
 
   const [weak, setWeak] = useState<Array<{ id: string; name: string; uhid: string }>>([]);
   const [blocking, setBlocking] = useState<Array<{ id: string; name: string; uhid: string }>>([]);
@@ -1332,6 +1675,7 @@ function InlineRegister({
         consentMarketing: false,
         ...(ageYears ? { ageYears: Number(ageYears) } : {}),
         ...(city ? { city } : {}),
+        ...(state ? { state } : {}),
         ...(confirmedNotDuplicate ? { confirmedNotDuplicate: true } : {}),
       });
       onDone(patient);
@@ -1390,7 +1734,7 @@ function InlineRegister({
             disabled={saving}
             onClick={() => void submit(true)}
           >
-            This is a different person — register anyway
+            This is a different person, register anyway
           </button>
         </div>
       )}
@@ -1452,9 +1796,28 @@ function InlineRegister({
             inputMode="numeric"
           />
         </label>
-        <label className="sm:col-span-2">
+        <label>
           <span className="field-label">City</span>
           <input className="field-input" value={city} onChange={(e) => setCity(e.target.value)} />
+        </label>
+        {/*
+          THE OTHER REGISTRATION DOOR.
+
+          This form is deliberately short — a patient at a finance desk is not
+          the moment to ask for a postcode — but it was sending no state at
+          all, so the same clinic produced patients with a state and patients
+          without one depending on which screen registered them. A dropdown
+          that is already on the right answer costs the desk nothing.
+        */}
+        <label>
+          <span className="field-label">State</span>
+          <select className="field-input" value={state} onChange={(e) => setState(e.target.value)}>
+            {INDIAN_STATES.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 
@@ -1466,7 +1829,7 @@ function InlineRegister({
           className="mt-0.5"
         />
         <span>
-          The patient consents to their records being held for their care. Required — this is the
+          The patient consents to their records being held for their care. Required: this is the
           DPDP consent captured at registration.
         </span>
       </label>
@@ -1660,7 +2023,7 @@ function AddCharge({
           <option value="">Choose a service…</option>
           {services.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name} — {formatPaise(s.pricePaise)}
+              {s.name} · {formatPaise(s.pricePaise)}
             </option>
           ))}
         </select>
@@ -1781,7 +2144,7 @@ function Finished({
               sending them back to reception is a wasted trip across a clinic. */}
           <p className="mt-1 text-[13px] text-ink-60">
             {standalone
-              ? 'Send them to the test room — the department can release the result now.'
+              ? 'Send them to the test room. The department can release the result now.'
               : 'Send them to the front desk to be checked in.'}
           </p>
         </div>

@@ -38,15 +38,116 @@ export type DiagnosticBillingState =
   | { status: 'SETTLED'; invoiceNumber: string }
   | { status: 'VOID'; invoiceNumber: string };
 
+/**
+ * Where ONE INVOICE stands with the money, as a pure function over rows already
+ * loaded.
+ *
+ * Extracted on 29 Sep 2026 for the home-page day board, which asks this question
+ * about sixty patients at a time. The alternative was a second copy of the
+ * arithmetic for the bulk case, which is exactly what `diagnosticBillingState`
+ * below was written to avoid — and the consequence of getting it wrong is
+ * specific: a board that says "Fee paid" for a visit the check-in gate then
+ * refuses, so the front desk is told the patient is clear and then blocked.
+ *
+ * `blockingReason` and `diagnosticBillingState` both call this, so there is one
+ * definition of "paid" in the system and all three screens agree by
+ * construction rather than by review.
+ */
+export interface InvoiceSettlementInput {
+  number: string;
+  status: string;
+  totalPaise: number;
+  payments: Array<{ direction: string; amountPaise: number }>;
+  /**
+   * Forgiven money, which settles a bill exactly as cash does.
+   *
+   * REQUIRED, not optional, and that is the point. A fully waived bill is
+   * caught by its WAIVED status above, so this changes nothing for it — but a
+   * PARTLY waived bill is still UNPAID, and without these rows this function
+   * reported a balance higher than `totals` did. The desk was shown the
+   * pre-waiver figure, tried to collect it, and the server refused it as an
+   * overpayment.
+   *
+   * Making it required means every caller's `select` must fetch it, and the
+   * compiler finds the ones that do not. An optional field would have let the
+   * two figures drift apart again silently, which is how they drifted in the
+   * first place.
+   */
+  writeOffs: Array<{ amountPaise: number; voidedAt: Date | null }>;
+}
+
+export type InvoiceSettlement =
+  /** No charge was raised — this clinic prices nothing, or not this item. */
+  | { status: 'NOT_BILLED' }
+  | { status: 'UNPAID'; invoiceNumber: string; balancePaise: number }
+  | { status: 'SETTLED'; invoiceNumber: string }
+  | { status: 'VOID'; invoiceNumber: string };
+
+export function invoiceSettlement(invoice: InvoiceSettlementInput | null): InvoiceSettlement {
+  if (!invoice) return { status: 'NOT_BILLED' };
+
+  if (invoice.status === 'CANCELLED') {
+    return { status: 'VOID', invoiceNumber: invoice.number };
+  }
+
+  // PAID, WAIVED and DEFERRED all mean "no more money is expected before the
+  // patient is served" — a clinic that defers a bill must not find it deferred
+  // at the desk and blocked in the X-ray room.
+  if ((SETTLED as readonly string[]).includes(invoice.status)) {
+    return { status: 'SETTLED', invoiceNumber: invoice.number };
+  }
+
+  const paid = sum(invoice.payments.filter((p) => p.direction === 'IN'));
+  const refunded = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
+  /* Voided waivers excluded, as `totals` does: forgiveness that was taken back
+     settles nothing. */
+  const writtenOff = invoice.writeOffs
+    .filter((w) => w.voidedAt === null)
+    .reduce((n, w) => n + w.amountPaise, 0);
+  const balancePaise = invoice.totalPaise - (paid - refunded) - writtenOff;
+
+  if (balancePaise <= 0) return { status: 'SETTLED', invoiceNumber: invoice.number };
+  return { status: 'UNPAID', invoiceNumber: invoice.number, balancePaise };
+}
+
+/**
+ * The emergency surcharge, by code.
+ *
+ * A PRICE-LIST SERVICE, not a column and not a rule. Three consequences, all
+ * of them wanted:
+ *
+ *   the clinic decides the amount, in Settings → Prices, like every other
+ *   charge — and a clinic that does not charge one simply never creates it,
+ *   which is why nothing here fails when the code is absent;
+ *
+ *   it lands on the bill as an ordinary line, so it prints on the receipt,
+ *   appears in the finance report and is refundable by the paths that already
+ *   exist;
+ *
+ *   it is ADDED BY SOMEBODY, never applied automatically. The queue's
+ *   EMERGENCY flag is set by whoever holds `queue:prioritise` — a nurse, often
+ *   — and raising a charge needs `invoice:write`. A flag that billed the
+ *   patient by itself would let the first permission spend the second, and it
+ *   would have to un-bill itself when the flag is cleared, which an invoice
+ *   with money on it cannot do.
+ *
+ * The desk is PROMPTED instead: `emergencyVisit` below tells the screen the
+ * queue already calls this an emergency, and the screen offers the charge.
+ */
+export const EMERGENCY_SURCHARGE_CODE = 'CONS-EMERG';
+
 /** What `diagnosticBillingState` needs loaded. Shared so the rule has one home. */
 export interface DiagnosticBillingInput {
   legacyUnbilled: boolean;
   invoiceLine: {
+    /** What this one test was charged, which is not the invoice's total. */
+    totalPaise: number;
     invoice: {
       number: string;
       status: string;
       totalPaise: number;
       payments: Array<{ direction: string; amountPaise: number }>;
+      writeOffs: Array<{ amountPaise: number; voidedAt: Date | null }>;
     };
   } | null;
 }
@@ -60,30 +161,11 @@ export interface DiagnosticBillingInput {
  * is how a worklist ends up showing "paid" for something the gate then refuses.
  */
 export function diagnosticBillingState(order: DiagnosticBillingInput): DiagnosticBillingState {
+  // The one state that is a fact about the ORDER rather than about any invoice,
+  // so it is answered before the invoice is looked at.
   if (order.legacyUnbilled) return { status: 'LEGACY' };
 
-  const line = order.invoiceLine;
-  if (!line) return { status: 'NOT_BILLED' };
-
-  const invoice = line.invoice;
-  if (invoice.status === 'CANCELLED') {
-    return { status: 'VOID', invoiceNumber: invoice.number };
-  }
-
-  // PAID, WAIVED and DEFERRED all mean "no more money is expected before the
-  // patient is served" — the same list the check-in gate uses, deliberately, so
-  // a clinic that defers a bill does not find it deferred at the desk and
-  // blocked in the X-ray room.
-  if ((SETTLED as readonly string[]).includes(invoice.status)) {
-    return { status: 'SETTLED', invoiceNumber: invoice.number };
-  }
-
-  const paid = sum(invoice.payments.filter((p) => p.direction === 'IN'));
-  const refunded = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
-  const balancePaise = invoice.totalPaise - (paid - refunded);
-
-  if (balancePaise <= 0) return { status: 'SETTLED', invoiceNumber: invoice.number };
-  return { status: 'UNPAID', invoiceNumber: invoice.number, balancePaise };
+  return invoiceSettlement(order.invoiceLine?.invoice ?? null);
 }
 
 /** The nested shape `diagnosticBillingState` reads. Reused by the worklist. */
@@ -91,12 +173,21 @@ export const DIAGNOSTIC_BILLING_SELECT = {
   legacyUnbilled: true,
   invoiceLine: {
     select: {
+      /**
+       * What this test cost, as charged — the line's own total, not the
+       * invoice's. A visit's bill may carry a consultation and three films;
+       * the requisition slip has to say what THIS one was.
+       */
+      totalPaise: true,
       invoice: {
         select: {
           number: true,
           status: true,
           totalPaise: true,
           payments: { select: { direction: true, amountPaise: true } },
+          /* A partly forgiven bill is still UNPAID but owes less. Without this
+             the worklist blocks a test whose balance has been written down. */
+          writeOffs: { select: { amountPaise: true, voidedAt: true } },
         },
       },
     },
@@ -346,6 +437,15 @@ export class BillingService {
       visitAppointmentId: string | null;
       serviceId: string;
       description: string;
+      /**
+       * What to charge, when the clinic is not charging the list price.
+       *
+       * Absent means the catalogue price, which is the normal case. Present
+       * means somebody decided this one costs something else — a concession on
+       * a repeat film, a bundled rate — and the decision belongs on the bill at
+       * the moment it is made, not as a discount argued about later at the desk.
+       */
+      pricePaise?: number;
     },
     meta: RequestMeta,
   ): Promise<{ invoiceId: string; lineId: string }> {
@@ -366,7 +466,12 @@ export class BillingService {
       tx,
       tenantId,
       invoice.id,
-      { patientId: input.patientId, serviceId: service.id, description: input.description },
+      {
+        patientId: input.patientId,
+        serviceId: service.id,
+        description: input.description,
+        ...(input.pricePaise === undefined ? {} : { pricePaise: input.pricePaise }),
+      },
       meta,
     );
 
@@ -389,7 +494,13 @@ export class BillingService {
     tx: TenantClient,
     tenantId: string,
     invoiceId: string,
-    input: { patientId: string; serviceId: string; description: string },
+    input: {
+      patientId: string;
+      serviceId: string;
+      description: string;
+      /** What to charge instead of the catalogue price. See the caller above. */
+      pricePaise?: number;
+    },
     meta: RequestMeta,
   ): Promise<{ id: string }> {
     const service = await tx.service.findUnique({
@@ -398,7 +509,19 @@ export class BillingService {
     });
     if (!service) throw new NotFoundException('Service not found');
 
-    const taxPaise = Math.round((service.pricePaise * service.taxRateBasisPoints) / 10000);
+    /**
+     * The price charged, which is not always the price listed.
+     *
+     * The LINE is the record of what was charged — it already copies the
+     * description for the same reason — so an override lives here and leaves
+     * the catalogue alone. Putting the clinic's list price up because one
+     * patient was charged differently is the bug this shape prevents.
+     *
+     * Tax is recomputed from the charged price rather than copied, or a
+     * concession would carry the full tax of a price nobody paid.
+     */
+    const pricePaise = input.pricePaise ?? service.pricePaise;
+    const taxPaise = Math.round((pricePaise * service.taxRateBasisPoints) / 10000);
 
     const line = await tx.invoiceLine.create({
       data: {
@@ -407,10 +530,10 @@ export class BillingService {
         serviceId: service.id,
         description: input.description,
         quantity: 1,
-        unitPricePaise: service.pricePaise,
+        unitPricePaise: pricePaise,
         taxRateBasisPoints: service.taxRateBasisPoints,
         taxPaise,
-        totalPaise: service.pricePaise + taxPaise,
+        totalPaise: pricePaise + taxPaise,
       },
       select: { id: true },
     });
@@ -557,26 +680,37 @@ export class BillingService {
   async blockingReason(tx: TenantClient, appointmentId: string): Promise<string | null> {
     const invoice = await tx.invoice.findUnique({
       where: { appointmentId },
-      select: { id: true, status: true, totalPaise: true, number: true },
+      // Payments come with the invoice rather than in a second round trip, so
+      // the pure rule below can be handed everything it needs. One query.
+      select: {
+        status: true,
+        totalPaise: true,
+        number: true,
+        payments: { select: { direction: true, amountPaise: true } },
+        /* Forgiven money settles a bill as cash does — see
+           `InvoiceSettlementInput`. Without this a partly waived bill blocks a
+           check-in for a balance that is no longer owed. */
+        writeOffs: { select: { amountPaise: true, voidedAt: true } },
+      },
     });
 
-    // No invoice at all — this clinic has not priced anything. See the note on
-    // ensureInvoiceForAppointment.
-    if (!invoice) return null;
+    // `invoiceSettlement` is the same function the worklist and the day board
+    // use. No invoice at all means this clinic has not priced anything — see
+    // the note on ensureInvoiceForAppointment.
+    const state = invoiceSettlement(invoice);
 
-    if (invoice.status === 'CANCELLED') {
-      return `Invoice ${invoice.number} was cancelled. Raise a new one before checking in.`;
+    if (state.status === 'VOID') {
+      return `Invoice ${state.invoiceNumber} was cancelled. Raise a new one before checking in.`;
     }
 
-    if ((SETTLED as readonly string[]).includes(invoice.status)) return null;
+    if (state.status === 'UNPAID') {
+      // "before issuing a token" until 12 Aug 2026, when tokens moved to
+      // booking. The gate did not move; the sentence had to, because by
+      // check-in the patient is already holding their token.
+      return `${formatPaise(state.balancePaise)} outstanding on invoice ${state.invoiceNumber}. Collect payment before adding them to the queue.`;
+    }
 
-    const { balancePaise } = await this.totals(tx, invoice.id, invoice.totalPaise);
-    if (balancePaise <= 0) return null;
-
-    // "before issuing a token" until 12 Aug 2026, when tokens moved to booking.
-    // The gate did not move; the sentence had to, because by check-in the
-    // patient is already holding their token.
-    return `${formatPaise(balancePaise)} outstanding on invoice ${invoice.number}. Collect payment before adding them to the queue.`;
+    return null;
   }
 
   async getForAppointment(tenantId: string, appointmentId: string) {
@@ -587,6 +721,40 @@ export class BillingService {
       });
       if (!invoice) throw new NotFoundException('No invoice for this appointment');
       return this.view(tx, invoice.id);
+    });
+  }
+
+  /**
+   * EVERY bill this visit has produced, oldest first.
+   *
+   * A visit makes more than one. The consultation's invoice carries
+   * `appointmentId`; a test raises its own with `appointmentId` NULL and
+   * `visitAppointmentId` set, because the consultation bill is settled before
+   * the doctor is reached and will not take another line. That split is
+   * deliberate and is not changing.
+   *
+   * What was wrong is that nothing ever showed both. The finance desk opened a
+   * visit, saw the consultation bill, took the money — and the X-ray's bill was
+   * on no screen it was looking at, so the test stayed unpaid and the
+   * department stayed blocked. Reported from the clinic on 27 Oct 2026: "xray
+   * ka UPI nahi liya".
+   *
+   * Returns settled bills too. "What did this visit cost and what is left" is
+   * one question, and hiding the paid half makes the remainder unexplainable.
+   */
+  async getAllForAppointment(tenantId: string, appointmentId: string) {
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const invoices = await tx.invoice.findMany({
+        where: {
+          OR: [{ appointmentId }, { visitAppointmentId: appointmentId }],
+        },
+        orderBy: { issuedAt: 'asc' },
+        select: { id: true },
+      });
+
+      return {
+        invoices: await Promise.all(invoices.map((i) => this.view(tx, i.id))),
+      };
     });
   }
 
@@ -689,8 +857,8 @@ export class BillingService {
         throw new ConflictException({
           code: 'LINE_IS_A_TEST',
           message:
-            `“${line.description}” is a test that was ordered. Decline the test instead — ` +
-            'that takes the charge to zero and stops the department from running it.',
+            `“${line.description}” is a test that was ordered. Decline the test instead. ` +
+            'That takes the charge to zero and stops the department from running it.',
         });
       }
 
@@ -767,72 +935,392 @@ export class BillingService {
         });
       }
 
-      const payment = await tx.payment.create({
-        data: {
-          tenantId,
-          invoiceId: id,
-          direction: 'IN',
-          mode: input.mode as never,
-          amountPaise: input.amountPaise,
-          reference: input.reference ?? null,
-          collectedByUserId,
-        },
-        select: { id: true, collectedAt: true },
-      });
-
-      /**
-       * The receipt, written in the same transaction as the payment.
-       *
-       * FR-RCP-01: every time the desk takes money, there is a receipt to hand
-       * over. Created HERE rather than at print time so its figures are the ones
-       * that were true when the money moved — a payment without a receipt is not
-       * a state this database can hold.
-       *
-       * The money block is FROZEN rather than derived. Deriving it looked safe,
-       * since the total cannot move while money sits on the invoice — but
-       * `loadEditable` tests paid MINUS refunded, so a fully refunded invoice
-       * becomes editable again and its total can change afterwards. A reprint
-       * would then show a balance that was never true on the day.
-       */
-      const full = await tx.invoice.findUniqueOrThrow({
-        where: { id },
-        select: { subtotalPaise: true, discountPaise: true, taxPaise: true, totalPaise: true },
-      });
-
-      await tx.receipt.create({
-        data: {
-          tenantId,
-          paymentId: payment.id,
-          invoiceId: id,
-          number: await this.nextReceiptNumber(tx, tenantId),
-          totalChargedPaise: full.subtotalPaise,
-          discountPaise: full.discountPaise,
-          taxPaise: full.taxPaise,
-          payablePaise: full.totalPaise,
-          paidNowPaise: input.amountPaise,
-          // What was still outstanding immediately after this payment. The
-          // balance read above is the one BEFORE it.
-          balancePaise: balancePaise - input.amountPaise,
-          issuedAt: payment.collectedAt,
-        },
-      });
-
-      await this.restatus(tx, id, invoice.totalPaise);
-
-      await this.audit.record(tx, tenantId, {
-        action: 'payment.collect',
-        resourceType: 'Invoice',
-        resourceId: id,
-        patientId: invoice.patientId,
-        changedFields: ['payments', 'status'],
-        ...meta,
-      });
+      await this.recordPaymentAgainst(
+        tx,
+        tenantId,
+        { id, totalPaise: invoice.totalPaise, patientId: invoice.patientId },
+        input,
+        collectedByUserId,
+        balancePaise,
+        meta,
+      );
 
       return this.view(tx, id);
     });
   }
 
+  /**
+   * SETTLE SEVERAL OF ONE PATIENT'S BILLS FROM ONE HANDOVER OF MONEY.
+   *
+   * Reported from the clinic on 29 Oct 2026: a patient seeing three doctors had
+   * three bills, and the desk had to run the Collect dialog three times while
+   * the patient stood there. The board could only ever offer the oldest one,
+   * which is why its button read "1 of 3".
+   *
+   * ONE TRANSACTION, MANY PAYMENT ROWS. A payment row belongs to exactly one
+   * invoice and that is not negotiable — it is what lets the day-end drawer be
+   * counted by mode and a receipt be reprinted years later. So this does not
+   * invent a payment spanning bills; it writes one payment per bill, together,
+   * so the desk cannot end up having settled two bills out of three.
+   *
+   * OLDEST BILL FIRST, not pro-rata. Narveer's call, 29 Oct 2026: a part
+   * payment spread thinly leaves every bill open and the patient still owing on
+   * all three, so nothing is ever finished. Filling the oldest to zero means
+   * the count of bills owing actually falls, and it matches the order the board
+   * already lists them in.
+   *
+   * `invoiceIds` comes from the caller rather than being discovered here, so
+   * the desk settles exactly the bills it was looking at. A charge raised
+   * between the screen rendering and the clerk pressing Collect is not swept
+   * into a payment nobody saw.
+   */
+  async collectAcross(
+    tenantId: string,
+    patientId: string,
+    input: { mode: string; amountPaise: number; reference?: string; invoiceIds: string[] },
+    meta: RequestMeta,
+  ) {
+    const collectedByUserId = meta.actorUserId;
+    if (!collectedByUserId) throw new BadRequestException('A payment needs a collector.');
+    if (input.amountPaise <= 0) {
+      throw new BadRequestException('A payment must be more than zero.');
+    }
+    if (input.invoiceIds.length === 0) {
+      throw new BadRequestException('Name the bills this money is for.');
+    }
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      /*
+       * Locked in a FIXED order, sorted by id.
+       *
+       * Two desks collecting from two patients who share a bill between them is
+       * not a thing, but two clerks on the same patient is — and two
+       * transactions taking the same locks in opposite orders deadlock. Sorting
+       * means every caller queues in the same order instead.
+       */
+      const ids = [...new Set(input.invoiceIds)].sort();
+      for (const id of ids) await lockInvoice(tx, id);
+
+      const invoices = await tx.invoice.findMany({
+        where: { id: { in: ids }, patientId },
+        // Oldest first: the order the money is applied in.
+        orderBy: { issuedAt: 'asc' },
+        select: { id: true, status: true, number: true, totalPaise: true, patientId: true },
+      });
+
+      // Belonging to this patient is part of the WHERE above, so a short result
+      // means one of the ids was somebody else's bill or does not exist. Either
+      // way the desk is not looking at what it thinks it is.
+      if (invoices.length !== ids.length) {
+        throw new NotFoundException('One of those bills is not this patient’s.');
+      }
+
+      for (const invoice of invoices) {
+        if (invoice.status === 'CANCELLED') {
+          throw new ConflictException({
+            code: 'INVOICE_CANCELLED',
+            message: `Bill ${invoice.number} was cancelled. Take it off the list and collect the rest.`,
+          });
+        }
+        if (invoice.status === 'WAIVED') {
+          throw new ConflictException({
+            code: 'INVOICE_WAIVED',
+            message: `Bill ${invoice.number} was waived. Reverse the waiver before collecting.`,
+          });
+        }
+      }
+
+      const owing: Array<{ id: string; number: string; totalPaise: number; balancePaise: number }> =
+        [];
+      for (const invoice of invoices) {
+        const { balancePaise } = await this.totals(tx, invoice.id, invoice.totalPaise);
+        if (balancePaise > 0) {
+          owing.push({
+            id: invoice.id,
+            number: invoice.number,
+            totalPaise: invoice.totalPaise,
+            balancePaise,
+          });
+        }
+      }
+
+      if (owing.length === 0) {
+        throw new ConflictException({
+          code: 'NOTHING_OWING',
+          message: 'Those bills are already settled.',
+        });
+      }
+
+      const outstandingPaise = owing.reduce((n, i) => n + i.balancePaise, 0);
+
+      // The same refusal as a single bill, for the same reason: a clinic that
+      // takes more than is owed has created a debt nobody recorded.
+      if (input.amountPaise > outstandingPaise) {
+        throw new ConflictException({
+          code: 'OVERPAYMENT',
+          message: `Only ${formatPaise(outstandingPaise)} is outstanding across those bills. Collect that or less.`,
+          balancePaise: outstandingPaise,
+        });
+      }
+
+      const allocated: Array<{
+        invoiceId: string;
+        invoiceNumber: string;
+        amountPaise: number;
+        paymentId: string;
+        balancePaise: number;
+      }> = [];
+
+      let left = input.amountPaise;
+      for (const invoice of owing) {
+        if (left <= 0) break;
+
+        // Everything this bill still needs, or everything that is left.
+        const share = Math.min(invoice.balancePaise, left);
+
+        const payment = await this.recordPaymentAgainst(
+          tx,
+          tenantId,
+          { id: invoice.id, totalPaise: invoice.totalPaise, patientId },
+          {
+            mode: input.mode,
+            amountPaise: share,
+            ...(input.reference ? { reference: input.reference } : {}),
+          },
+          collectedByUserId,
+          invoice.balancePaise,
+          meta,
+        );
+
+        allocated.push({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          amountPaise: share,
+          paymentId: payment.id,
+          balancePaise: invoice.balancePaise - share,
+        });
+
+        left -= share;
+      }
+
+      return {
+        collectedPaise: input.amountPaise,
+        outstandingBeforePaise: outstandingPaise,
+        outstandingAfterPaise: outstandingPaise - input.amountPaise,
+        billsSettled: allocated.filter((a) => a.balancePaise === 0).length,
+        allocated,
+      };
+    });
+  }
+
+  /**
+   * One payment and its receipt against ONE invoice that is ALREADY LOCKED.
+   *
+   * Extracted from `collect` so that paying several of a patient's bills in one
+   * go cannot drift from paying one of them — the receipt's frozen figures, the
+   * restatus and the audit row are the parts that must be identical however the
+   * money arrived. The caller locks the invoice and works out the balance,
+   * because only the caller knows whether this is the whole payment or one
+   * slice of a larger one.
+   */
+  private async recordPaymentAgainst(
+    tx: TenantClient,
+    tenantId: string,
+    invoice: { id: string; totalPaise: number; patientId: string },
+    input: { mode: string; amountPaise: number; reference?: string },
+    collectedByUserId: string,
+    balancePaise: number,
+    meta: RequestMeta,
+  ): Promise<{ id: string; collectedAt: Date }> {
+    const id = invoice.id;
+
+    const payment = await tx.payment.create({
+      data: {
+        tenantId,
+        invoiceId: id,
+        direction: 'IN',
+        mode: input.mode as never,
+        amountPaise: input.amountPaise,
+        reference: input.reference ?? null,
+        collectedByUserId,
+      },
+      select: { id: true, collectedAt: true },
+    });
+
+    /**
+     * The receipt, written in the same transaction as the payment.
+     *
+     * FR-RCP-01: every time the desk takes money, there is a receipt to hand
+     * over. Created HERE rather than at print time so its figures are the ones
+     * that were true when the money moved — a payment without a receipt is not
+     * a state this database can hold.
+     *
+     * The money block is FROZEN rather than derived. Deriving it looked safe,
+     * since the total cannot move while money sits on the invoice — but
+     * `loadEditable` tests paid MINUS refunded, so a fully refunded invoice
+     * becomes editable again and its total can change afterwards. A reprint
+     * would then show a balance that was never true on the day.
+     *
+     * One receipt per BILL, including when several bills are settled by one
+     * handover of cash. Narveer's call, 29 Oct 2026: a combined slip would mean
+     * a receipt pointing at many payments, and that is the one thing this table
+     * is shaped not to do. Three bills therefore produce three slips.
+     */
+    const full = await tx.invoice.findUniqueOrThrow({
+      where: { id },
+      select: { subtotalPaise: true, discountPaise: true, taxPaise: true, totalPaise: true },
+    });
+
+    await tx.receipt.create({
+      data: {
+        tenantId,
+        paymentId: payment.id,
+        invoiceId: id,
+        number: await this.nextReceiptNumber(tx, tenantId),
+        totalChargedPaise: full.subtotalPaise,
+        discountPaise: full.discountPaise,
+        taxPaise: full.taxPaise,
+        payablePaise: full.totalPaise,
+        paidNowPaise: input.amountPaise,
+        // What was still outstanding immediately after this payment. The
+        // balance passed in is the one BEFORE it.
+        balancePaise: balancePaise - input.amountPaise,
+        issuedAt: payment.collectedAt,
+      },
+    });
+
+    await this.restatus(tx, id, invoice.totalPaise);
+
+    await this.audit.record(tx, tenantId, {
+      action: 'payment.collect',
+      resourceType: 'Invoice',
+      resourceId: id,
+      patientId: invoice.patientId,
+      changedFields: ['payments', 'status'],
+      ...meta,
+    });
+
+    return payment;
+  }
+
   /** Give money back. Never more than came in. */
+  /**
+   * The money was right; the MODE was wrong.
+   *
+   * Reported from the clinic on 27 Oct 2026: an X-ray was paid by UPI and
+   * recorded as cash. Nothing was missing from the bill — the patient owed
+   * nothing and the invoice was settled — but the day's cash drawer claimed
+   * ₹700 it had never held, and UPI was short by the same.
+   *
+   * TWO ROWS, NOT AN EDIT. A payment is a row and a correction is a
+   * compensating row, never a column rewritten: that is what lets a receipt
+   * reprinted in 2029 show what actually happened. So this reverses the
+   * original as RECORDED_IN_ERROR — money that was never really in the drawer,
+   * which is exactly true — and records the same amount again in the right
+   * mode.
+   *
+   * ONE TRANSACTION, which is the whole reason this is a method and not two
+   * calls from the browser. A reversal that lands without its replacement
+   * leaves a settled bill looking unpaid, with a patient who has already gone
+   * home; that is a worse state than the typo it was fixing.
+   */
+  async correctPaymentMode(
+    tenantId: string,
+    invoiceId: string,
+    input: { paymentId: string; mode: string; reference?: string },
+    meta: RequestMeta,
+  ) {
+    const actorUserId = meta.actorUserId;
+    if (!actorUserId) throw new BadRequestException('A correction needs an author.');
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      await lockInvoice(tx, invoiceId);
+
+      const invoice = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        select: { id: true, totalPaise: true, patientId: true },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+
+      const original = await tx.payment.findUnique({
+        where: { id: input.paymentId },
+        select: {
+          id: true,
+          invoiceId: true,
+          direction: true,
+          mode: true,
+          amountPaise: true,
+          correctionKind: true,
+        },
+      });
+      if (!original || original.invoiceId !== invoiceId) {
+        throw new NotFoundException('No such payment on this bill.');
+      }
+
+      /* Only money that came IN has a mode worth correcting. A refund's mode
+         says how money went back, and reversing one here would be inventing a
+         second refund. */
+      if (original.direction !== 'IN' || original.correctionKind) {
+        throw new ConflictException({
+          code: 'NOT_A_COLLECTION',
+          message: 'Only a payment taken from the patient can have its mode corrected.',
+        });
+      }
+
+      if (original.mode === input.mode) {
+        throw new ConflictException({
+          code: 'SAME_MODE',
+          message: `That payment is already recorded as ${String(original.mode).toLowerCase()}.`,
+        });
+      }
+
+      const reason = `Mode corrected from ${String(original.mode)} to ${input.mode}`;
+
+      // Out: the drawer never held this.
+      await tx.payment.create({
+        data: {
+          tenantId,
+          invoiceId,
+          direction: 'REFUND',
+          mode: original.mode,
+          amountPaise: original.amountPaise,
+          reason,
+          correctionKind: 'RECORDED_IN_ERROR',
+          collectedByUserId: actorUserId,
+        },
+      });
+
+      // In: the same money, where it actually arrived.
+      const replacement = await tx.payment.create({
+        data: {
+          tenantId,
+          invoiceId,
+          direction: 'IN',
+          mode: input.mode as never,
+          amountPaise: original.amountPaise,
+          reference: input.reference ?? null,
+          reason,
+          collectedByUserId: actorUserId,
+        },
+        select: { id: true },
+      });
+
+      await this.restatus(tx, invoiceId, invoice.totalPaise);
+
+      await this.audit.record(tx, tenantId, {
+        action: 'payment.mode_corrected',
+        resourceType: 'Invoice',
+        resourceId: invoiceId,
+        patientId: invoice.patientId,
+        changedFields: ['payments'],
+        reason,
+        ...meta,
+      });
+
+      return { ...(await this.view(tx, invoiceId)), correctedPaymentId: replacement.id };
+    });
+  }
+
   async refund(
     tenantId: string,
     id: string,
@@ -860,7 +1348,7 @@ export class BillingService {
       if (input.amountPaise > refundable) {
         throw new ConflictException({
           code: 'REFUND_EXCEEDS_PAYMENTS',
-          message: `Only ${formatPaise(refundable)} can be refunded — that is what was actually collected.`,
+          message: `Only ${formatPaise(refundable)} can be refunded. That is what was actually collected.`,
           refundablePaise: refundable,
         });
       }
@@ -894,11 +1382,204 @@ export class BillingService {
     });
   }
 
-  /** Write the charge off, defer it, or void the invoice. All need a reason. */
+  /**
+   * FORGIVE PART OR ALL OF A CHARGE.
+   *
+   * Narveer's case, 2 Nov 2026: a relative pays at the desk, the doctor sees
+   * him afterwards and wants to make the visit complimentary. Two or three a
+   * day.
+   *
+   * ALREADY PAID IS HANDLED HERE RATHER THAN BY THE CALLER. Forgiving money
+   * that has already been collected means handing it back AND writing it off,
+   * and doing that as two calls leaves a window where the bill reads "owing"
+   * — if the second half then fails, the clinic has created a debt for
+   * somebody it just refunded. Both rows go in one transaction or neither
+   * does.
+   *
+   * The refund is recorded as a real PATIENT_REFUND so the drawer still
+   * reconciles: money physically left the till.
+   */
+  async writeOff(
+    tenantId: string,
+    id: string,
+    input: { amountPaise: number; reason: string },
+    meta: RequestMeta,
+  ) {
+    const waivedByUserId = meta.actorUserId;
+    if (!waivedByUserId) throw new BadRequestException('A waiver needs an author.');
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      await lockInvoice(tx, id);
+
+      const invoice = await tx.invoice.findUnique({
+        where: { id },
+        select: { id: true, status: true, totalPaise: true, patientId: true },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+
+      if (invoice.status === 'CANCELLED') {
+        throw new ConflictException({
+          code: 'INVOICE_CANCELLED',
+          message: 'This invoice is cancelled. There is nothing left to forgive.',
+        });
+      }
+
+      const { paidPaise, refundedPaise, writtenOffPaise } = await this.totals(
+        tx,
+        id,
+        invoice.totalPaise,
+      );
+
+      /*
+       * The ceiling is the whole charge, less what has already been forgiven —
+       * NOT the outstanding balance. A bill that has been paid in full has a
+       * balance of zero and is exactly the case this was built for.
+       */
+      const forgivable = invoice.totalPaise - writtenOffPaise;
+      if (input.amountPaise > forgivable) {
+        throw new ConflictException({
+          code: 'WRITE_OFF_EXCEEDS_CHARGE',
+          message:
+            forgivable <= 0
+              ? 'The whole of this bill has already been written off.'
+              : `Only ${formatPaise(forgivable)} is left to write off on this bill.`,
+          forgivablePaise: forgivable,
+        });
+      }
+
+      /*
+       * Money already in the till, up to what is being forgiven, goes back.
+       * Anything beyond that was never collected, so there is nothing to
+       * return — the write-off alone cancels the debt.
+       */
+      const held = paidPaise - refundedPaise;
+      const toRefund = Math.min(held, input.amountPaise);
+
+      if (toRefund > 0) {
+        await tx.payment.create({
+          data: {
+            tenantId,
+            invoiceId: id,
+            direction: 'REFUND',
+            mode: 'CASH',
+            amountPaise: toRefund,
+            reason: input.reason,
+            correctionKind: 'PATIENT_REFUND',
+            collectedByUserId: waivedByUserId,
+          },
+        });
+      }
+
+      const writeOff = await tx.invoiceWriteOff.create({
+        data: {
+          tenantId,
+          invoiceId: id,
+          amountPaise: input.amountPaise,
+          reason: input.reason,
+          waivedByUserId,
+        },
+        select: { id: true },
+      });
+
+      await this.restatus(tx, id, invoice.totalPaise);
+
+      await this.audit.record(tx, tenantId, {
+        action: 'invoice.write_off',
+        resourceType: 'Invoice',
+        resourceId: id,
+        patientId: invoice.patientId,
+        changedFields: toRefund > 0 ? ['writeOffs', 'payments', 'status'] : ['writeOffs', 'status'],
+        reason: input.reason,
+        ...meta,
+      });
+
+      return { ...(await this.view(tx, id)), writeOffId: writeOff.id, refundedPaise: toRefund };
+    });
+  }
+
+  /**
+   * UNDO A WAIVER PUT ON THE WRONG BILL.
+   *
+   * Voided, never deleted: what was given away and then taken back is as much
+   * a part of the history as the waiver itself, and a clinic that can quietly
+   * remove one can quietly remove any of them.
+   *
+   * The money is NOT re-collected. Voiding says the forgiveness was a mistake,
+   * which puts the charge back on the bill as owing — collecting it is a
+   * separate act by whoever is standing at the desk.
+   */
+  async voidWriteOff(
+    tenantId: string,
+    id: string,
+    writeOffId: string,
+    reason: string,
+    meta: RequestMeta,
+  ) {
+    const voidedByUserId = meta.actorUserId;
+    if (!voidedByUserId) throw new BadRequestException('Undoing a waiver needs an author.');
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      await lockInvoice(tx, id);
+
+      const invoice = await tx.invoice.findUnique({
+        where: { id },
+        select: { id: true, totalPaise: true, patientId: true },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+
+      const writeOff = await tx.invoiceWriteOff.findUnique({
+        where: { id: writeOffId },
+        select: { id: true, invoiceId: true, voidedAt: true },
+      });
+      if (!writeOff || writeOff.invoiceId !== id) {
+        throw new NotFoundException('Waiver not found on this bill.');
+      }
+
+      if (writeOff.voidedAt) {
+        throw new ConflictException({
+          code: 'ALREADY_VOIDED',
+          message: 'This waiver has already been undone.',
+        });
+      }
+
+      await tx.invoiceWriteOff.update({
+        where: { id: writeOffId },
+        data: { voidedAt: new Date(), voidedByUserId, voidReason: reason },
+      });
+
+      await this.restatus(tx, id, invoice.totalPaise);
+
+      await this.audit.record(tx, tenantId, {
+        action: 'invoice.void_write_off',
+        resourceType: 'Invoice',
+        resourceId: id,
+        patientId: invoice.patientId,
+        changedFields: ['writeOffs', 'status'],
+        reason,
+        ...meta,
+      });
+
+      return this.view(tx, id);
+    });
+  }
+
+  /**
+   * Defer the charge or void the invoice. Both need a reason.
+   *
+   * WAIVED IS NO LONGER SET HERE — 2 Nov 2026. Forgiving a charge went through
+   * this method when it was all-or-nothing, and it refused any bill that had
+   * been paid. It is now `writeOff`, which takes an amount and handles the
+   * already-paid case, and WAIVED is the status that falls out when a waiver
+   * clears the balance.
+   *
+   * The union is narrowed deliberately rather than left wide: two ways to
+   * waive a bill would drift apart, and the compiler is a cheaper guard
+   * against that than a comment.
+   */
   async setException(
     tenantId: string,
     id: string,
-    status: 'WAIVED' | 'DEFERRED' | 'CANCELLED',
+    status: 'DEFERRED' | 'CANCELLED',
     reason: string,
     meta: RequestMeta,
   ) {
@@ -974,6 +1655,30 @@ export class BillingService {
       });
       const tz = tenant.timezone;
       const day = date ?? clinicToday(tz);
+
+      /*
+       * NO DAY THAT HAS NOT HAPPENED YET.
+       *
+       * The screen carries `max={today}` on the picker, and that is all `max`
+       * does — a date TYPED into the field still reaches state and still comes
+       * down the wire. Reported from the clinic on 30 Oct 2026 for this screen
+       * and for the finance report, which guards it the same way.
+       *
+       * Refused rather than clamped: a collection sheet silently showing a
+       * different day than the one asked for is how a figure gets quoted at
+       * closing and nobody can reproduce it.
+       *
+       * Against the CLINIC's today, not the server's — see `ageFrom` for what
+       * the UTC date does for five and a half hours every morning.
+       */
+      const today = clinicToday(tz);
+      if (day > today) {
+        throw new BadRequestException({
+          code: 'FUTURE_DAY',
+          message: 'That day has not happened yet. Collections can only be read up to today.',
+          today,
+        });
+      }
 
       const from = localToInstant(day, '00:00', tz);
       const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
@@ -1094,6 +1799,34 @@ export class BillingService {
           reason: true,
           patient: { select: { id: true, name: true, uhid: true, mobile: true } },
           payments: { select: { direction: true, amountPaise: true } },
+
+          /**
+           * What the money is FOR, and who it belongs to.
+           *
+           * A desk chasing a bill is asked "what is this for?" before it is
+           * paid, and a number and an amount cannot answer that. The lines
+           * carry the description AS CHARGED — a consultation, an X-ray — and
+           * the appointment carries the doctor.
+           *
+           * Both links are read because a bill reaches a visit two ways:
+           * `appointmentId` when it IS the consultation bill, and
+           * `visitAppointmentId` when it is a test raised during that visit.
+           * The second exists precisely because the first is unique and a test
+           * bill cannot borrow it.
+           */
+          lines: { select: { description: true }, orderBy: { createdAt: 'asc' }, take: 4 },
+          appointment: { select: { practitioner: { select: { fullName: true } } } },
+          visitAppointment: { select: { practitioner: { select: { fullName: true } } } },
+
+          /**
+           * How many lines there really are, counted rather than inferred.
+           *
+           * `lines` above is capped at four, so the screen cannot tell a bill
+           * with exactly four charges from one with nine. Four descriptions and
+           * a count lets it say "and 5 more" instead of quietly presenting a
+           * truncated list as the whole bill.
+           */
+          _count: { select: { lines: true } },
         },
       });
 
@@ -1110,6 +1843,13 @@ export class BillingService {
             issuedAt: i.issuedAt,
             reason: i.reason,
             patient: i.patient,
+            items: i.lines.map((l) => l.description),
+            itemCount: i._count.lines,
+            // Null for a walk-in test, which belongs to no doctor.
+            doctor:
+              i.appointment?.practitioner?.fullName ??
+              i.visitAppointment?.practitioner?.fullName ??
+              null,
           };
         }),
       };
@@ -1238,10 +1978,27 @@ export class BillingService {
     const paidPaise = sum(payments.filter((p) => p.direction === 'IN'));
     const refundedPaise = sum(payments.filter((p) => p.direction === 'REFUND'));
 
+    /**
+     * What was forgiven rather than paid.
+     *
+     * Voided waivers are excluded here rather than deleted, so a write-off put
+     * on the wrong bill stops counting the moment it is undone while the
+     * record of both the mistake and the correction survives.
+     */
+    const liveWriteOffs = await tx.invoiceWriteOff.findMany({
+      where: { invoiceId, voidedAt: null },
+      select: { amountPaise: true },
+    });
+    const writtenOffPaise = liveWriteOffs.reduce((n, w) => n + w.amountPaise, 0);
+
     return {
       paidPaise,
       refundedPaise,
-      balancePaise: totalPaise - (paidPaise - refundedPaise),
+      writtenOffPaise,
+      /* Forgiven money settles a bill exactly as collected money does — the
+         difference is only where it came from, which is what keeps the two
+         separable in the finance report. */
+      balancePaise: totalPaise - (paidPaise - refundedPaise) - writtenOffPaise,
     };
   }
 
@@ -1275,13 +2032,60 @@ export class BillingService {
    * until the month-end.
    */
   private async restatus(tx: TenantClient, id: string, totalPaise: number): Promise<void> {
-    const { paidPaise, refundedPaise } = await this.totals(tx, id, totalPaise);
+    const { paidPaise, refundedPaise, writtenOffPaise } = await this.totals(tx, id, totalPaise);
     const net = paidPaise - refundedPaise;
+    const settled = net + writtenOffPaise;
 
-    const status =
-      net >= totalPaise && totalPaise > 0 ? 'PAID' : net > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
+    /**
+     * WAIVED IS NOW A DERIVED END-STATE, not a separate act — 2 Nov 2026.
+     *
+     * A bill cleared with any forgiven money reads WAIVED rather than PAID,
+     * which is what keeps the board's "Waived" in the Method column and the
+     * `feeWaived` flag working exactly as they did when waiving was its own
+     * endpoint. A bill cleared entirely in cash is still PAID.
+     *
+     * Partly forgiven and still owing stays UNPAID or PARTIALLY_PAID with a
+     * smaller balance — the waiver reduced the debt, it did not settle it.
+     */
+    const cleared = settled >= totalPaise && totalPaise > 0;
+    const status = cleared
+      ? writtenOffPaise > 0
+        ? 'WAIVED'
+        : 'PAID'
+      : settled > 0
+        ? 'PARTIALLY_PAID'
+        : 'UNPAID';
 
-    await tx.invoice.update({ where: { id }, data: { status } });
+    /**
+     * `invoice_exception_is_explained` requires a WAIVED invoice to carry a
+     * reason AND an authoriser on the invoice row itself. The waiver that
+     * closed the bill is the one that answers for it, so its words are copied
+     * up — and cleared again if a void takes the status back off WAIVED, so a
+     * bill never sits there explaining a decision that no longer stands.
+     */
+    const closing =
+      status === 'WAIVED'
+        ? await tx.invoiceWriteOff.findFirst({
+            where: { invoiceId: id, voidedAt: null },
+            orderBy: { waivedAt: 'desc' },
+            select: { reason: true, waivedByUserId: true },
+          })
+        : null;
+
+    await tx.invoice.update({
+      where: { id },
+      data: {
+        status,
+        ...(status === 'WAIVED' && closing
+          ? { reason: closing.reason, authorisedByUserId: closing.waivedByUserId }
+          : {}),
+        /* `status` here is only ever PAID, UNPAID, PARTIALLY_PAID or WAIVED —
+           DEFERRED and CANCELLED are set by `setException` and never reached
+           by this arithmetic, so anything that is not WAIVED has no exception
+           left to explain. */
+        ...(status === 'WAIVED' ? {} : { reason: null, authorisedByUserId: null }),
+      },
+    });
   }
 
   private async view(tx: TenantClient, id: string) {
@@ -1299,12 +2103,17 @@ export class BillingService {
           include: { diagnosticOrder: { select: { id: true, status: true } } },
         },
         payments: { orderBy: { collectedAt: 'asc' } },
+        /* Voided ones included deliberately: the dialog shows what was
+           forgiven AND what was taken back, which is the history the table
+           exists for. `totals` is what ignores the voided rows. */
+        writeOffs: { orderBy: { waivedAt: 'asc' } },
         appointment: {
           select: {
             id: true,
             startAt: true,
             status: true,
             externalTestNote: true,
+            priorityReasonCode: true,
             practitioner: { select: { fullName: true, prefix: true } },
           },
         },
@@ -1320,6 +2129,7 @@ export class BillingService {
             startAt: true,
             status: true,
             externalTestNote: true,
+            priorityReasonCode: true,
             practitioner: { select: { fullName: true, prefix: true } },
           },
         },
@@ -1329,6 +2139,11 @@ export class BillingService {
 
     const paidPaise = sum(invoice.payments.filter((p) => p.direction === 'IN'));
     const refundedPaise = sum(invoice.payments.filter((p) => p.direction === 'REFUND'));
+    /* Live waivers only. The voided ones are still returned for the history,
+       but they no longer settle anything. */
+    const writtenOffPaise = invoice.writeOffs
+      .filter((w) => w.voidedAt === null)
+      .reduce((n, w) => n + w.amountPaise, 0);
 
     /**
      * FR-BIL-13 — who did this, in words.
@@ -1390,11 +2205,27 @@ export class BillingService {
       })),
       paidPaise,
       refundedPaise,
-      balancePaise: invoice.totalPaise - (paidPaise - refundedPaise),
+      /** Forgiven and still standing. Voided waivers are excluded. */
+      writtenOffPaise,
+      balancePaise: invoice.totalPaise - (paidPaise - refundedPaise) - writtenOffPaise,
       /** True when the visit may proceed to the queue. */
       settled:
         (SETTLED as readonly string[]).includes(invoice.status) ||
-        invoice.totalPaise - (paidPaise - refundedPaise) <= 0,
+        invoice.totalPaise - (paidPaise - refundedPaise) - writtenOffPaise <= 0,
+
+      /**
+       * The queue already calls this visit an emergency.
+       *
+       * A PROMPT, not a charge: the screen offers the surcharge, somebody with
+       * `invoice:write` decides. See `EMERGENCY_SURCHARGE_CODE` for why it is
+       * not applied automatically.
+       *
+       * Read from whichever link this bill has — the consultation's own visit,
+       * or for a test bill the visit it was raised during, which is the same
+       * emergency either way. False where there is no visit at all.
+       */
+      emergencyVisit:
+        (invoice.appointment ?? invoice.visitAppointment)?.priorityReasonCode === 'EMERGENCY',
     };
   }
 }

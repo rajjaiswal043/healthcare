@@ -345,6 +345,7 @@ export type InvoiceWhereInput = {
   visitAppointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
   lines?: Prisma.InvoiceLineListRelationFilter
   payments?: Prisma.PaymentListRelationFilter
+  writeOffs?: Prisma.InvoiceWriteOffListRelationFilter
   activePromotion?: Prisma.XOR<Prisma.PromotionApplicationNullableScalarRelationFilter, Prisma.PromotionApplicationWhereInput> | null
   promotionApplications?: Prisma.PromotionApplicationListRelationFilter
   receipts?: Prisma.ReceiptListRelationFilter
@@ -375,6 +376,7 @@ export type InvoiceOrderByWithRelationInput = {
   visitAppointment?: Prisma.AppointmentOrderByWithRelationInput
   lines?: Prisma.InvoiceLineOrderByRelationAggregateInput
   payments?: Prisma.PaymentOrderByRelationAggregateInput
+  writeOffs?: Prisma.InvoiceWriteOffOrderByRelationAggregateInput
   activePromotion?: Prisma.PromotionApplicationOrderByWithRelationInput
   promotionApplications?: Prisma.PromotionApplicationOrderByRelationAggregateInput
   receipts?: Prisma.ReceiptOrderByRelationAggregateInput
@@ -409,6 +411,7 @@ export type InvoiceWhereUniqueInput = Prisma.AtLeast<{
   visitAppointment?: Prisma.XOR<Prisma.AppointmentNullableScalarRelationFilter, Prisma.AppointmentWhereInput> | null
   lines?: Prisma.InvoiceLineListRelationFilter
   payments?: Prisma.PaymentListRelationFilter
+  writeOffs?: Prisma.InvoiceWriteOffListRelationFilter
   activePromotion?: Prisma.XOR<Prisma.PromotionApplicationNullableScalarRelationFilter, Prisma.PromotionApplicationWhereInput> | null
   promotionApplications?: Prisma.PromotionApplicationListRelationFilter
   receipts?: Prisma.ReceiptListRelationFilter
@@ -487,6 +490,7 @@ export type InvoiceCreateInput = {
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
@@ -514,6 +518,7 @@ export type InvoiceUncheckedCreateInput = {
   activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
@@ -539,6 +544,7 @@ export type InvoiceUpdateInput = {
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
@@ -566,6 +572,7 @@ export type InvoiceUncheckedUpdateInput = {
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
@@ -871,6 +878,20 @@ export type InvoiceUpdateOneRequiredWithoutLinesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.InvoiceUpdateToOneWithWhereWithoutLinesInput, Prisma.InvoiceUpdateWithoutLinesInput>, Prisma.InvoiceUncheckedUpdateWithoutLinesInput>
 }
 
+export type InvoiceCreateNestedOneWithoutWriteOffsInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutWriteOffsInput, Prisma.InvoiceUncheckedCreateWithoutWriteOffsInput>
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutWriteOffsInput
+  connect?: Prisma.InvoiceWhereUniqueInput
+}
+
+export type InvoiceUpdateOneRequiredWithoutWriteOffsNestedInput = {
+  create?: Prisma.XOR<Prisma.InvoiceCreateWithoutWriteOffsInput, Prisma.InvoiceUncheckedCreateWithoutWriteOffsInput>
+  connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutWriteOffsInput
+  upsert?: Prisma.InvoiceUpsertWithoutWriteOffsInput
+  connect?: Prisma.InvoiceWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.InvoiceUpdateToOneWithWhereWithoutWriteOffsInput, Prisma.InvoiceUpdateWithoutWriteOffsInput>, Prisma.InvoiceUncheckedUpdateWithoutWriteOffsInput>
+}
+
 export type InvoiceCreateNestedOneWithoutPaymentsInput = {
   create?: Prisma.XOR<Prisma.InvoiceCreateWithoutPaymentsInput, Prisma.InvoiceUncheckedCreateWithoutPaymentsInput>
   connectOrCreate?: Prisma.InvoiceCreateOrConnectWithoutPaymentsInput
@@ -975,6 +996,7 @@ export type InvoiceCreateWithoutPatientInput = {
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
@@ -1001,6 +1023,7 @@ export type InvoiceUncheckedCreateWithoutPatientInput = {
   activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
@@ -1076,6 +1099,7 @@ export type InvoiceCreateWithoutAppointmentInput = {
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
@@ -1102,6 +1126,7 @@ export type InvoiceUncheckedCreateWithoutAppointmentInput = {
   activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
@@ -1131,6 +1156,7 @@ export type InvoiceCreateWithoutVisitAppointmentInput = {
   appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
@@ -1157,6 +1183,7 @@ export type InvoiceUncheckedCreateWithoutVisitAppointmentInput = {
   activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
@@ -1202,6 +1229,7 @@ export type InvoiceUpdateWithoutAppointmentInput = {
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
@@ -1228,6 +1256,7 @@ export type InvoiceUncheckedUpdateWithoutAppointmentInput = {
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
@@ -1268,6 +1297,7 @@ export type InvoiceCreateWithoutLinesInput = {
   appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
@@ -1294,6 +1324,7 @@ export type InvoiceUncheckedCreateWithoutLinesInput = {
   updatedAt?: Date | string
   activePromotionApplicationId?: string | null
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
@@ -1334,6 +1365,7 @@ export type InvoiceUpdateWithoutLinesInput = {
   appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
@@ -1360,6 +1392,127 @@ export type InvoiceUncheckedUpdateWithoutLinesInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
+  receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
+}
+
+export type InvoiceCreateWithoutWriteOffsInput = {
+  id?: string
+  tenantId: string
+  number: string
+  status?: $Enums.InvoiceStatus
+  subtotalPaise: number
+  discountPaise?: number
+  taxPaise?: number
+  totalPaise: number
+  reason?: string | null
+  authorisedByUserId?: string | null
+  issuedByUserId?: string | null
+  issuedAt?: Date | string
+  cancelledAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  patient: Prisma.PatientCreateNestedOneWithoutInvoicesInput
+  appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
+  visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
+  lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
+  payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
+  promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
+  receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
+}
+
+export type InvoiceUncheckedCreateWithoutWriteOffsInput = {
+  id?: string
+  tenantId: string
+  number: string
+  patientId: string
+  appointmentId?: string | null
+  visitAppointmentId?: string | null
+  status?: $Enums.InvoiceStatus
+  subtotalPaise: number
+  discountPaise?: number
+  taxPaise?: number
+  totalPaise: number
+  reason?: string | null
+  authorisedByUserId?: string | null
+  issuedByUserId?: string | null
+  issuedAt?: Date | string
+  cancelledAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  activePromotionApplicationId?: string | null
+  lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
+  payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
+  receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
+}
+
+export type InvoiceCreateOrConnectWithoutWriteOffsInput = {
+  where: Prisma.InvoiceWhereUniqueInput
+  create: Prisma.XOR<Prisma.InvoiceCreateWithoutWriteOffsInput, Prisma.InvoiceUncheckedCreateWithoutWriteOffsInput>
+}
+
+export type InvoiceUpsertWithoutWriteOffsInput = {
+  update: Prisma.XOR<Prisma.InvoiceUpdateWithoutWriteOffsInput, Prisma.InvoiceUncheckedUpdateWithoutWriteOffsInput>
+  create: Prisma.XOR<Prisma.InvoiceCreateWithoutWriteOffsInput, Prisma.InvoiceUncheckedCreateWithoutWriteOffsInput>
+  where?: Prisma.InvoiceWhereInput
+}
+
+export type InvoiceUpdateToOneWithWhereWithoutWriteOffsInput = {
+  where?: Prisma.InvoiceWhereInput
+  data: Prisma.XOR<Prisma.InvoiceUpdateWithoutWriteOffsInput, Prisma.InvoiceUncheckedUpdateWithoutWriteOffsInput>
+}
+
+export type InvoiceUpdateWithoutWriteOffsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  number?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
+  subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  reason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  authorisedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  patient?: Prisma.PatientUpdateOneRequiredWithoutInvoicesNestedInput
+  appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
+  visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
+  lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
+  payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
+  promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
+  receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
+}
+
+export type InvoiceUncheckedUpdateWithoutWriteOffsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  tenantId?: Prisma.StringFieldUpdateOperationsInput | string
+  number?: Prisma.StringFieldUpdateOperationsInput | string
+  patientId?: Prisma.StringFieldUpdateOperationsInput | string
+  appointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  visitAppointmentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumInvoiceStatusFieldUpdateOperationsInput | $Enums.InvoiceStatus
+  subtotalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  discountPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  taxPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  totalPaise?: Prisma.IntFieldUpdateOperationsInput | number
+  reason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  authorisedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  issuedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  cancelledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
+  payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
@@ -1384,6 +1537,7 @@ export type InvoiceCreateWithoutPaymentsInput = {
   appointment?: Prisma.AppointmentCreateNestedOneWithoutInvoiceInput
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
@@ -1410,6 +1564,7 @@ export type InvoiceUncheckedCreateWithoutPaymentsInput = {
   updatedAt?: Date | string
   activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
@@ -1450,6 +1605,7 @@ export type InvoiceUpdateWithoutPaymentsInput = {
   appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
@@ -1476,6 +1632,7 @@ export type InvoiceUncheckedUpdateWithoutPaymentsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
@@ -1501,6 +1658,7 @@ export type InvoiceCreateWithoutPromotionApplicationsInput = {
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
 }
@@ -1527,6 +1685,7 @@ export type InvoiceUncheckedCreateWithoutPromotionApplicationsInput = {
   activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
 
@@ -1556,6 +1715,7 @@ export type InvoiceCreateWithoutActivePromotionInput = {
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptCreateNestedManyWithoutInvoiceInput
 }
@@ -1581,6 +1741,7 @@ export type InvoiceUncheckedCreateWithoutActivePromotionInput = {
   updatedAt?: Date | string
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
   receipts?: Prisma.ReceiptUncheckedCreateNestedManyWithoutInvoiceInput
 }
@@ -1627,6 +1788,7 @@ export type InvoiceUpdateWithoutPromotionApplicationsInput = {
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
 }
@@ -1653,6 +1815,7 @@ export type InvoiceUncheckedUpdateWithoutPromotionApplicationsInput = {
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
 
@@ -1693,6 +1856,7 @@ export type InvoiceCreateWithoutReceiptsInput = {
   visitAppointment?: Prisma.AppointmentCreateNestedOneWithoutVisitInvoicesInput
   lines?: Prisma.InvoiceLineCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffCreateNestedManyWithoutInvoiceInput
   activePromotion?: Prisma.PromotionApplicationCreateNestedOneWithoutActiveOnInput
   promotionApplications?: Prisma.PromotionApplicationCreateNestedManyWithoutInvoiceInput
 }
@@ -1719,6 +1883,7 @@ export type InvoiceUncheckedCreateWithoutReceiptsInput = {
   activePromotionApplicationId?: string | null
   lines?: Prisma.InvoiceLineUncheckedCreateNestedManyWithoutInvoiceInput
   payments?: Prisma.PaymentUncheckedCreateNestedManyWithoutInvoiceInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedCreateNestedManyWithoutInvoiceInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedCreateNestedManyWithoutInvoiceInput
 }
 
@@ -1759,6 +1924,7 @@ export type InvoiceUpdateWithoutReceiptsInput = {
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
 }
@@ -1785,6 +1951,7 @@ export type InvoiceUncheckedUpdateWithoutReceiptsInput = {
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
 }
 
@@ -1829,6 +1996,7 @@ export type InvoiceUpdateWithoutPatientInput = {
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
@@ -1855,6 +2023,7 @@ export type InvoiceUncheckedUpdateWithoutPatientInput = {
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
@@ -1921,6 +2090,7 @@ export type InvoiceUpdateWithoutVisitAppointmentInput = {
   appointment?: Prisma.AppointmentUpdateOneWithoutInvoiceNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   activePromotion?: Prisma.PromotionApplicationUpdateOneWithoutActiveOnNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
@@ -1947,6 +2117,7 @@ export type InvoiceUncheckedUpdateWithoutVisitAppointmentInput = {
   activePromotionApplicationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
@@ -2014,6 +2185,7 @@ export type InvoiceUpdateWithoutActivePromotionInput = {
   visitAppointment?: Prisma.AppointmentUpdateOneWithoutVisitInvoicesNestedInput
   lines?: Prisma.InvoiceLineUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUpdateManyWithoutInvoiceNestedInput
 }
@@ -2039,6 +2211,7 @@ export type InvoiceUncheckedUpdateWithoutActivePromotionInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lines?: Prisma.InvoiceLineUncheckedUpdateManyWithoutInvoiceNestedInput
   payments?: Prisma.PaymentUncheckedUpdateManyWithoutInvoiceNestedInput
+  writeOffs?: Prisma.InvoiceWriteOffUncheckedUpdateManyWithoutInvoiceNestedInput
   promotionApplications?: Prisma.PromotionApplicationUncheckedUpdateManyWithoutInvoiceNestedInput
   receipts?: Prisma.ReceiptUncheckedUpdateManyWithoutInvoiceNestedInput
 }
@@ -2072,6 +2245,7 @@ export type InvoiceUncheckedUpdateManyWithoutActivePromotionInput = {
 export type InvoiceCountOutputType = {
   lines: number
   payments: number
+  writeOffs: number
   promotionApplications: number
   receipts: number
 }
@@ -2079,6 +2253,7 @@ export type InvoiceCountOutputType = {
 export type InvoiceCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   lines?: boolean | InvoiceCountOutputTypeCountLinesArgs
   payments?: boolean | InvoiceCountOutputTypeCountPaymentsArgs
+  writeOffs?: boolean | InvoiceCountOutputTypeCountWriteOffsArgs
   promotionApplications?: boolean | InvoiceCountOutputTypeCountPromotionApplicationsArgs
   receipts?: boolean | InvoiceCountOutputTypeCountReceiptsArgs
 }
@@ -2105,6 +2280,13 @@ export type InvoiceCountOutputTypeCountLinesArgs<ExtArgs extends runtime.Types.E
  */
 export type InvoiceCountOutputTypeCountPaymentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.PaymentWhereInput
+}
+
+/**
+ * InvoiceCountOutputType without action
+ */
+export type InvoiceCountOutputTypeCountWriteOffsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.InvoiceWriteOffWhereInput
 }
 
 /**
@@ -2147,6 +2329,7 @@ export type InvoiceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   visitAppointment?: boolean | Prisma.Invoice$visitAppointmentArgs<ExtArgs>
   lines?: boolean | Prisma.Invoice$linesArgs<ExtArgs>
   payments?: boolean | Prisma.Invoice$paymentsArgs<ExtArgs>
+  writeOffs?: boolean | Prisma.Invoice$writeOffsArgs<ExtArgs>
   activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
   promotionApplications?: boolean | Prisma.Invoice$promotionApplicationsArgs<ExtArgs>
   receipts?: boolean | Prisma.Invoice$receiptsArgs<ExtArgs>
@@ -2234,6 +2417,7 @@ export type InvoiceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs
   visitAppointment?: boolean | Prisma.Invoice$visitAppointmentArgs<ExtArgs>
   lines?: boolean | Prisma.Invoice$linesArgs<ExtArgs>
   payments?: boolean | Prisma.Invoice$paymentsArgs<ExtArgs>
+  writeOffs?: boolean | Prisma.Invoice$writeOffsArgs<ExtArgs>
   activePromotion?: boolean | Prisma.Invoice$activePromotionArgs<ExtArgs>
   promotionApplications?: boolean | Prisma.Invoice$promotionApplicationsArgs<ExtArgs>
   receipts?: boolean | Prisma.Invoice$receiptsArgs<ExtArgs>
@@ -2260,6 +2444,7 @@ export type $InvoicePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     visitAppointment: Prisma.$AppointmentPayload<ExtArgs> | null
     lines: Prisma.$InvoiceLinePayload<ExtArgs>[]
     payments: Prisma.$PaymentPayload<ExtArgs>[]
+    writeOffs: Prisma.$InvoiceWriteOffPayload<ExtArgs>[]
     activePromotion: Prisma.$PromotionApplicationPayload<ExtArgs> | null
     /**
      * Every discount this bill has ever carried, reversed ones included.
@@ -2726,6 +2911,7 @@ export interface Prisma__InvoiceClient<T, Null = never, ExtArgs extends runtime.
   visitAppointment<T extends Prisma.Invoice$visitAppointmentArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$visitAppointmentArgs<ExtArgs>>): Prisma.Prisma__AppointmentClient<runtime.Types.Result.GetResult<Prisma.$AppointmentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   lines<T extends Prisma.Invoice$linesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$linesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$InvoiceLinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   payments<T extends Prisma.Invoice$paymentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$paymentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  writeOffs<T extends Prisma.Invoice$writeOffsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$writeOffsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$InvoiceWriteOffPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   activePromotion<T extends Prisma.Invoice$activePromotionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$activePromotionArgs<ExtArgs>>): Prisma.Prisma__PromotionApplicationClient<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   promotionApplications<T extends Prisma.Invoice$promotionApplicationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$promotionApplicationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PromotionApplicationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   receipts<T extends Prisma.Invoice$receiptsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Invoice$receiptsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ReceiptPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -3261,6 +3447,30 @@ export type Invoice$paymentsArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number
   skip?: number
   distinct?: Prisma.PaymentScalarFieldEnum | Prisma.PaymentScalarFieldEnum[]
+}
+
+/**
+ * Invoice.writeOffs
+ */
+export type Invoice$writeOffsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the InvoiceWriteOff
+   */
+  select?: Prisma.InvoiceWriteOffSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the InvoiceWriteOff
+   */
+  omit?: Prisma.InvoiceWriteOffOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.InvoiceWriteOffInclude<ExtArgs> | null
+  where?: Prisma.InvoiceWriteOffWhereInput
+  orderBy?: Prisma.InvoiceWriteOffOrderByWithRelationInput | Prisma.InvoiceWriteOffOrderByWithRelationInput[]
+  cursor?: Prisma.InvoiceWriteOffWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.InvoiceWriteOffScalarFieldEnum | Prisma.InvoiceWriteOffScalarFieldEnum[]
 }
 
 /**

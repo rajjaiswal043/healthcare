@@ -64,7 +64,7 @@ export default function FinanceReportPage() {
           <p className="eyebrow">Billing</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Finance report</h1>
           <p className="mt-1 text-[14px] text-ink-60">
-            Billed, discounted and collected over a range — by doctor, by department, and by where
+            Billed, discounted and collected over a range: by doctor, by department, and by where
             the work came from.
           </p>
         </div>
@@ -77,6 +77,13 @@ export default function FinanceReportPage() {
             <input
               id="from"
               type="date"
+              /*
+                No day that has not happened yet. A report for next March is
+                always an empty one, and an empty report reads as "the clinic
+                took nothing" rather than as "you asked the wrong question".
+                Reported 28 Oct 2026.
+              */
+              max={new Date().toLocaleDateString('en-CA')}
               className="field-input"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
@@ -89,6 +96,13 @@ export default function FinanceReportPage() {
             <input
               id="to"
               type="date"
+              /*
+                No day that has not happened yet. A report for next March is
+                always an empty one, and an empty report reads as "the clinic
+                took nothing" rather than as "you asked the wrong question".
+                Reported 28 Oct 2026.
+              */
+              max={new Date().toLocaleDateString('en-CA')}
               className="field-input"
               value={to}
               onChange={(e) => setTo(e.target.value)}
@@ -122,7 +136,7 @@ export default function FinanceReportPage() {
 
       {report && (
         <>
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-5">
             <Stat label="Collected" value={formatPaise(report.collections.collectedPaise)} />
             <Stat
               label="Refunded"
@@ -132,6 +146,23 @@ export default function FinanceReportPage() {
                   : '—'
               }
               {...(report.collections.refundedPaise > 0 ? { tone: 'coral' as const } : {})}
+            />
+            {/*
+              WHAT THE CLINIC GAVE AWAY.
+
+              Beside the takings rather than inside them: no money moved, so it
+              is not part of Net. It is here because "how much did we make free
+              this month" was a question nobody could answer — the decision was
+              recorded on each bill and totalled nowhere.
+            */}
+            <Stat
+              label="Made free"
+              value={
+                report.collections.writtenOffPaise > 0
+                  ? formatPaise(report.collections.writtenOffPaise)
+                  : '—'
+              }
+              {...(report.collections.writtenOffPaise > 0 ? { tone: 'amber' as const } : {})}
             />
             <Stat label="Net" value={formatPaise(report.collections.netPaise)} tone="green" />
             <Stat
@@ -190,8 +221,8 @@ export default function FinanceReportPage() {
             */}
               <p className="field-hint mt-3">
                 There is no collected figure per department, and that is deliberate. A patient pays
-                one bill, not a share to each department — splitting it back out would mean
-                inventing an allocation. The collected total above is for the whole clinic.
+                one bill, not a share to each department. Splitting it back out would mean inventing
+                an allocation. The collected total above is for the whole clinic.
               </p>
             </section>
           )}
@@ -337,42 +368,68 @@ function Line({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Wide content scrolls inside its own box rather than the page. */
+/**
+ * Wide content scrolls inside its own box rather than the page — and on a
+ * phone it stops being a table at all.
+ *
+ * GENERIC, SO ONE CHANGE COVERS EVERY TABLE ON THIS PAGE. Each row becomes a
+ * small block: the first cell is the thing being reported on, and the rest are
+ * its figures with the column heading as the label. A six-column revenue table
+ * read sideways on a phone is a table nobody reads.
+ */
 function Table({ head, rows, empty }: { head: string[]; rows: string[][]; empty: string }) {
   if (rows.length === 0) return <p className="field-hint mt-2">{empty}</p>;
 
   return (
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr>
-            {head.map((h, i) => (
-              <th
-                key={h}
-                className={`mono-label border-b border-ink/10 pb-1.5 ${i === 0 ? 'text-left' : 'text-right'}`}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, r) => (
-            <tr key={r}>
-              {row.map((cell, i) => (
-                <td
-                  key={i}
-                  className={`border-b border-ink/6 py-2 ${
-                    i === 0 ? 'text-left' : 'text-right font-mono tabular-nums'
-                  }`}
+    <>
+      <ul className="mt-3 divide-y divide-ink/8 md:hidden">
+        {rows.map((row, r) => (
+          <li key={r} className="py-2.5 first:pt-0">
+            <p className="text-[13.5px] font-semibold text-ink">{row[0]}</p>
+            <dl className="mt-1 space-y-0.5 text-[12.5px]">
+              {row.slice(1).map((cell, i) => (
+                <div key={head[i + 1] ?? i} className="flex items-center justify-between gap-3">
+                  <dt className="text-ink-40">{head[i + 1]}</dt>
+                  <dd className="font-mono tabular-nums text-ink">{cell}</dd>
+                </div>
+              ))}
+            </dl>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3 hidden overflow-x-auto md:block">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr>
+              {head.map((h, i) => (
+                <th
+                  key={h}
+                  className={`mono-label border-b border-ink/10 pb-1.5 ${i === 0 ? 'text-left' : 'text-right'}`}
                 >
-                  {cell}
-                </td>
+                  {h}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((row, r) => (
+              <tr key={r}>
+                {row.map((cell, i) => (
+                  <td
+                    key={i}
+                    className={`border-b border-ink/6 py-2 ${
+                      i === 0 ? 'text-left' : 'text-right font-mono tabular-nums'
+                    }`}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

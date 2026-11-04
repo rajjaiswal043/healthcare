@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../platform/database/prisma.service.js';
 import { AuditService } from '../platform/audit/audit.service.js';
 import { AppointmentsService, type RequestMeta } from './appointments.service.js';
 import { generateDisplayKey, hashDisplayKey, tenantIdFromDisplayKey } from './display-key.js';
 import { logoVersionOf } from '../platform/branding/logo-version.js';
 import { publicPatientName } from './public-name.js';
-import { minutesPerPatient } from '../engagement/queue-estimate.js';
 
 /**
  * The waiting-room screen.
@@ -126,6 +130,66 @@ export class DisplayService {
   }
 
   /**
+   * TURN A REVOKED SCREEN BACK ON, with a NEW key.
+   *
+   * Reported from the clinic on 30 Oct 2026: once a paired screen was turned
+   * off there was no way to turn it on again — `revoke` was one-way and nothing
+   * ever set `is_active` back.
+   *
+   * A NEW KEY, NOT THE OLD ONE. `revoke` leaves `accessKeyHash` in place, so
+   * simply flipping the flag would resurrect the exact credential somebody
+   * deliberately killed — and the ordinary reason to turn a screen off is that
+   * it walked out of the building or its key ended up in a screenshot. Reusing
+   * it would make "off" mean nothing. So this re-pairs the row: same screen,
+   * same history, same place in the list, different credential.
+   *
+   * The row is reused rather than replaced so that "when did it stop, and when
+   * did it start again" still has an answer in one place.
+   */
+  async reissue(tenantId: string, id: string, meta: RequestMeta) {
+    const key = generateDisplayKey(tenantId);
+
+    return this.prisma.forTenant(tenantId, async (tx) => {
+      const device = await tx.displayDevice.findUnique({
+        where: { id },
+        select: { id: true, isActive: true },
+      });
+      if (!device) throw new NotFoundException('Screen not found');
+
+      /*
+       * An active screen is refused rather than silently re-keyed. Pressing
+       * this on a working screen would blank it until somebody walked over and
+       * typed the new key in, which is not what "turn on" can be allowed to
+       * mean. Re-keying a live screen is `revoke` then this.
+       */
+      if (device.isActive) {
+        throw new ConflictException({
+          code: 'DISPLAY_ALREADY_ON',
+          message: 'That screen is already on. Turn it off first to give it a new key.',
+        });
+      }
+
+      const updated = await tx.displayDevice.update({
+        where: { id },
+        data: { isActive: true, revokedAt: null, accessKeyHash: hashDisplayKey(key) },
+        select: { id: true, name: true },
+      });
+
+      await this.audit.record(tx, tenantId, {
+        action: 'display.reissue',
+        resourceType: 'DisplayDevice',
+        resourceId: id,
+        changedFields: ['isActive', 'revokedAt', 'accessKeyHash'],
+        ...meta,
+      });
+
+      // The key ONCE, as pairing does. It is not stored and cannot be shown
+      // again, so the screen is set up now or turned off and on once more.
+      return { ...updated, isActive: true, accessKey: key };
+    });
+  }
+
+  /**
    * What the screen paints. No session — the key is the credential.
    *
    * Every failure here returns the same 401. A screen with a mistyped key and a
@@ -220,19 +284,6 @@ export class DisplayService {
 
       const lastCalledAt = queue.nowServing?.calledAt ?? null;
 
-      // For a patient arriving now: everybody waiting, plus whoever is in the
-      // room, at today's pace. Labelled "about" on the screen, because it is.
-      const pace = minutesPerPatient(
-        [...queue.completed, ...(queue.nowServing ? [queue.nowServing] : [])].map((v) => ({
-          id: v.id,
-          status: v.status,
-          startAt: v.startAt,
-          calledAt: v.calledAt,
-          completedAt: v.completedAt,
-        })),
-      );
-      const ahead = queue.waiting.length + (queue.nowServing ? 1 : 0);
-
       doctors.push({
         // The name as the clinic typed it. `prefix` was folded into
         // full_name on 26 Aug 2026 and is no longer read — composing it here
@@ -259,14 +310,6 @@ export class DisplayService {
           name: publicPatientName(a.patient.name),
         })),
         waiting: queue.waiting.length,
-        /** Minutes a patient arriving now can expect to wait. Null when nobody is ahead. */
-        estimatedWaitMinutes: ahead > 0 ? ahead * pace : null,
-        /**
-         * Booked today and not yet here — waiting from home. A count, never a
-         * list: who is at home is nobody else's business.
-         */
-        atHome: queue.yetToArrive.length,
-        onTheWay: queue.yetToArrive.filter((a) => a.arrivalIntent === 'ON_THE_WAY').length,
         /**
          * Minutes since the last patient was called in, or null if none has
          * been. The screen decides what counts as late — deriving it here means

@@ -284,7 +284,7 @@ export class RolesService {
         code: 'ROLE_IS_LOCKED',
         message:
           'The Administrator role cannot be changed. It is the way back from every other ' +
-          'change on this screen — a clinic that removed the wrong permission from it could ' +
+          'change on this screen. A clinic that removed the wrong permission from it could ' +
           'not undo that itself.',
       });
     }

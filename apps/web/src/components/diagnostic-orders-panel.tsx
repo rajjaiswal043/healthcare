@@ -14,6 +14,7 @@ import { useAuth } from '@/components/auth-provider';
 import { IconAlert, IconCheck, IconStethoscope } from '@/components/icons';
 import { TestBillingBadge } from '@/components/test-billing-badge';
 import { PatientTestHistory } from '@/components/patient-test-history';
+import { PrintTestSlipButton } from '@/components/test-slip-button';
 
 /**
  * Tests, inside the consultation.
@@ -47,6 +48,14 @@ export function DiagnosticOrdersPanel({
   const [orders, setOrders] = useState<DiagnosticOrder[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The server says this exact test is already on the visit.
+   *
+   * Since 27 Oct 2026 the comparison includes the description, so two X-rays
+   * of different body parts go through untouched. This is only the genuine
+   * repeat of the same wording, and it offers the way through.
+   */
+  const [repeat, setRepeat] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [adding, setAdding] = useState(false);
@@ -131,15 +140,17 @@ export function DiagnosticOrdersPanel({
     })();
   }, [mayOrder]);
 
-  async function raise() {
+  async function raise(confirmedRepeat = false) {
     setBusy(true);
     setError(null);
+    setRepeat(false);
     try {
       await api.raiseDiagnosticOrder({
         appointmentId,
         departmentId,
         serviceId,
         ...(description.trim() ? { description: description.trim() } : {}),
+        ...(confirmedRepeat ? { confirmedRepeat: true } : {}),
       });
       setDescription('');
       setServiceId('');
@@ -147,6 +158,9 @@ export function DiagnosticOrdersPanel({
       await load();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not request that test.');
+      setRepeat(
+        err instanceof ApiRequestError && err.error.details?.code === 'TEST_ALREADY_ORDERED',
+      );
     } finally {
       setBusy(false);
     }
@@ -256,7 +270,7 @@ export function DiagnosticOrdersPanel({
           setting up — and the slip note above still works either way. */}
       {mayOrder && editable && departments.length === 0 && !noting && (
         <p className="mt-2 text-[12.5px] text-ink-40">
-          No department here does tests yet — an administrator adds one in Settings → Doctors.
+          No department here does tests yet. An administrator adds one in Settings → Doctors.
         </p>
       )}
 
@@ -268,7 +282,21 @@ export function DiagnosticOrdersPanel({
           <span className="mt-0.5 shrink-0">
             <IconAlert size={13} />
           </span>
-          <span>{error}</span>
+          <span>
+            {error}
+            {/* Offered only for a true repeat of the same wording. One
+                deliberate press, so a double-click still cannot bill twice. */}
+            {repeat && (
+              <button
+                type="button"
+                className="btn-ghost mt-1.5 block !px-0 !py-0 !text-[12.5px] !text-coral-text underline underline-offset-2"
+                disabled={busy}
+                onClick={() => void raise(true)}
+              >
+                Order it again anyway
+              </button>
+            )}
+          </span>
         </div>
       )}
 
@@ -322,7 +350,7 @@ export function DiagnosticOrdersPanel({
                   <option value="">Select a test…</option>
                   {testsHere.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name} — {formatPaise(t.pricePaise)}
+                      {t.name} · {formatPaise(t.pricePaise)}
                     </option>
                   ))}
                 </select>
@@ -440,6 +468,19 @@ export function DiagnosticOrdersPanel({
                   </button>
                 )}
 
+                {/* A reprint, for the slip the patient folded into a pocket and
+                    lost on the way to the department. Only while the test is
+                    still waiting: once it is back, the slip is a request for
+                    work already done. */}
+                {o.status === 'PENDING' && (
+                  <PrintTestSlipButton
+                    order={o}
+                    className="text-[12.5px] font-semibold text-clinical-text underline underline-offset-2"
+                    label="Slip"
+                    iconSize={12}
+                  />
+                )}
+
                 {o.status === 'PENDING' && mayOrder && editable && (
                   <button
                     type="button"
@@ -546,7 +587,7 @@ export function DiagnosticOrdersPanel({
       {externalTestNote && (
         <div className="mt-4 rounded-panel border border-dashed border-ink/20 bg-bg-soft px-3.5 py-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <p className="mono-label">Not done here — on the slip</p>
+            <p className="mono-label">Not done here, on the slip</p>
             {mayOrder && editable && (
               <button
                 type="button"

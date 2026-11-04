@@ -14,6 +14,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import { IsPersonName } from '../../../common/is-person-name.decorator.js';
 
 export enum GenderDto {
   MALE = 'MALE',
@@ -58,6 +59,7 @@ export class RegisterPatientDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value))
   name!: string;
 
@@ -116,6 +118,16 @@ export class RegisterPatientDto {
   @IsEnum(BloodGroupDto)
   bloodGroup?: BloodGroupDto;
 
+  /**
+   * Known allergies, free text. Saving this field at all — even empty — records
+   * that somebody asked, which is what separates "no known allergies" from
+   * "nobody has asked". See the patient_allergies migration.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  allergies?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(200)
@@ -140,15 +152,6 @@ export class RegisterPatientDto {
   @IsOptional()
   @IsBoolean()
   consentMarketing?: boolean;
-
-  /**
-   * WhatsApp and SMS about their own care: token, time to leave, check-ins,
-   * review reminders (docs/10). Its own purpose, separate from marketing,
-   * and optional — a patient who says no is treated exactly the same.
-   */
-  @IsOptional()
-  @IsBoolean()
-  consentCommunications?: boolean;
 
   /**
    * Set when the front desk has reviewed the duplicate warnings and is

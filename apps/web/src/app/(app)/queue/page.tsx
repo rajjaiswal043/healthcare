@@ -111,6 +111,15 @@ export default function QueuePage() {
     return () => clearInterval(t);
   }, [doctorId, load]);
 
+  /**
+   * Today's no-shows, which the server sends mixed in with cancellations.
+   *
+   * Split here rather than asked for separately: they arrive on the same
+   * payload, and the difference that matters is what the desk may do about
+   * them — a no-show can be undone, a cancellation cannot.
+   */
+  const noShows = (queue?.cancelled ?? []).filter((a) => a.status === 'NO_SHOW');
+
   async function act(id: string, fn: () => Promise<unknown>) {
     setBusyId(id);
     setError(null);
@@ -146,7 +155,7 @@ export default function QueuePage() {
     } catch (err) {
       setError(
         err instanceof ApiRequestError && err.status === 404
-          ? 'No bill was raised for this visit — this clinic has not set up its charges yet.'
+          ? 'No bill was raised for this visit. This clinic has not set up its charges yet.'
           : err instanceof ApiRequestError
             ? err.error.message
             : 'Could not open the bill.',
@@ -184,7 +193,7 @@ export default function QueuePage() {
           <p className="eyebrow">OPD</p>
           <h1 className="mt-2 font-display text-[30px] font-bold">Today&rsquo;s queue</h1>
           <p className="mt-1 text-[14px] text-ink-60">
-            Ordered by arrival — not by token, and not by appointment time.
+            Ordered by arrival, not by token and not by appointment time.
           </p>
         </div>
 
@@ -232,12 +241,19 @@ export default function QueuePage() {
               </select>
             </div>
           )}
+          {/*
+            Disabled until a doctor is chosen, reported 28 Oct 2026 as "refresh
+            is not working". It was live, and `load` opens with an early return
+            when there is no id — so it did nothing and said nothing, which
+            reads as a broken button rather than one that has nothing to do.
+          */}
           <button
             type="button"
             className="btn-secondary !px-3"
+            disabled={!doctorId}
             onClick={() => void load(doctorId)}
-            aria-label="Refresh now"
-            title="Refresh now"
+            aria-label={doctorId ? 'Refresh now' : 'Pick a doctor first'}
+            title={doctorId ? 'Refresh now' : 'Pick a doctor first'}
           >
             <IconRefresh size={16} />
           </button>
@@ -255,7 +271,10 @@ export default function QueuePage() {
 
       {queue && (
         <>
-          <div className="grid gap-3 sm:grid-cols-5">
+          {/* Two across on a phone rather than five stacked tiles, which
+              pushed the queue itself below the fold on the one screen whose
+              point is who is waiting. Unchanged from `sm` up. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <Stat label="In the queue" value={String(queue.stats.inQueue)} />
             <Stat label="Waiting" value={String(queue.stats.waiting)} tone="amber" />
             <Stat label="Away for tests" value={String(queue.stats.awayForTests)} />
@@ -335,7 +354,7 @@ export default function QueuePage() {
               </div>
             ) : (
               <p className="mt-2 text-[14px] text-ink-60">
-                The room is free. Call the next token when the doctor is ready.
+                Nobody is with the doctor. Call the next token when they are ready.
               </p>
             )}
           </section>
@@ -344,7 +363,7 @@ export default function QueuePage() {
             <Panel
               title="Waiting"
               count={queue.waiting.length}
-              empty="Nobody is waiting. A quiet moment."
+              empty="Nobody is waiting."
               icon={<IconClock size={16} />}
             >
               {queue.waiting.map((a, i) => (
@@ -396,7 +415,7 @@ export default function QueuePage() {
                           type="button"
                           className="btn-ghost !px-2 !py-1.5 text-[12.5px]"
                           disabled={busyId === a.id}
-                          title={`${priorityLabel(a.priority)} — put them back in their normal position`}
+                          title={`${priorityLabel(a.priority)}: put them back in their normal position`}
                           onClick={() => void act(a.id, () => api.clearPriority(a.id))}
                         >
                           Move back
@@ -414,6 +433,43 @@ export default function QueuePage() {
                           </button>
                         )
                       ))}
+
+                    {/*
+                      THE WAY OUT FOR SOMEBODY ALREADY WAITING.
+
+                      Reported from the clinic on 30 Oct 2026: an administrator
+                      could not cancel a checked-in patient whose doctor had
+                      become unavailable. The server has always allowed it —
+                      `cancelIn` refuses only a FULFILLED visit — so this was
+                      purely a missing button: Cancel was drawn in the "yet to
+                      arrive" list and nowhere else, and checking in moved the
+                      patient out of that list.
+
+                      Move sits beside it, because a doctor going home is
+                      usually a reason to give the patient another day rather
+                      than nothing — see CANCEL_REASONS in the dialog.
+                    */}
+                    {mayAct && (
+                      <button
+                        type="button"
+                        className="btn-ghost !px-2 !py-1.5 text-[12.5px]"
+                        disabled={busyId === a.id}
+                        title="Give this patient another time or another doctor"
+                        onClick={() => setDialog({ mode: 'reschedule', appointment: a })}
+                      >
+                        Move
+                      </button>
+                    )}
+                    {canCancel && (
+                      <button
+                        type="button"
+                        className="btn-ghost !px-2 !py-1.5 text-[12.5px] !text-coral-text"
+                        disabled={busyId === a.id}
+                        onClick={() => setDialog({ mode: 'cancel', appointment: a })}
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </Row>
               ))}
@@ -456,7 +512,7 @@ export default function QueuePage() {
             <Panel
               title="Yet to arrive"
               count={queue.yetToArrive.length}
-              empty="Everyone booked is here. Nobody left to wait for."
+              empty="Everyone booked has arrived."
               icon={<IconUsers size={16} />}
             >
               {queue.yetToArrive.map((a) => (
@@ -533,6 +589,44 @@ export default function QueuePage() {
               ))}
             </Panel>
           )}
+
+          {/*
+            THE WAY BACK FROM A NO-SHOW, added 28 Oct 2026.
+
+            The API has always returned this list and the screen never drew it,
+            so a patient marked off disappeared from the queue entirely. The
+            desk's only route was booking a fresh appointment, which issues a
+            second token and raises a second consultation bill for one visit.
+
+            No-shows only. A CANCELLED appointment is in the same list from the
+            server and is deliberately left alone: somebody rang up and
+            cancelled, which is a decision rather than a mistake, and the way
+            back from it is to book again.
+          */}
+          {noShows.length > 0 && (
+            <Panel
+              title="Did not come"
+              count={noShows.length}
+              empty=""
+              icon={<IconUsers size={16} />}
+            >
+              {noShows.map((a) => (
+                <Row key={a.id} appointment={a} muted>
+                  {mayAct && (
+                    <button
+                      type="button"
+                      className="btn-secondary !px-2.5 !py-1.5 text-[12.5px]"
+                      disabled={busyId === a.id}
+                      title="They turned up after all — put them back in the list"
+                      onClick={() => void act(a.id, () => api.undoNoShow(a.id))}
+                    >
+                      They came
+                    </button>
+                  )}
+                </Row>
+              ))}
+            </Panel>
+          )}
         </>
       )}
 
@@ -557,6 +651,9 @@ export default function QueuePage() {
             setDialog(null);
             void load(doctorId);
           }}
+          /* Cancelling because the doctor is away is usually the wrong act —
+             the dialog offers this instead. See the nudge in that file. */
+          onSwitchToMove={() => setDialog({ mode: 'reschedule', appointment: dialog.appointment })}
         />
       )}
 
@@ -661,23 +758,6 @@ function Row({
           {a.priority && (
             <span className="badge-amber" title={priorityLabel(a.priority)}>
               seen next
-            </span>
-          )}
-          {/* Said from their own phone (docs/10). Only while they are still
-              out: once checked in, the desk can see them. */}
-          {a.status === 'BOOKED' && a.arrivalIntent === 'ON_THE_WAY' && (
-            <span className="badge-green" title="The patient said so from their WhatsApp link">
-              on the way
-            </span>
-          )}
-          {a.status === 'BOOKED' && a.arrivalIntent === 'RUNNING_LATE' && (
-            <span className="badge-amber" title="The patient said so from their WhatsApp link">
-              running late
-            </span>
-          )}
-          {a.status === 'BOOKED' && !a.arrivalIntent && a.leaveNowSentAt && (
-            <span className="badge-neutral" title="The time-to-leave message has gone">
-              told to leave
             </span>
           )}
         </p>

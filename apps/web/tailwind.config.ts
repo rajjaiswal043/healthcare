@@ -54,6 +54,63 @@ export default {
           soft: '#DCEFE1',
           text: '#1F5531',
         },
+
+        /**
+         * Finished — a visit that is over, a patient who has left.
+         *
+         * Its own hue because GREEN ALREADY MEANS MONEY HERE: a paid bill, a
+         * settled fee, "nothing outstanding". Using it for a completed visit
+         * overloaded it, and on the day board the two landed on the same row —
+         * where it also sat beside `clinical`, which is itself a teal-green, so
+         * "finished" and "with the doctor" were two greens a metre from a
+         * doctor's eyes.
+         *
+         * Muted to sit with the rest of the palette rather than the saturated
+         * indigo of every framework default. Named for the flower, not the
+         * colour, because every plain colour name is taken by Tailwind's own
+         * scale and overriding one breaks it everywhere else.
+         */
+        iris: {
+          DEFAULT: '#5B5EA6',
+          soft: '#E3E4F3',
+          text: '#3F4280',
+        },
+
+        /**
+         * Out of the room — away at a machine, in another department.
+         *
+         * The day board used to tint this stage with plain grey, which is what
+         * every disabled thing in the console is tinted with: "at the X-ray"
+         * read as "switched off". It is a live, normal stage of a visit and it
+         * deserves a colour of its own.
+         *
+         * A cool blue, as far from `clinical`'s teal as the palette allows
+         * while staying in the same muted family — "in the room" and "out at a
+         * machine" are the two stages a doctor most needs to tell apart, and
+         * they sit next to each other on the board.
+         */
+        sky: {
+          DEFAULT: '#3E6FA8',
+          soft: '#DCE8F5',
+          text: '#2A5180',
+        },
+
+        /**
+         * Back from tests, holding a film, waiting to be seen again.
+         *
+         * Warmer and deeper than `amber`, and deliberately adjacent to it:
+         * both are people waiting on a doctor, so they belong to the same
+         * family — but this one has already waited once and is the more
+         * urgent, so it is the stronger of the pair.
+         *
+         * Not `coral`. Coral means money owed or something wrong, and a
+         * patient whose film came back is neither.
+         */
+        peach: {
+          DEFAULT: '#D97A45',
+          soft: '#FAE0CE',
+          text: '#A1512A',
+        },
       },
 
       fontFamily: {

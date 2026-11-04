@@ -8,11 +8,12 @@ import {
   ApiRequestError,
   type ClinicLocation,
   type DayAvailability,
-  type Department,
   type PatientSummary,
   type Practitioner,
 } from '@/lib/api';
+import { useAuth } from '@/components/auth-provider';
 import { formatAge, genderInitial } from '@/lib/format';
+import { SEARCH_CAP } from '@/lib/patient-search';
 import {
   IconAlert,
   IconCalendar,
@@ -36,13 +37,28 @@ function dateKey(offsetDays = 0): string {
 
 const DAYS = Array.from({ length: 14 }, (_, i) => i);
 
+/**
+ * Why the patient is coming, as a short list rather than a free-text box.
+ *
+ * FR-APT-03 asks for reason codes, and the point is counting: free text alone
+ * gives a thousand spellings of "back pain" and no answer to "what does this
+ * clinic mostly see". A code plus an optional note gives both.
+ *
+ * **These are orthopaedic**, chosen on 29 Sep 2026 for the clinic adopting the
+ * system — and every clinic on the platform currently sees the same four. A
+ * paediatrician has no use for "Spine". Making the list per clinic is a column
+ * and a settings screen; until somebody asks, this constant is the whole of it.
+ */
+const VISIT_REASONS = ['Spine', 'Trauma', 'Joint pain', 'Other'] as const;
+
 export default function NewAppointmentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { can } = useAuth();
 
   const [patient, setPatient] = useState<PatientSummary | null>(null);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [departmentId, setDepartmentId] = useState<string>('');
+  /** Arrived straight from registration, so this screen says so. */
+  const [justRegistered, setJustRegistered] = useState(false);
   const [doctors, setDoctors] = useState<Practitioner[]>([]);
   const [doctorId, setDoctorId] = useState<string>('');
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
@@ -50,6 +66,14 @@ export default function NewAppointmentPage() {
   const [date, setDate] = useState<string>(dateKey());
   const [availability, setAvailability] = useState<DayAvailability | null>(null);
   const [slotStart, setSlotStart] = useState<string>('');
+  /**
+   * The reason IS the code, and one has to be picked.
+   *
+   * There was a free-text note beside it until 29 Sep 2026; Narveer removed it,
+   * so "Other" now carries no detail and the column holds one of exactly four
+   * values. That is the trade: the field counts perfectly and says nothing
+   * more than it counts.
+   */
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,10 +87,9 @@ export default function NewAppointmentPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [d, l] = await Promise.all([api.departments(), api.locations()]);
-        setDepartments(d.departments);
-        setLocations(l.locations);
-        if (l.locations.length > 0) setLocationId(l.locations[0]!.id);
+        const { locations } = await api.locations();
+        setLocations(locations);
+        if (locations.length > 0) setLocationId(locations[0]!.id);
       } catch {
         setError('Could not load clinic setup.');
       }
@@ -80,6 +103,10 @@ export default function NewAppointmentPage() {
        * banner rendered from a query string would happily display whatever
        * somebody pasted into the address bar.
        */
+      // Set once, from the URL this screen was opened with. Reading the flag
+      // during render instead would keep the banner up after "Book another".
+      setJustRegistered(searchParams.get('registered') === '1');
+
       const preselected = searchParams.get('patientId');
       if (preselected) {
         try {
@@ -93,12 +120,12 @@ export default function NewAppointmentPage() {
 
   useEffect(() => {
     void (async () => {
-      const { practitioners } = await api.practitioners(departmentId || undefined);
+      const { practitioners } = await api.practitioners();
       setDoctors(practitioners);
       setDoctorId((prev) => (practitioners.some((p) => p.id === prev) ? prev : ''));
       setSlotStart('');
     })();
-  }, [departmentId]);
+  }, []);
 
   const loadAvailability = useCallback(async () => {
     if (!doctorId) {
@@ -128,14 +155,12 @@ export default function NewAppointmentPage() {
             patientId: patient.id,
             practitionerId: doctorId,
             locationId,
-            ...(departmentId ? { departmentId } : {}),
             ...(reason ? { reasonForVisit: reason } : {}),
           })
         : await api.bookAppointment({
             patientId: patient.id,
             practitionerId: doctorId,
             locationId,
-            ...(departmentId ? { departmentId } : {}),
             startAt: slotStart,
             ...(reason ? { reasonForVisit: reason } : {}),
           });
@@ -186,7 +211,7 @@ export default function NewAppointmentPage() {
                 ? 'Waiting to be called.'
                 : booked.walkIn
                   ? 'Collect payment, then check them in to join the queue.'
-                  : `${booked.time} — they join the queue when they arrive and check in.`}
+                  : `${booked.time}. They join the queue when they arrive and check in.`}
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-3 p-6">
@@ -196,6 +221,7 @@ export default function NewAppointmentPage() {
               onClick={() => {
                 setBooked(null);
                 setPatient(null);
+                setJustRegistered(false);
                 setReason('');
                 setSlotStart('');
                 void loadAvailability();
@@ -215,8 +241,24 @@ export default function NewAppointmentPage() {
   }
 
   const selectedDoctor = doctors.find((d) => d.id === doctorId) ?? null;
-  const canBook = Boolean(patient && doctorId && locationId && slotStart);
-  const canWalkIn = Boolean(patient && doctorId && locationId);
+  // A reason is required for both routes into the day, or a walk-in would be
+  // the way round the rule — and walk-ins are most of an ortho clinic's list.
+  const canBook = Boolean(patient && doctorId && locationId && slotStart && reason);
+
+  /**
+   * Opening a visit is a different permission from holding the diary.
+   *
+   * `visit:open` sits with the front desk, the finance desk and the
+   * administrator; a doctor holds `appointment:write` and not this. The button
+   * used to be enabled for them anyway and the server answered 403 — and a
+   * button the server refuses is worse than no button, which is the rule the
+   * day board follows for exactly the same reason. Reported 27 Oct 2026.
+   *
+   * An administrator can hand `visit:open` to the doctor role on the Roles
+   * screen, and the button appears without anything being rebuilt.
+   */
+  const mayOpenVisits = can('visit:open');
+  const canWalkIn = Boolean(mayOpenVisits && patient && doctorId && locationId && reason);
 
   return (
     <div className="space-y-6">
@@ -226,7 +268,7 @@ export default function NewAppointmentPage() {
           Book an <em className="accent-words">appointment</em>
         </h1>
         <p className="mt-1 text-[14px] text-ink-60">
-          Or add a walk-in straight to the queue — same form, different button.
+          Or add a walk-in straight to the queue. Same form, different button.
         </p>
       </header>
 
@@ -244,6 +286,20 @@ export default function NewAppointmentPage() {
 
       {/* 1 — patient */}
       <section className="card p-5">
+        {justRegistered && patient && (
+          /* Registration lands here now, so this screen has to carry the
+             confirmation that used to be its own success card — above all the
+             patient's own UHID, which the receptionist reads out or writes on
+             a card. */
+          <p className="mb-3 flex flex-wrap items-center gap-2 rounded-panel border border-clinical/25 bg-clinical-tint px-3 py-2 text-[13px] text-clinical-text">
+            <IconCheck size={14} />
+            <span>
+              <strong>{patient.name}</strong> is registered as{' '}
+              <span className="font-mono font-semibold">{patient.uhid}</span>. Now book them in.
+            </span>
+          </p>
+        )}
+
         <p className="mono-label mb-3">1 · Patient</p>
         {patient ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-clinical/25 bg-clinical-tint px-4 py-3">
@@ -272,18 +328,16 @@ export default function NewAppointmentPage() {
       <section className="card p-5">
         <p className="mono-label mb-3">2 · Doctor</p>
 
-        <div className="flex flex-wrap gap-1.5">
-          <Chip active={departmentId === ''} onClick={() => setDepartmentId('')}>
-            All departments
-          </Chip>
-          {departments.map((d) => (
-            <Chip key={d.id} active={departmentId === d.id} onClick={() => setDepartmentId(d.id)}>
-              {d.name}
-            </Chip>
-          ))}
-        </div>
+        {/*
+          NO DEPARTMENT FILTER. A department is a place that does tests — X-ray,
+          Pathology — and nobody books an appointment with radiology. The chips
+          here listed clinical departments that existed only because a seed made
+          them, and filtered a list of four doctors by them.
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          The doctor cards carry the specialty, which is the thing somebody
+          booking actually wants to know.
+        */}
+        <div className="grid gap-2 sm:grid-cols-2">
           {doctors.map((d) => (
             <button
               key={d.id}
@@ -298,7 +352,7 @@ export default function NewAppointmentPage() {
             >
               <p className="text-[14px] font-semibold text-ink">{d.fullName}</p>
               <p className="text-[12.5px] text-ink-40">
-                {d.specialty ?? d.department?.name ?? '—'}
+                {d.specialty ?? '—'}
                 {d.qualification ? ` · ${d.qualification}` : ''}
               </p>
             </button>
@@ -379,25 +433,38 @@ export default function NewAppointmentPage() {
         ) : (
           <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
             {availability.slots.map((s) => {
-              const full = s.available <= 0;
+              // A finished slot and a full one are both unbookable and are not
+              // the same thing — struck through says "taken", faded says
+              // "gone". A receptionist reading the day needs to tell them
+              // apart, so the titles differ too.
+              const full = !s.past && s.available <= 0;
+              const disabled = s.past || full;
               return (
                 <button
                   key={s.startAt}
                   type="button"
-                  disabled={full}
+                  disabled={disabled}
                   onClick={() => setSlotStart(s.startAt)}
                   title={
-                    full ? 'Fully booked' : s.overbooking ? 'Overbooking this slot' : undefined
+                    s.past
+                      ? 'This time has already passed'
+                      : full
+                        ? 'Fully booked'
+                        : s.overbooking
+                          ? 'Overbooking this slot'
+                          : undefined
                   }
                   className={[
                     'rounded-tiny border-[1.5px] px-2 py-2 font-mono text-[13px] transition-colors',
-                    full
-                      ? 'cursor-not-allowed border-ink/8 bg-ink/5 text-ink-20 line-through'
-                      : slotStart === s.startAt
-                        ? 'border-clinical bg-clinical text-white'
-                        : s.overbooking
-                          ? 'border-amber/50 bg-amber-soft/40 text-amber-text'
-                          : 'border-ink/10 bg-white hover:border-clinical/50',
+                    s.past
+                      ? 'cursor-not-allowed border-ink/6 bg-transparent text-ink-20'
+                      : full
+                        ? 'cursor-not-allowed border-ink/8 bg-ink/5 text-ink-20 line-through'
+                        : slotStart === s.startAt
+                          ? 'border-clinical bg-clinical text-white'
+                          : s.overbooking
+                            ? 'border-amber/50 bg-amber-soft/40 text-amber-text'
+                            : 'border-ink/10 bg-white hover:border-clinical/50',
                   ].join(' ')}
                 >
                   {s.time}
@@ -410,14 +477,34 @@ export default function NewAppointmentPage() {
 
       {/* 4 — reason and confirm */}
       <section className="card p-5">
-        <p className="mono-label mb-3">4 · Reason (optional)</p>
-        <input
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          className="field-input"
-          placeholder="e.g. Fever for 3 days"
-          maxLength={300}
-        />
+        <p className="mono-label mb-3">
+          4 · Reason <span className="text-coral">*</span>
+        </p>
+
+        <div className="flex flex-wrap gap-1.5">
+          {VISIT_REASONS.map((r) => {
+            const on = reason === r;
+            return (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={on}
+                // No un-picking now that one is required: clearing the choice
+                // would only ever put the form back into a state it cannot be
+                // submitted from.
+                onClick={() => setReason(r)}
+                className={[
+                  'rounded-pill border-[1.5px] px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
+                  on
+                    ? 'border-clinical bg-clinical text-white'
+                    : 'border-ink/12 bg-white text-ink-60 hover:border-ink/25 hover:text-ink',
+                ].join(' ')}
+              >
+                {r}
+              </button>
+            );
+          })}
+        </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
@@ -430,17 +517,21 @@ export default function NewAppointmentPage() {
             {busy ? 'Booking…' : 'Book appointment'}
           </button>
 
-          {/* Same patient and doctor, no slot — straight into today's queue. */}
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={!canWalkIn || busy}
-            title="Add to today's queue now, without a time slot"
-            onClick={() => void book(true)}
-          >
-            <IconClock size={16} />
-            Add as walk-in
-          </button>
+          {/* Same patient and doctor, no slot — straight into today's queue.
+              Absent, not disabled, for somebody who may not open a visit: a
+              greyed-out button reads as "not yet", and this is "not you". */}
+          {mayOpenVisits && (
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!canWalkIn || busy}
+              title="Add to today's queue now, without a time slot"
+              onClick={() => void book(true)}
+            >
+              <IconClock size={16} />
+              Add as walk-in
+            </button>
+          )}
 
           <Link href="/queue" className="btn-ghost text-[13px]">
             Cancel
@@ -450,38 +541,14 @@ export default function NewAppointmentPage() {
         {selectedDoctor && patient && (
           <p className="mt-3 text-[12.5px] text-ink-40">
             {slotStart
-              ? `${patient.name} with ${selectedDoctor.fullName} — ${availability?.slots.find((s) => s.startAt === slotStart)?.time} on ${date}.`
-              : `Pick a time, or add ${patient.name} as a walk-in for today.`}
+              ? `${patient.name} with ${selectedDoctor.fullName} at ${availability?.slots.find((s) => s.startAt === slotStart)?.time} on ${date}.`
+              : mayOpenVisits
+                ? `Pick a time, or add ${patient.name} as a walk-in for today.`
+                : 'Pick a time.'}
           </p>
         )}
       </section>
     </div>
-  );
-}
-
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={[
-        'rounded-pill border-[1.5px] px-3 py-1 text-[13px] font-semibold transition-colors',
-        active
-          ? 'border-clinical bg-clinical text-white'
-          : 'border-ink/12 bg-white text-ink-60 hover:border-ink/25 hover:text-ink',
-      ].join(' ')}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -500,7 +567,7 @@ function PatientPicker({ onPick }: { onPick: (p: PatientSummary) => void }) {
       setSearching(true);
       try {
         const { patients } = await api.searchPatients(query);
-        setResults(patients.slice(0, 6));
+        setResults(patients);
       } catch {
         setResults([]);
       } finally {
@@ -529,7 +596,11 @@ function PatientPicker({ onPick }: { onPick: (p: PatientSummary) => void }) {
       {searching && <p className="field-hint">Searching…</p>}
 
       {results.length > 0 && (
-        <ul className="mt-2 divide-y divide-ink/6 overflow-hidden rounded-panel border border-ink/10">
+        /* Scrolls, since 27 Oct 2026. It used to show six of however many
+           matched and say nothing about the rest — which on a UHID search is
+           most of them, because every ID in a clinic shares a prefix and
+           typing one matches everybody on file. */
+        <ul className="scrollbar-quiet mt-2 max-h-[264px] divide-y divide-ink/6 overflow-y-auto rounded-panel border border-ink/10">
           {results.map((p) => (
             <li key={p.id}>
               <button
@@ -551,6 +622,14 @@ function PatientPicker({ onPick }: { onPick: (p: PatientSummary) => void }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Said, not hidden. A capped list that looks complete is worse than one
+          that admits it is capped. */}
+      {results.length >= SEARCH_CAP && (
+        <p className="field-hint">
+          Showing the closest {SEARCH_CAP}. Add a mobile number or a UHID to narrow it.
+        </p>
       )}
 
       {query.trim().length >= 2 && !searching && results.length === 0 && (

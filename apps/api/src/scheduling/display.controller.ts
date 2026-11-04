@@ -84,6 +84,23 @@ export class DisplayController {
   ) {
     return this.display.revoke(tenantId, id, meta(req, user));
   }
+
+  /**
+   * Turn a revoked screen back on, with a new key (returned once).
+   *
+   * POST rather than PATCH because it MINTS something — the response carries a
+   * credential that has never existed before and cannot be fetched again.
+   */
+  @Post('display-devices/:id/key')
+  @RequirePermissions(PERMISSIONS.DISPLAY_MANAGE)
+  async reissue(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.display.reissue(tenantId, id, meta(req, user));
+  }
 }
 
 function meta(req: FastifyRequest, user: AuthenticatedUser): RequestMeta {

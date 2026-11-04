@@ -49,7 +49,7 @@ export function uhidPrefixProblems(prefix: string): string[] {
   if (!/^[A-Z]/.test(prefix)) problems.push('Must start with a letter.');
   // The one that matters: DRV1 + 05 and DRV + 105 are both DRV105.
   if (/[0-9]$/.test(prefix))
-    problems.push('Cannot end in a digit — put a - or / after it, like DRV1-.');
+    problems.push('Cannot end in a digit. Put a - or / after it, like DRV1-.');
 
   return problems;
 }

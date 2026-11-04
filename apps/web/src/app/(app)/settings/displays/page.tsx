@@ -79,6 +79,41 @@ export default function DisplaysPage() {
     }
   }
 
+  /**
+   * Turn a screen back on.
+   *
+   * Reported from the clinic on 30 Oct 2026: a screen turned off had no button
+   * to turn it on again, so the only way back was pairing a second screen and
+   * leaving the first in the list forever.
+   *
+   * A NEW URL comes back, because a new key does — the old one stays dead. So
+   * this is confirmed first: somebody has to walk to the screen and enter it,
+   * and that is worth knowing before pressing rather than after.
+   */
+  async function turnOn(id: string, deviceName: string) {
+    if (
+      !window.confirm(
+        `Turn “${deviceName}” back on?\n\n` +
+          'It gets a NEW address, shown once. The old one stays dead, so you will ' +
+          'need to open the new link on the screen itself.',
+      )
+    ) {
+      return;
+    }
+
+    setError(null);
+    try {
+      const back = await api.reissueDisplayKey(id);
+      setIssued({
+        name: back.name,
+        url: `${window.location.origin}/display/${back.accessKey}`,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not turn it on.');
+    }
+  }
+
   async function revoke(id: string, deviceName: string) {
     if (!window.confirm(`Turn off “${deviceName}”? The screen will stop updating immediately.`)) {
       return;
@@ -98,7 +133,7 @@ export default function DisplaysPage() {
         <p className="eyebrow">Settings</p>
         <h1 className="mt-2 font-display text-[30px] font-bold">Waiting-room screens</h1>
         <p className="mt-1 max-w-[62ch] text-[14px] text-ink-60">
-          A screen shows token numbers and the doctor&rsquo;s name — never a patient&rsquo;s. It
+          A screen shows token numbers and the doctor&rsquo;s name, never a patient&rsquo;s. It
           signs in with its own key rather than a staff login, so nobody has to leave a session open
           on a television.
         </p>
@@ -123,7 +158,7 @@ export default function DisplaysPage() {
           <div className="bg-clinical-tint px-5 py-4">
             <p className="mono-label !text-clinical-text">{issued.name} is paired</p>
             <p className="mt-1 text-[13.5px] text-ink-60">
-              Open this address on the screen. <strong>Copy it now</strong> — it cannot be shown
+              Open this address on the screen. <strong>Copy it now</strong>. It cannot be shown
               again, and a screen that loses it has to be paired afresh.
             </p>
           </div>
@@ -267,13 +302,23 @@ export default function DisplaysPage() {
                       : 'never connected'}
                   </p>
                 </div>
-                {d.isActive && (
+                {d.isActive ? (
                   <button
                     type="button"
                     className="btn-ghost !px-2.5 !py-1.5 text-[12.5px] !text-coral-text"
                     onClick={() => void revoke(d.id, d.name)}
                   >
                     Turn off
+                  </button>
+                ) : (
+                  /* The way back. A screen turned off had no action on its row
+                     at all until 30 Oct 2026, so it could only be abandoned. */
+                  <button
+                    type="button"
+                    className="btn-secondary !px-2.5 !py-1.5 !text-[12.5px]"
+                    onClick={() => void turnOn(d.id, d.name)}
+                  >
+                    Turn on
                   </button>
                 )}
               </li>

@@ -144,14 +144,49 @@ export class PromotionsService {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const promotion = await this.load(tx, id);
 
+      /**
+       * What a used promotion may still change, narrowed 28 Oct 2026.
+       *
+       * It used to refuse EVERY field once a single bill had used it, and told
+       * the administrator to switch it off and make a new one. That is right
+       * for anything that rewrites what past reports mean — the code, the
+       * type, the value, the cap — because "CAMP50 gave 50%" and "CAMP50 gave
+       * 30%" cannot both be true of one row and leave last month explainable.
+       *
+       * It is wrong for the two things a clinic actually needs: STOPPING a
+       * promotion that is running, and fixing a typo in its NAME. Neither
+       * changes a figure anybody has already reported. `validTo` only closes
+       * the window going forward; applications already made keep their own
+       * recorded amounts, which `promotion_application` stores per bill rather
+       * than reading back off the promotion.
+       *
+       * `validFrom` is NOT in the list on purpose. Moving the start backwards
+       * or forwards re-describes a window that bills were already taken under,
+       * which is the same mistake in slower motion.
+       */
       const used = await tx.promotionApplication.count({ where: { promotionId: id } });
       if (used > 0) {
-        throw new ConflictException({
-          code: 'PROMOTION_IN_USE',
-          message:
-            `${promotion.code} has been applied to ${used} bill${used === 1 ? '' : 's'} and ` +
-            'can no longer be edited. Switch it off and create a new one.',
-        });
+        const frozen = (
+          [
+            ['value', input.value],
+            ['maxDiscountPaise', input.maxDiscountPaise],
+            ['validFrom', input.validFrom],
+            ['description', input.description],
+          ] as const
+        )
+          .filter(([, value]) => value !== undefined)
+          .map(([field]) => field);
+
+        if (frozen.length > 0) {
+          throw new ConflictException({
+            code: 'PROMOTION_IN_USE',
+            message:
+              `${promotion.code} has been applied to ${used} bill${used === 1 ? '' : 's'}, so ` +
+              `${frozen.join(', ')} can no longer be changed — last month's figures are ` +
+              'grouped by this promotion. Its name and its end date can still be edited, and ' +
+              'it can be switched off.',
+          });
+        }
       }
 
       /**
@@ -167,7 +202,7 @@ export class PromotionsService {
         throw new ConflictException({
           code: 'CUSTOM_HAS_NO_VALUE',
           message:
-            `${promotion.code} is a custom promotion — its amount is typed when it is applied, ` +
+            `${promotion.code} is a custom promotion. Its amount is typed when it is applied, ` +
             'so it has no value and no maximum to edit.',
         });
       }
@@ -357,8 +392,8 @@ export class PromotionsService {
         throw new ConflictException({
           code: 'PAYMENT_ALREADY_TAKEN',
           message:
-            'Money has already been taken on this bill. A discount after payment is a refund — ' +
-            'an administrator does that.',
+            'Money has already been taken on this bill. A discount after payment is a refund. ' +
+            'An administrator does that.',
         });
       }
 
@@ -450,7 +485,7 @@ export class PromotionsService {
       if (isCustom && input.customDiscountPaise === undefined) {
         throw new BadRequestException({
           code: 'CUSTOM_AMOUNT_REQUIRED',
-          message: `${promotion.code} needs an amount — type what this bill should be discounted by.`,
+          message: `${promotion.code} needs an amount. Type what this bill should be discounted by.`,
         });
       }
 
@@ -627,7 +662,7 @@ export class PromotionsService {
           code: 'PAYMENT_ALREADY_TAKEN',
           message:
             'Money has already been taken on this bill. Removing the discount now is a ' +
-            'correction — an administrator does that.',
+            'correction. An administrator does that.',
         });
       }
 

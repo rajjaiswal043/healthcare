@@ -424,6 +424,7 @@ export const ModelName = {
   Service: 'Service',
   Invoice: 'Invoice',
   InvoiceLine: 'InvoiceLine',
+  InvoiceWriteOff: 'InvoiceWriteOff',
   Payment: 'Payment',
   InvoiceCounter: 'InvoiceCounter',
   QueueCounter: 'QueueCounter',
@@ -434,10 +435,7 @@ export const ModelName = {
   PromotionApplication: 'PromotionApplication',
   ReceiptCounter: 'ReceiptCounter',
   Receipt: 'Receipt',
-  ReceiptPrint: 'ReceiptPrint',
-  PatientLink: 'PatientLink',
-  OutboundMessage: 'OutboundMessage',
-  RecoveryCheckin: 'RecoveryCheckin'
+  ReceiptPrint: 'ReceiptPrint'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -453,7 +451,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "tenant" | "platformUser" | "platformSession" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "tenantSeatLimit" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "payment" | "invoiceCounter" | "queueCounter" | "clinicalDocument" | "diagnosticOrder" | "patientCorrection" | "promotion" | "promotionApplication" | "receiptCounter" | "receipt" | "receiptPrint" | "patientLink" | "outboundMessage" | "recoveryCheckin"
+    modelProps: "tenant" | "platformUser" | "platformSession" | "location" | "displayDevice" | "patient" | "consentRecord" | "auditEvent" | "user" | "role" | "tenantSeatLimit" | "userRole" | "session" | "department" | "practitioner" | "practitionerSchedule" | "scheduleException" | "appointment" | "encounter" | "vitalsObservation" | "diagnosis" | "formularyItem" | "prescription" | "encounterAddendum" | "service" | "invoice" | "invoiceLine" | "invoiceWriteOff" | "payment" | "invoiceCounter" | "queueCounter" | "clinicalDocument" | "diagnosticOrder" | "patientCorrection" | "promotion" | "promotionApplication" | "receiptCounter" | "receipt" | "receiptPrint"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2455,6 +2453,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    InvoiceWriteOff: {
+      payload: Prisma.$InvoiceWriteOffPayload<ExtArgs>
+      fields: Prisma.InvoiceWriteOffFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.InvoiceWriteOffFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.InvoiceWriteOffFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        findFirst: {
+          args: Prisma.InvoiceWriteOffFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.InvoiceWriteOffFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        findMany: {
+          args: Prisma.InvoiceWriteOffFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>[]
+        }
+        create: {
+          args: Prisma.InvoiceWriteOffCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        createMany: {
+          args: Prisma.InvoiceWriteOffCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.InvoiceWriteOffCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>[]
+        }
+        delete: {
+          args: Prisma.InvoiceWriteOffDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        update: {
+          args: Prisma.InvoiceWriteOffUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        deleteMany: {
+          args: Prisma.InvoiceWriteOffDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.InvoiceWriteOffUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.InvoiceWriteOffUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>[]
+        }
+        upsert: {
+          args: Prisma.InvoiceWriteOffUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoiceWriteOffPayload>
+        }
+        aggregate: {
+          args: Prisma.InvoiceWriteOffAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateInvoiceWriteOff>
+        }
+        groupBy: {
+          args: Prisma.InvoiceWriteOffGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.InvoiceWriteOffGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.InvoiceWriteOffCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.InvoiceWriteOffCountAggregateOutputType> | number
+        }
+      }
+    }
     Payment: {
       payload: Prisma.$PaymentPayload<ExtArgs>
       fields: Prisma.PaymentFieldRefs
@@ -3269,228 +3341,6 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
-    PatientLink: {
-      payload: Prisma.$PatientLinkPayload<ExtArgs>
-      fields: Prisma.PatientLinkFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.PatientLinkFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.PatientLinkFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>
-        }
-        findFirst: {
-          args: Prisma.PatientLinkFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.PatientLinkFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>
-        }
-        findMany: {
-          args: Prisma.PatientLinkFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>[]
-        }
-        create: {
-          args: Prisma.PatientLinkCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>
-        }
-        createMany: {
-          args: Prisma.PatientLinkCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.PatientLinkCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>[]
-        }
-        delete: {
-          args: Prisma.PatientLinkDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>
-        }
-        update: {
-          args: Prisma.PatientLinkUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>
-        }
-        deleteMany: {
-          args: Prisma.PatientLinkDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.PatientLinkUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.PatientLinkUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>[]
-        }
-        upsert: {
-          args: Prisma.PatientLinkUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$PatientLinkPayload>
-        }
-        aggregate: {
-          args: Prisma.PatientLinkAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregatePatientLink>
-        }
-        groupBy: {
-          args: Prisma.PatientLinkGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.PatientLinkGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.PatientLinkCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.PatientLinkCountAggregateOutputType> | number
-        }
-      }
-    }
-    OutboundMessage: {
-      payload: Prisma.$OutboundMessagePayload<ExtArgs>
-      fields: Prisma.OutboundMessageFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.OutboundMessageFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.OutboundMessageFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>
-        }
-        findFirst: {
-          args: Prisma.OutboundMessageFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.OutboundMessageFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>
-        }
-        findMany: {
-          args: Prisma.OutboundMessageFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>[]
-        }
-        create: {
-          args: Prisma.OutboundMessageCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>
-        }
-        createMany: {
-          args: Prisma.OutboundMessageCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.OutboundMessageCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>[]
-        }
-        delete: {
-          args: Prisma.OutboundMessageDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>
-        }
-        update: {
-          args: Prisma.OutboundMessageUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>
-        }
-        deleteMany: {
-          args: Prisma.OutboundMessageDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.OutboundMessageUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.OutboundMessageUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>[]
-        }
-        upsert: {
-          args: Prisma.OutboundMessageUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$OutboundMessagePayload>
-        }
-        aggregate: {
-          args: Prisma.OutboundMessageAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateOutboundMessage>
-        }
-        groupBy: {
-          args: Prisma.OutboundMessageGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.OutboundMessageGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.OutboundMessageCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.OutboundMessageCountAggregateOutputType> | number
-        }
-      }
-    }
-    RecoveryCheckin: {
-      payload: Prisma.$RecoveryCheckinPayload<ExtArgs>
-      fields: Prisma.RecoveryCheckinFieldRefs
-      operations: {
-        findUnique: {
-          args: Prisma.RecoveryCheckinFindUniqueArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload> | null
-        }
-        findUniqueOrThrow: {
-          args: Prisma.RecoveryCheckinFindUniqueOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>
-        }
-        findFirst: {
-          args: Prisma.RecoveryCheckinFindFirstArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload> | null
-        }
-        findFirstOrThrow: {
-          args: Prisma.RecoveryCheckinFindFirstOrThrowArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>
-        }
-        findMany: {
-          args: Prisma.RecoveryCheckinFindManyArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>[]
-        }
-        create: {
-          args: Prisma.RecoveryCheckinCreateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>
-        }
-        createMany: {
-          args: Prisma.RecoveryCheckinCreateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        createManyAndReturn: {
-          args: Prisma.RecoveryCheckinCreateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>[]
-        }
-        delete: {
-          args: Prisma.RecoveryCheckinDeleteArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>
-        }
-        update: {
-          args: Prisma.RecoveryCheckinUpdateArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>
-        }
-        deleteMany: {
-          args: Prisma.RecoveryCheckinDeleteManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateMany: {
-          args: Prisma.RecoveryCheckinUpdateManyArgs<ExtArgs>
-          result: BatchPayload
-        }
-        updateManyAndReturn: {
-          args: Prisma.RecoveryCheckinUpdateManyAndReturnArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>[]
-        }
-        upsert: {
-          args: Prisma.RecoveryCheckinUpsertArgs<ExtArgs>
-          result: runtime.Types.Utils.PayloadToResult<Prisma.$RecoveryCheckinPayload>
-        }
-        aggregate: {
-          args: Prisma.RecoveryCheckinAggregateArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.AggregateRecoveryCheckin>
-        }
-        groupBy: {
-          args: Prisma.RecoveryCheckinGroupByArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.RecoveryCheckinGroupByOutputType>[]
-        }
-        count: {
-          args: Prisma.RecoveryCheckinCountArgs<ExtArgs>
-          result: runtime.Types.Utils.Optional<Prisma.RecoveryCheckinCountAggregateOutputType> | number
-        }
-      }
-    }
   }
 } & {
   other: {
@@ -3641,6 +3491,8 @@ export const PatientScalarFieldEnum = {
   state: 'state',
   postalCode: 'postalCode',
   bloodGroup: 'bloodGroup',
+  allergies: 'allergies',
+  allergiesReviewedAt: 'allergiesReviewedAt',
   emergencyContactName: 'emergencyContactName',
   emergencyContactMobile: 'emergencyContactMobile',
   abhaNumber: 'abhaNumber',
@@ -3703,6 +3555,7 @@ export const UserScalarFieldEnum = {
   lastLoginAt: 'lastLoginAt',
   failedLoginCount: 'failedLoginCount',
   lockedUntil: 'lockedUntil',
+  departmentId: 'departmentId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -3771,7 +3624,6 @@ export const DepartmentScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
   name: 'name',
-  isDiagnostic: 'isDiagnostic',
   displayOrder: 'displayOrder',
   isActive: 'isActive',
   createdAt: 'createdAt',
@@ -3790,7 +3642,6 @@ export const PractitionerScalarFieldEnum = {
   hprId: 'hprId',
   qualification: 'qualification',
   specialty: 'specialty',
-  departmentId: 'departmentId',
   userId: 'userId',
   previousUserId: 'previousUserId',
   overbookPerSession: 'overbookPerSession',
@@ -3850,7 +3701,6 @@ export const AppointmentScalarFieldEnum = {
   patientId: 'patientId',
   practitionerId: 'practitionerId',
   locationId: 'locationId',
-  departmentId: 'departmentId',
   startAt: 'startAt',
   endAt: 'endAt',
   status: 'status',
@@ -3870,15 +3720,14 @@ export const AppointmentScalarFieldEnum = {
   checkedInAt: 'checkedInAt',
   calledAt: 'calledAt',
   completedAt: 'completedAt',
+  closedAt: 'closedAt',
+  closedByUserId: 'closedByUserId',
   cancelledAt: 'cancelledAt',
   cancelReason: 'cancelReason',
   cancelledByUserId: 'cancelledByUserId',
   noShowAt: 'noShowAt',
   bookedByUserId: 'bookedByUserId',
   reminderSentAt: 'reminderSentAt',
-  arrivalIntent: 'arrivalIntent',
-  arrivalIntentAt: 'arrivalIntentAt',
-  leaveNowSentAt: 'leaveNowSentAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   externalTestNote: 'externalTestNote'
@@ -3901,7 +3750,6 @@ export const EncounterScalarFieldEnum = {
   prescriptionNote: 'prescriptionNote',
   followUpDate: 'followUpDate',
   followUpNote: 'followUpNote',
-  checkInIntervalDays: 'checkInIntervalDays',
   startedAt: 'startedAt',
   signedAt: 'signedAt',
   signedByUserId: 'signedByUserId',
@@ -3928,6 +3776,7 @@ export const VitalsObservationScalarFieldEnum = {
   spo2Percent: 'spo2Percent',
   respiratoryRate: 'respiratoryRate',
   notes: 'notes',
+  correctsId: 'correctsId',
   createdAt: 'createdAt'
 } as const
 
@@ -4059,6 +3908,23 @@ export const InvoiceLineScalarFieldEnum = {
 export type InvoiceLineScalarFieldEnum = (typeof InvoiceLineScalarFieldEnum)[keyof typeof InvoiceLineScalarFieldEnum]
 
 
+export const InvoiceWriteOffScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  invoiceId: 'invoiceId',
+  amountPaise: 'amountPaise',
+  reason: 'reason',
+  waivedByUserId: 'waivedByUserId',
+  waivedAt: 'waivedAt',
+  voidedAt: 'voidedAt',
+  voidedByUserId: 'voidedByUserId',
+  voidReason: 'voidReason',
+  createdAt: 'createdAt'
+} as const
+
+export type InvoiceWriteOffScalarFieldEnum = (typeof InvoiceWriteOffScalarFieldEnum)[keyof typeof InvoiceWriteOffScalarFieldEnum]
+
+
 export const PaymentScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -4108,7 +3974,10 @@ export const ClinicalDocumentScalarFieldEnum = {
   sizeBytes: 'sizeBytes',
   diagnosticOrderId: 'diagnosticOrderId',
   uploadedByUserId: 'uploadedByUserId',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  removedAt: 'removedAt',
+  removedByUserId: 'removedByUserId',
+  removalReason: 'removalReason'
 } as const
 
 export type ClinicalDocumentScalarFieldEnum = (typeof ClinicalDocumentScalarFieldEnum)[keyof typeof ClinicalDocumentScalarFieldEnum]
@@ -4131,6 +4000,7 @@ export const DiagnosticOrderScalarFieldEnum = {
   description: 'description',
   status: 'status',
   resultNote: 'resultNote',
+  noFileReason: 'noFileReason',
   completedAt: 'completedAt',
   completedByUserId: 'completedByUserId',
   handedOverAt: 'handedOverAt',
@@ -4232,65 +4102,6 @@ export const ReceiptPrintScalarFieldEnum = {
 } as const
 
 export type ReceiptPrintScalarFieldEnum = (typeof ReceiptPrintScalarFieldEnum)[keyof typeof ReceiptPrintScalarFieldEnum]
-
-
-export const PatientLinkScalarFieldEnum = {
-  id: 'id',
-  tenantId: 'tenantId',
-  patientId: 'patientId',
-  purpose: 'purpose',
-  appointmentId: 'appointmentId',
-  encounterId: 'encounterId',
-  keyHash: 'keyHash',
-  expiresAt: 'expiresAt',
-  lastSeenAt: 'lastSeenAt',
-  revokedAt: 'revokedAt',
-  createdAt: 'createdAt'
-} as const
-
-export type PatientLinkScalarFieldEnum = (typeof PatientLinkScalarFieldEnum)[keyof typeof PatientLinkScalarFieldEnum]
-
-
-export const OutboundMessageScalarFieldEnum = {
-  id: 'id',
-  tenantId: 'tenantId',
-  patientId: 'patientId',
-  appointmentId: 'appointmentId',
-  encounterId: 'encounterId',
-  kind: 'kind',
-  channel: 'channel',
-  status: 'status',
-  toMobile: 'toMobile',
-  body: 'body',
-  providerRef: 'providerRef',
-  error: 'error',
-  createdByUserId: 'createdByUserId',
-  createdAt: 'createdAt'
-} as const
-
-export type OutboundMessageScalarFieldEnum = (typeof OutboundMessageScalarFieldEnum)[keyof typeof OutboundMessageScalarFieldEnum]
-
-
-export const RecoveryCheckinScalarFieldEnum = {
-  id: 'id',
-  tenantId: 'tenantId',
-  encounterId: 'encounterId',
-  patientId: 'patientId',
-  dueOn: 'dueOn',
-  sentAt: 'sentAt',
-  answeredAt: 'answeredAt',
-  painScore: 'painScore',
-  exercisesDone: 'exercisesDone',
-  note: 'note',
-  flaggedAt: 'flaggedAt',
-  flagReason: 'flagReason',
-  flagClearedAt: 'flagClearedAt',
-  flagClearedByUserId: 'flagClearedByUserId',
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
-} as const
-
-export type RecoveryCheckinScalarFieldEnum = (typeof RecoveryCheckinScalarFieldEnum)[keyof typeof RecoveryCheckinScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -4527,20 +4338,6 @@ export type ListEnumQueuePriorityReasonFieldRefInput<$PrismaModel> = FieldRefInp
 
 
 /**
- * Reference to a field of type 'ArrivalIntent'
- */
-export type EnumArrivalIntentFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ArrivalIntent'>
-    
-
-
-/**
- * Reference to a field of type 'ArrivalIntent[]'
- */
-export type ListEnumArrivalIntentFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ArrivalIntent[]'>
-    
-
-
-/**
  * Reference to a field of type 'EncounterStatus'
  */
 export type EnumEncounterStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'EncounterStatus'>
@@ -4719,48 +4516,6 @@ export type EnumPromotionReversalKindFieldRefInput<$PrismaModel> = FieldRefInput
  * Reference to a field of type 'PromotionReversalKind[]'
  */
 export type ListEnumPromotionReversalKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PromotionReversalKind[]'>
-    
-
-
-/**
- * Reference to a field of type 'PatientLinkPurpose'
- */
-export type EnumPatientLinkPurposeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientLinkPurpose'>
-    
-
-
-/**
- * Reference to a field of type 'PatientLinkPurpose[]'
- */
-export type ListEnumPatientLinkPurposeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PatientLinkPurpose[]'>
-    
-
-
-/**
- * Reference to a field of type 'MessageKind'
- */
-export type EnumMessageKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MessageKind'>
-    
-
-
-/**
- * Reference to a field of type 'MessageKind[]'
- */
-export type ListEnumMessageKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MessageKind[]'>
-    
-
-
-/**
- * Reference to a field of type 'MessageStatus'
- */
-export type EnumMessageStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MessageStatus'>
-    
-
-
-/**
- * Reference to a field of type 'MessageStatus[]'
- */
-export type ListEnumMessageStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MessageStatus[]'>
     
 
 
@@ -4955,6 +4710,7 @@ export type GlobalOmitConfig = {
   service?: Prisma.ServiceOmit
   invoice?: Prisma.InvoiceOmit
   invoiceLine?: Prisma.InvoiceLineOmit
+  invoiceWriteOff?: Prisma.InvoiceWriteOffOmit
   payment?: Prisma.PaymentOmit
   invoiceCounter?: Prisma.InvoiceCounterOmit
   queueCounter?: Prisma.QueueCounterOmit
@@ -4966,9 +4722,6 @@ export type GlobalOmitConfig = {
   receiptCounter?: Prisma.ReceiptCounterOmit
   receipt?: Prisma.ReceiptOmit
   receiptPrint?: Prisma.ReceiptPrintOmit
-  patientLink?: Prisma.PatientLinkOmit
-  outboundMessage?: Prisma.OutboundMessageOmit
-  recoveryCheckin?: Prisma.RecoveryCheckinOmit
 }
 
 /* Types for Logging */

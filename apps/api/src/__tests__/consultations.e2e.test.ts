@@ -340,6 +340,189 @@ describe('recording the visit', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  /**
+   * A review date is a date in the future.
+   *
+   * Reported 27 Oct 2026: the form took any date at all, so a mistyped year
+   * printed "Review on 12 January 2025" on a prescription. Checked against the
+   * CLINIC's today, not the server's or the browser's.
+   */
+  it('refuses a follow-up date that has already passed', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { followUpDate: clinicDate(-1) },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(domainCode(res)).toBe('FOLLOW_UP_IN_THE_PAST');
+  });
+
+  it('accepts today, because "come back this evening" is a real instruction', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { followUpDate: clinicDate(0) },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('lets the follow-up date be cleared', async () => {
+    // Blank is somebody removing a date, which must not be read as a past one.
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { followUpDate: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().followUpDate).toBeNull();
+  });
+
+  /**
+   * A chief complaint has words in it.
+   *
+   * Reported 27 Oct 2026: "123" was accepted, and then prints on the
+   * prescription as the reason the patient came.
+   */
+  it('refuses a narrative field with no words in it', async () => {
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: '123' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('accepts a narrative that is mostly numbers but says something', async () => {
+    // The rule is "has words", not "has no digits" — this is how doctors write.
+    const { encounter } = await openConsultation();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/encounters/${encounter.id}`,
+      headers: { cookie: doctor.cookie },
+      payload: { chiefComplaint: '2 days of knee pain', advice: 'T2DM x 5y, review in 2w' },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  /**
+   * Correcting a reading somebody typed wrongly.
+   *
+   * Vitals were append-only, which is right for an observation and wrong for a
+   * typo. A pulse of 178 instead of 78 is inside every bound, so nothing
+   * refused it and nothing could take it back — note that the pair a
+   * transposed BP would make is already refused by `vitals_bp_ordered`, so the
+   * fixture here uses the kind of slip the database cannot see.
+   */
+  describe('correcting a vitals reading', () => {
+    async function withReading() {
+      const { encounter } = await openConsultation();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/encounters/${encounter.id}/vitals`,
+        headers: { cookie: nurse.cookie },
+        payload: { systolicMmHg: 120, diastolicMmHg: 80, pulseBpm: 178 },
+      });
+
+      expect(res.statusCode).toBe(201);
+      return { encounter, reading: res.json().latestVitals };
+    }
+
+    function correct(encounterId: string, vitalsId: string, payload: Record<string, number>) {
+      return app.inject({
+        method: 'POST',
+        url: `/api/v1/encounters/${encounterId}/vitals/${vitalsId}/correct`,
+        headers: { cookie: nurse.cookie },
+        payload,
+      });
+    }
+
+    it('replaces the reading and keeps the original', async () => {
+      const { encounter, reading } = await withReading();
+
+      const res = await correct(encounter.id, reading.id, {
+        systolicMmHg: 120,
+        diastolicMmHg: 80,
+        pulseBpm: 78,
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      const body = res.json();
+      expect(body.latestVitals.pulseBpm).toBe(78);
+      expect(body.latestVitals.correctsId).toBe(reading.id);
+
+      // Both rows are there. The original is the evidence that the first
+      // reading was ever taken, which is what somebody asks about later.
+      expect(body.vitals).toHaveLength(2);
+      const original = body.vitals.find((v: { id: string }) => v.id === reading.id);
+      expect(original.pulseBpm).toBe(178);
+      expect(original.superseded).toBe(true);
+    });
+
+    it('keeps the correction at the time the observation was taken', async () => {
+      // Not the time somebody noticed: a corrected 10:00 reading must not jump
+      // ahead of a real 11:00 one.
+      const { encounter, reading } = await withReading();
+
+      const res = await correct(encounter.id, reading.id, { pulseBpm: 78 });
+
+      expect(res.json().latestVitals.recordedAt).toBe(reading.recordedAt);
+    });
+
+    it('refuses to correct the same reading twice', async () => {
+      const { encounter, reading } = await withReading();
+
+      expect((await correct(encounter.id, reading.id, { pulseBpm: 78 })).statusCode).toBe(201);
+
+      const again = await correct(encounter.id, reading.id, { pulseBpm: 80 });
+
+      expect(again.statusCode).toBe(409);
+      expect(domainCode(again)).toBe('ALREADY_CORRECTED');
+    });
+
+    it('refuses a reading from another visit', async () => {
+      const { reading } = await withReading();
+      // Its own patient and slot: openConsultation defaults to the first of
+      // each, and asking twice collides on the queue rather than the test.
+      const other = await openConsultation(1, 1);
+
+      const res = await correct(other.encounter.id, reading.id, { pulseBpm: 78 });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('refuses a correction with nothing in it', async () => {
+      const { encounter, reading } = await withReading();
+
+      expect((await correct(encounter.id, reading.id, {})).statusCode).toBe(400);
+    });
+
+    it('refuses an impossible correction, the same as a reading', async () => {
+      const { encounter, reading } = await withReading();
+
+      expect((await correct(encounter.id, reading.id, { weightKg: 700 })).statusCode).toBe(400);
+    });
+  });
+
   it('makes the first diagnosis primary when none is marked', async () => {
     const { encounter } = await openConsultation();
 
@@ -1054,7 +1237,17 @@ describe('whose consultation you may touch', () => {
         patientId: fx.main.patientIds[1],
         practitionerId: colleaguePractitionerId,
         locationId: fx.main.locationId,
-        startAt: day.json().slots[0].startAt,
+        /*
+         * A LATER slot, not the same one. `openConsultation` above put this
+         * patient in the first doctor's 09:00, and since 29 Oct 2026 a patient
+         * cannot be in two rooms at the same time — see `patientBusyBetween`.
+         *
+         * The rule is overlap, not "same day", so what this test is actually
+         * about is untouched: two doctors still each hold their own visit for
+         * this patient on this day, and ownership is still per appointment. It
+         * was never the simultaneity that mattered here, only the two visits.
+         */
+        startAt: day.json().slots[4].startAt,
       },
     });
     expect(booked.statusCode).toBe(201);
@@ -1404,8 +1597,19 @@ describe('the previous visit', () => {
   });
 
   /**
-   * A draft is somebody's unfinished thinking. Showing it in a later
-   * consultation would put it in front of a doctor as though it were a record.
+   * An unsigned visit is still a visit that happened.
+   *
+   * REVERSED ON 28 OCT 2026, and this test used to assert the opposite. The
+   * reasoning for hiding drafts was that unfinished thinking should not reach a
+   * later consultation as though it were a record — sound on its own, and
+   * wrong beside the panel above it: the tests panel lists every completed test
+   * whatever visit produced it, so a patient whose earlier visit was never
+   * signed showed a previous TEST at the top of the screen and "no previous
+   * visits" at the bottom. One screen, one patient, two answers.
+   *
+   * So the visit is listed and `signedAt` is null, which is what the browser
+   * draws a "Not signed" badge from. The reader is told what they are looking
+   * at rather than told it does not exist.
    *
    * The earlier visit is pushed back to IN_PROGRESS directly rather than by
    * leaving a real one unsigned: an unsigned visit keeps its patient in the
@@ -1413,7 +1617,7 @@ describe('the previous visit', () => {
    * test needs. What is under test is the status filter, and this exercises it
    * without fighting the queue rules.
    */
-  it('ignores an unsigned visit', async () => {
+  it('lists an unsigned visit, and says it is unsigned', async () => {
     const earlier = await signedVisitFor(1, 'Signed then unsigned');
     const { encounter: today } = await openConsultation(1, 1);
 
@@ -1422,7 +1626,10 @@ describe('the previous visit', () => {
       url: `/api/v1/encounters/${today.id}/previous-visits`,
       headers: { cookie: doctor.cookie },
     });
-    expect(before.json<{ visits: unknown[] }>().visits).toHaveLength(1);
+    expect(before.json<{ visits: Array<{ signedAt: string | null }> }>().visits).toHaveLength(1);
+    expect(
+      before.json<{ visits: Array<{ signedAt: string | null }> }>().visits[0]!.signedAt,
+    ).not.toBeNull();
 
     await ownerQuery(
       fx.main.id,
@@ -1437,7 +1644,12 @@ describe('the previous visit', () => {
       headers: { cookie: doctor.cookie },
     });
 
-    expect(after.json<{ visits: unknown[] }>().visits).toHaveLength(0);
+    const visits = after.json<{ visits: Array<{ signedAt: string | null }> }>().visits;
+
+    // Still there — and carrying the one fact that tells a doctor to read it
+    // as a draft rather than as a record.
+    expect(visits).toHaveLength(1);
+    expect(visits[0]!.signedAt).toBeNull();
   });
 
   it('does not leak another clinic history', async () => {

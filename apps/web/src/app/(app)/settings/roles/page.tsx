@@ -172,7 +172,7 @@ export default function RolesPage() {
                     }`
                   : // Said on the card, not hidden behind the padlock. A locked
                     // thing with no reason reads as something that is broken.
-                    'Holds every permission, and cannot be changed — it is how you undo a mistake made on this screen.'}
+                    'Holds every permission, and cannot be changed: it is how you undo a mistake made on this screen.'}
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2 pt-1">

@@ -1,0 +1,704 @@
+<title>Walk-in Diagnostics</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Ledger palette: paper with a green bias, ink that isn't black, one teal
+     accent for money, amber for what is still undecided, clay for what must
+     not be broken. */
+  :root {
+    --paper:      #F6F8F6;
+    --surface:    #FFFFFF;
+    --surface-2:  #EEF2EF;
+    --ink:        #17211F;
+    --ink-70:     #47544F;
+    --ink-45:     #77837E;
+    --rule:       #DCE3DE;
+    --rule-soft:  #E8EDE9;
+    --accent:     #0E6B58;
+    --accent-bg:  #E4F0EB;
+    --amber:      #9A6412;
+    --amber-bg:   #F6EEDD;
+    --clay:       #97363A;
+    --clay-bg:    #F6E5E4;
+
+    --measure: 68ch;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #101614;
+      --surface:   #18201D;
+      --surface-2: #1F2825;
+      --ink:       #E7EDE9;
+      --ink-70:    #A9B5B0;
+      --ink-45:    #7C8883;
+      --rule:      #2C3733;
+      --rule-soft: #232D2A;
+      --accent:    #4FBB9E;
+      --accent-bg: #16302A;
+      --amber:     #D3A253;
+      --amber-bg:  #322817;
+      --clay:      #DC8B86;
+      --clay-bg:   #33201F;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #101614;
+    --surface:   #18201D;
+    --surface-2: #1F2825;
+    --ink:       #E7EDE9;
+    --ink-70:    #A9B5B0;
+    --ink-45:    #7C8883;
+    --rule:      #2C3733;
+    --rule-soft: #232D2A;
+    --accent:    #4FBB9E;
+    --accent-bg: #16302A;
+    --amber:     #D3A253;
+    --amber-bg:  #322817;
+    --clay:      #DC8B86;
+    --clay-bg:   #33201F;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 28px 96px;
+  }
+
+  /* ---- masthead ---- */
+
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 64px 0 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: clamp(38px, 6vw, 54px);
+    font-weight: 600;
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink-70);
+    max-width: var(--measure);
+    margin: 0;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    padding-top: 6px;
+  }
+
+  /* ---- sections ---- */
+
+  section { padding-top: 56px; }
+
+  h2 {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  p { max-width: var(--measure); margin: 0; }
+
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stack-tight { display: flex; flex-direction: column; gap: 10px; }
+
+  strong { font-weight: 600; }
+
+  /* ---- requirement cards ---- */
+
+  .req {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 26px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .req-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    padding-bottom: 14px;
+  }
+
+  .req-id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* Build state is real information, not decoration: it tells the developer
+     whether a requirement is a new build or a setting on something that
+     already ships. */
+  .state {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .state-new    { background: var(--clay-bg);   color: var(--clay); }
+  .state-extend { background: var(--amber-bg);  color: var(--amber); }
+  .state-config { background: var(--accent-bg); color: var(--accent); }
+
+  /* ---- tables ---- */
+
+  .scroll { overflow-x: auto; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 14.5px;
+    min-width: 460px;
+  }
+
+  th {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+    font-weight: 500;
+    padding: 0 16px 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  td {
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    color: var(--ink-70);
+  }
+
+  td:first-child { color: var(--ink); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ---- flow ---- */
+
+  ol.flow {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  ol.flow li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    align-items: baseline;
+    max-width: var(--measure);
+  }
+
+  ol.flow li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--ink-45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  ul.plain {
+    margin: 0;
+    padding-left: 20px;
+    max-width: var(--measure);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  ul.plain li { padding-left: 3px; }
+  ul.plain::marker { color: var(--ink-45); }
+
+  /* ---- notes ---- */
+
+  .note {
+    border-left: 2px solid var(--accent);
+    padding: 2px 0 2px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .note-warn { border-left-color: var(--clay); }
+
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-45);
+  }
+
+  .note p { font-size: 15px; color: var(--ink-70); }
+  .note strong { color: var(--ink); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.88em;
+    background: var(--surface-2);
+    padding: 1.5px 5px;
+    border-radius: 2px;
+  }
+
+  /* ---- decisions ---- */
+
+  .decision {
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .decision-q {
+    font-family: Newsreader, Georgia, serif;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.3;
+    max-width: var(--measure);
+    text-wrap: balance;
+  }
+
+  .rec {
+    font-size: 14.5px;
+    color: var(--ink-70);
+    max-width: var(--measure);
+  }
+  .rec b {
+    color: var(--accent);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-size: 13.5px;
+    color: var(--ink-45);
+    max-width: var(--measure);
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">Requirements · HealthCloud</span>
+    <h1>Walk-in Diagnostics</h1>
+    <p class="standfirst">
+      Somebody walks in wanting an X-ray and does not want to see a doctor. Every
+      test in the system today exists because a doctor asked for it — this is the
+      other case.
+    </p>
+    <div class="meta">
+      <span>From clinic demos, 3 Sep 2026</span>
+      <span>6 requirements</span>
+      <span>6 decisions outstanding</span>
+      <span>Companion to “Finance Desk and Promotions”</span>
+    </div>
+  </header>
+
+  <section class="stack">
+    <h2>What is being asked for</h2>
+    <p>
+      Today a test exists because a doctor asked for it. During a consultation the
+      doctor raises the order, the patient walks to the X-ray room, the department
+      does the work and attaches the result, and the result comes back into the
+      consultation for the doctor to read. <strong>That chain assumes a doctor at
+      both ends.</strong>
+    </p>
+    <p>
+      The clinics want the other case: a patient walks in off the street wanting a
+      film. They may be carrying a prescription from a hospital across town, or
+      they may simply want a chest X-ray. They pay, the department does the test,
+      they take the report away. No consultation, no prescription, no doctor
+      anywhere in it.
+    </p>
+
+    <div class="note">
+      <span class="note-label">The flow the clinics described</span>
+      <ol class="flow" style="margin-top:2px">
+        <li>The patient arrives and says which test they want.</li>
+        <li><strong>Finance</strong> finds or registers them, quotes the price for that test, and takes the payment.</li>
+        <li><strong>Front desk</strong> raises the request against the department.</li>
+        <li><strong>The department</strong> performs the test, attaches the result, and hands the report over.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>Requirements</h2>
+
+    <article class="req">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-DIA-10</span>
+          <h3>A test request with no ordering doctor</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        A diagnostic order that stands on its own — raised because a patient asked
+        for it, rather than because a doctor prescribed it.
+      </p>
+
+      <ul class="plain">
+        <li>The order records <strong>who asked for it</strong>: this clinic's doctor as today, a doctor at another hospital, or the patient themselves.</li>
+        <li>It behaves like any other order on the department worklist — the department does not need to care why it exists.</li>
+        <li>It attaches to the <strong>patient</strong>, not to a consultation, so it appears in their history for any doctor who sees them later.</li>
+      </ul>
+
+      <div class="note note-warn">
+        <span class="note-label">For the developer</span>
+        <p>
+          <code>diagnostic_order</code> currently hangs off a consultation and
+          carries the ordering practitioner. Both become optional, and a
+          <strong>referral source</strong> — in-house doctor, external doctor, or
+          self — is stored <strong>explicitly rather than inferred</strong> from a
+          null consultation. Inferring it works today and breaks the first time a
+          fourth case appears; the reports below need the distinction stated, not
+          deduced. Everything downstream already exists.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-DIA-11</span>
+          <h3>Pricing and paying for a walk-in test</h3>
+        </div>
+        <span class="state state-extend">Extends existing</span>
+      </div>
+
+      <p>
+        The finance desk quotes the test, takes the money and prints a receipt — the
+        same desk and the same screen as a consultation, with a test in place of a
+        doctor's fee.
+      </p>
+
+      <ul class="plain">
+        <li>Finance selects the <strong>test</strong>, not a doctor. The price comes from the clinic's priced services, which already exist.</li>
+        <li>Several tests on one bill — an X-ray and a blood test together — is one invoice, one payment, one receipt.</li>
+        <li>Promotions apply here too, if the clinic decides they do. That is an open question in the companion document.</li>
+      </ul>
+
+      <div class="note">
+        <span class="note-label">The gate</span>
+        <p>
+          <strong>The department does not start work until the test is paid for.</strong>
+          Same rule as pay-first at check-in, applied to the worklist instead of the
+          queue: an unpaid test shows on the worklist marked unpaid and cannot be
+          started. A clinic that prices nothing is unaffected, as today.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-DIA-12</span>
+          <h3>Raising the request at the front desk</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        After paying, the patient goes to the front desk, which sends the request to
+        the department with no consultation involved. Front desk picks the patient,
+        the department and the test; it lands on that department's worklist
+        immediately; whoever raised it is recorded.
+      </p>
+
+      <div class="note note-warn">
+        <span class="note-label">For the developer</span>
+        <p>
+          The front desk needs the permission to order a test, which it does not
+          have today. This is a genuine widening of what the front desk can do —
+          and decision 1 below asks whether it should be finance doing this instead.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-DIA-13</span>
+          <h3>Doing the test and handing the report over</h3>
+        </div>
+        <span class="state state-extend">Extends existing</span>
+      </div>
+
+      <p>
+        The department performs the test, attaches the film or result, writes its
+        report, and <strong>gives the report to the patient</strong> — because there
+        is no doctor waiting for it.
+      </p>
+
+      <ul class="plain">
+        <li>Same worklist and same result attachment as a doctor-ordered test. The department's screen does not change.</li>
+        <li>The report is <strong>printed and handed over</strong>, and the system records that it was handed over and when. A patient who paid and left without their film is a complaint waiting to happen.</li>
+        <li>The result stays on the patient record. If they see a doctor here in six months, it is in their history like any other test.</li>
+      </ul>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-DIA-14</span>
+          <h3>The doctor who sent them, from somewhere else</h3>
+        </div>
+        <span class="state state-new">New build</span>
+      </div>
+
+      <p>
+        Many walk-ins arrive holding a prescription from a doctor at another
+        hospital, and in Indian practice the report is addressed back to that doctor
+        by name.
+      </p>
+
+      <ul class="plain">
+        <li>Capture the <strong>referring doctor's name</strong>, and their clinic and number if given.</li>
+        <li>Print it on the report.</li>
+        <li>Report on it. Which outside doctors send the most work is a number the owner will want — and it is the start of a referral relationship.</li>
+      </ul>
+
+      <div class="note">
+        <span class="note-label">Scope</span>
+        <p>
+          Start as <strong>free text on the order</strong>. A managed list of
+          external referrers is the obvious next step and should not be built until
+          somebody asks for it.
+        </p>
+      </div>
+    </article>
+
+    <article class="req" style="margin-top:16px">
+      <div class="req-head">
+        <div>
+          <span class="req-id">FR-DIA-15</span>
+          <h3>Money that belongs to no doctor</h3>
+        </div>
+        <span class="state state-extend">Extends existing</span>
+      </div>
+
+      <p>
+        A test-only patient never sees a doctor, so a report that splits revenue by
+        doctor cannot see them at all.
+      </p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Split by</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Department</td><td>X-ray, pathology, and each doctor's consulting — so every rupee lands somewhere</td></tr>
+            <tr><td>Referral source</td><td>Work our own doctors generated, work sent by outside doctors, work that walked in. Three different businesses</td></tr>
+            <tr><td>Patient count</td><td>A department's throughput is not the same question as its revenue</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note note-warn">
+        <span class="note-label">This changes the companion document</span>
+        <p>
+          FR-FIN-03 says collections split <strong>by doctor</strong>. It must say
+          by doctor <strong>and by department</strong>, or walk-in test revenue
+          disappears from the finance person's own reports. Whoever picks up either
+          requirement should read both.
+        </p>
+      </div>
+    </article>
+  </section>
+
+  <section class="stack">
+    <h2>Decisions still needed</h2>
+
+    <div class="stack" style="gap:24px; margin-top:12px">
+      <div class="decision">
+        <div class="decision-q">1. Should finance raise the request, instead of the front desk?</div>
+        <p class="rec">
+          In the flow as described, <strong>finance already selects the test in
+          order to price it, and then the front desk selects it again in order to
+          request it.</strong> The same information is typed twice by two people,
+          each with a patient in front of them — and the second entry can silently
+          disagree with the first. Paid for a chest X-ray, requested a knee.
+        </p>
+        <p class="rec">
+          <b>Recommendation</b>
+          Finance raises the request as part of taking the payment, and the front
+          desk simply points the patient at the right room. One less step for the
+          patient, one less place for the two records to diverge, and no new power
+          for the front desk. Against it: more on the finance desk, and it is not
+          what the clinics described. Your call — but make it deliberately, because
+          building it as described means accepting the double entry.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">2. Does a walk-in test patient get a token?</div>
+        <p class="rec">
+          Consultation patients get a token at booking and appear on the
+          waiting-room screen. A patient waiting for an X-ray is also waiting, in
+          the same room. Token and screen, or do departments just work their list?
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">3. Does the printed report say no clinician has read it?</div>
+        <p class="rec">
+          Nobody interprets a self-referred test. The clinic is selling a film and a
+          technical report, not a diagnosis — and the patient may well read it as
+          one. A medico-legal question for the doctors, not a technical one, but it
+          must be settled before reports print.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">4. Must a test be paid before the department starts?</div>
+        <p class="rec">
+          <b>Recommendation</b>
+          Yes, consistent with pay-first everywhere else. Worth confirming, because
+          a clinic that lets a regular pay afterwards will find it obstructive.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">5. What if they then decide they do want a doctor?</div>
+        <p class="rec">
+          The technician sees something on the film and now the patient wants a
+          consultation. Can that test be pulled into the consultation that follows,
+          so the doctor reads the film they just paid for rather than ordering it
+          again? This will happen. Better answered than discovered.
+        </p>
+      </div>
+
+      <div class="decision">
+        <div class="decision-q">6. Free text or a managed list for external referrers?</div>
+        <p class="rec">
+          Free text is right to start with. A managed list gives referral reporting
+          that actually adds up, at the cost of somebody maintaining it. Start free,
+          and watch whether anybody reads the report.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="stack">
+    <h2>What already exists</h2>
+    <p>So that none of it gets rebuilt.</p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Already built</th><th>Where</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Departments, including diagnostic ones</td><td><code>docs/09-diagnostics-plan.md</code></td></tr>
+          <tr><td>Diagnostic orders, worklist, result attachment</td><td><code>docs/09</code> · checkpoints 2 and 3</td></tr>
+          <tr><td>A diagnostics role that can attach results</td><td>Settings → Roles</td></tr>
+          <tr><td>Files against a patient — X-rays, scans, reports</td><td>S3-backed clinical document storage</td></tr>
+          <tr><td>Completed tests showing in patient history</td><td><code>PreviousVisitsPanel</code></td></tr>
+          <tr><td>Priced services, invoices, payments, receipts</td><td><code>docs/04-billing-plan.md</code></td></tr>
+          <tr><td>Pay-first enforced in the API, not the UI</td><td><code>AppointmentsService.checkIn</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note" style="margin-top:8px">
+      <span class="note-label">Genuinely new</span>
+      <p>
+        An order with no consultation and no ordering doctor; the referral source;
+        the external referrer; handing a report to a patient; and department-level
+        revenue. <strong>Everything else is reuse.</strong>
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Full text, kept in the repository alongside the code, at
+    <code>docs/11-walk-in-diagnostics.md</code>. The finance desk that prices these
+    tests is <code>docs/10-finance-persona-and-promotions.md</code>. Project context
+    for somebody joining: <code>docs/03-resume-here.md</code>.
+  </footer>
+
+</div>

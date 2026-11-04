@@ -399,7 +399,7 @@ export default function PromotionsPage() {
               />
               <span className="field-hint">
                 {newRow.type === 'PERCENTAGE'
-                  ? '1 to 100. 100 is allowed — that is the “don’t charge this patient” case.'
+                  ? '1 to 100. 100 is allowed: that is the “don’t charge this patient” case.'
                   : 'Larger than the bill simply reduces it to zero.'}
               </span>
             </label>
@@ -514,8 +514,8 @@ export default function PromotionsPage() {
         <div className="card p-8 text-center">
           <p className="font-display text-[17px] font-bold">No promotions yet</p>
           <p className="mx-auto mt-1.5 max-w-[54ch] text-[13.5px] text-ink-60">
-            Until one exists, the finance desk has nothing to apply — and a discount stays what it
-            is today, a verbal instruction and a hand-written note.
+            Until one exists, the finance desk has nothing to apply, and a discount stays what it is
+            today, a verbal instruction and a hand-written note.
           </p>
         </div>
       ) : (
@@ -597,8 +597,8 @@ export default function PromotionsPage() {
                     </div>
 
                     <p className="field-hint">
-                      The code and the type cannot be changed — both would turn this into a
-                      different promotion under the same row, and every past report would re-group.
+                      The code and the type cannot be changed. Both would turn this into a different
+                      promotion under the same row, and every past report would re-group.
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -729,7 +729,7 @@ export default function PromotionsPage() {
       <p className="max-w-[68ch] text-[12.5px] text-ink-40">
         There is no delete. A promotion is switched off and kept, because reporting groups by
         promotion and a removed one makes last month’s discounts unexplainable. Applying a promotion
-        is a separate permission from setting one up — the finance desk applies what exists here and
+        is a separate permission from setting one up. The finance desk applies what exists here and
         cannot invent one.
       </p>
     </div>

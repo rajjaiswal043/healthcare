@@ -34,6 +34,7 @@ import { BrandingService } from '../branding/branding.service.js';
 import { MAX_UPLOAD_BYTES } from '../branding/logo-image.js';
 import { IsUhidPrefix, IsUhidWidth } from './uhid-format.js';
 import { UhidFormatService } from './uhid-format.service.js';
+import { ClinicPasswordService } from './clinic-password.service.js';
 import {
   PLATFORM_REFRESH_COOKIE,
   clearPlatformCookies,
@@ -135,7 +136,7 @@ class ChangeUhidFormatDto {
 
   /** Why, and who asked. Written into the clinic's audit trail. */
   @IsString()
-  @MinLength(3, { message: 'Say why the format is changing — who asked, and when.' })
+  @MinLength(3, { message: 'Say why the format is changing: who asked, and when.' })
   @MaxLength(300)
   reason!: string;
 }
@@ -181,6 +182,7 @@ export class PlatformController {
     private readonly onboarding: OnboardingService,
     private readonly branding: BrandingService,
     private readonly uhidFormat: UhidFormatService,
+    private readonly clinicPasswords: ClinicPasswordService,
   ) {}
 
   // --- signing in ----------------------------------------------------------
@@ -295,6 +297,48 @@ export class PlatformController {
   @Patch('clinics/:id/reactivate')
   async reactivate(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.onboarding.setSuspended(id, false, null);
+  }
+
+  /**
+   * The administrators at one clinic, so support can pick one to reset.
+   *
+   * Administrators ONLY — the same set the reset below will act on, by the same
+   * condition inside the database function, so the console cannot offer a row
+   * the reset would then refuse. Deliberately not a way to list a clinic's
+   * staff: `platform_clinic_stats` returns integers precisely so the platform
+   * cannot enumerate people, and this does not widen that to doctors or nurses.
+   */
+  @Public()
+  @UseGuards(PlatformGuard)
+  @Get('clinics/:id/administrators')
+  async clinicAdministrators(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.clinicPasswords.administrators(id);
+  }
+
+  /**
+   * A new temporary password for a locked-out clinic administrator.
+   *
+   * The case this exists for: the only account at a clinic that can manage
+   * users has forgotten its password. There is no self-service reset and
+   * nothing here sends email, so without this the only route is editing a
+   * password hash by hand.
+   *
+   * The clinic sees it happen — the audit entry goes into THEIR log, not a
+   * platform-side one. Support reaching into a clinic's accounts invisibly is a
+   * backdoor; making it visible is what makes it a support tool.
+   */
+  @Public()
+  @UseGuards(PlatformGuard)
+  @Post('clinics/:id/administrators/:userId/reset-password')
+  async resetClinicPassword(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.clinicPasswords.reset(id, userId, {
+      platformUserId: actor(req).platformUserId,
+      ...metaFrom(req),
+    });
   }
 
   @Public()

@@ -69,6 +69,14 @@ function upsert(body: Record<string, unknown>, session: Session = admin) {
   });
 }
 
+function deleteService(id: string, session: Session = admin) {
+  return app.inject({
+    method: 'DELETE',
+    url: `/api/v1/setup/services/${id}`,
+    headers: { cookie: session.cookie },
+  });
+}
+
 function priceList(session: Session = admin) {
   return app.inject({
     method: 'GET',
@@ -106,6 +114,221 @@ async function seedService(overrides: Record<string, unknown> = {}) {
   expect(res.statusCode).toBe(201);
   return res.json<{ id: string; code: string }>();
 }
+
+function addTest(departmentId: string, body: Record<string, unknown>, session: Session = admin) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/v1/departments/${departmentId}/tests`,
+    headers: { cookie: session.cookie },
+    payload: body,
+  });
+}
+
+// --- tests belong to the room that does them --------------------------------
+
+/**
+ * Pricing a test on the department that performs it.
+ *
+ * A test is only orderable if its service names a department. Asking for that
+ * on the price list meant choosing a category and a department correctly, and
+ * getting the second one wrong produced a test that could be billed and never
+ * ordered — which is what this endpoint removes: the room is the thing being
+ * acted on, so it cannot be got wrong.
+ */
+describe('a test priced on its department', () => {
+  it('lands in that department as a diagnostic, with a code nobody had to invent', async () => {
+    const res = await addTest(fx.main.departmentId, { name: 'X-ray, knee', pricePaise: 50000 });
+
+    expect(res.statusCode).toBe(201);
+    const created = res.json<{ id: string; code: string; name: string }>();
+    /* Derived from the room and the test, because reports group by it and it
+       never changes. */
+    expect(created.code).toMatch(/^[A-Z0-9-]+$/);
+    expect(created.code).toContain('KNEE');
+
+    const [row] = await ownerQuery<{ category: string; department_id: string }>(
+      fx.main.id,
+      `SELECT category, department_id FROM service WHERE id = $1`,
+      [created.id],
+    );
+    expect(row?.category).toBe('DIAGNOSTIC');
+    expect(row?.department_id).toBe(fx.main.departmentId);
+  });
+
+  it('refuses a second test with the same name in the same room', async () => {
+    expect(
+      (await addTest(fx.main.departmentId, { name: 'ECG', pricePaise: 30000 })).statusCode,
+    ).toBe(201);
+
+    // Two identical lines is a slip, not a catalogue: whoever orders it would
+    // be choosing between them at random.
+    const again = await addTest(fx.main.departmentId, { name: 'ecg', pricePaise: 40000 });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.details?.code).toBe('TEST_EXISTS');
+  });
+
+  it('generates a distinct code when the name repeats in another room', async () => {
+    const other = await app.inject({
+      method: 'POST',
+      url: '/api/v1/departments',
+      headers: { cookie: admin.cookie },
+      payload: { name: 'Ultrasound' },
+    });
+    expect(other.statusCode).toBe(201);
+
+    const first = await addTest(fx.main.departmentId, { name: 'Knee', pricePaise: 50000 });
+    const second = await addTest(other.json<{ id: string }>().id, {
+      name: 'Knee',
+      pricePaise: 90000,
+    });
+
+    expect(second.statusCode).toBe(201);
+    /* The codes must differ or the second would UPSERT over the first —
+       `upsertService` keys on the code, so a collision overwrites a price. */
+    expect(second.json<{ code: string }>().code).not.toBe(first.json<{ code: string }>().code);
+  });
+
+  it('refuses a retired room', async () => {
+    await ownerQuery(fx.main.id, `UPDATE department SET is_active = false WHERE id = $1`, [
+      fx.main.departmentId,
+    ]);
+
+    try {
+      const res = await addTest(fx.main.departmentId, { name: 'X-ray, wrist', pricePaise: 50000 });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.details?.code).toBe('DEPARTMENT_INACTIVE');
+    } finally {
+      await ownerQuery(fx.main.id, `UPDATE department SET is_active = true WHERE id = $1`, [
+        fx.main.departmentId,
+      ]);
+    }
+  });
+
+  it('is refused to the finance desk, which may bill a test but not price one', async () => {
+    expect(
+      (await addTest(fx.main.departmentId, { name: 'MRI', pricePaise: 50000 }, finance)).statusCode,
+    ).toBe(403);
+  });
+
+  it("cannot reach another clinic's room", async () => {
+    const res = await addTest(fx.other.departmentId, { name: 'X-ray, hip', pricePaise: 50000 });
+    // Not found rather than forbidden: read through the tenant client, another
+    // clinic's department simply does not exist.
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+/**
+ * A test in no room at all.
+ *
+ * These can be billed and never ordered, and now that tests are managed on the
+ * department rather than on the price list they would have no screen at all.
+ * The department listing hands them back so the one screen that owns tests can
+ * offer them a room.
+ */
+describe('tests that belong to no department', () => {
+  it('come back with the department listing', async () => {
+    const orphan = await seedService({ code: 'DIAG-ECG', name: 'ECG' });
+    await seedService({
+      code: 'XR-CHEST',
+      name: 'X-ray, chest',
+      departmentId: fx.main.departmentId,
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/setup/departments',
+      headers: { cookie: admin.cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ unassignedTests: Array<{ id: string }> }>();
+    expect(body.unassignedTests.map((t) => t.id)).toEqual([orphan.id]);
+  });
+});
+
+// --- deleting one -----------------------------------------------------------
+
+/**
+ * Delete is for a mistake, not for retirement.
+ *
+ * THIS NARROWS FR-PRC-03 RATHER THAN BREAKING IT. The requirement says a
+ * service is withdrawn and never removed, and the reason it gives is that
+ * reporting groups by service — a deleted one makes last month's figures
+ * unexplainable. That reason binds exactly the services that APPEAR in last
+ * month's figures. There used to be no delete endpoint at all, and a test here
+ * asserting its absence; what replaced it is the rule with its own reason
+ * applied, which is why the refusal below is the first thing tested.
+ *
+ * The refusal is the whole point of these. `invoice_line.service_id` and
+ * `diagnostic_order.service_id` are ON DELETE SET NULL, so the database would
+ * ACCEPT a delete of a service that has been billed — it would quietly null
+ * the link on every past line and leave the figures unexplainable, with nothing
+ * on any screen to say it happened. A test that nothing has used is a different
+ * case entirely, and forcing an administrator to keep scrolling past a typo
+ * forever is not a safety property.
+ */
+describe('deleting a service', () => {
+  it('removes one nothing has used', async () => {
+    const service = await seedService();
+
+    const res = await deleteService(service.id);
+    expect(res.statusCode).toBe(200);
+
+    const [row] = await ownerQuery<{ n: number }>(
+      fx.main.id,
+      `SELECT count(*)::int AS n FROM service WHERE id = $1`,
+      [service.id],
+    );
+    expect(row?.n).toBe(0);
+  });
+
+  it('refuses one that has been billed, and says to switch it off', async () => {
+    const service = await seedService();
+
+    /* A line written the way billing writes one: the name and price copied as
+       charged, with the service id alongside for reporting. That id is the
+       thing a delete would cut loose. */
+    const invoice = await ownerQuery<{ id: string }>(
+      fx.main.id,
+      `INSERT INTO invoice (tenant_id, patient_id, number, status, subtotal_paise,
+                            discount_paise, tax_paise, total_paise, updated_at)
+       VALUES ($1, $2, 'INV-DEL-1', 'UNPAID', 50000, 0, 0, 50000, now())
+       RETURNING id`,
+      [fx.main.id, fx.main.patientIds[0]],
+    );
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO invoice_line (tenant_id, invoice_id, service_id, description,
+                                 quantity, unit_price_paise, total_paise)
+       VALUES ($1, $2, $3, 'X-ray, knee', 1, 50000, 50000)`,
+      [fx.main.id, invoice[0]?.id, service.id],
+    );
+
+    const res = await deleteService(service.id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('SERVICE_IN_USE');
+    expect(res.json().error.message).toContain('Switch it off instead');
+
+    // And it is still there, which is the only assertion that matters.
+    const [row] = await ownerQuery<{ n: number }>(
+      fx.main.id,
+      `SELECT count(*)::int AS n FROM service WHERE id = $1`,
+      [service.id],
+    );
+    expect(row?.n).toBe(1);
+  });
+
+  it('is refused to the finance desk', async () => {
+    const service = await seedService();
+    expect((await deleteService(service.id, finance)).statusCode).toBe(403);
+  });
+
+  it("cannot reach another clinic's service", async () => {
+    const service = await seedService();
+    expect((await deleteService(service.id, otherAdmin)).statusCode).toBe(404);
+  });
+});
 
 // --- the bug ----------------------------------------------------------------
 
@@ -162,20 +385,6 @@ describe('a switched-off service stays off', () => {
 
     expect(edited.json().isActive).toBe(true);
   });
-
-  it('has no delete endpoint', async () => {
-    // FR-PRC-03: withdrawn, never removed. Reporting groups by service, and a
-    // deleted one makes last month's figures unexplainable.
-    const service = await seedService();
-
-    const res = await app.inject({
-      method: 'DELETE',
-      url: `/api/v1/setup/services/${service.id}`,
-      headers: { cookie: admin.cookie },
-    });
-
-    expect(res.statusCode).toBe(404);
-  });
 });
 
 // --- the list ---------------------------------------------------------------
@@ -213,7 +422,7 @@ describe('the administrator price list', () => {
   it('carries the departments a service can be attached to', async () => {
     const body = (await priceList()).json<{ departments: Array<{ name: string }> }>();
     // Saves the screen a second round trip to fill one dropdown.
-    expect(body.departments.map((d) => d.name)).toContain('General Medicine');
+    expect(body.departments.map((d) => d.name)).toContain('Imaging');
   });
 
   it('is gated on tenant:configure, not invoice:read', async () => {
@@ -297,7 +506,7 @@ describe('the department link', () => {
     await seedService({ departmentId: fx.main.departmentId });
 
     const row = (await priceList()).json().services[0];
-    expect(row.department).toMatchObject({ id: fx.main.departmentId, name: 'General Medicine' });
+    expect(row.department).toMatchObject({ id: fx.main.departmentId, name: 'Imaging' });
   });
 
   it('can be detached again', async () => {
@@ -386,4 +595,36 @@ describe('a price change does not reach what is already billed', () => {
     await ownerQuery(fx.main.id, `DELETE FROM invoice_line WHERE invoice_id = $1`, [invoice!.id]);
     await ownerQuery(fx.main.id, `DELETE FROM invoice WHERE id = $1`, [invoice!.id]);
   });
+});
+
+/**
+ * A TEST IN THE CATALOGUE HAS A NAME, NOT A NUMBER.
+ *
+ * Reported from the clinic on 30 Oct 2026 from two screens that write the same
+ * column: Settings → Departments → add a test, and Settings → Prices. Both took
+ * `@MinLength(2)` and nothing more, so "12" and "@@" became the name of a test
+ * — which then appears on a patient's bill, on the department's worklist and in
+ * an ordering dropdown, where nobody can read it.
+ *
+ * The rule is TWO LETTERS, not "no digits": a price list is full of "2D Echo"
+ * and "12-lead ECG", and banning numerals would refuse half of it to catch
+ * "999". See `IsCatalogueName`.
+ */
+describe('naming a test', () => {
+  // No cleanup needed: the file's `beforeEach` empties `service` already.
+
+  it.each(['12', '999', '0', '@@', '...', '--'])('refuses %j as a test name', async (name) => {
+    const res = await addTest(fx.main.departmentId, { name, pricePaise: 45000 });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it.each(['2D Echo', '12-lead ECG', 'X-Ray Chest PA', 'Vitamin B12'])(
+    'still accepts %j, which is a real test',
+    async (name) => {
+      const res = await addTest(fx.main.departmentId, { name, pricePaise: 45000 });
+
+      expect(res.statusCode).toBe(201);
+    },
+  );
 });

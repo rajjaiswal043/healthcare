@@ -1,11 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { api, ApiRequestError, type Invoice, type Promotion } from '@/lib/api';
+import {
+  api,
+  ApiRequestError,
+  type ChargeableService,
+  type Invoice,
+  type Promotion,
+} from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { formatPaise, parseRupeesToPaise } from '@/lib/format';
 import { ReceiptButton } from './receipt-button';
 import { PromotionPanel } from './promotion-panel';
+import { EmergencySurcharge, mayAddSurcharge } from './emergency-surcharge';
 import { IconAlert, IconCheck, IconX } from './icons';
 
 const MODES = [
@@ -20,7 +27,7 @@ const MODES = [
 const WAIVE_REASONS = [
   'Staff or staff family',
   'Camp or free clinic',
-  'Courtesy — clinic error',
+  'Courtesy (clinic error)',
   'Charitable case',
 ];
 
@@ -42,7 +49,7 @@ export function showsPromotionPanel(mayDiscount: boolean, invoice: Invoice): boo
 }
 
 const DEFER_REASONS = [
-  'Emergency — no means to pay now',
+  'Emergency (no means to pay now)',
   'Corporate or company account',
   'Patient will pay on collection of report',
 ];
@@ -73,6 +80,9 @@ export function PaymentDialog({
   const [amount, setAmount] = useState(() => (initial.balancePaise / 100).toFixed(2));
   const [reference, setReference] = useState('');
   const [exception, setException] = useState<'waive' | 'defer' | null>(null);
+  /* How much of the charge to forgive. Set when the form is opened, from
+     whatever is left to forgive, because the common case is all of it. */
+  const [waiveAmount, setWaiveAmount] = useState('0');
 
   /**
    * Correcting money already recorded — FR-BIL-11.
@@ -83,6 +93,19 @@ export function PaymentDialog({
    * correction that does not say which.
    */
   const [correcting, setCorrecting] = useState<'PATIENT_REFUND' | 'RECORDED_IN_ERROR' | null>(null);
+  /**
+   * The payment whose MODE is being put right, and what it should have been.
+   *
+   * Its own state rather than part of `correcting` above, because it is not a
+   * correction to the money: the amount does not change and nothing leaves the
+   * clinic. Reported from the clinic on 27 Oct 2026 — an X-ray paid by UPI and
+   * keyed as cash, which left the drawer claiming money it never held.
+   */
+  const [fixingMode, setFixingMode] = useState<{
+    paymentId: string;
+    mode: string;
+    reference: string;
+  } | null>(null);
   const [correctionAmount, setCorrectionAmount] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
   const [reason, setReason] = useState('');
@@ -100,6 +123,22 @@ export function PaymentDialog({
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [approvers, setApprovers] = useState<Array<{ id: string; fullName: string }>>([]);
   const [approversBlocked, setApproversBlocked] = useState(false);
+
+  /**
+   * The price list, for the emergency surcharge and nothing else.
+   *
+   * THIS DIALOG IS WHERE AN EMERGENCY ACTUALLY LANDS. The queue cannot be
+   * flagged until the patient is checked in, and check-in needs the
+   * consultation bill clear — so a flagged visit's unpaid bill is almost always
+   * one opened from the outstanding list, which opens here. Offering the
+   * surcharge only on the finance desk's own walk-in flow would have put it
+   * everywhere except where it is needed.
+   *
+   * Loaded only when it could be used, and a failure is not an error to shout
+   * about: billing is opt-in per clinic, and a clinic with no price list has no
+   * surcharge to offer.
+   */
+  const [services, setServices] = useState<ChargeableService[]>([]);
 
   useEffect(() => {
     if (!mayDiscount) return;
@@ -124,6 +163,22 @@ export function PaymentDialog({
   }, [mayDiscount]);
 
   useEffect(() => {
+    if (!can('invoice:write') || initial.paidPaise > 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { services } = await api.services();
+        if (!cancelled) setServices(services);
+      } catch {
+        if (!cancelled) setServices([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [can, initial.paidPaise]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !busy) onClose();
     };
@@ -139,6 +194,8 @@ export function PaymentDialog({
   const canCollect = can('payment:collect');
   const mayWaive = can('invoice:waive');
   const mayDefer = can('invoice:defer');
+  /** What is left to forgive — the whole charge, less anything already waived. */
+  const forgivablePaise = invoice.totalPaise - invoice.writtenOffPaise;
   const mayCorrect = can('payment:refund');
 
   const apply = (updated: Invoice) => {
@@ -173,21 +230,83 @@ export function PaymentDialog({
     }
   }
 
+  /**
+   * Put a payment under the right mode.
+   *
+   * ONE CALL, because the server does both halves in one transaction: the
+   * original is reversed as recorded-in-error and the same amount goes back in
+   * under the new mode. Doing it as two calls from here would risk a reversal
+   * landing without its replacement, which leaves a settled bill looking
+   * unpaid with the patient already gone.
+   */
+  async function submitModeFix() {
+    if (!fixingMode) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      apply(
+        await api.correctPaymentMode(invoice.id, {
+          paymentId: fixingMode.paymentId,
+          mode: fixingMode.mode,
+          ...(fixingMode.reference.trim() ? { reference: fixingMode.reference.trim() } : {}),
+        }),
+      );
+      setFixingMode(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not correct the mode.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitException() {
     if (!exception || reason.trim().length < 3) return;
+
+    /*
+     * A waiver now carries an AMOUNT. Part of a bill can be forgiven — the
+     * X-ray made free and the consultation still charged — which the old
+     * all-or-nothing waive could not express.
+     */
+    const paise = Math.round(Number(waiveAmount) * 100);
+    if (exception === 'waive' && (!Number.isFinite(paise) || paise <= 0)) {
+      setError('Enter how much to write off.');
+      return;
+    }
 
     setBusy(true);
     setError(null);
     try {
       apply(
         exception === 'waive'
-          ? await api.waiveInvoice(invoice.id, reason.trim())
+          ? await api.writeOffInvoice(invoice.id, { amountPaise: paise, reason: reason.trim() })
           : await api.deferInvoice(invoice.id, reason.trim()),
       );
       setException(null);
       setReason('');
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.error.message : 'Could not record that.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Undo a waiver put on the wrong bill.
+   *
+   * The charge goes back on as owing; the money is NOT re-collected, because
+   * undoing a mistake and taking a payment are two different acts.
+   */
+  async function undoWriteOff(writeOffId: string) {
+    const why = window.prompt('Why is this waiver being undone?')?.trim();
+    if (!why || why.length < 3) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      apply(await api.voidInvoiceWriteOff(invoice.id, writeOffId, why));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.error.message : 'Could not undo that.');
     } finally {
       setBusy(false);
     }
@@ -314,6 +433,37 @@ export function PaymentDialog({
 
           <BillSummary invoice={invoice} />
 
+          {/* Above the discount, because the order on screen is the order it
+              happens in: everything that is being charged goes on the bill
+              first, then what comes off it. A discount applied before the
+              surcharge has to be taken off and re-applied — the server refuses
+              the charge underneath it, and `promotion_application` would
+              otherwise keep claiming the old figure. */}
+          {mayAddSurcharge(can('invoice:write'), invoice) && (
+            <EmergencySurcharge
+              invoice={invoice}
+              services={services}
+              busy={busy}
+              onAdd={(input) => {
+                setBusy(true);
+                setError(null);
+                void (async () => {
+                  try {
+                    apply(await api.addInvoiceLine(invoice.id, input));
+                  } catch (err) {
+                    setError(
+                      err instanceof ApiRequestError
+                        ? err.error.message
+                        : 'Could not add the surcharge.',
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              }}
+            />
+          )}
+
           {showsPromotionPanel(mayDiscount, invoice) && (
             <PromotionPanel
               layout="stacked"
@@ -346,7 +496,7 @@ export function PaymentDialog({
                 {invoice.status === 'WAIVED'
                   ? 'This charge was waived.'
                   : invoice.status === 'DEFERRED'
-                    ? 'Payment deferred — the patient can be checked in, and this stays on the outstanding list.'
+                    ? 'Payment deferred. The patient can be checked in, and this stays on the outstanding list.'
                     : 'Settled in full. The patient can be checked in.'}
                 {invoice.reason && <span className="block text-ink-60">{invoice.reason}</span>}
               </span>
@@ -401,7 +551,7 @@ export function PaymentDialog({
                 {/* Part payment is normal — ₹200 cash and the rest by UPI. Each
                     press records its own row, and the balance updates. */}
                 <p className="field-hint mt-1.5">
-                  Taking part of it is fine — record each tender separately and the balance updates.
+                  Taking part of it is fine. Record each tender separately and the balance updates.
                 </p>
 
                 <button
@@ -455,7 +605,7 @@ export function PaymentDialog({
                   <p className="mono-label">
                     {correcting === 'PATIENT_REFUND'
                       ? 'Money going back to the patient'
-                      : 'This entry was never real — no money moved'}
+                      : 'This entry was never real, no money moved'}
                   </p>
 
                   <div className="flex flex-wrap gap-2">
@@ -507,20 +657,39 @@ export function PaymentDialog({
             </section>
           )}
 
-          {!settled && (mayWaive || mayDefer) && (
+          {/*
+            WAIVING IS NOT GATED ON `!settled` — 2 Nov 2026.
+
+            It used to be, and that hid the button in exactly the case Narveer
+            described: the relative had already paid at the desk, so the bill
+            was settled and there was no way to make it free. Forgiving a paid
+            charge hands the money back and writes it off in one call, so the
+            bill never passes through "owing".
+
+            Deferring stays behind `!settled` — there is nothing to postpone on
+            a bill that is already paid.
+          */}
+          {((mayWaive && forgivablePaise > 0) || (!settled && mayDefer)) && (
             <section className="border-t border-ink/8 pt-4">
               {exception === null ? (
                 <div className="flex flex-wrap gap-2">
-                  {mayWaive && (
+                  {mayWaive && forgivablePaise > 0 && (
                     <button
                       type="button"
                       className="btn-secondary !py-1.5 text-[12.5px]"
-                      onClick={() => setException('waive')}
+                      onClick={() => {
+                        setException('waive');
+                        // The common case is the whole thing.
+                        setWaiveAmount((forgivablePaise / 100).toFixed(2));
+                      }}
                     >
-                      Waive the charge
+                      {/* Named for the decision, not the accounting. "Waive the
+                          charge" is what the books call it; "make this free" is
+                          what the person standing there is actually doing. */}
+                      Make this free
                     </button>
                   )}
-                  {mayDefer && (
+                  {!settled && mayDefer && (
                     <button
                       type="button"
                       className="btn-secondary !py-1.5 text-[12.5px]"
@@ -532,8 +701,30 @@ export function PaymentDialog({
                 </div>
               ) : (
                 <div>
+                  {exception === 'waive' && (
+                    <div className="mb-3">
+                      <p className="mono-label mb-1">
+                        How much to write off? <span className="text-coral">*</span>
+                      </p>
+                      <input
+                        className="field-input"
+                        inputMode="decimal"
+                        value={waiveAmount}
+                        onChange={(e) => setWaiveAmount(e.target.value)}
+                      />
+                      {/* Part of a bill can be forgiven — the X-ray made free
+                          and the consultation still charged. Defaulted to all
+                          of it because that is the usual case. */}
+                      <p className="mt-1 text-[12px] text-ink-40">
+                        Up to {formatPaise(forgivablePaise)}.
+                        {invoice.paidPaise - invoice.refundedPaise > 0 &&
+                          ' Anything already paid is handed back at the same time.'}
+                      </p>
+                    </div>
+                  )}
+
                   <p className="mono-label mb-2">
-                    {exception === 'waive' ? 'Why is this being waived?' : 'Why defer payment?'}{' '}
+                    {exception === 'waive' ? 'Why is this being made free?' : 'Why defer payment?'}{' '}
                     <span className="text-coral">*</span>
                   </p>
 
@@ -585,11 +776,62 @@ export function PaymentDialog({
                       disabled={busy || reason.trim().length < 3}
                       onClick={() => void submitException()}
                     >
-                      {exception === 'waive' ? 'Waive this charge' : 'Defer payment'}
+                      {exception === 'waive' ? 'Make this free' : 'Defer payment'}
                     </button>
                   </div>
                 </div>
               )}
+            </section>
+          )}
+
+          {/*
+            WHAT WAS GIVEN AWAY, and by whom.
+
+            Shown apart from the payments rather than mixed in, because they are
+            different facts: a payment is money that moved, a waiver is money
+            that was never going to. Voided ones stay in the list, struck
+            through — a clinic that can quietly remove one can quietly remove
+            any of them.
+          */}
+          {invoice.writeOffs.length > 0 && (
+            <section>
+              <p className="mono-label mb-2">Made free</p>
+              <ul className="space-y-2">
+                {invoice.writeOffs.map((w) => (
+                  <li
+                    key={w.id}
+                    className="flex items-start justify-between gap-3 rounded-card border border-ink/8 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className={[
+                          'font-mono text-[13px] font-semibold tabular-nums',
+                          w.voidedAt ? 'text-ink-40 line-through' : 'text-ink',
+                        ].join(' ')}
+                      >
+                        {formatPaise(w.amountPaise)}
+                      </p>
+                      <p className="mt-0.5 break-words text-[12px] text-ink-60">{w.reason}</p>
+                      {w.voidedAt && (
+                        <p className="mt-0.5 break-words text-[12px] text-coral">
+                          Undone — {w.voidReason}
+                        </p>
+                      )}
+                    </div>
+
+                    {mayWaive && !w.voidedAt && (
+                      <button
+                        type="button"
+                        className="btn-ghost shrink-0 !px-2.5 !py-1 !text-[12px]"
+                        disabled={busy}
+                        onClick={() => void undoWriteOff(w.id)}
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 
@@ -604,6 +846,11 @@ export function PaymentDialog({
                 {invoice.payments.map((p) => {
                   const reversal = p.correctionKind === 'RECORDED_IN_ERROR';
                   const back = p.direction === 'REFUND';
+
+                  const fixing = fixingMode?.paymentId === p.id;
+                  /* Only money that came in, and only once. A reversal has no
+                     mode worth correcting, and neither does a refund. */
+                  const fixable = mayCorrect && !back && !p.correctionKind;
 
                   return (
                     <li key={p.id} className="text-[12.5px]">
@@ -633,6 +880,92 @@ export function PaymentDialog({
                       </p>
 
                       {p.reason && <p className="text-[11.5px] text-ink-60">“{p.reason}”</p>}
+
+                      {/*
+                        THE MODE, PUT RIGHT.
+                        
+                        Keyed as cash when the money arrived by UPI leaves the
+                        drawer claiming what it never held. Offered under the
+                        payment it concerns rather than beside the invoice
+                        total, because the thing being corrected is this entry
+                        and a bill may carry several.
+                      */}
+                      {fixable && !fixing && (
+                        <button
+                          type="button"
+                          className="mt-1 text-[11.5px] font-semibold text-clinical-text underline underline-offset-2"
+                          onClick={() =>
+                            setFixingMode({
+                              paymentId: p.id,
+                              mode: p.mode === 'CASH' ? 'UPI' : 'CASH',
+                              reference: '',
+                            })
+                          }
+                        >
+                          Wrong payment mode?
+                        </button>
+                      )}
+
+                      {fixing && fixingMode && (
+                        <div className="mt-2 space-y-2 rounded-panel bg-bg-soft p-2.5">
+                          <p className="text-[11.5px] text-ink-60">It was actually taken by:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {MODES.filter((m) => m.key !== p.mode).map((m) => (
+                              <button
+                                key={m.key}
+                                type="button"
+                                aria-pressed={fixingMode.mode === m.key}
+                                onClick={() => setFixingMode({ ...fixingMode, mode: m.key })}
+                                className={[
+                                  'rounded-pill border-[1.5px] px-2.5 py-1 text-[11.5px] font-semibold transition-colors',
+                                  fixingMode.mode === m.key
+                                    ? 'border-clinical bg-clinical-tint text-clinical-text'
+                                    : 'border-ink/12 bg-white text-ink-60 hover:border-ink/25',
+                                ].join(' ')}
+                              >
+                                {m.label}
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            className="field-input !py-1.5 !text-[12px]"
+                            value={fixingMode.reference}
+                            onChange={(e) =>
+                              setFixingMode({ ...fixingMode, reference: e.target.value })
+                            }
+                            placeholder={
+                              fixingMode.mode === 'UPI' ? 'UPI transaction id' : 'Reference'
+                            }
+                            maxLength={120}
+                          />
+                          {/* Said before the press: this writes two rows, and
+                              the receipt the patient already holds says the
+                              old mode. */}
+                          <p className="text-[11px] text-ink-40">
+                            {formatPaise(p.amountPaise)} is reversed as recorded in error and taken
+                            again as {fixingMode.mode.replace('_', ' ').toLowerCase()}. The bill
+                            stays settled.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className="btn-primary !py-1.5 !text-[12px]"
+                              disabled={busy}
+                              onClick={() => void submitModeFix()}
+                            >
+                              {busy ? 'Correcting…' : 'Correct it'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-ghost !py-1.5 !text-[12px]"
+                              disabled={busy}
+                              onClick={() => setFixingMode(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </li>
                   );
                 })}

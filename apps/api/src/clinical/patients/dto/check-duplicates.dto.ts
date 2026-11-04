@@ -1,11 +1,13 @@
 import { Transform } from 'class-transformer';
 import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { normaliseMobile } from './register-patient.dto.js';
+import { IsPersonName } from '../../../common/is-person-name.decorator.js';
 
 export class CheckDuplicatesDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value))
   name!: string;
 

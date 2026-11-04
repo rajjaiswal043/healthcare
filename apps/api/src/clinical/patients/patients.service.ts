@@ -7,6 +7,7 @@ import {
 import type { TenantClient } from '@healthcloud/db';
 import { PrismaService } from '../../platform/database/prisma.service.js';
 import { AuditService } from '../../platform/audit/audit.service.js';
+import { clinicToday, instantToLocalDate } from '../../scheduling/clinic-time.js';
 import type { RegisterPatientDto } from './dto/register-patient.dto.js';
 
 export interface DuplicateCandidate {
@@ -82,6 +83,20 @@ export interface PatientDetail extends PatientSummary {
     practitioner: { id: string; fullName: string; prefix: string | null };
     /** Null when the visit produced no clinical note. */
     encounterId: string | null;
+    /**
+     * Booked, never checked in, and its day is over.
+     *
+     * Derived here rather than in the browser because it is a question about
+     * the CLINIC's day, and the browser knows only the reader's timezone. A
+     * clinic in Kolkata read from a laptop set to Toronto would otherwise flip
+     * the answer for every appointment in the first half of the day.
+     *
+     * Derived rather than stored because nothing in the clinic marks a
+     * no-show: the status stays BOOKED for ever unless somebody presses the
+     * button on the day board, and the record must not keep saying "booked"
+     * about a Tuesday three weeks ago.
+     */
+    missed: boolean;
   }>;
   stats: {
     totalVisits: number;
@@ -176,34 +191,71 @@ export class PatientsService {
 
       const incomingAge = ageOf(input.ageYears, input.birthDate);
 
-      return rows.map((r) => {
-        const similarity = Number(r.name_similarity);
-        const candidateAge = ageOf(r.age_years, r.birth_date);
+      return (
+        rows
+          .map((r) => {
+            const similarity = Number(r.name_similarity);
+            const candidateAge = ageOf(r.age_years, r.birth_date);
 
-        const agesAgree =
-          incomingAge !== null &&
-          candidateAge !== null &&
-          Math.abs(incomingAge - candidateAge) <= AGE_TOLERANCE_YEARS;
+            const agesAgree =
+              incomingAge !== null &&
+              candidateAge !== null &&
+              Math.abs(incomingAge - candidateAge) <= AGE_TOLERANCE_YEARS;
 
-        const genderAgrees = input.gender !== undefined && input.gender === r.gender;
+            const genderAgrees = input.gender !== undefined && input.gender === r.gender;
 
-        const strong =
-          r.same_mobile || (similarity >= NAME_SIMILARITY_STRONG && genderAgrees && agesAgree);
+            const strong =
+              r.same_mobile || (similarity >= NAME_SIMILARITY_STRONG && genderAgrees && agesAgree);
 
-        return {
-          id: r.id,
-          uhid: r.uhid,
-          name: r.name,
-          mobile: r.mobile,
-          gender: r.gender,
-          ageYears: r.age_years,
-          birthDate: r.birth_date,
-          createdAt: r.created_at,
-          matchReason: r.same_mobile ? ('SAME_MOBILE' as const) : ('SIMILAR_NAME' as const),
-          nameSimilarity: similarity,
-          confidence: strong ? ('STRONG' as const) : ('WEAK' as const),
-        };
-      });
+            /**
+             * Both known, and years apart.
+             *
+             * Not the same as `!agesAgree`, which is also true when either age is
+             * missing — and an unknown age is no evidence at all. This is the
+             * narrower claim that we have both numbers and they disagree.
+             */
+            const agesContradict =
+              incomingAge !== null &&
+              candidateAge !== null &&
+              Math.abs(incomingAge - candidateAge) > AGE_TOLERANCE_YEARS;
+
+            return {
+              id: r.id,
+              uhid: r.uhid,
+              name: r.name,
+              mobile: r.mobile,
+              gender: r.gender,
+              ageYears: r.age_years,
+              birthDate: r.birth_date,
+              createdAt: r.created_at,
+              matchReason: r.same_mobile ? ('SAME_MOBILE' as const) : ('SIMILAR_NAME' as const),
+              nameSimilarity: similarity,
+              confidence: strong ? ('STRONG' as const) : ('WEAK' as const),
+              contradicted: !r.same_mobile && agesContradict,
+            };
+          })
+          /**
+           * Silence where the evidence argues against it.
+           *
+           * Reported from the clinic on 28 Oct 2026: a different patient who
+           * happens to share a name was being flagged, with a different mobile and
+           * an age years apart. An identical name scores 1.0 and the showing
+           * threshold is 0.4, so the notice fired on the name alone however much
+           * the rest of the record disagreed.
+           *
+           * Nobody was ever BLOCKED by this — strong still needs the same mobile,
+           * or a close name with the gender and the age agreeing too. But a warning
+           * that cries wolf on every Sharma is a warning the desk stops reading,
+           * which costs more than the duplicate it was meant to catch.
+           *
+           * A different number alone is not enough to stay quiet: families share
+           * one number here, and people change theirs. It takes the number AND the
+           * age both disagreeing, and an age nobody recorded disagrees with
+           * nothing.
+           */
+          .filter((candidate) => !candidate.contradicted)
+          .map(({ contradicted: _contradicted, ...candidate }) => candidate)
+      );
     });
   }
 
@@ -260,13 +312,54 @@ export class PatientsService {
       for (const [field, raw] of Object.entries(input)) {
         if (raw === undefined) continue;
 
-        const next = field === 'birthDate' && raw !== null ? new Date(String(raw)) : raw;
+        const next =
+          field === 'birthDate' && raw !== null
+            ? new Date(String(raw))
+            : // An allergy box submitted empty is "no known allergies", which is
+              // a finding. Stored as null so one absence means one thing, with
+              // the review stamp below carrying the fact that somebody asked.
+              field === 'allergies' && typeof raw === 'string'
+              ? raw.trim() || null
+              : raw;
         const previous = (before as Record<string, unknown>)[field];
 
         if (asText(previous) === asText(next)) continue;
 
         data[field] = next;
         corrections.push({ field, oldValue: asText(previous), newValue: asText(next) });
+      }
+
+      /**
+       * Asking counts, even when the answer does not change the text.
+       *
+       * A patient whose allergies were never recorded, confirmed today as
+       * having none, writes no correction row — nothing changed, both are
+       * empty — and yet something important did happen: the question was put.
+       * Stamped outside the loop so it lands whether or not the text moved.
+       */
+      if (input.allergies !== undefined) {
+        data['allergiesReviewedAt'] = new Date();
+      }
+
+      /*
+       * ONE AGE, NOT TWO.
+       *
+       * A patient has a date of birth or a stated age, never both — the one
+       * the caller supplies wins and the other is cleared below.
+       *
+       * Refused rather than reconciled when BOTH arrive, because there is no
+       * honest way to choose: silently preferring one would record a fact the
+       * caller did not send and throw away one they did. The correction dialog
+       * used to send both whenever both had changed, which slipped past the
+       * branches below — neither fired — and stored a date of birth beside a
+       * contradictory age. Reported from the clinic, 30 Oct 2026. The dialog
+       * now clears its sibling field; this is here so no other caller can put
+       * the record back into that state.
+       */
+      if (input['birthDate'] !== undefined && input['ageYears'] !== undefined) {
+        throw new BadRequestException(
+          'Send a date of birth or an age, not both — recording one clears the other.',
+        );
       }
 
       // Keep the two age representations from disagreeing. Whichever the caller
@@ -291,7 +384,21 @@ export class PatientsService {
         data['birthDate'] = null;
       }
 
-      if (corrections.length === 0) {
+      /**
+       * Nothing changed, nothing to write — with one exception.
+       *
+       * Confirming that a patient still has no known allergies changes no text,
+       * so it produces no correction row, and this return used to drop the
+       * review stamp with it. That is the one case where "no change" is itself
+       * the finding: the difference between a patient nobody has asked and a
+       * patient who was asked this morning is the whole reason the column
+       * exists.
+       *
+       * No correction row is written for it either way. `patient_correction`
+       * records an old value becoming a new one, and there is no such pair
+       * here — the timestamp is the record.
+       */
+      if (corrections.length === 0 && data['allergiesReviewedAt'] === undefined) {
         return { patient: toSummary(before), duplicatesWarned: [] };
       }
 
@@ -429,6 +536,15 @@ export class PatientsService {
             state: dto.state ?? null,
             postalCode: dto.postalCode ?? null,
             bloodGroup: dto.bloodGroup ?? 'UNKNOWN',
+            // `allergies` present in the payload at all means the desk asked —
+            // including when they typed nothing, which is the "none known"
+            // answer and a finding in its own right.
+            ...(dto.allergies === undefined
+              ? {}
+              : {
+                  allergies: dto.allergies.trim() || null,
+                  allergiesReviewedAt: new Date(),
+                }),
             emergencyContactName: dto.emergencyContactName ?? null,
             emergencyContactMobile: dto.emergencyContactMobile ?? null,
           },
@@ -439,8 +555,8 @@ export class PatientsService {
               code: 'UHID_CLASH',
               message:
                 `The next patient ID for this clinic, ${uhid}, is already in use, so nobody can be ` +
-                'registered until the ID format is corrected. This needs the platform team — ' +
-                'please report it with this message.',
+                'registered until the ID format is corrected. This needs the platform team. ' +
+                'Please report it with this message.',
             });
           }
           throw err;
@@ -467,12 +583,34 @@ export class PatientsService {
    * One box, four things a receptionist might type: UHID, mobile, name, ABHA
    * number. Asking them to pick a field first is how you lose the sub-two-minute
    * registration target.
+   *
+   * **Names match by prefix, on any word.** "rajesh" finds Rajesh Naidu and
+   * Kumar Rajesh; it does not find Ramesh Rao.
+   *
+   * This replaced trigram similarity on 28 Sep 2026. That rule scored the query
+   * against the WHOLE name, so the number it produced depended on how long the
+   * rest of the name was rather than on how well anything matched: "Rajesh"
+   * scored 0.333 against "Ramesh Rao" and was returned, while "Muhammad Rao"
+   * scored 0.308 against its own surname and was nearly lost. One threshold
+   * governed both, and no value of it separated them — any bar high enough to
+   * exclude Ramesh started dropping real patients. A fitted constant in a WHERE
+   * clause is a number nobody can defend six months later, so there isn't one.
+   *
+   * The cost, stated plainly: misspellings no longer match. "Mohamed" does not
+   * find "Mohammed". Catching that properly needs phonetic matching, which is
+   * its own piece of work and not a threshold.
    */
   async search(tenantId: string, query: string, meta: RequestMeta = {}): Promise<PatientSummary[]> {
     const trimmed = query.trim();
     if (trimmed.length < 2) return [];
 
     const digits = trimmed.replace(/\D/g, '');
+
+    /**
+     * `%` and `_` are ILIKE wildcards, and matching is now entirely ILIKE.
+     * Without this, typing a single "%" returns every patient in the clinic.
+     */
+    const like = trimmed.replace(/([\\%_])/g, '\\$1');
 
     return this.prisma.forTenant(tenantId, async (tx) => {
       const rows = await tx.$queryRaw<
@@ -494,13 +632,19 @@ export class PatientsService {
           FROM patient
          WHERE is_active = true
            AND (
-                 uhid ILIKE ${'%' + trimmed + '%'}
+                 uhid ILIKE ${'%' + like + '%'}
               OR (${digits.length >= 4}::boolean AND mobile LIKE ${'%' + digits + '%'})
-              OR similarity(name, ${trimmed}) >= 0.3
-              OR name ILIKE ${trimmed + '%'}
+              -- The whole name starts with it, or any word in it does. Two
+              -- patterns rather than a plain contains: "esh" should not find
+              -- Rajesh, because nobody searches by the middle of a name.
+              OR name ILIKE ${like + '%'}
+              OR name ILIKE ${'% ' + like + '%'}
               OR abha_number = ${trimmed}
            )
-         ORDER BY similarity(name, ${trimmed}) DESC, created_at DESC
+         -- Whole-name matches first: someone typing "rajesh" wants Rajesh
+         -- Naidu above Kumar Rajesh. Then alphabetically, because sixteen
+         -- patients called Rao are read down a list, not ranked.
+         ORDER BY (name ILIKE ${like + '%'}) DESC, name ASC
          LIMIT 25
       `;
 
@@ -684,7 +828,8 @@ export class PatientsService {
       // the row is simply not visible, and we must not confirm it exists.
       if (!patient) throw new NotFoundException('Patient not found');
 
-      const [consentRows, appointments, totalVisits, completedVisits] = await Promise.all([
+      const [tenant, consentRows, appointments, totalVisits, completedVisits] = await Promise.all([
+        tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true } }),
         tx.consentRecord.findMany({
           where: { patientId: id },
           orderBy: { grantedAt: 'desc' },
@@ -708,6 +853,10 @@ export class PatientsService {
         tx.appointment.count({ where: { patientId: id } }),
         tx.appointment.count({ where: { patientId: id, status: 'FULFILLED' } }),
       ]);
+
+      /* The clinic's today, against which a booked visit either has not
+         happened yet or never did. */
+      const today = clinicToday(tenant.timezone);
 
       /**
        * Latest decision per purpose.
@@ -742,6 +891,10 @@ export class PatientsService {
         state: patient.state,
         postalCode: patient.postalCode,
         bloodGroup: patient.bloodGroup,
+        allergies: patient.allergies,
+        // Sent alongside, never inferred from the text: null allergies with a
+        // review date means "none known", without one means nobody asked.
+        allergiesReviewedAt: patient.allergiesReviewedAt,
         emergencyContactName: patient.emergencyContactName,
         emergencyContactMobile: patient.emergencyContactMobile,
         abhaAddress: patient.abhaAddress,
@@ -766,6 +919,7 @@ export class PatientsService {
           reasonForVisit: a.reasonForVisit,
           practitioner: a.practitioner,
           encounterId: a.encounter?.id ?? null,
+          missed: a.status === 'BOOKED' && instantToLocalDate(a.startAt, tenant.timezone) < today,
         })),
 
         stats: {
@@ -803,18 +957,6 @@ export class PatientsService {
         patientId,
         purpose: 'MARKETING',
         granted: dto.consentMarketing ?? false,
-        noticeVersion: NOTICE_VERSION,
-      },
-    });
-
-    // Recorded either way, for the same reason as marketing. Nothing is ever
-    // sent to a patient without a yes here (EngagementService.deliver).
-    await tx.consentRecord.create({
-      data: {
-        tenantId,
-        patientId,
-        purpose: 'COMMUNICATIONS',
-        granted: dto.consentCommunications ?? false,
         noticeVersion: NOTICE_VERSION,
       },
     });

@@ -131,16 +131,6 @@ export const PERMISSIONS = {
 
   REPORT_REVENUE: 'report:revenue',
 
-  /**
-   * The follow-up board — docs/10.
-   *
-   * Two, because reading who is due and SENDING a patient a message are
-   * different acts. The owner watches the return rate; the front desk and the
-   * doctor are the ones who nudge a patient or call back about rising pain.
-   */
-  FOLLOWUP_READ: 'followup:read',
-  FOLLOWUP_MANAGE: 'followup:manage',
-
   AUDIT_READ: 'audit:read',
 
   USER_MANAGE: 'user:manage',
@@ -195,11 +185,27 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       // Puts a patient back at the front after they return from an X-ray, and
       // handles the emergency who cannot wait. Recorded, never silent.
       PERMISSIONS.QUEUE_PRIORITISE,
-      // Raises the bill and takes the money. Cannot waive, defer or refund —
-      // those are the ways money leaves without a service behind it.
+      // Raises the bill and takes the money. Cannot defer or refund — those
+      // are the ways money leaves without a service behind it.
       PERMISSIONS.INVOICE_READ,
       PERMISSIONS.INVOICE_WRITE,
       PERMISSIONS.PAYMENT_COLLECT,
+      /**
+       * Forgives a charge, in part or in whole — Narveer's call, 2 Nov 2026.
+       *
+       * DELIBERATELY UNCAPPED, and that is a decision rather than an
+       * oversight. The clinic gives services away two or three times a day,
+       * usually while the person who would authorise it is in a room with a
+       * patient, and a ceiling that sends the desk looking for an
+       * administrator means the money gets taken anyway and sorted out later,
+       * which is worse than recording it honestly the first time.
+       *
+       * What makes that safe is not prevention but visibility: every waiver
+       * names who, how much and why, cannot be deleted, and appears as its own
+       * figure in the finance report. Revisit the moment that figure looks
+       * wrong.
+       */
+      PERMISSIONS.INVOICE_WAIVE,
       // Applies a discount the administrator already defined, CUSTOM included,
       // from the queue's payment dialog — where this desk takes the fee.
       // Decision of 22 Sep 2026; existing clinics get it from migration
@@ -208,9 +214,6 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       // Fields "are my X-ray results back yet". Reads; never attaches.
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_READ,
-      // Works the follow-up board: reminds the overdue, calls back rising pain.
-      PERMISSIONS.FOLLOWUP_READ,
-      PERMISSIONS.FOLLOWUP_MANAGE,
     ],
     requiresMfa: false,
   },
@@ -236,9 +239,16 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_ORDER,
       PERMISSIONS.DIAGNOSTIC_READ,
-      // Their own patients' recovery, and the callback when pain is rising.
-      PERMISSIONS.FOLLOWUP_READ,
-      PERMISSIONS.FOLLOWUP_MANAGE,
+      /**
+       * Forgives a charge — 2 Nov 2026.
+       *
+       * The doctor is usually the one making the decision ("why did you pay,
+       * let me make this free") and was the one role that could not act on it:
+       * no money permission at all, so the gesture had to be relayed to the
+       * desk and often was not. Note this grants NO other money power — a
+       * doctor still cannot take a payment or issue a refund on its own.
+       */
+      PERMISSIONS.INVOICE_WAIVE,
     ],
     requiresMfa: false,
   },
@@ -256,7 +266,6 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.VITALS_WRITE,
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_READ,
-      PERMISSIONS.FOLLOWUP_READ,
     ],
     requiresMfa: false,
   },
@@ -326,6 +335,10 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.INVOICE_READ,
       PERMISSIONS.INVOICE_WRITE,
       PERMISSIONS.PAYMENT_COLLECT,
+      /* Forgives a charge — 2 Nov 2026. The desk that owns the numbers is the
+         obvious place for it, and it already answers for where the day's money
+         went. Uncapped, like the other three; see the front desk's note. */
+      PERMISSIONS.INVOICE_WAIVE,
       // Applies a discount the administrator already defined. Cannot define one.
       PERMISSIONS.PROMOTION_APPLY,
 
@@ -370,8 +383,6 @@ export const SYSTEM_ROLES: RoleSeed[] = [
       PERMISSIONS.REPORT_REVENUE,
       PERMISSIONS.DOCUMENT_READ,
       PERMISSIONS.DIAGNOSTIC_READ,
-      // The return rate is the owner's number. Watching it, not working it.
-      PERMISSIONS.FOLLOWUP_READ,
     ],
     requiresMfa: true,
   },

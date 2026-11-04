@@ -22,7 +22,7 @@ export const PRIORITY_REASONS: Array<{ key: QueuePriorityReason; label: string }
 export function priorityLabel(priority: NonNullable<Appointment['priority']>): string {
   const reason =
     PRIORITY_REASONS.find((r) => r.key === priority.reasonCode)?.label ?? priority.reasonCode;
-  return priority.note ? `${reason} — ${priority.note}` : reason;
+  return priority.note ? `${reason} · ${priority.note}` : reason;
 }
 
 /**
@@ -82,14 +82,14 @@ export function QueuePriorityDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] !m-0 grid place-items-center bg-ink/30 p-4">
+    <div className="fixed inset-0 z-[60] !m-0 flex items-end justify-center bg-ink/30 p-0 backdrop-blur-sm sm:items-center sm:p-6">
       <div
         ref={panelRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={mode === 'return' ? 'Back at the desk' : 'Move to the front'}
-        className="card w-full max-w-md overflow-hidden outline-none"
+        className="card w-full max-w-md overflow-hidden outline-none max-sm:rounded-b-none"
       >
         <header className="flex items-start gap-3 border-b border-ink/8 bg-bg-soft px-5 py-3">
           <div className="min-w-0 flex-1">

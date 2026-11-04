@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './auth-provider';
 import { ClinicLogo } from './clinic-logo';
 import { initialsOf } from '@/lib/role-signature';
+import { worksOneDepartment } from '@/lib/roles';
 import { breadcrumbFor } from '@/lib/breadcrumbs';
 import { recordNavigation } from '@/lib/navigation-history';
 import {
@@ -19,7 +20,6 @@ import {
   IconLogout,
   IconMenu,
   IconPanelLeft,
-  IconPulse,
   IconReceipt,
   IconSearch,
   IconShield,
@@ -35,6 +35,13 @@ interface NavItem {
   icon: React.ReactNode;
   /** Hidden entirely when the signed-in user lacks this. */
   permission?: string;
+  /**
+   * Hidden when this entry is already the signed-in person's home page.
+   *
+   * Not a permission question — they may absolutely reach it — but a menu that
+   * lists where you already are is a menu with a dead entry in it.
+   */
+  hiddenWhenItIsHome?: boolean;
 }
 
 interface NavSection {
@@ -61,33 +68,20 @@ const SECTIONS: NavSection[] = [
         icon: <IconCalendar size={16} />,
         permission: 'appointment:write',
       },
-      {
-        // docs/10. Who is due back, who came back, whose pain is rising.
-        key: 'follow-ups',
-        label: 'Follow-ups',
-        href: '/follow-ups',
-        icon: <IconPulse size={16} />,
-        permission: 'followup:read',
-      },
     ],
   },
   {
     title: 'Patients',
     items: [
       {
+        // One entry where there were two. "Find a patient" opened an empty box
+        // and "All patients" listed everyone; they are one screen now, because
+        // somebody arriving at the menu does not yet know which of those two
+        // questions they have.
         key: 'patients',
-        label: 'Find a patient',
+        label: 'Patients',
         href: '/patients',
         icon: <IconUsers size={16} />,
-        permission: 'patient:read',
-      },
-      {
-        key: 'all-patients',
-        label: 'All patients',
-        href: '/patients/all',
-        icon: <IconClock size={16} />,
-        // Same permission as search: both are reads of the patient list, and a
-        // role that may search it may page through it.
         permission: 'patient:read',
       },
       {
@@ -143,6 +137,9 @@ const SECTIONS: NavSection[] = [
         // Everyone clinical can read the list; only Diagnostics and the
         // administrator can attach a result, and the screen adapts.
         permission: 'diagnostic:read',
+        // Somebody who works one department lands on this board as their home
+        // page, so the entry would point at the screen they are already on.
+        hiddenWhenItIsHome: true,
       },
     ],
   },
@@ -164,6 +161,16 @@ const SECTIONS: NavSection[] = [
         // Sits next to Staff on purpose: adding someone and deciding what they
         // may do are the same job, two screens apart.
         permission: 'role:manage',
+      },
+      {
+        // Beside Prices on purpose: a priced test is only orderable if its
+        // service names a department, so the two screens are halves of one
+        // setup job.
+        key: 'departments',
+        label: 'Departments',
+        href: '/settings/departments',
+        icon: <IconStethoscope size={16} />,
+        permission: 'schedule:manage',
       },
       {
         key: 'prices',
@@ -223,6 +230,20 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
+/**
+ * Screens that use the full width of the window.
+ *
+ * Tables and boards, where an answer is scanned across a row rather than read
+ * down a column. Everything else keeps the 1152px measure.
+ */
+const WIDE_ROUTES = ['/', '/finance', '/patients', '/queue', '/diagnostics'];
+
+function isWideRoute(pathname: string): boolean {
+  // A patient record is wide too — its timeline and tables earn the space — and
+  // it is the only one needing a prefix rather than an exact match.
+  return WIDE_ROUTES.includes(pathname) || /^\/patients\/[^/]+$/.test(pathname);
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { session, loading, can, signOut, signature } = useAuth();
   const pathname = usePathname();
@@ -278,9 +299,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // empty chrome.
   if (loading || !session) return null;
 
+  /**
+   * Whose home page is the department board, rather than the patient board.
+   *
+   * Decided by the same rule the home page itself uses — see `lib/roles` — so
+   * the menu and the screen cannot disagree about where Home goes.
+   */
+  const homeIsTheDepartmentBoard = worksOneDepartment(session.roles);
+
   const visible = SECTIONS.map((s) => ({
     ...s,
-    items: s.items.filter((i) => !i.permission || can(i.permission)),
+    items: s.items.filter(
+      (i) =>
+        (!i.permission || can(i.permission)) && !(i.hiddenWhenItIsHome && homeIsTheDepartmentBoard),
+    ),
+    // A section whose only entry has gone takes its heading with it, which is
+    // what stops an empty "DIAGNOSTICS" label sitting over nothing.
   })).filter((s) => s.items.length > 0);
 
   /**
@@ -644,7 +678,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 const q = query.trim();
-                if (q) router.push(`/patients?q=${encodeURIComponent(q)}`);
+                if (!q) return;
+
+                router.push(`/patients?q=${encodeURIComponent(q)}`);
+                /* The patients screen's own box carries the term from here.
+                   Leaving it in both reads as two searches, and this one would
+                   go stale the moment the word is refined down there. */
+                setQuery('');
               }}
               className="relative flex items-center"
               role="search"
@@ -733,7 +773,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-7 sm:px-6">{children}</main>
+        {/*
+          Most screens are READ, so they keep a measure: a registration form or
+          a role editor stretched across a 2000px monitor is harder to use, not
+          easier. The data-dense ones are SCANNED instead — a table with nine
+          columns wants every pixel, and capping it at 1152 leaves a third of a
+          clinic monitor empty.
+
+          A named list rather than a prop on each page, because the decision
+          belongs to the shell that owns the layout, and one place to look beats
+          a flag on twenty screens.
+        */}
+        <main
+          className={[
+            'w-full flex-1 px-4 py-5 sm:px-6',
+            isWideRoute(pathname) ? '' : 'mx-auto max-w-6xl',
+          ].join(' ')}
+        >
+          {children}
+        </main>
 
         {/* No footer. It used to read "Confidential patient data · Access is
             logged" on every screen — true, and still true, but a standing

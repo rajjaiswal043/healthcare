@@ -12,12 +12,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "next": "^15.5.25",
+    "next": "^15.5.28",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "^5.16.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",

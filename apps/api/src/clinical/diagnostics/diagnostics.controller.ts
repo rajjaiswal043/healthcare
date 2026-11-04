@@ -15,13 +15,20 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
+import { IsPersonName } from '../../common/is-person-name.decorator.js';
+import { IsReportText } from '../../common/is-clinical-text.decorator.js';
 import type { FastifyRequest } from 'fastify';
 import {
   CurrentTenant,
@@ -74,6 +81,16 @@ class CreateOrderDto {
   @MaxLength(32)
   referrerPhone?: string;
 
+  /**
+   * This really is a second one, not a double-click.
+   *
+   * The screen sets it only after telling whoever is ordering that the same
+   * test, worded the same way, is already on this visit.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmedRepeat?: boolean;
+
   @IsUUID()
   departmentId!: string;
 
@@ -100,6 +117,24 @@ class CreateOrderDto {
   @MinLength(2)
   @MaxLength(300)
   description?: string;
+
+  /**
+   * What to charge for this one, in paise, when it is not the list price.
+   *
+   * Absent means the catalogue price — which is what every order sent before
+   * this existed meant, and what the form sends unless somebody edits the
+   * amount. Zero is allowed and is a real answer: a film repeated because the
+   * first was unreadable is not charged twice.
+   *
+   * Capped at the same ₹1,00,000 as the price list itself. The cap is the
+   * only judgement this layer makes; whether a concession was right is the
+   * clinic's call and shows up in the audit trail either way.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100_000_000)
+  pricePaise?: number;
 }
 
 class ExternalTestNoteDto {
@@ -146,12 +181,25 @@ class WalkInOrderDto {
   @IsString()
   @MaxLength(32)
   referrerPhone?: string;
+
+  /** These really are repeats, not a double-click. */
+  @IsOptional()
+  @IsBoolean()
+  confirmedRepeat?: boolean;
 }
 
 class HandoverDto {
-  /** The patient, or the relative who collected it. Free text — see the column. */
+  /**
+   * The patient, or the relative who collected it. Free text — see the column.
+   *
+   * A NAME, because this is the clinic's record of who physically took a
+   * report away. `@MinLength(2)` accepted "12" and "@@", reported from the
+   * clinic on 30 Oct 2026 — and a handover row naming nobody is the one thing
+   * this field exists to prevent. Two letters in any script; see
+   * `IsPersonName` for why digits themselves are not banned.
+   */
   @IsString()
-  @MinLength(2)
+  @IsPersonName()
   @MaxLength(160)
   handedOverTo!: string;
 }
@@ -171,8 +219,59 @@ class CompleteOrderDto {
    */
   @IsOptional()
   @IsString()
+  @IsReportText()
   @MaxLength(2000)
   resultNote?: string;
+
+  /**
+   * Why this finished test has no report attached.
+   *
+   * A note is NOT a report — it is the remark about one. Until 30 Oct 2026 a
+   * note alone closed a test, so an X-ray could read COMPLETED with no image
+   * behind it, which is what the department was reported doing.
+   *
+   * Not every test produces a file, though: a strip test read off a card, a
+   * reading taken verbally, a measurement on a slip. So the rule is a file OR
+   * a stated reason there is none — and the reason is stored, because "which
+   * finished tests have no report, and why" has to stay answerable.
+   */
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  noFileReason?: string;
+}
+
+/**
+ * Correcting a test already at a department.
+ *
+ * Every field optional, and at least one is expected — a request naming none is
+ * harmless rather than an error: the service writes the same values back.
+ */
+class UpdateDiagnosticOrderDto {
+  /** What exactly was asked for. "X-ray left knee" → "…, AP and lateral". */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  /** A different test from the catalogue. Moves the department with it. */
+  @IsOptional()
+  @IsUUID()
+  serviceId?: string;
+
+  /**
+   * A corrected charge, in paise.
+   *
+   * Refused on a test that has been paid for — see `updateOrder`. Absent means
+   * the price is not being touched, which is NOT the same as the catalogue
+   * price: sending the list price back would record an ordinary correction as
+   * a priced decision somebody made.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  pricePaise?: number;
 }
 
 class WorklistQueryDto {
@@ -191,6 +290,14 @@ class WorklistQueryDto {
   @IsOptional()
   @IsIn(['PENDING', 'COMPLETED', 'DECLINED'])
   status?: 'PENDING' | 'COMPLETED' | 'DECLINED';
+
+  /**
+   * One clinic day, `2026-10-22`. Absent means every day, which is what a
+   * to-do list wants: yesterday's unfinished work is still today's work.
+   */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'A date looks like 2026-10-22.' })
+  date?: string;
 }
 
 @Controller()
@@ -378,7 +485,13 @@ export class DiagnosticsController {
     @Body() dto: CompleteOrderDto,
     @Req() req: FastifyRequest,
   ) {
-    return this.diagnostics.completeOrder(tenantId, id, dto.resultNote, meta(req, user));
+    return this.diagnostics.completeOrder(
+      tenantId,
+      id,
+      dto.resultNote,
+      dto.noFileReason,
+      meta(req, user),
+    );
   }
 
   /**
@@ -441,6 +554,29 @@ export class DiagnosticsController {
     @Req() req: FastifyRequest,
   ) {
     return this.diagnostics.cancelOrder(tenantId, id, meta(req, user));
+  }
+
+  /**
+   * Correct a test that is already at a department.
+   *
+   * Behind `diagnostic:order` — the same permission as cancelling one, and for
+   * the same reason: changing what was asked for is the clinical half of the
+   * decision, not the commercial one. The front desk holds neither.
+   *
+   * Narveer's requirement, 2 Nov 2026. Nothing wrote `description` after
+   * creation before this, so a typo on a film could only be fixed by
+   * cancelling the order and raising another.
+   */
+  @Patch('diagnostics/orders/:id')
+  @RequirePermissions(PERMISSIONS.DIAGNOSTIC_ORDER)
+  async update(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateDiagnosticOrderDto,
+    @Req() req: FastifyRequest,
+  ) {
+    return this.diagnostics.updateOrder(tenantId, id, { ...dto }, meta(req, user));
   }
 }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   api,
   ApiRequestError,
@@ -10,6 +11,9 @@ import {
   type RegisterPatientInput,
 } from '@/lib/api';
 import { IconAlert, IconCheck, IconInfo, IconSearch, IconUserPlus } from '@/components/icons';
+import { looksLikeAPersonName } from '@/lib/person-name';
+import { DEFAULT_STATE, INDIAN_STATES } from '@/lib/india';
+import { clearDraft, readDraft, saveDraft } from '@/lib/registration-draft';
 
 type Form = {
   name: string;
@@ -27,7 +31,6 @@ type Form = {
   emergencyContactMobile: string;
   consentCareDelivery: boolean;
   consentMarketing: boolean;
-  consentCommunications: boolean;
 };
 
 const EMPTY: Form = {
@@ -40,7 +43,7 @@ const EMPTY: Form = {
   birthDate: '',
   mobile: '',
   city: '',
-  state: 'Maharashtra',
+  state: DEFAULT_STATE,
   postalCode: '',
   addressLine: '',
   bloodGroup: 'UNKNOWN',
@@ -48,7 +51,6 @@ const EMPTY: Form = {
   emergencyContactMobile: '',
   consentCareDelivery: false,
   consentMarketing: false,
-  consentCommunications: false,
 };
 
 const BLOOD_GROUPS = [
@@ -63,13 +65,49 @@ const BLOOD_GROUPS = [
   ['AB_NEGATIVE', 'AB−'],
 ] as const;
 
+/**
+ * Not kept in the draft, and the one deliberate hole in it.
+ *
+ * Consent is an act somebody performed. A tick that reappears by itself after
+ * a refresh is a record of an act that may not have happened, so the typing
+ * comes back and the consent is given again.
+ */
+const NOT_DRAFTED = ['consentCareDelivery', 'consentMarketing'];
+
+/**
+ * The fields a draft may carry, which is every other field of this form.
+ *
+ * Passed to `readDraft` as a whitelist rather than trusted from the stored
+ * text: anything in local storage can be edited by whoever sits at the machine,
+ * so a draft is untrusted input and must not be able to introduce a key the
+ * form never had.
+ */
+const DRAFTABLE = Object.keys(EMPTY).filter((key) => !NOT_DRAFTED.includes(key));
+
 export default function RegisterPatientPage() {
   const [form, setForm] = useState<Form>(EMPTY);
+  /** Whether this form was picked up from a draft, so the screen can say so. */
+  const [restored, setRestored] = useState(false);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
   const [blocking, setBlocking] = useState<DuplicateCandidate[]>([]);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const router = useRouter();
+
+  /**
+   * Registration continues into booking, every time.
+   *
+   * It used to end on a success card offering "Register another" and "Find a
+   * patient" — a dead end in the one flow that always has a next step. A new
+   * patient at the desk is a patient who needs an appointment, and the
+   * receptionist was retyping the name they had just entered into a search box
+   * on another screen. Narveer's decision, 7 Oct 2026.
+   *
+   * `replace`, not `push`: Back from the booking screen should go wherever the
+   * registration was started from, not to a filled-in form for a patient who
+   * now exists.
+   */
   const [registered, setRegistered] = useState<PatientSummary | null>(null);
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
@@ -80,7 +118,7 @@ export default function RegisterPatientPage() {
   // standing there rather than after.
   const checkDuplicates = useCallback(async (name: string, mobile: string) => {
     const digits = mobile.replace(/\D/g, '').slice(-10);
-    if (name.trim().length < 3 || !/^[6-9]\d{9}$/.test(digits)) {
+    if (name.trim().length < 3 || !looksLikeAPersonName(name) || !/^[6-9]\d{9}$/.test(digits)) {
       setDuplicates([]);
       return;
     }
@@ -103,6 +141,44 @@ export default function RegisterPatientPage() {
     return () => clearTimeout(t);
   }, [form.name, form.mobile, checkDuplicates]);
 
+  /**
+   * Pick up whatever was being typed before.
+   *
+   * Once, on arrival, and never again: reading the draft back on every change
+   * would fight the person at the keyboard. Merged over `EMPTY` rather than
+   * replacing the form, so a field this browser's draft does not carry keeps
+   * its default — `state` and `bloodGroup` especially, which are not blank to
+   * begin with.
+   */
+  useEffect(() => {
+    const draft = readDraft(DRAFTABLE);
+    if (!draft) return;
+
+    /* `ageMode` drives which of two inputs is shown, so a hand-edited draft
+       carrying anything else would leave the form in a state neither radio
+       matches. Every other field is free text and cannot be wrong. */
+    const { ageMode, ...rest } = draft;
+
+    setForm((f) => ({
+      ...f,
+      ...(rest as Partial<Form>),
+      ...(ageMode === 'age' || ageMode === 'dob' ? { ageMode } : {}),
+    }));
+    setRestored(true);
+  }, []);
+
+  /**
+   * Write it back as they type.
+   *
+   * Debounced, because this runs on every keystroke and the draft is only ever
+   * read after a reload. Half a second of typing lost to a crash is not the
+   * problem being solved; a whole form is.
+   */
+  useEffect(() => {
+    const t = setTimeout(() => saveDraft(form, NOT_DRAFTED), 400);
+    return () => clearTimeout(t);
+  }, [form]);
+
   async function submit(confirmedNotDuplicate = false) {
     setSaving(true);
     setError(null);
@@ -114,7 +190,6 @@ export default function RegisterPatientPage() {
       mobile: form.mobile,
       consentCareDelivery: form.consentCareDelivery,
       consentMarketing: form.consentMarketing,
-      consentCommunications: form.consentCommunications,
       ...(confirmedNotDuplicate ? { confirmedNotDuplicate: true } : {}),
       ...(form.ageMode === 'age' && form.ageYears ? { ageYears: Number(form.ageYears) } : {}),
       ...(form.ageMode === 'dob' && form.birthDate ? { birthDate: form.birthDate } : {}),
@@ -131,7 +206,10 @@ export default function RegisterPatientPage() {
 
     try {
       const { patient } = await api.registerPatient(payload);
+      // They are a patient now. Nothing is left half-typed to come back to.
+      clearDraft();
       setRegistered(patient);
+      router.replace(`/appointments/new?patientId=${patient.id}&registered=1`);
       setForm(EMPTY);
       setDuplicates([]);
       setBlocking([]);
@@ -151,7 +229,44 @@ export default function RegisterPatientPage() {
     }
   }
 
-  if (registered) return <Success patient={registered} onAgain={() => setRegistered(null)} />;
+  // Held until the redirect lands, so a second submit is impossible and the
+  // form does not flash back to editable in between.
+  if (registered) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <div className="card p-8 text-center">
+          <p className="mono-label !text-clinical-text">Registered</p>
+          <p className="mt-3 font-mono text-[30px] font-bold leading-none text-clinical-text">
+            {registered.uhid}
+          </p>
+          <p className="mt-3 font-display text-[18px] font-bold">{registered.name}</p>
+          <p className="field-hint">Opening the booking screen…</p>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * The age the typed birthday works out to, or null while it is unusable.
+   *
+   * Null rather than a guess for a half-typed date, a date in the future or a
+   * year nobody could have been born in: a field that flickers through "2026
+   * years old" as somebody types is worse than one that waits.
+   */
+  const ageFromBirthDate = (() => {
+    if (form.ageMode !== 'dob' || !form.birthDate) return null;
+
+    const born = new Date(form.birthDate);
+    if (Number.isNaN(born.getTime())) return null;
+
+    const now = new Date();
+    let years = now.getFullYear() - born.getFullYear();
+    const monthsIn = now.getMonth() - born.getMonth();
+    // Not yet had this year's birthday.
+    if (monthsIn < 0 || (monthsIn === 0 && now.getDate() < born.getDate())) years -= 1;
+
+    return years >= 0 && years <= 130 ? years : null;
+  })();
 
   const weak = duplicates.filter((d) => d.confidence === 'WEAK');
   const strong = duplicates.filter((d) => d.confidence === 'STRONG');
@@ -167,6 +282,31 @@ export default function RegisterPatientPage() {
           Name, sex, age and mobile are all that is required. Everything else can wait.
         </p>
       </header>
+
+      {/*
+        Said, because a form that fills itself in is alarming otherwise — and
+        because the receptionist has to be able to tell whether these are this
+        patient's details or the last one's. The way out is beside it.
+      */}
+      {restored && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <p className="text-[13.5px] text-ink-60">
+            Picked up where this form was left off. The consent boxes are not restored.
+          </p>
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-[12.5px]"
+            onClick={() => {
+              clearDraft();
+              setForm(EMPTY);
+              setDuplicates([]);
+              setRestored(false);
+            }}
+          >
+            Start fresh
+          </button>
+        </div>
+      )}
 
       {strong.length > 0 && <DuplicateNotice candidates={strong} tone="strong" />}
       {strong.length === 0 && weak.length > 0 && <DuplicateNotice candidates={weak} tone="weak" />}
@@ -213,7 +353,7 @@ export default function RegisterPatientPage() {
                 autoComplete="off"
                 placeholder="98765 43210"
               />
-              <p className="field-hint">Any format — spaces and +91 are fine.</p>
+              <p className="field-hint">Any format. Spaces and +91 are fine.</p>
             </div>
 
             <div>
@@ -274,18 +414,36 @@ export default function RegisterPatientPage() {
                     placeholder="years"
                   />
                 ) : (
-                  <input
-                    aria-label="Date of birth"
-                    required
-                    type="date"
-                    value={form.birthDate}
-                    onChange={(e) => set('birthDate', e.target.value)}
-                    className="field-input w-48"
-                  />
+                  <>
+                    <input
+                      aria-label="Date of birth"
+                      required
+                      type="date"
+                      /* Nobody alive was born tomorrow, and a date in the future
+                         is the commonest slip on a keyboard-entered year. */
+                      max={new Date().toLocaleDateString('en-CA')}
+                      value={form.birthDate}
+                      onChange={(e) => set('birthDate', e.target.value)}
+                      className="field-input w-48"
+                    />
+                    {/*
+                      The age, as soon as there is a date to work it out from.
+                      Reported 28 Oct 2026: a receptionist entering a birthday
+                      had nothing to check it against, and a mistyped year looks
+                      exactly like a correct one until somebody reads the age.
+                      Said here rather than only after saving, which is where it
+                      used to appear.
+                    */}
+                    {ageFromBirthDate !== null && (
+                      <span className="text-[13px] text-ink-60" role="status" aria-live="polite">
+                        {ageFromBirthDate} years old
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
               <p className="field-hint">
-                Many patients do not know their date of birth — an approximate age is better than a
+                Many patients do not know their date of birth. An approximate age is better than a
                 made-up date.
               </p>
             </div>
@@ -307,6 +465,33 @@ export default function RegisterPatientPage() {
                 onChange={(e) => set('city', e.target.value)}
                 className="field-input"
               />
+            </div>
+
+            <div>
+              <label htmlFor="state" className="field-label">
+                State
+              </label>
+              {/*
+                A LIST, NOT A TEXT BOX. Free-typed states become "UP", "U.P."
+                and "Uttar pradesh" within a week, and then nothing can group
+                by them.
+
+                It replaces a hidden `state: 'Maharashtra'` that was never on
+                screen — which is why every patient in the register currently
+                reads Maharashtra regardless of where they live.
+              */}
+              <select
+                id="state"
+                value={form.state}
+                onChange={(e) => set('state', e.target.value)}
+                className="field-input"
+              >
+                {INDIAN_STATES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -388,15 +573,6 @@ export default function RegisterPatientPage() {
               title="Care delivery"
               body="Process personal and health data for treatment and medical records."
             />
-            {/* docs/10. Its own purpose: messages about THIS patient's own care,
-                which is not marketing and must not be bundled with it. */}
-            <Consent
-              id="consentCommunications"
-              checked={form.consentCommunications}
-              onChange={(v) => set('consentCommunications', v)}
-              title="WhatsApp about their visits"
-              body="Their token and live place in line, a message when it is time to leave, recovery check-ins and review reminders. Optional."
-            />
             <Consent
               id="consentMarketing"
               checked={form.consentMarketing}
@@ -439,8 +615,7 @@ export default function RegisterPatientPage() {
                   This looks like an existing patient
                 </p>
                 <p className="mt-0.5 text-[13.5px] text-ink-60">
-                  Check before creating a second record — a split file means a split allergy
-                  history.
+                  Check before creating a second record. A split file means a split allergy history.
                 </p>
                 <ul className="mt-3 space-y-1.5">
                   {blocking.map((d) => (
@@ -468,7 +643,7 @@ export default function RegisterPatientPage() {
                     onClick={() => void submit(true)}
                     disabled={saving}
                   >
-                    This is a different person — register anyway
+                    This is a different person, register anyway
                   </button>
                 </div>
               </div>
@@ -582,7 +757,7 @@ function DuplicateNotice({
         <p className={`text-[13.5px] font-semibold ${strong ? 'text-ink' : 'text-ink-60'}`}>
           {strong
             ? 'Likely already registered'
-            : `${candidates.length} similar ${candidates.length === 1 ? 'name' : 'names'} on file — probably unrelated`}
+            : `${candidates.length} similar ${candidates.length === 1 ? 'name' : 'names'} on file, probably unrelated`}
         </p>
         <ul className="mt-1.5 space-y-1 text-[13px] text-ink-60">
           {candidates.slice(0, 4).map((d) => (
@@ -594,37 +769,6 @@ function DuplicateNotice({
             </li>
           ))}
         </ul>
-      </div>
-    </div>
-  );
-}
-
-function Success({ patient, onAgain }: { patient: PatientSummary; onAgain: () => void }) {
-  return (
-    <div className="mx-auto max-w-lg">
-      <div className="card overflow-hidden text-center">
-        <div className="bg-clinical-tint px-6 pb-6 pt-8">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-clinical text-white shadow">
-            <IconCheck size={26} />
-          </span>
-          <p className="mono-label mt-4 !text-clinical-text">Registered</p>
-          <p className="mt-3 font-mono text-[34px] font-bold leading-none tracking-tight text-clinical-text">
-            {patient.uhid}
-          </p>
-          <p className="mt-3 font-display text-[20px] font-bold">{patient.name}</p>
-          <p className="font-mono text-[13px] text-ink-60">{patient.mobile}</p>
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-3 p-6">
-          <button type="button" className="btn-primary" onClick={onAgain}>
-            <IconUserPlus size={16} />
-            Register another
-          </button>
-          <Link href="/patients" className="btn-secondary">
-            <IconSearch size={16} />
-            Find a patient
-          </Link>
-        </div>
       </div>
     </div>
   );

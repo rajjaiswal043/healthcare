@@ -2,7 +2,8 @@
 
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, ApiRequestError, type Encounter } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { api, ApiRequestError, type Appointment, type Encounter } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { formatAge, genderInitial } from '@/lib/format';
 import {
@@ -14,23 +15,14 @@ import {
 import { PrescriptionPrint } from '@/components/prescription-print';
 import { DiagnosticOrdersPanel } from '@/components/diagnostic-orders-panel';
 import { PreviousVisitsPanel } from '@/components/previous-visits-panel';
-import { RecoveryPanel } from '@/components/recovery-panel';
 import {
   IconAlert,
   IconArrowLeft,
-  IconChat,
+  IconCallNext,
   IconCheckCircle,
   IconClock,
   IconLock,
 } from '@/components/icons';
-
-/** How often to ask the patient how they are, until the review. docs/10. */
-const CHECKIN_OPTIONS = [
-  { value: '', label: 'No check-ins' },
-  { value: '2', label: 'Every 2 days' },
-  { value: '3', label: 'Every 3 days' },
-  { value: '7', label: 'Once a week' },
-];
 
 /** Narrative fields, saved on blur rather than on every keystroke. */
 /**
@@ -74,10 +66,10 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
   const [sendingOut, setSendingOut] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [narrative, setNarrative] = useState<Record<string, string>>({});
-  const [sendingToPatient, setSendingToPatient] = useState(false);
-  const [sentNotice, setSentNotice] = useState<string | null>(null);
 
   const mayWrite = can('consultation:write');
+
+  const router = useRouter();
 
   const applyEncounter = useCallback((e: Encounter) => {
     setEncounter(e);
@@ -107,6 +99,70 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
   }, [id, applyEncounter]);
 
   const editable = encounter?.status === 'IN_PROGRESS' && mayWrite;
+
+  /**
+   * The next patient waiting for THIS doctor.
+   *
+   * Signing already ends the visit — see `signEncounter`, which sets the
+   * appointment to FULFILLED — so the only thing left pulling a doctor back to
+   * the queue screen was finding out who is next. Fetched once the note is
+   * signed rather than on load: offering the next patient while this one is
+   * still in the room is an invitation to hurry them out.
+   */
+  const [nextUp, setNextUp] = useState<Appointment | null>(null);
+  const [callingNext, setCallingNext] = useState(false);
+
+  // `signed` is declared below, after the null guard; this effect runs before
+  // that point in the file, so it reads the status directly.
+  const isSigned = encounter?.status === 'SIGNED';
+  const practitionerId = encounter?.practitioner.id ?? null;
+
+  useEffect(() => {
+    if (!isSigned || !practitionerId || !mayWrite) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const queue = await api.queue(practitionerId);
+        // First in the waiting list — the queue is already in the order the
+        // clinic serves, priority flags and all, so taking the top of it is
+        // taking the clinic's own answer rather than inventing a second one.
+        if (!cancelled) setNextUp(queue.waiting[0] ?? null);
+      } catch {
+        // A doctor who cannot read the queue simply gets no shortcut. The
+        // board is one click away and says the same thing.
+        if (!cancelled) setNextUp(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSigned, practitionerId, mayWrite]);
+
+  /**
+   * Call them in and open their note, in one press.
+   *
+   * The two calls the queue screen makes, in the order it makes them: the
+   * patient is called (which is what the waiting-room display reads) and then
+   * the consultation is opened or resumed.
+   */
+  async function seeNext() {
+    if (!nextUp) return;
+    setCallingNext(true);
+    setError(null);
+
+    try {
+      await api.callPatient(nextUp.id);
+      const next = await api.openEncounter(nextUp.id);
+      router.push(`/consultations/${next.id}`);
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError ? err.error.message : 'Could not call the next patient.',
+      );
+      setCallingNext(false);
+    }
+  }
 
   /**
    * Save one narrative field on blur.
@@ -155,92 +211,6 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
       );
     } finally {
       setSendingOut(false);
-    }
-  }
-
-  /**
-   * "The same again", merged into whatever is already on today's list.
-   * A drug already there (same name and strength) is not added twice.
-   */
-  async function carryForward(
-    previous: Array<{
-      drugName: string;
-      strength: string | null;
-      form: string | null;
-      dose: string;
-      frequency: string;
-      durationDays: number | null;
-    }>,
-  ) {
-    if (!encounter) return;
-    const key = (p: { drugName: string; strength: string | null }) =>
-      `${p.drugName.trim().toLowerCase()}|${(p.strength ?? '').trim().toLowerCase()}`;
-    const present = new Set(encounter.prescriptions.map(key));
-
-    const today = encounter.prescriptions.map((p) => ({
-      ...(p.formularyItemId ? { formularyItemId: p.formularyItemId } : {}),
-      drugName: p.drugName,
-      ...(p.strength ? { strength: p.strength } : {}),
-      ...(p.form ? { form: p.form } : {}),
-      dose: p.dose,
-      frequency: p.frequency,
-      route: p.route,
-      ...(p.durationDays ? { durationDays: p.durationDays } : {}),
-      ...(p.quantity ? { quantity: p.quantity } : {}),
-      ...(p.instructions ? { instructions: p.instructions } : {}),
-    }));
-    const repeated = previous
-      .filter((p) => !present.has(key(p)))
-      .map((p) => ({
-        drugName: p.drugName,
-        ...(p.strength ? { strength: p.strength } : {}),
-        ...(p.form ? { form: p.form } : {}),
-        dose: p.dose,
-        frequency: p.frequency,
-        ...(p.durationDays ? { durationDays: p.durationDays } : {}),
-      }));
-
-    try {
-      applyEncounter(await api.setPrescriptions(encounter.id, [...today, ...repeated]));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.error.message : 'Could not add the medicines.');
-      throw err;
-    }
-  }
-
-  async function saveCheckinInterval(value: string) {
-    if (!encounter || !editable) return;
-    try {
-      applyEncounter(
-        await api.updateEncounter(encounter.id, {
-          checkInIntervalDays: value === '' ? null : Number(value),
-        }),
-      );
-      setError(null);
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.error.message : 'Could not save.');
-    }
-  }
-
-  async function sendToPatient() {
-    if (!encounter) return;
-    setSendingToPatient(true);
-    setError(null);
-    try {
-      const { status } = await api.sendToPatient(encounter.id);
-      const first = encounter.patient.name.trim().split(' ')[0];
-      setSentNotice(
-        status === 'SENT'
-          ? `Sent to ${first} on WhatsApp.`
-          : status === 'SKIPPED_NO_CONSENT'
-            ? 'Not sent: this patient has not agreed to WhatsApp messages. The front desk can record their consent on their record.'
-            : 'The message could not be sent. Print the prescription instead.',
-      );
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.error.message : 'Could not send.');
-    } finally {
-      setSendingToPatient(false);
     }
   }
 
@@ -338,17 +308,6 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 Print prescription
               </button>
             )}
-            {signed && mayWrite && (
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={sendingToPatient}
-                onClick={() => void sendToPatient()}
-              >
-                <IconChat size={16} />
-                {sendingToPatient ? 'Sending…' : 'Send to patient on WhatsApp'}
-              </button>
-            )}
             {/* Sending for an X-ray pauses the visit rather than ending it. The
                 note stays a draft, the bill stays as it is, and the patient
                 keeps their token — signing here would close a consultation the
@@ -376,13 +335,55 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 onClick={() => void sign()}
                 title={
                   awaitingTests
-                    ? 'Close the visit with what is recorded — for a patient who did not come back'
-                    : undefined
+                    ? 'Close the visit with what is recorded, for a patient who did not come back'
+                    : 'Signs the note and marks the OPD finished. This cannot be undone.'
                 }
               >
                 <IconCheckCircle size={16} />
-                {signing ? 'Signing…' : 'Sign and finish'}
+                {/*
+                  THE DOCTOR'S "OPD DONE", in the words the rest of the console
+                  uses. It was "Sign and finish", which was accurate and shared
+                  no vocabulary with the front desk's button for the same act —
+                  the desk said "OPD done" and the doctor said "finish", about
+                  one event. "Sign" stays in front of it because signing is a
+                  clinical act with a registration number attached, and a
+                  doctor should see that they are doing it.
+                */}
+                {signing ? 'Signing…' : 'Sign · OPD done'}
               </button>
+            )}
+
+            {/*
+              STRAIGHT ON TO THE NEXT PATIENT.
+
+              Signing already ended this visit, so the only thing that used to
+              pull a doctor back to the queue screen was finding out who was
+              next — twice per patient, all morning. Shown only once the note
+              is signed: offering it while this patient is still in the room is
+              an invitation to hurry them out.
+
+              Named, not just "Next": a doctor about to call somebody in should
+              see who they are calling before they press it.
+            */}
+            {signed && nextUp && (
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={callingNext}
+                onClick={() => void seeNext()}
+              >
+                <IconCallNext size={16} />
+                {callingNext
+                  ? 'Calling…'
+                  : `Next: ${nextUp.tokenNumber === null ? '' : `#${nextUp.tokenNumber} `}${nextUp.patient.name}`}
+              </button>
+            )}
+
+            {/* The honest empty state. Without it, a doctor who finished the
+                last patient of the morning would be left looking for a button
+                that is not there. */}
+            {signed && !nextUp && mayWrite && (
+              <span className="text-[13px] text-ink-40">Nobody else is waiting.</span>
             )}
           </div>
         </header>
@@ -400,7 +401,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                 value={sendOutReason}
                 onChange={(e) => setSendOutReason(e.target.value)}
                 maxLength={200}
-                placeholder="X-ray — left wrist"
+                placeholder="X-ray, left wrist"
                 autoFocus
               />
               <button
@@ -438,15 +439,6 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
-        {sentNotice && (
-          <div
-            role="status"
-            className="rounded-panel border border-clinical/25 bg-clinical-tint p-3 text-[13px]"
-          >
-            {sentNotice}
-          </div>
-        )}
-
         {signed && (
           <div className="flex items-start gap-2 rounded-panel border border-green/30 bg-green-soft/40 p-3 text-[13px]">
             <span className="mt-0.5 shrink-0 text-green-text">
@@ -464,18 +456,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
             {/* Above the vitals, because "what did I give her last time" is the
                 first question of a follow-up and the answer should not be
                 below the fold. Renders nothing on a first visit. */}
-            {/* How they did since last time, in their own check-ins — the first
-                question of a follow-up, answered before they sit down. */}
-            <RecoveryPanel encounterId={encounter.id} />
-
-            <PreviousVisitsPanel
-              encounterId={encounter.id}
-              onCarryForward={
-                encounter.status === 'IN_PROGRESS' && can('prescription:write')
-                  ? carryForward
-                  : undefined
-              }
-            />
+            <PreviousVisitsPanel encounterId={encounter.id} />
 
             <VitalsPanel
               encounter={encounter}
@@ -494,7 +475,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                     <textarea
                       id={field.key}
                       rows={field.rows}
-                      className="field-input mt-1.5 text-[13.5px]"
+                      className="field-input mt-1.5 text-[16px] md:text-[13.5px]"
                       placeholder={field.placeholder}
                       value={narrative[field.key] ?? ''}
                       onChange={(e) => setNarrative({ ...narrative, [field.key]: e.target.value })}
@@ -513,38 +494,24 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   Follow-up
                 </label>
                 {editable ? (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <input
-                      id="followUpDate"
-                      type="date"
-                      className="field-input block max-w-[200px] text-[13.5px]"
-                      value={narrative.followUpDate ?? ''}
-                      onChange={(e) => setNarrative({ ...narrative, followUpDate: e.target.value })}
-                      onBlur={(e) => void saveField('followUpDate', e.target.value)}
-                    />
-                    {/* Check-ins run until the review, so they need one. */}
-                    <select
-                      id="checkInIntervalDays"
-                      aria-label="WhatsApp check-ins until the review"
-                      className="field-input block max-w-[200px] text-[13.5px]"
-                      disabled={!narrative.followUpDate}
-                      value={
-                        encounter.checkInIntervalDays ? String(encounter.checkInIntervalDays) : ''
-                      }
-                      onChange={(e) => void saveCheckinInterval(e.target.value)}
-                    >
-                      {CHECKIN_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="field-hint w-full">
-                      {narrative.followUpDate
-                        ? 'Check-ins ask the patient on WhatsApp about their pain and exercises until the review. Rising pain is flagged to the clinic.'
-                        : 'Set a review date to turn on WhatsApp check-ins.'}
-                    </p>
-                  </div>
+                  <input
+                    id="followUpDate"
+                    type="date"
+                    /*
+                      No review date in the past. A courtesy only — the server
+                      checks it against the CLINIC's today, which is the one
+                      that counts, and this reads the browser's. Where the two
+                      disagree this is the looser of the pair, which is the
+                      right way round: the screen never refuses something the
+                      server would have taken.
+                    */
+                    min={new Date().toLocaleDateString('en-CA')}
+                    // 16px on a phone or iOS zooms the page when this takes focus.
+                    className="field-input mt-1.5 block max-w-[200px] text-[16px] md:text-[13.5px]"
+                    value={narrative.followUpDate ?? ''}
+                    onChange={(e) => setNarrative({ ...narrative, followUpDate: e.target.value })}
+                    onBlur={(e) => void saveField('followUpDate', e.target.value)}
+                  />
                 ) : (
                   <p className="mt-1 text-[13.5px]">
                     {encounter.followUpDate ? (
@@ -606,7 +573,7 @@ export default function ConsultationPage({ params }: { params: Promise<{ id: str
                   id="prescriptionNote"
                   rows={3}
                   maxLength={NOTE_MAX_LENGTH}
-                  className="field-input mt-1.5 text-[13.5px]"
+                  className="field-input mt-1.5 text-[16px] md:text-[13.5px]"
                   placeholder="Physiotherapy, precautions, instructions for the pharmacy"
                   value={narrative.prescriptionNote ?? ''}
                   onChange={(e) => setNarrative({ ...narrative, prescriptionNote: e.target.value })}

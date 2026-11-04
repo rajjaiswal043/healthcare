@@ -75,6 +75,13 @@ export default function CollectionsPage() {
             <input
               id="date"
               type="date"
+              /*
+                No day that has not happened yet. A report for next March is
+                always an empty one, and an empty report reads as "the clinic
+                took nothing" rather than as "you asked the wrong question".
+                Reported 28 Oct 2026.
+              */
+              max={new Date().toLocaleDateString('en-CA')}
               className="field-input"
               value={date}
               onChange={(e) => setDate(e.target.value)}
@@ -184,53 +191,94 @@ export default function CollectionsPage() {
             {report.transactions.length === 0 ? (
               <p className="field-hint px-5 py-6">No money moved on this day.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="border-b border-ink/8 text-left">
-                      <Th>Time</Th>
-                      <Th>Patient</Th>
-                      <Th>Invoice</Th>
-                      <Th>Mode</Th>
-                      <Th>Taken by</Th>
-                      <Th>Amount</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.transactions.map((t, i) => (
-                      <tr
-                        key={`${t.invoiceNumber}-${i}`}
-                        className="border-b border-ink/6 last:border-0"
-                      >
-                        <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[12px] text-ink-60">
-                          {new Date(t.collectedAt).toLocaleTimeString('en-IN', {
-                            timeStyle: 'short',
-                          })}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {t.patient.name}
-                          <span className="block font-mono text-[11px] text-ink-40">
-                            {t.patient.uhid}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[12px] text-ink-60">
-                          {t.invoiceNumber}
-                        </td>
-                        <td className="px-4 py-2.5 text-ink-60">{MODE_LABELS[t.mode] ?? t.mode}</td>
-                        <td className="px-4 py-2.5 text-ink-60">{t.collectedBy}</td>
-                        <td
-                          className={`whitespace-nowrap px-4 py-2.5 text-right font-mono font-semibold ${
+              <>
+                {/* Six columns of money is a sideways scroll on a phone. Each
+                    transaction becomes a line instead: who and when on the
+                    left, the amount on the right, the rest underneath. */}
+                <ul className="divide-y divide-ink/6 md:hidden">
+                  {report.transactions.map((t, i) => (
+                    <li key={`m-${t.invoiceNumber}-${i}`} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[14px] font-semibold text-ink">
+                            {t.patient.name}
+                          </p>
+                          <p className="mt-0.5 font-mono text-[11.5px] text-ink-40">
+                            {t.patient.uhid} · {t.invoiceNumber}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 font-mono text-[15px] font-bold tabular-nums ${
                             t.direction === 'REFUND' ? 'text-coral-text' : ''
                           }`}
                         >
-                          {t.direction === 'REFUND' ? '−' : ''}
+                          {t.direction === 'REFUND' ? '− ' : ''}
                           {formatPaise(t.amountPaise)}
-                        </td>
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11.5px] text-ink-40">
+                        {new Date(t.collectedAt).toLocaleTimeString('en-IN', {
+                          timeStyle: 'short',
+                        })}
+                        {' · '}
+                        {MODE_LABELS[t.mode] ?? t.mode}
+                        {' · '}
+                        {t.collectedBy}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="border-b border-ink/8 text-left">
+                        <Th>Time</Th>
+                        <Th>Patient</Th>
+                        <Th>Invoice</Th>
+                        <Th>Mode</Th>
+                        <Th>Taken by</Th>
+                        <Th>Amount</Th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {report.transactions.map((t, i) => (
+                        <tr
+                          key={`${t.invoiceNumber}-${i}`}
+                          className="border-b border-ink/6 last:border-0"
+                        >
+                          <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[12px] text-ink-60">
+                            {new Date(t.collectedAt).toLocaleTimeString('en-IN', {
+                              timeStyle: 'short',
+                            })}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {t.patient.name}
+                            <span className="block font-mono text-[11px] text-ink-40">
+                              {t.patient.uhid}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 font-mono text-[12px] text-ink-60">
+                            {t.invoiceNumber}
+                          </td>
+                          <td className="px-4 py-2.5 text-ink-60">
+                            {MODE_LABELS[t.mode] ?? t.mode}
+                          </td>
+                          <td className="px-4 py-2.5 text-ink-60">{t.collectedBy}</td>
+                          <td
+                            className={`whitespace-nowrap px-4 py-2.5 text-right font-mono font-semibold ${
+                              t.direction === 'REFUND' ? 'text-coral-text' : ''
+                            }`}
+                          >
+                            {t.direction === 'REFUND' ? '−' : ''}
+                            {formatPaise(t.amountPaise)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </section>
         </>

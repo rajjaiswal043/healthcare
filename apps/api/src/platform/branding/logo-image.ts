@@ -86,7 +86,7 @@ export async function normaliseLogo(input: Buffer): Promise<NormalisedLogo> {
   // Content-Type. This is the magic-byte check; there is no separate one.
   if (meta.format === 'svg') {
     throw new BadRequestException(
-      'SVG logos are not accepted. Please send a PNG or JPEG — an SVG can carry script, ' +
+      'SVG logos are not accepted. Please send a PNG or JPEG. An SVG can carry script, ' +
         'and this image is shown on the sign-in page before anyone has signed in.',
     );
   }

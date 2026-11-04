@@ -67,11 +67,6 @@ const TABLES = [
   'invoice',
   'invoice_counter',
   'service',
-  // Patient journey (docs/10): all three reference patient, and two of them
-  // appointment or encounter.
-  'patient_link',
-  'outbound_message',
-  'recovery_checkin',
   'encounter_addendum',
   'prescription',
   'diagnosis',
@@ -186,7 +181,6 @@ export async function resetAppointments(): Promise<void> {
   const db = await owner();
   await db.query(
     `TRUNCATE receipt_print, receipt, promotion_application, payment, invoice_line, invoice,
-              patient_link, outbound_message, recovery_checkin,
               encounter_addendum, prescription, diagnosis, vitals_observation, encounter,
               appointment, queue_counter
      RESTART IDENTITY CASCADE`,
@@ -263,10 +257,19 @@ async function seedTenant(input: {
       [input.id],
     );
 
+    /**
+     * A department is somewhere a patient is sent for a test. The fixture used
+     * to seed "General Medicine" here, back when a department was also the
+     * first step of booking — which is the thing that went.
+     */
     const department = await one<{ id: string }>(
       tx,
+      // "Imaging", not "X-ray": suites that exercise the diagnostics flow
+      // create their own X-ray and Pathology, and a name clash on
+      // (tenant, name) would 409 their fixture rather than the thing under
+      // test.
       `INSERT INTO department (tenant_id, name, display_order, updated_at)
-       VALUES ($1, 'General Medicine', 1, now()) RETURNING id`,
+       VALUES ($1, 'Imaging', 1, now()) RETURNING id`,
       [input.id],
     );
 
@@ -274,10 +277,10 @@ async function seedTenant(input: {
       tx,
       `INSERT INTO practitioner
          (tenant_id, full_name, prefix, registration_number, specialty,
-          department_id, overbook_per_session, updated_at)
-       VALUES ($1, $2, NULL, 'TEST-0001', 'General Medicine', $3, 0, now())
+          overbook_per_session, updated_at)
+       VALUES ($1, $2, NULL, 'TEST-0001', 'General Medicine', 0, now())
        RETURNING id`,
-      [input.id, input.doctorName, department.id],
+      [input.id, input.doctorName],
     );
 
     // 09:00–12:00, 15-minute slots, capacity 1, every day. Twelve slots, which
@@ -475,39 +478,18 @@ export async function loginWithMfa(
     throw new Error(`${email} did not return an enrolment challenge.`);
   }
 
-  const { generate } = await import('otplib');
   const secret = body.enrolmentSecret;
 
-  /**
-   * Confirm across a TOTP step boundary without flaking.
-   *
-   * A code is generated for the current 30-second window. Generate one at
-   * 29.9s and the server verifies it at 30.1s, in the next window, and rejects
-   * a code that was correct when it was made. That is not a bug in either side
-   * — it is the protocol — and it surfaced as `billing.e2e` failing its
-   * beforeAll with "Invalid code" roughly one run in twenty, which is exactly
-   * often enough to be dismissed as noise and waste an afternoon later.
-   *
-   * So: wait out the boundary and try once more. Bounded at two attempts,
-   * because a third would be hiding a real failure rather than a timing one.
-   */
-  let res = await confirm(await generate({ secret }));
-
-  if (res.statusCode !== 200) {
-    await new Promise((r) => setTimeout(r, msUntilNextTotpWindow() + 250));
-    res = await confirm(await generate({ secret }));
-  }
+  const res = await acrossTotpBoundary(async () =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/mfa/confirm',
+      payload: { tenantSlug, email, password, totpCode: await totpCode(secret) },
+    }),
+  );
 
   if (res.statusCode !== 200) {
     throw new Error(`MFA confirm failed for ${email}: ${res.statusCode} ${res.payload}`);
-  }
-
-  function confirm(totpCode: string) {
-    return app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/mfa/confirm',
-      payload: { tenantSlug, email, password, totpCode },
-    });
   }
 
   const cookies = parseSetCookies(res.headers['set-cookie']);
@@ -523,6 +505,53 @@ export async function loginWithMfa(
     refreshToken,
     permissions: res.json<{ user: { permissions: string[] } }>().user.permissions,
   };
+}
+
+/** A code for the current 30-second window. */
+export async function totpCode(secret: string): Promise<string> {
+  const { generate } = await import('otplib');
+  return generate({ secret });
+}
+
+/**
+ * Run a TOTP-dependent request across a step boundary without flaking.
+ *
+ * A code is generated for the current 30-second window. Generate one at 29.9s
+ * and the server verifies it at 30.1s, in the next window, and rejects a code
+ * that was correct when it was made. That is not a bug in either side — it is
+ * the protocol — and it surfaced as `billing.e2e` failing its beforeAll with
+ * "Invalid code" roughly one run in twenty, which is exactly often enough to be
+ * dismissed as noise and waste an afternoon later.
+ *
+ * So: try once more with a FRESH code. Bounded at two attempts, because a third
+ * would be hiding a real failure rather than a timing one.
+ *
+ * `attempt` MUST GENERATE THE CODE ITSELF, inside the callback — that is the
+ * whole point, and it is also why the retry needs no real wait. The first
+ * attempt failing is itself the proof that the clock has crossed into the new
+ * window: a code made now belongs to the window the server is already in. The
+ * short pause is margin, not mechanism.
+ *
+ * IT USED TO WAIT OUT THE REST OF THE WINDOW — up to thirty whole seconds — and
+ * that turned a rare "Invalid code" into a rare TIMEOUT, because
+ * `vitest` caps a test at thirty seconds and several tests call `loginWithMfa`
+ * inside the body rather than in a hook. The symptom moved from an error naming
+ * MFA to "Test timed out", which is considerably harder to read.
+ *
+ * Exported because `loginWithMfa` is not the only caller: the platform console
+ * has its own confirm endpoint with no tenant in it, and `platform.e2e` wrote
+ * both of its confirms out by hand with a single attempt. The clinic one came
+ * back as "expected 401 to be 200" on an onboarded clinic's first sign-in,
+ * which reads like a broken onboarding rather than a 30-second window.
+ */
+export async function acrossTotpBoundary<T extends { statusCode: number }>(
+  attempt: () => Promise<T>,
+): Promise<T> {
+  const first = await attempt();
+  if (first.statusCode === 200) return first;
+
+  await new Promise((r) => setTimeout(r, 1200));
+  return attempt();
 }
 
 /**
@@ -579,17 +608,11 @@ export async function createDoctor(
     const [row] = await ownerQuery<{ id: string }>(
       tenant.id,
       `INSERT INTO practitioner
-         (tenant_id, user_id, full_name, registration_number, specialty, department_id,
+         (tenant_id, user_id, full_name, registration_number, specialty,
           overbook_per_session, updated_at)
-       VALUES ($1, $2, $3, $4, 'General Medicine', $5, 0, now())
+       VALUES ($1, $2, $3, $4, 'General Medicine', 0, now())
        RETURNING id`,
-      [
-        tenant.id,
-        user.id,
-        options.fullName,
-        `TEST-${options.email.slice(0, 8)}`,
-        tenant.departmentId,
-      ],
+      [tenant.id, user.id, options.fullName, `TEST-${options.email.slice(0, 8)}`],
     );
     practitionerId = row?.id ?? null;
 
@@ -625,7 +648,8 @@ export async function seedBilling(
       `INSERT INTO service (tenant_id, code, name, category, price_paise, updated_at)
        VALUES ($1, 'CONS-NEW', 'Consultation', 'CONSULTATION', $2, now()),
               ($1, 'CONS-FOLLOWUP', 'Follow-up', 'CONSULTATION', $3, now()),
-              ($1, 'PROC-DRESS', 'Dressing', 'PROCEDURE', 25000, now())
+              ($1, 'PROC-DRESS', 'Dressing', 'PROCEDURE', 25000, now()),
+              ($1, 'CONS-EMERG', 'Emergency surcharge', 'CONSULTATION', 30000, now())
        ON CONFLICT (tenant_id, code) DO UPDATE SET price_paise = EXCLUDED.price_paise`,
       [tenantId, consultation, followUp],
     );
@@ -691,7 +715,3 @@ export function clinicDate(days = 7, timeZone = 'Asia/Kolkata'): string {
 }
 
 /** Milliseconds remaining in the current 30-second TOTP step. */
-function msUntilNextTotpWindow(): number {
-  const STEP_MS = 30_000;
-  return STEP_MS - (Date.now() % STEP_MS);
-}

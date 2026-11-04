@@ -136,6 +136,11 @@ export interface CurrentSession {
    * a choice it would then refuse.
    */
   practitionerId: string | null;
+  /**
+   * The room this person works in — set for the diagnostics role and null for
+   * everybody else. The test worklist opens on it.
+   */
+  department: { id: string; name: string } | null;
 }
 
 /**
@@ -194,6 +199,253 @@ export interface ClinicRole {
   staffCount: number;
 }
 
+/**
+ * One test on a day-board row, and how far it has got.
+ *
+ * A visit can run through several departments — X-ray, then bloods, then
+ * physio — and the desk has to answer "where is this patient" and "what is
+ * left" from the row itself.
+ */
+export interface RowTest {
+  description: string;
+  department: string;
+  /** Reported and back. Nothing left for the patient to do for this one. */
+  done: boolean;
+  /** Money is stopping it: no result goes out against an unpaid bill. */
+  unpaid: boolean;
+}
+
+export type DayBucket =
+  | 'EXPECTED'
+  | 'WAITING'
+  | 'WITH_DOCTOR'
+  | 'AT_DEPARTMENT'
+  /** Their test is back and the doctor has not seen it. They are in the corridor. */
+  | 'BACK_FROM_TESTS'
+  /** The doctor has finished; nobody has said the visit is over. Still here. */
+  | 'READY_TO_CLOSE'
+  | 'DONE'
+  /** Booked for a day that has gone, never checked in. Nobody marked it. */
+  | 'DID_NOT_COME'
+  /** Started on a day that has gone and never finished. They did arrive. */
+  | 'NOT_FINISHED'
+  | 'NOT_ATTENDING';
+
+/** Where a bill stands, without saying how much. Null when nothing was charged. */
+export type FeeTag = 'PAID' | 'PENDING' | null;
+
+/**
+ * What a patient was charged today. NULL FOR A CALLER WITHOUT `invoice:read`.
+ *
+ * The server leaves the figures out of the response rather than sending them
+ * for the browser to hide — doctors and nurses read this board and deliberately
+ * do not hold that permission, so the column is absent, not merely invisible.
+ */
+export interface RowMoney {
+  billedPaise: number;
+  duePaise: number;
+  /** Handed back out of the drawer on this patient's bills today. */
+  refundedPaise: number;
+  /** Forgiven on them. No money moved — the Method column says "Waived". */
+  writtenOffPaise: number;
+}
+
+/**
+ * What a patient needs next, most blocking first.
+ *
+ * A LIST, because more than one thing can be true at once: a patient sitting
+ * with the doctor who has just been sent for an X-ray needs the money taking
+ * AND the consultation carrying on. Each screen shows the first step the
+ * signed-in person is allowed to perform — so the desk sees Collect, the doctor
+ * sees Resume, and somebody holding every permission sees Collect, because an
+ * unpaid bill blocks everything after it.
+ *
+ * COLLECT is absent entirely for a caller who may not see money, the same rule
+ * as `money`.
+ */
+export type NextStep =
+  /**
+   * `duePaise` is THE PATIENT's balance across every bill still owing, and
+   * `invoiceIds` lists them oldest first — the order the money is applied in.
+   *
+   * It used to be one bill's balance, so the button read "Collect ₹500 · 1 of
+   * 2" beside a Due column showing ₹1,000. Since 29 Oct 2026 the desk settles
+   * them together, so the button and the column carry the same figure and the
+   * label is gone. `billsOwing` stays for the dialog, which still says what
+   * the money is being spread across.
+   */
+  | { kind: 'COLLECT'; invoiceIds: string[]; duePaise: number; billsOwing: number }
+  | { kind: 'CHECK_IN'; appointmentId: string }
+  | { kind: 'START'; appointmentId: string }
+  | { kind: 'RESUME'; appointmentId: string }
+  | { kind: 'BRING_BACK'; appointmentId: string }
+  | { kind: 'FINISH'; appointmentId: string }
+  | { kind: 'CLOSE_VISIT'; appointmentId: string }
+  /** Closed by mistake. Clears `closed_at` and puts the row back. */
+  | { kind: 'REOPEN_VISIT'; appointmentId: string }
+  | { kind: 'RECORD_RESULT'; orderId: string }
+  /** The patient said no. Takes the charge off; only where there is one. */
+  | { kind: 'DECLINE_TEST'; orderId: string }
+  /** The same way out where the test was never charged for. */
+  | { kind: 'CANCEL_TEST'; orderId: string }
+  /** They never came. Writes the no-show the board has been inferring. */
+  | { kind: 'MARK_NO_SHOW'; appointmentId: string }
+  | { kind: 'RECEIPT'; paymentId: string };
+
+export interface DayBoardRow {
+  patient: {
+    id: string;
+    name: string;
+    uhid: string;
+    /** Already worked out from the age OR the birth date. The date is not sent. */
+    ageYears: number | null;
+    gender: string;
+  };
+  bucket: DayBucket;
+  /** The visit this row hangs off. Null for a walk-in test with no appointment. */
+  appointmentId: string | null;
+  hasVisit: boolean;
+  hasTest: boolean;
+  /** The doctor has finished — "OPD done". True whether or not the visit is closed. */
+  opdDone: boolean;
+  /** The department that finished their tests — "X-ray done". Null while any is pending. */
+  testsDoneIn: string | null;
+  token: number | null;
+  /**
+   * EVERY doctor they are booked with, comma-separated — or the department for
+   * a test-only visit. One name until 30 Oct 2026, which hid the rest.
+   */
+  withWhom: string | null;
+  /** How many doctors this patient is seeing today. Zero for a test-only row. */
+  doctorCount: number;
+  /**
+   * What they were sent for, up to three. Live tests only.
+   *
+   * `withWhom` names the doctor for anybody who had a consultation, so the
+   * board could say somebody was at a department without saying which, and
+   * never what test. The receptionist reads this row; the answer belongs on it.
+   */
+  tests: RowTest[];
+  /** The department holding them. Null when no test is live. */
+  testDepartment: string | null;
+  time: string | null;
+  visitFee: FeeTag;
+  testFee: FeeTag;
+  /** How they paid today — empty when nothing has been collected. */
+  paymentMethods: string[];
+  /**
+   * Whether a charge of theirs was WRITTEN OFF rather than paid.
+   *
+   * A waiver produces no payment row, so the Method column showed a hyphen and
+   * read as missing data rather than as a decision somebody took. Reported from
+   * the clinic, 30 Oct 2026.
+   */
+  feeWaived: boolean;
+  /** Null without `invoice:read`. See `RowMoney`. */
+  money: RowMoney | null;
+  /** What to do with this patient next, most blocking first. See `NextStep`. */
+  nextSteps: NextStep[];
+}
+
+export interface DayBoard {
+  date: string;
+  timezone: string;
+  /** OWN for a doctor — their own patients only. CLINIC for everyone else. */
+  scope: 'CLINIC' | 'OWN';
+  counts: {
+    expected: number;
+    waiting: number;
+    with_doctor: number;
+    back_from_tests: number;
+    ready_to_close: number;
+    at_department: number;
+    done: number;
+    not_finished: number;
+    did_not_come: number;
+    not_attending: number;
+    total: number;
+  };
+  /**
+   * The day's money over every row, summed server-side. Null without
+   * `invoice:read`.
+   *
+   * Not derived in the browser: it has to be the day's figure whichever tab is
+   * open, and the browser only holds what it was sent.
+   */
+  /**
+   * The day's money. Null without `invoice:read`.
+   *
+   * `collected − refunded` is what should be in the till at close, counted from
+   * payment rows rather than derived — that is the figure to check a physical
+   * count against. The four do NOT reliably sum to `billed`; see the note on
+   * the server's `DayBoard` type for the three reasons why.
+   */
+  money: {
+    billedPaise: number;
+    collectedPaise: number;
+    /** Handed back out of the drawer. */
+    refundedPaise: number;
+    /** Forgiven. No money moved, so it is in neither figure above. */
+    writtenOffPaise: number;
+    duePaise: number;
+  } | null;
+  rows: DayBoardRow[];
+}
+
+export interface TimelineEvent {
+  id: string;
+  kind:
+    | 'REGISTERED'
+    | 'APPOINTMENT'
+    | 'CONSULTATION'
+    | 'TEST'
+    | 'DOCUMENT'
+    | 'INVOICE'
+    | 'PAYMENT'
+    | 'CORRECTION';
+  at: string;
+  summary: string;
+  detail: string | null;
+}
+
+export interface PatientBilling {
+  outstandingPaise: number;
+  invoices: Array<{
+    id: string;
+    number: string;
+    status: string;
+    totalPaise: number;
+    balancePaise: number;
+    createdAt: string;
+    /** What was charged, as charged. Four at most — `itemCount` has the rest. */
+    items: string[];
+    itemCount: number;
+    /** Null for a walk-in test, which belongs to no doctor. */
+    doctor: string | null;
+    /** Net of money in and refunds out: what the patient is actually down. */
+    paidPaise: number;
+    refundedPaise: number;
+    /** How they paid. Two entries when a part payment changed method. */
+    paymentModes: string[];
+    /** The payment a receipt prints for, or null when nothing was taken. */
+    lastPaymentId: string | null;
+  }>;
+}
+
+export interface PatientTest {
+  id: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  completedAt: string | null;
+  handedOverAt: string | null;
+  resultNote: string | null;
+  referralSource: string;
+  referrerName: string | null;
+  department: { name: string };
+  documents: Array<{ id: string; fileName: string; contentType: string }>;
+}
+
 export interface StaffUser {
   id: string;
   email: string;
@@ -207,6 +459,8 @@ export interface StaffUser {
   mfaEnrolled: boolean;
   createdAt: string;
   roles: Array<{ key: string; name: string }>;
+  /** Which room they work in. Set for the diagnostics role, null otherwise. */
+  department: { id: string; name: string } | null;
 }
 
 export interface WeeklySession {
@@ -235,7 +489,6 @@ export interface SetupPractitioner {
   followUpFeePaise: number | null;
   overbookPerSession: number;
   isActive: boolean;
-  department: { id: string; name: string } | null;
   schedules: WeeklySession[];
   /**
    * What decides whether this doctor can be deleted: any appointment, of any
@@ -350,6 +603,9 @@ export interface PatientDetail extends PatientSummary {
   state: string | null;
   postalCode: string | null;
   bloodGroup: string;
+  allergies: string | null;
+  /** Null means nobody has asked. Set with no `allergies` means "none known". */
+  allergiesReviewedAt: string | null;
   emergencyContactName: string | null;
   emergencyContactMobile: string | null;
   abhaAddress: string | null;
@@ -372,6 +628,13 @@ export interface PatientDetail extends PatientSummary {
     reasonForVisit: string | null;
     practitioner: { id: string; fullName: string; prefix: string | null };
     encounterId: string | null;
+    /**
+     * Booked, never checked in, and the clinic's day is over.
+     *
+     * Worked out by the server, which knows the clinic's timezone; the browser
+     * knows only the reader's, and those are not the same question.
+     */
+    missed: boolean;
   }>;
   stats: {
     totalVisits: number;
@@ -408,8 +671,6 @@ export interface RegisterPatientInput {
   emergencyContactMobile?: string;
   consentCareDelivery: boolean;
   consentMarketing?: boolean;
-  /** WhatsApp about their own care — docs/10. */
-  consentCommunications?: boolean;
   confirmedNotDuplicate?: boolean;
 }
 
@@ -477,11 +738,35 @@ export interface DiagnosticOrder {
   /** The charge raised for it. Null for a free-text order and for legacy ones. */
   invoiceLineId: string | null;
   /**
+   * What this one test was charged, in paise — the line's total, not the
+   * invoice's. Null when nothing was charged. This is what the requisition slip
+   * prints, which is why it is the charged amount and not the list price.
+   */
+  chargedPaise: number | null;
+  /**
    * Where this test stands with the money. UNPAID and VOID block the result;
    * LEGACY and NOT_BILLED are shown for information and never block.
    */
   billing: DiagnosticBillingState;
-  patient: { id: string; name: string; uhid: string; gender: string; ageYears: number | null };
+  /**
+   * The patient, as the person at the machine needs them: enough to call them,
+   * phone them if they wander off, and give contrast safely.
+   */
+  patient: {
+    id: string;
+    name: string;
+    uhid: string;
+    gender: string;
+    /** Already worked out from the age OR the birth date. The date is not sent. */
+    ageYears: number | null;
+    mobile: string;
+    /** Null means nothing recorded — see `allergiesReviewedAt` for which kind. */
+    allergies: string | null;
+    /** Set and `allergies` empty means somebody asked and the answer was none. */
+    allergiesReviewedAt: string | null;
+  };
+  /** The visit this came out of. Null for a walk-in test, which has no token. */
+  appointment: { tokenNumber: number | null; reasonForVisit: string | null } | null;
   orderedBy: { id: string; fullName: string };
   completedBy: { id: string; fullName: string } | null;
   /** Set once the patient has actually been given the report (FR-DIA-13). */
@@ -530,6 +815,9 @@ export interface FinanceReport {
   collections: {
     collectedPaise: number;
     refundedPaise: number;
+    /** Charges forgiven in this range. Not part of `netPaise` — no money moved. */
+    writtenOffPaise: number;
+    writeOffCount: number;
     netPaise: number;
     transactionCount: number;
     byMode: Array<{
@@ -621,11 +909,35 @@ export interface ClinicalDocument {
 export interface Department {
   id: string;
   name: string;
-  /**
-   * X-ray, pathology. Absent from the booking list entirely, so this is only
-   * ever set on departments read through `setupDepartments`.
-   */
-  isDiagnostic?: boolean;
+  displayOrder?: number;
+  isActive?: boolean;
+}
+
+/** A test priced inside the department that performs it. */
+export interface DepartmentTest {
+  id: string;
+  /** Generated, permanent, and what reports group by. Shown, never edited. */
+  code: string;
+  name: string;
+  pricePaise: number;
+  taxRateBasisPoints: number;
+  isActive: boolean;
+}
+
+/**
+ * A department as Settings → Departments sees it: the room, who works in it and
+ * what it does.
+ *
+ * The three arrive together because they are one screen's worth of a single
+ * question — "what is this room for" — and splitting them across endpoints is
+ * what let a department exist with no tests and no staff and nothing on any
+ * screen to say so.
+ */
+export interface ManagedDepartment extends Department {
+  staff: Array<{ id: string; fullName: string }>;
+  tests: DepartmentTest[];
+  /** Orders ever sent here — what retiring it would strand. */
+  orderCount: number;
 }
 
 /**
@@ -662,7 +974,6 @@ export interface Practitioner {
    * `consultationPrice` on the finance desk.
    */
   consultationFeePaise: number | null;
-  department: { id: string; name: string } | null;
 }
 
 export interface ClinicLocation {
@@ -679,6 +990,8 @@ export interface Slot {
   booked: number;
   available: number;
   overbooking: boolean;
+  /** The slot has finished. Shown, but not selectable. */
+  past: boolean;
 }
 
 export interface DayAvailability {
@@ -718,11 +1031,6 @@ export interface Appointment {
   checkedInAt: string | null;
   calledAt: string | null;
   completedAt: string | null;
-  /** What the patient said from their phone. Informational: it moves nobody. */
-  arrivalIntent: 'ON_THE_WAY' | 'RUNNING_LATE' | null;
-  arrivalIntentAt: string | null;
-  /** When the "time to leave" message went, if it has. */
-  leaveNowSentAt: string | null;
   patient: {
     id: string;
     uhid: string;
@@ -787,6 +1095,10 @@ export interface Vitals {
   spo2Percent: number | null;
   respiratoryRate: number | null;
   notes: string | null;
+  /** The reading this one replaces, when it is a correction rather than a set. */
+  correctsId: string | null;
+  /** Whether a later correction replaces this one. It is kept, not deleted. */
+  superseded: boolean;
   /** Derived by the server from height and weight — never stored, never sent up. */
   bmi: number | null;
 }
@@ -835,8 +1147,6 @@ export interface Encounter {
   prescriptionNote: string | null;
   followUpDate: string | null;
   followUpNote: string | null;
-  /** Ask how they are every N days until the review. Null is off. docs/10. */
-  checkInIntervalDays: number | null;
   patient: {
     id: string;
     uhid: string;
@@ -906,6 +1216,8 @@ export interface FormularyItem {
  */
 export interface InvoiceLine {
   id: string;
+  /** The catalogue entry this came from. Null for a free-text charge. */
+  serviceId: string | null;
   description: string;
   quantity: number;
   unitPricePaise: number;
@@ -918,6 +1230,30 @@ export interface InvoiceLine {
 
 /** Why a compensating entry exists — null on money-in. */
 export type PaymentCorrectionKind = 'PATIENT_REFUND' | 'RECORDED_IN_ERROR';
+
+/**
+ * What came back from settling several of a patient's bills at once.
+ *
+ * `allocated` is in the order the money was applied — oldest bill first — and
+ * carries one entry per bill that took some, each with the payment it created
+ * so its receipt can be printed. A bill that was already settled is absent
+ * rather than present with zero.
+ */
+export interface CollectedAcrossBills {
+  collectedPaise: number;
+  outstandingBeforePaise: number;
+  outstandingAfterPaise: number;
+  /** How many bills this money closed outright. */
+  billsSettled: number;
+  allocated: Array<{
+    invoiceId: string;
+    invoiceNumber: string;
+    amountPaise: number;
+    paymentId: string;
+    /** What this bill still owes after its share. */
+    balancePaise: number;
+  }>;
+}
 
 export interface PaymentRow {
   id: string;
@@ -936,6 +1272,24 @@ export interface PaymentRow {
   collectedBy: { id: string; fullName: string | null };
 }
 
+/**
+ * A charge forgiven, in whole or in part.
+ *
+ * Not a `PaymentRow`: no money moved and nothing reached the drawer. Kept
+ * apart on the server for the same reason — see the `invoice_write_off` table.
+ */
+export interface InvoiceWriteOff {
+  id: string;
+  amountPaise: number;
+  reason: string;
+  waivedByUserId: string;
+  waivedAt: string;
+  /** Set when it was undone. A voided waiver settles nothing. */
+  voidedAt: string | null;
+  voidedByUserId: string | null;
+  voidReason: string | null;
+}
+
 export interface Invoice {
   id: string;
   number: string;
@@ -946,6 +1300,8 @@ export interface Invoice {
   totalPaise: number;
   paidPaise: number;
   refundedPaise: number;
+  /** Forgiven and still standing. Voided waivers are not counted. */
+  writtenOffPaise: number;
   balancePaise: number;
   /** True when the visit may proceed to the queue. */
   settled: boolean;
@@ -954,6 +1310,8 @@ export interface Invoice {
   patient: { id: string; uhid: string; name: string; mobile: string };
   lines: InvoiceLine[];
   payments: PaymentRow[];
+  /** Every waiver on this bill, voided ones included — that is the history. */
+  writeOffs: InvoiceWriteOff[];
   appointment: {
     id: string;
     startAt: string;
@@ -982,7 +1340,24 @@ export interface Invoice {
     externalTestNote: string | null;
     practitioner: { fullName: string; prefix: string | null };
   } | null;
+  /**
+   * The queue already calls this visit an emergency.
+   *
+   * A prompt for the desk, never a charge in itself: the surcharge is added by
+   * somebody holding `invoice:write`, because the queue flag is set by whoever
+   * holds `queue:prioritise` and the two are deliberately different powers.
+   */
+  emergencyVisit: boolean;
 }
+
+/**
+ * The emergency surcharge, by code — mirrors `EMERGENCY_SURCHARGE_CODE` on the
+ * server.
+ *
+ * An ordinary price-list service, so a clinic that does not charge one never
+ * creates it and is never offered it.
+ */
+export const EMERGENCY_SURCHARGE_CODE = 'CONS-EMERG';
 
 /**
  * A discount the administrator has set up (FR-PRO-01).
@@ -1064,6 +1439,14 @@ export interface ReceiptPayload {
   };
   /** Null for a walk-in with no doctor. The sheet does not invent one. */
   doctor: { fullName: string; prefix: string | null } | null;
+  /**
+   * The queue token of the visit this bill belongs to.
+   *
+   * Null for a walk-in test, which never joins a queue and so has no number to
+   * be called by. Read live rather than frozen onto the receipt: a token is
+   * allocated with the visit and never renumbered.
+   */
+  token: number | null;
   lines: Array<{
     description: string;
     quantity: number;
@@ -1143,100 +1526,51 @@ export interface OutstandingInvoice {
   issuedAt: string;
   reason: string | null;
   patient: { id: string; name: string; uhid: string; mobile: string };
-}
-
-export type MessageStatus = 'SENT' | 'FAILED' | 'SKIPPED_NO_CONSENT';
-
-export interface PatientMessage {
-  id: string;
-  kind: 'TOKEN_ISSUED' | 'LEAVE_NOW' | 'CHECKIN_REQUEST' | 'REVIEW_REMINDER' | 'PRESCRIPTION';
-  channel: string;
-  status: MessageStatus;
-  /** As sent, with "[patient link]" where the link was. The link is never stored. */
-  body: string;
-  createdAt: string;
-  appointmentId: string | null;
-  encounterId: string | null;
-}
-
-export interface RecoveryCheckin {
-  id: string;
-  dueOn: string;
-  sent: boolean;
-  answeredAt: string | null;
-  painScore: number | null;
-  exercisesDone: boolean | null;
-  note: string | null;
-  flagReason: string | null;
-  flagOpen: boolean;
-}
-
-export interface Recovery {
-  sinceEncounterId: string;
-  since: string;
-  reviewDate: string | null;
-  intervalDays: number | null;
-  checkins: RecoveryCheckin[];
-  summary: {
-    answered: number;
-    missed: number;
-    firstPain: number | null;
-    lastPain: number | null;
-    exercisesDone: number;
-    exercisesAnswered: number;
-  };
-}
-
-export type FollowUpStatus = 'FLAGGED' | 'OVERDUE' | 'DUE' | 'BOOKED' | 'CAME_BACK';
-
-export interface FollowUpRow {
-  encounterId: string;
-  status: FollowUpStatus;
-  reviewDate: string | null;
-  daysOverdue: number | null;
-  visitDate: string;
-  patient: { id: string; name: string; uhid: string; mobile: string };
-  practitioner: { id: string; fullName: string };
-  cameBackAt: string | null;
-  valuePaise: number;
-  bookedFor: string | null;
-  checkins: {
-    intervalDays: number | null;
-    answered: number;
-    missed: number;
-    firstPain: number | null;
-    lastPain: number | null;
-    lastAnsweredAt: string | null;
-    exercisesDone: number;
-    exercisesAnswered: number;
-  };
-  flag: { checkinId: string; reason: string | null; at: string | null } | null;
-  lastRemindedAt: string | null;
-}
-
-export interface FollowUpBoard {
-  today: string;
-  weekStart: string;
-  weekEnd: string;
-  scopedToPractitionerId: string | null;
-  stats: {
-    dueThisWeek: number;
-    cameBack: number;
-    booked: number;
-    overdue: number;
-    flagged: number;
-    valueKeptPaise: number;
-    waitedFromHome: { opened: number; total: number };
-  };
-  trend: Array<{ weekStart: string; due: number; cameBack: number; rate: number | null }>;
-  rows: FollowUpRow[];
+  /** What is being charged for, as charged. Up to four lines. */
+  items: string[];
+  /** Every line on the bill, so a truncated `items` can say how many it hides. */
+  itemCount: number;
+  /** Null for a walk-in test, which belongs to no doctor. */
+  doctor: string | null;
 }
 
 export const api = {
-  departments: () => request<{ departments: Department[] }>('/departments'),
+  /**
+   * Every department, retired ones included — the settings screen's list.
+   *
+   * Each one carries its staff and its tests. Callers that only need a picker
+   * read `id` and `name` and ignore the rest; `ManagedDepartment` extends
+   * `Department`, so they need no change.
+   */
+  setupDepartments: async (): Promise<{
+    departments: ManagedDepartment[];
+    /** Priced tests attached to no department, which cannot be ordered. */
+    unassignedTests: DepartmentTest[];
+  }> => {
+    const { departments, unassignedTests } = await request<{
+      departments: Array<
+        Department & {
+          staff?: Array<{ id: string; fullName: string }>;
+          services?: DepartmentTest[];
+          _count?: { diagnosticOrders: number };
+        }
+      >;
+      unassignedTests?: DepartmentTest[];
+    }>('/setup/departments');
 
-  /** Setup's view — includes diagnostic departments, which booking hides. */
-  setupDepartments: () => request<{ departments: Department[] }>('/setup/departments'),
+    /* `services` on the wire, `tests` on the screen: the table is called one
+       thing and the clinic calls it the other. Renamed here, once, rather than
+       in every component that draws a row. */
+    return {
+      departments: departments.map((d) => ({
+        ...d,
+        staff: d.staff ?? [],
+        tests: d.services ?? [],
+        orderCount: d._count?.diagnosticOrders ?? 0,
+      })),
+      unassignedTests: unassignedTests ?? [],
+    };
+  },
 
   /** The clinic's patient ID format. Read-only — changing it is the platform's job. */
   patientIdFormat: () => request<PatientIdFormat>('/settings/patient-ids'),
@@ -1271,14 +1605,26 @@ export const api = {
       `/diagnostics/catalogue${departmentId ? `?departmentId=${departmentId}` : ''}`,
     ),
 
+  /**
+   * The department's work.
+   *
+   * `date` absent means EVERY day, not today — a test ordered yesterday
+   * evening is still waiting this morning, and a to-do list that hid it would
+   * lose the patient who came back for it.
+   */
   diagnosticWorklist: (
-    params: { departmentId?: string; status?: 'PENDING' | 'COMPLETED' | 'DECLINED' } = {},
+    params: {
+      departmentId?: string;
+      status?: 'PENDING' | 'COMPLETED' | 'DECLINED';
+      date?: string;
+    } = {},
   ) => {
     const query = new URLSearchParams();
     if (params.departmentId) query.set('departmentId', params.departmentId);
     if (params.status) query.set('status', params.status);
+    if (params.date) query.set('date', params.date);
     const suffix = query.toString();
-    return request<{ orders: DiagnosticOrder[] }>(
+    return request<{ orders: DiagnosticOrder[]; date: string | null }>(
       `/diagnostics/orders${suffix ? `?${suffix}` : ''}`,
     );
   },
@@ -1297,6 +1643,21 @@ export const api = {
     departmentId: string;
     serviceId?: string;
     description?: string;
+    /**
+     * This really is a second one, not a double-click.
+     *
+     * Send it only after the person ordering has been told the same test,
+     * worded the same way, is already on this visit — and has said yes.
+     */
+    confirmedRepeat?: boolean;
+    /**
+     * What to charge for this one, when it is not the list price.
+     *
+     * Omitted means the catalogue price. Send it only when somebody actually
+     * changed the amount — an order that accepted the default should not be
+     * recorded as one that was priced by hand.
+     */
+    pricePaise?: number;
     referralSource?: 'INTERNAL' | 'EXTERNAL_DOCTOR' | 'SELF';
     referrerName?: string;
     referrerClinic?: string;
@@ -1309,6 +1670,23 @@ export const api = {
 
   cancelDiagnosticOrder: (id: string) =>
     request<DiagnosticOrder>(`/diagnostics/orders/${id}/cancel`, { method: 'PATCH' }),
+
+  /**
+   * Correct a test already at a department — 2 Nov 2026.
+   *
+   * Before this nothing wrote `description` after creation, so a typo on a film
+   * could only be fixed by cancelling the order and raising another. Changing
+   * the test or the price replaces the invoice line; changing only the wording
+   * leaves the bill alone. Refused once the test has been paid for.
+   */
+  updateDiagnosticOrder: (
+    id: string,
+    input: { description?: string; serviceId?: string; pricePaise?: number },
+  ) =>
+    request<DiagnosticOrder>(`/diagnostics/orders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
 
   /**
    * Every completed test this patient has had, for the doctor seeing them now.
@@ -1364,10 +1742,18 @@ export const api = {
   attachResult: (orderId: string, file: File) =>
     upload<ClinicalDocument>(`/diagnostics/orders/${orderId}/documents`, file),
 
-  completeDiagnosticOrder: (id: string, resultNote: string) =>
+  /**
+   * Mark a test done.
+   *
+   * `noFileReason` is required by the server when nothing is attached — a note
+   * is the remark about a report, not the report, and a test reading COMPLETED
+   * with no image behind it was reported from the clinic on 30 Oct 2026. Sent
+   * only in that case; with a file attached there is no question to answer.
+   */
+  completeDiagnosticOrder: (id: string, resultNote: string, noFileReason?: string) =>
     request<DiagnosticOrder>(`/diagnostics/orders/${id}/complete`, {
       method: 'PATCH',
-      body: JSON.stringify({ resultNote }),
+      body: JSON.stringify({ resultNote, ...(noFileReason ? { noFileReason } : {}) }),
     }),
 
   /**
@@ -1381,6 +1767,19 @@ export const api = {
     const res = await api.documentUrlRaw(id);
     return res.url.startsWith('/') ? { ...res, url: `${API_BASE}${res.url}` } : res;
   },
+
+  /**
+   * Take a document back — wrong patient, wrong file.
+   *
+   * PATCH, not DELETE, because nothing is deleted: the row keeps who removed
+   * it, when and why, and the file stays in the bucket. It simply stops being
+   * shown anywhere. A reason is required.
+   */
+  removeDocument: (id: string, reason: string) =>
+    request<{ removed: boolean }>(`/documents/${id}/remove`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
 
   /** The server's answer, unresolved. */
   documentUrlRaw: (id: string) =>
@@ -1429,6 +1828,10 @@ export const api = {
     request<Appointment>(`/appointments/${id}/call`, { method: 'PATCH' }),
   completeVisit: (id: string) =>
     request<Appointment>(`/appointments/${id}/complete`, { method: 'PATCH' }),
+  /** They turned up after all. Back to booked, so check-in runs as normal. */
+  undoNoShow: (id: string) =>
+    request<Appointment>(`/appointments/${id}/undo-no-show`, { method: 'PATCH' }),
+
   markNoShow: (id: string) =>
     request<Appointment>(`/appointments/${id}/no-show`, { method: 'PATCH' }),
 
@@ -1466,10 +1869,31 @@ export const api = {
     ),
   revokeDisplay: (id: string) =>
     request<{ id: string; isActive: boolean }>(`/display-devices/${id}`, { method: 'DELETE' }),
-  rescheduleAppointment: (id: string, startAt: string, reason: string) =>
+  /**
+   * Turn a screen that was turned off back on, with a NEW key — returned once,
+   * exactly as pairing does.
+   *
+   * Not the old key: turning a screen off usually means it left the building or
+   * its key got into a screenshot, so reviving that credential would make "off"
+   * mean nothing. See `reissue` on the server.
+   */
+  reissueDisplayKey: (id: string) =>
+    request<{ id: string; name: string; isActive: boolean; accessKey: string }>(
+      `/display-devices/${id}/key`,
+      { method: 'POST' },
+    ),
+  /**
+   * Move a booking to another time, another doctor, or both.
+   *
+   * `practitionerId` omitted keeps the doctor it was booked with, which is
+   * what an ordinary change of time means.
+   */
+  rescheduleAppointment: (id: string, startAt: string, reason: string, practitionerId?: string) =>
     request<Appointment>(`/appointments/${id}/reschedule`, {
       method: 'PATCH',
-      body: JSON.stringify({ startAt, reason }),
+      /* Absent rather than null when the doctor is unchanged: the DTO treats
+         an absent field as "keep the one it has". */
+      body: JSON.stringify({ startAt, reason, ...(practitionerId ? { practitionerId } : {}) }),
     }),
 
   cancelAppointment: (id: string, reason: string) =>
@@ -1483,7 +1907,34 @@ export const api = {
   invoiceForAppointment: (appointmentId: string) =>
     request<Invoice>(`/appointments/${appointmentId}/invoice`),
 
+  /**
+   * EVERY bill a visit has produced, oldest first.
+   *
+   * A consultation and a test are two invoices — the test raises its own,
+   * because a consultation bill settled before the doctor will not take
+   * another line. The desk settles a PATIENT, so it has to see both.
+   */
+  invoicesForAppointment: (appointmentId: string) =>
+    request<{ invoices: Invoice[] }>(`/appointments/${appointmentId}/invoices`),
+
   invoice: (id: string) => request<Invoice>(`/invoices/${id}`),
+
+  /**
+   * The money was right; the mode was wrong.
+   *
+   * One call on purpose. It reverses the original as recorded-in-error and
+   * re-records the same amount under the right mode IN ONE TRANSACTION — a
+   * reversal that landed without its replacement would leave a settled bill
+   * looking unpaid, with the patient already gone home.
+   */
+  correctPaymentMode: (
+    invoiceId: string,
+    input: { paymentId: string; mode: string; reference?: string },
+  ) =>
+    request<Invoice>(`/invoices/${invoiceId}/payments/correct-mode`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   services: () => request<{ services: ChargeableService[] }>('/services'),
 
@@ -1498,6 +1949,22 @@ export const api = {
   collectPayment: (id: string, input: { mode: string; amountPaise: number; reference?: string }) =>
     request<Invoice>(`/invoices/${id}/payments`, { method: 'POST', body: JSON.stringify(input) }),
 
+  /**
+   * One handover of money against several of a patient's bills.
+   *
+   * The bills are named so the desk settles exactly what it had on screen, and
+   * the money fills them oldest first. One receipt per bill comes back — three
+   * bills, three slips. See `collectAcross` on the server.
+   */
+  collectAcrossBills: (
+    patientId: string,
+    input: { mode: string; amountPaise: number; reference?: string; invoiceIds: string[] },
+  ) =>
+    request<CollectedAcrossBills>(`/patients/${patientId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
   refundPayment: (
     id: string,
     input: {
@@ -1509,8 +1976,27 @@ export const api = {
     },
   ) => request<Invoice>(`/invoices/${id}/refunds`, { method: 'POST', body: JSON.stringify(input) }),
 
-  waiveInvoice: (id: string, reason: string) =>
-    request<Invoice>(`/invoices/${id}/waive`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  /**
+   * Forgive part or all of a charge.
+   *
+   * REPLACED `waiveInvoice` on 2 Nov 2026. That one wrote off the whole bill
+   * and the server refused it once anything had been paid — so making an
+   * already-settled visit free meant refunding first, which put the bill back
+   * to "owing". This takes an amount, and hands back whatever was collected in
+   * the same transaction.
+   */
+  writeOffInvoice: (id: string, input: { amountPaise: number; reason: string }) =>
+    request<Invoice & { writeOffId: string; refundedPaise: number }>(`/invoices/${id}/write-offs`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** Undo one that went on the wrong bill. Voided, never deleted. */
+  voidInvoiceWriteOff: (id: string, writeOffId: string, reason: string) =>
+    request<Invoice>(`/invoices/${id}/write-offs/${writeOffId}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 
   deferInvoice: (id: string, reason: string) =>
     request<Invoice>(`/invoices/${id}/defer`, { method: 'POST', body: JSON.stringify({ reason }) }),
@@ -1653,9 +2139,20 @@ export const api = {
       prescriptionNote?: string;
       followUpDate?: string;
       followUpNote?: string;
-      checkInIntervalDays?: number | null;
     },
   ) => request<Encounter>(`/encounters/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+
+  /**
+   * Replace a reading that was taken wrongly.
+   *
+   * A superseding row, not an edit: the original stays on the record and comes
+   * back marked `superseded`. Only while the note is unsigned.
+   */
+  correctVitals: (id: string, vitalsId: string, input: Record<string, number>) =>
+    request<Encounter>(`/encounters/${id}/vitals/${vitalsId}/correct`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 
   recordVitals: (
     id: string,
@@ -1708,40 +2205,6 @@ export const api = {
     }),
 
   signEncounter: (id: string) => request<Encounter>(`/encounters/${id}/sign`, { method: 'POST' }),
-
-  // --- the patient's journey (docs/10) --------------------------------------
-
-  /** The signed prescription to the patient's WhatsApp, with the check-in link. */
-  sendToPatient: (encounterId: string) =>
-    request<{ status: MessageStatus }>(`/encounters/${encounterId}/send-to-patient`, {
-      method: 'POST',
-    }),
-
-  /** Check-ins since the previous visit. Null on a first visit or with none. */
-  recovery: (encounterId: string) =>
-    request<{ recovery: Recovery | null }>(`/encounters/${encounterId}/recovery`),
-
-  followUps: (week?: string) => request<FollowUpBoard>(`/follow-ups${week ? `?week=${week}` : ''}`),
-  remindReview: (encounterId: string) =>
-    request<{ status: MessageStatus }>(`/follow-ups/${encounterId}/remind`, { method: 'POST' }),
-  remindAllOverdue: () =>
-    request<{ sent: number; skipped: number }>('/follow-ups/remind-overdue', { method: 'POST' }),
-  dispatchCheckins: () =>
-    request<{ sent: number }>('/follow-ups/dispatch-checkins', { method: 'POST' }),
-  clearFlag: (checkinId: string) =>
-    request<{ id: string; cleared: boolean }>(`/follow-ups/checkins/${checkinId}/clear-flag`, {
-      method: 'POST',
-    }),
-
-  setCommunicationsConsent: (patientId: string, granted: boolean) =>
-    request<{ patientId: string; communications: boolean }>(
-      `/patients/${patientId}/communications-consent`,
-      { method: 'PUT', body: JSON.stringify({ granted }) },
-    ),
-  patientMessages: (patientId: string) =>
-    request<{ messages: PatientMessage[]; communicationsConsent: boolean }>(
-      `/patients/${patientId}/messages`,
-    ),
 
   addAddendum: (id: string, text: string) =>
     request<Encounter>(`/encounters/${id}/addenda`, {
@@ -1840,6 +2303,26 @@ export const api = {
 
   deleteRole: (id: string) => request<{ id: string }>(`/roles/${id}`, { method: 'DELETE' }),
 
+  // --- the patient 360 ------------------------------------------------------
+
+  /** Everything that has happened to this patient, newest first, 20 at a time. */
+  patientTimeline: (id: string, cursor?: { at: string; id: string }) =>
+    request<{ events: TimelineEvent[]; nextCursor: { at: string; id: string } | null }>(
+      `/patients/${id}/timeline${
+        cursor ? `?cursorAt=${encodeURIComponent(cursor.at)}&cursorId=${cursor.id}` : ''
+      }`,
+    ),
+
+  /** Needs `invoice:read` — a doctor gets 403 and the tab is not drawn. */
+  patientBilling: (id: string) => request<PatientBilling>(`/patients/${id}/billing`),
+
+  patientTests: (id: string) => request<{ orders: PatientTest[] }>(`/patients/${id}/diagnostics`),
+
+  // --- the day board --------------------------------------------------------
+
+  /** Everybody in the clinic today, one row per patient. Scope decided server-side. */
+  dayBoard: (date?: string) => request<DayBoard>(`/day-board${date ? `?date=${date}` : ''}`),
+
   // --- staff accounts -------------------------------------------------------
 
   staff: () => request<{ users: StaffUser[]; seats: SeatUsage[] }>('/users'),
@@ -1856,7 +2339,14 @@ export const api = {
     request<{ approvers: Array<{ id: string; fullName: string }> }>('/users/approvers'),
 
   /** The temporary password comes back ONCE. */
-  createStaff: (input: { email: string; fullName: string; mobile?: string; roleKeys: string[] }) =>
+  createStaff: (input: {
+    email: string;
+    fullName: string;
+    mobile?: string;
+    roleKeys: string[];
+    /** Required when `roleKeys` includes diagnostics; the server enforces it. */
+    departmentId?: string;
+  }) =>
     request<{ id: string; email: string; fullName: string; temporaryPassword: string }>('/users', {
       method: 'POST',
       body: JSON.stringify(input),
@@ -1874,10 +2364,58 @@ export const api = {
    * `mobile: null` clears a stored number. The form sends '' for that and the
    * server maps it; see `UpdateUserDto`.
    */
-  updateStaff: (id: string, input: { fullName?: string; mobile?: string | null }) =>
+  /**
+   * Correct a staff record.
+   *
+   * `departmentId` is the room a diagnostics member of staff works in. Omitted
+   * leaves it alone; the server refuses a diagnostics login that would be left
+   * without one, and clears it for anybody whose diagnostics role is withdrawn.
+   */
+  updateStaff: (
+    id: string,
+    input: { fullName?: string; mobile?: string | null; departmentId?: string },
+  ) =>
     request<StaffUser>(`/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(input),
+    }),
+
+  /**
+   * Their tests are back — put them in the waiting list for the doctor.
+   *
+   * `seeNext` because they have already waited once: `returnFromTests` stamps
+   * a BACK_FROM_TESTS priority so they go in front of people who have not been
+   * seen at all, rather than to the back of the queue they already sat in.
+   */
+  bringBackFromTests: (appointmentId: string) =>
+    request<{ id: string; status: string }>(`/appointments/${appointmentId}/return`, {
+      method: 'PATCH',
+      body: JSON.stringify({ seeNext: true }),
+    }),
+
+  /**
+   * Say the visit is over.
+   *
+   * Distinct from the doctor finishing: this is the desk sending the patient
+   * home. Allowed with money still owed — the bill stays open and the finance
+   * desk keeps chasing it — but refused while a test is still out.
+   */
+  closeVisit: (appointmentId: string) =>
+    request<{ id: string; status: string }>(`/appointments/${appointmentId}/close`, {
+      method: 'PATCH',
+    }),
+
+  /**
+   * Undo a close.
+   *
+   * Both events stay in the audit log, so the history reads "closed, then
+   * reopened" rather than pretending the close never happened. Raising a test
+   * against a closed visit reopens it on its own — this is for the row that
+   * was simply the wrong one.
+   */
+  reopenVisit: (appointmentId: string) =>
+    request<{ id: string; status: string }>(`/appointments/${appointmentId}/reopen`, {
+      method: 'PATCH',
     }),
 
   setStaffActive: (id: string, isActive: boolean) =>
@@ -1893,10 +2431,41 @@ export const api = {
       '/setup/practitioners',
     ),
 
-  createDepartment: (name: string, isDiagnostic = false) =>
+  createDepartment: (name: string) =>
     request<Department>('/departments', {
       method: 'POST',
-      body: JSON.stringify({ name, isDiagnostic }),
+      body: JSON.stringify({ name }),
+    }),
+
+  /**
+   * Rename, reorder or retire a department.
+   *
+   * Every field optional: the settings screen sends only what changed, so a
+   * rename cannot accidentally reset the order and a reorder cannot rename.
+   */
+  updateDepartment: (
+    id: string,
+    input: { name?: string; displayOrder?: number; isActive?: boolean },
+  ) =>
+    request<Department>(`/departments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  /**
+   * Price a test inside a department.
+   *
+   * No code and no category: the server generates the one and knows the other.
+   * A price CHANGE goes through `upsertService` like any other price, keyed on
+   * the code this returns.
+   */
+  addDepartmentTest: (
+    departmentId: string,
+    input: { name: string; pricePaise: number; taxRateBasisPoints?: number },
+  ) =>
+    request<DepartmentTest>(`/departments/${departmentId}/tests`, {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
 
   createPractitioner: (input: {
@@ -2002,7 +2571,18 @@ export const api = {
       '/setup/services',
     ),
 
-  /** Switch a service off, or back on. There is no delete — FR-PRC-03. */
+  /**
+   * Delete a service outright. Refused with `SERVICE_IN_USE` once anything has
+   * been billed or ordered against it — switch those off instead.
+   */
+  deleteService: (id: string) =>
+    request<{ id: string; name: string }>(`/setup/services/${id}`, { method: 'DELETE' }),
+
+  /**
+   * Switch a service off, or back on. The usual way to retire one: it keeps
+   * every past bill and report explainable, which a delete cannot once the
+   * service has been used.
+   */
   setServiceActive: (id: string, isActive: boolean) =>
     request<PricedService>(`/setup/services/${id}/active`, {
       method: 'PATCH',

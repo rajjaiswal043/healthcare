@@ -67,9 +67,11 @@ beforeEach(async () => {
 interface Slot {
   time: string;
   startAt: string;
+  endAt: string;
   capacity: number;
   booked: number;
   available: number;
+  past: boolean;
 }
 
 async function availability(
@@ -106,7 +108,6 @@ async function book(
       patientId: fx.main.patientIds[options.patientIndex ?? 0],
       practitionerId: fx.main.practitionerId,
       locationId: fx.main.locationId,
-      departmentId: fx.main.departmentId,
       startAt,
       reasonForVisit: 'Fever for three days',
     },
@@ -509,6 +510,304 @@ describe('check-in and the queue', () => {
   });
 
   /**
+   * ONE PATIENT, TWO ROOMS, ONE HOUR.
+   *
+   * Reported from the clinic on 29 Oct 2026: the same person was booked with
+   * three doctors at the same time. Both duplicate checks were scoped to one
+   * DOCTOR — "is this patient already with Dr Rao today" — so a second
+   * consultant never saw the first. Three tokens, three consultation bills,
+   * and a Collect button reading "1 of 3".
+   *
+   * The rule is OVERLAP, not "same day": an orthopaedic consultant at 10:00
+   * and a physiotherapist at 11:30 is an ordinary morning.
+   */
+  describe('a patient already somewhere else', () => {
+    /**
+     * A second consultant, created once and taken away afterwards.
+     *
+     * Cleaned up because this clinic's doctor list is asserted exactly
+     * elsewhere in this file — leaving one behind turned a tenant-isolation
+     * test into a count that drifted with however many ran before it.
+     */
+    let other: string;
+
+    beforeAll(async () => {
+      const [row] = await ownerQuery<{ id: string }>(
+        fx.main.id,
+        `INSERT INTO practitioner
+           (tenant_id, full_name, prefix, registration_number, specialty,
+            overbook_per_session, updated_at)
+         VALUES ($1, 'Dr Second Opinion', NULL, 'TEST-0002', 'Physiotherapy', 0, now())
+         RETURNING id`,
+        [fx.main.id],
+      );
+      other = row!.id;
+
+      for (let day = 0; day <= 6; day++) {
+        await ownerQuery(
+          fx.main.id,
+          `INSERT INTO practitioner_schedule
+             (tenant_id, practitioner_id, location_id, day_of_week, start_time, end_time,
+              slot_minutes, capacity_per_slot, visit_types, valid_from, updated_at)
+           VALUES ($1, $2, $3, $4, '09:00', '12:00', 15, 1, '{}',
+                   current_date - interval '30 days', now())`,
+          [fx.main.id, other, fx.main.locationId, day],
+        );
+      }
+    });
+
+    afterAll(async () => {
+      await ownerQuery(fx.main.id, 'DELETE FROM appointment WHERE practitioner_id = $1', [other]);
+      await ownerQuery(fx.main.id, 'DELETE FROM practitioner_schedule WHERE practitioner_id = $1', [
+        other,
+      ]);
+      await ownerQuery(fx.main.id, 'DELETE FROM practitioner WHERE id = $1', [other]);
+    });
+
+    function bookWith(practitionerId: string, startAt: string, patientIndex = 0) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/v1/appointments',
+        headers: { cookie: frontDesk.cookie },
+        payload: {
+          patientId: fx.main.patientIds[patientIndex],
+          practitionerId,
+          locationId: fx.main.locationId,
+          startAt,
+          reasonForVisit: 'Joint pain',
+        },
+      });
+    }
+
+    function walkInWith(practitionerId: string, patientIndex = 0) {
+      return app.inject({
+        method: 'POST',
+        url: '/api/v1/appointments/walk-in',
+        headers: { cookie: frontDesk.cookie },
+        payload: {
+          patientId: fx.main.patientIds[patientIndex],
+          practitionerId,
+          locationId: fx.main.locationId,
+          reasonForVisit: 'Joint pain',
+        },
+      });
+    }
+
+    it('refuses a second doctor at the same time', async () => {
+      const day = await availability(frontDesk);
+      const at = day.slots[0]!.startAt;
+
+      expect((await bookWith(fx.main.practitionerId, at)).statusCode).toBe(201);
+
+      const clash = await bookWith(other, at);
+
+      expect(clash.statusCode).toBe(409);
+      expect(domainCode(clash)).toBe('PATIENT_DOUBLE_BOOKED');
+    });
+
+    it('allows a second doctor at a time that does not overlap', async () => {
+      // The case the rule must NOT break: a consultant, then physio later.
+      const day = await availability(frontDesk);
+
+      expect((await bookWith(fx.main.practitionerId, day.slots[0]!.startAt)).statusCode).toBe(201);
+      expect((await bookWith(other, day.slots[4]!.startAt)).statusCode).toBe(201);
+    });
+
+    it('treats back-to-back slots as not overlapping', async () => {
+      // 09:00-09:15 and 09:15-09:30 touch at the boundary. Half-open on both
+      // sides, so touching is not overlapping.
+      const day = await availability(frontDesk);
+
+      expect((await bookWith(fx.main.practitionerId, day.slots[0]!.startAt)).statusCode).toBe(201);
+      expect((await bookWith(other, day.slots[1]!.startAt)).statusCode).toBe(201);
+    });
+
+    /**
+     * THE BACK DOOR INTO A DOUBLE BOOKING.
+     *
+     * A no-show is not a live status, so while one stands the desk can quite
+     * correctly book the patient elsewhere at the same hour. Undoing it then
+     * revived the first appointment without looking, putting the patient in two
+     * rooms at once by a route the booking guard never sees.
+     *
+     * Found on 30 Oct 2026 while confirming no path was left that could still
+     * double-book, rather than reported — nobody had hit it yet.
+     */
+    it('refuses to undo a no-show when the patient was rebooked in that hour', async () => {
+      const day = await availability(frontDesk);
+      const at = day.slots[0]!.startAt;
+
+      const first = await bookWith(fx.main.practitionerId, at, 1);
+      expect(first.statusCode).toBe(201);
+
+      // Written off, which frees the hour.
+      const absent = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+      expect(absent.statusCode).toBe(200);
+
+      // So this is allowed, and must stay allowed.
+      expect((await bookWith(other, at, 1)).statusCode).toBe(201);
+
+      const undo = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/undo-no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      expect(undo.statusCode).toBe(409);
+      expect(domainCode(undo)).toBe('PATIENT_DOUBLE_BOOKED');
+    });
+
+    it('still undoes a no-show when nothing else was booked', async () => {
+      // The 28 Oct flow this must not break: written off at eleven, walks in at
+      // half past, and gets their own appointment back with its token and bill.
+      const first = await bookWith(
+        fx.main.practitionerId,
+        (await availability(frontDesk)).slots[0]!.startAt,
+      );
+      expect(first.statusCode).toBe(201);
+
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      const undo = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/appointments/${first.json().id}/undo-no-show`,
+        headers: { cookie: frontDesk.cookie },
+      });
+
+      expect(undo.statusCode).toBe(200);
+      expect(undo.json().status).toBe('BOOKED');
+      expect(undo.json().tokenNumber).toBe(first.json().tokenNumber);
+    });
+
+    it('refuses a walk-in for somebody already walked in elsewhere', async () => {
+      /*
+       * Both walk-ins, because they are the only bookings that land on NOW.
+       * `book` uses DAY, a week out, so a booking could never clash with a
+       * walk-in whatever the rule said.
+       */
+      expect((await walkInWith(fx.main.practitionerId, 2)).statusCode).toBe(201);
+
+      const clash = await walkInWith(other, 2);
+
+      expect(clash.statusCode).toBe(409);
+      expect(domainCode(clash)).toBe('PATIENT_DOUBLE_BOOKED');
+    });
+  });
+
+  /**
+   * Out at a department is not out of the clinic.
+   *
+   * Reported from the clinic on 28 Oct 2026: the same person showed as being
+   * served AND waiting. `LIVE_STATUSES` omitted `AWAITING_TESTS`, so the moment
+   * a doctor sent somebody for an X-ray the "already in this queue" guard
+   * stopped seeing them and the desk could add them a second time — two live
+   * appointments, two tokens and two consultation bills for one visit.
+   */
+  it('refuses a second booking while the patient is out for a test', async () => {
+    const appt = (await book(frontDesk)).json();
+    await checkIn(appt.id);
+    await transition(appt.id, 'call', doctor);
+
+    const sent = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${appt.id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray, left wrist' },
+    });
+    expect(sent.statusCode).toBe(200);
+    expect(sent.json().status).toBe('AWAITING_TESTS');
+
+    // Booking reports the day-window guard first; both guards read
+    // LIVE_STATUSES, and before the fix neither of them saw this patient.
+    const again = await book(frontDesk, { slotIndex: 1 });
+
+    expect(again.statusCode).toBe(409);
+    expect(domainCode(again)).toBe('ALREADY_BOOKED');
+  });
+
+  it('refuses a walk-in while the patient is out for a test', async () => {
+    /*
+     * Both walk-ins, so both land on TODAY. `book` uses `DAY`, a week out, and
+     * the walk-in guard is scoped to today's queue — a booking next week could
+     * never have collided with a walk-in now, whatever the statuses said.
+     */
+    const walkIn = (patientId: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/appointments/walk-in',
+        headers: { cookie: frontDesk.cookie },
+        payload: {
+          patientId,
+          practitionerId: fx.main.practitionerId,
+          locationId: fx.main.locationId,
+          reasonForVisit: 'Joint pain',
+        },
+      });
+
+    const patientId = fx.main.patientIds[1]!;
+
+    const first = await walkIn(patientId);
+    expect(first.statusCode).toBe(201);
+
+    // A walk-in arrives already in the waiting list, so there is no check-in.
+    const id = first.json<{ id: string }>().id;
+    await transition(id, 'call', doctor);
+
+    const sent = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/send-for-tests`,
+      headers: { cookie: doctor.cookie },
+      payload: { reason: 'X-ray, left wrist' },
+    });
+    expect(sent.json().status).toBe('AWAITING_TESTS');
+
+    const again = await walkIn(patientId);
+
+    expect(again.statusCode).toBe(409);
+    expect(domainCode(again)).toBe('ALREADY_IN_QUEUE');
+  });
+
+  /**
+   * "Seen today" is read backwards from every other list on the screen.
+   *
+   * Reported 27 Oct 2026: it inherited the serving order, so the first patient
+   * of the morning sat at the top all day and the one who had just walked out
+   * was at the bottom of a list of twenty. The waiting list, the diary and the
+   * away-for-tests list are all ascending on purpose; this one is not.
+   */
+  it('puts the most recently finished patient at the top of Seen today', async () => {
+    const first = (await book(frontDesk, { patientIndex: 0, slotIndex: 0 })).json();
+    const second = (await book(frontDesk, { patientIndex: 1, slotIndex: 1 })).json();
+
+    for (const appt of [first, second]) {
+      await checkIn(appt.id);
+      await transition(appt.id, 'call', doctor);
+      expect((await transition(appt.id, 'complete', doctor)).statusCode).toBe(200);
+    }
+
+    const queue = await app.inject({
+      method: 'GET',
+      url: `/api/v1/queue?practitionerId=${fx.main.practitionerId}&date=${DAY}`,
+      headers: { cookie: frontDesk.cookie },
+    });
+
+    const completed = queue.json().completed;
+
+    expect(completed).toHaveLength(2);
+    // The one finished last, not the one with the earlier slot or token.
+    expect(completed[0].id).toBe(second.id);
+    expect(completed[1].id).toBe(first.id);
+  });
+
+  /**
    * The X-ray round trip, which is the whole reason phase B exists.
    *
    * The point being asserted is that this is ONE visit throughout: same token,
@@ -792,14 +1091,71 @@ describe('rescheduling', () => {
 
   // --- one act, or nothing -------------------------------------------------
 
-  function reschedule(id: string, startAt: unknown) {
+  function reschedule(id: string, startAt: unknown, practitionerId?: string) {
     return app.inject({
       method: 'PATCH',
       url: `/api/v1/appointments/${id}/reschedule`,
       headers: { cookie: frontDesk.cookie },
-      payload: { startAt, reason: 'Patient asked to move' },
+      payload: {
+        startAt,
+        reason: 'Patient asked to move',
+        ...(practitionerId ? { practitionerId } : {}),
+      },
     });
   }
+
+  /**
+   * Booked with the wrong consultant.
+   *
+   * Reported 28 Oct 2026 as "admin should be able to change reception's
+   * mistakes". A move carried the doctor over and nothing anywhere could
+   * change it, so the only way out was cancel and rebook — a new token, a
+   * second consultation bill, and a cancellation on the patient's record for a
+   * mistake that was never theirs.
+   */
+  describe('moving a booking to another doctor', () => {
+    it('keeps the doctor when none is named', async () => {
+      const appt = (await book(frontDesk)).json();
+      const day = await availability(frontDesk);
+
+      const moved = await reschedule(appt.id, day.slots[6]?.startAt);
+
+      // 200: the route PATCHes an existing appointment rather than creating one.
+      expect(moved.statusCode).toBe(200);
+      expect(moved.json().practitioner.id).toBe(fx.main.practitionerId);
+    });
+
+    it('refuses a doctor who does not exist', async () => {
+      /*
+       * The decisive one. If the field were accepted and then ignored, this
+       * would succeed with the original doctor and nobody would notice until a
+       * patient turned up at the wrong room.
+       */
+      const appt = (await book(frontDesk)).json();
+      const day = await availability(frontDesk);
+
+      const moved = await reschedule(
+        appt.id,
+        day.slots[7]?.startAt,
+        '00000000-0000-4000-8000-000000000000',
+      );
+
+      expect(moved.statusCode).toBeGreaterThanOrEqual(400);
+      expect(moved.statusCode).toBeLessThan(500);
+    });
+
+    it('leaves the original untouched when the move is refused', async () => {
+      const appt = (await book(frontDesk)).json();
+      const before = await snapshot(appt.id);
+      const day = await availability(frontDesk);
+
+      await reschedule(appt.id, day.slots[8]?.startAt, '00000000-0000-4000-8000-000000000000');
+
+      // Cancel and book are one transaction: a refused move must not leave the
+      // patient with no appointment at all.
+      expect(await snapshot(appt.id)).toEqual(before);
+    });
+  });
 
   /** Everything a failed reschedule must leave exactly as it was. */
   async function snapshot(id: string) {
@@ -1231,11 +1587,11 @@ describe('whose queue you may read', () => {
     const [row] = await ownerQuery<{ id: string }>(
       fx.main.id,
       `INSERT INTO practitioner
-         (tenant_id, full_name, registration_number, specialty, department_id,
+         (tenant_id, full_name, registration_number, specialty,
           overbook_per_session, updated_at)
-       VALUES ($1, 'Dr Second Opinion', 'TEST-0002', 'Dermatology', $2, 0, now())
+       VALUES ($1, 'Dr Second Opinion', 'TEST-0002', 'Dermatology', 0, now())
        RETURNING id`,
-      [fx.main.id, fx.main.departmentId],
+      [fx.main.id],
     );
     return row!.id;
   }
@@ -1344,5 +1700,145 @@ describe('whose queue you may read', () => {
       headers: { cookie: frontDesk.cookie },
     });
     expect(asFrontDesk.json<{ practitionerId: string | null }>().practitionerId).toBeNull();
+  });
+});
+
+/**
+ * A slot that has already happened cannot be booked.
+ *
+ * The bug: at two in the afternoon the front desk could still book a patient
+ * into the nine o'clock slot. Availability was derived purely from the weekly
+ * template minus what was booked and blocked — correct about the doctor's hours
+ * and with no notion of "now" anywhere in it. Booking asks availability what is
+ * bookable rather than re-deriving the rules, so both layers agreed that a
+ * finished slot was free.
+ *
+ * **The line sits at the slot's END, not its start**, decided 28 Sep 2026. At
+ * 14:03 the 14:00–14:15 slot is still bookable: a patient three minutes late is
+ * ordinary, and a front desk told to pick a later slot would be fighting the
+ * software over nothing.
+ *
+ * These tests use a date a week in the PAST rather than an early hour today,
+ * because the fixture doctor sits 09:00–12:00 every day from thirty days ago —
+ * so every slot on that date has passed whatever time the suite runs. A test
+ * that booked "09:00 today" would pass all afternoon and fail at dawn.
+ */
+describe('a slot that has already passed', () => {
+  /** Same weekday as today, one week ago — inside the schedule's validity. */
+  const PAST_DAY = clinicDate(-7);
+
+  async function pastSlots(): Promise<Slot[]> {
+    const day = await availability(frontDesk, fx.main.practitionerId, PAST_DAY);
+    expect(day.slots.length).toBeGreaterThan(0);
+    return day.slots;
+  }
+
+  it('is still listed, so the day does not reflow under the front desk', async () => {
+    // Dropping them would renumber the morning as it went on, and would hide
+    // the doctor's own record of the day from the person reading it.
+    expect((await pastSlots()).length).toBe(12);
+  });
+
+  it('is marked past and offers nothing', async () => {
+    for (const slot of await pastSlots()) {
+      expect(slot.past).toBe(true);
+      expect(slot.available).toBe(0);
+    }
+  });
+
+  it('says the clinic has finished rather than that every slot is taken', async () => {
+    const day = await availability(frontDesk, fx.main.practitionerId, PAST_DAY);
+
+    // "Every slot is taken" sends the front desk hunting for a cancellation
+    // that was never the problem.
+    expect(day.unavailableReason).toBe('The doctor’s clinic has already finished.');
+  });
+
+  it('is refused at booking, and not as a full slot', async () => {
+    const [first] = await pastSlots();
+
+    const res = await book(frontDesk, { startAt: first!.startAt });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('SLOT_IN_THE_PAST');
+  });
+
+  it('is refused when rescheduling into it', async () => {
+    // Reschedule routes through the same booking path, so this is the test
+    // that proves the rule went where both callers pass through it.
+    const booked = await book(frontDesk, { slotIndex: 2 });
+    expect(booked.statusCode).toBe(201);
+    const id = booked.json<{ id: string }>().id;
+
+    const [first] = await pastSlots();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/appointments/${id}/reschedule`,
+      headers: { cookie: frontDesk.cookie },
+      payload: { startAt: first!.startAt, reason: 'Patient asked for the earlier slot' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.details?.code).toBe('SLOT_IN_THE_PAST');
+  });
+
+  it('leaves a future day entirely bookable', async () => {
+    const day = await availability(frontDesk);
+
+    expect(day.slots.every((s) => s.past === false)).toBe(true);
+    expect(day.unavailableReason).toBeNull();
+  });
+
+  /**
+   * The boundary, and the reason this test builds its own schedule.
+   *
+   * A doctor sitting all day means there is a slot straddling "now" whatever
+   * the hour — which is what makes "bookable until it ends" assertable at all.
+   * The fixture's 09:00–12:00 would only produce one during those three hours,
+   * and a test that only proves its point between nine and noon proves nothing
+   * at half past four.
+   */
+  it('ends at the slot end, so the one running now is still bookable', async () => {
+    const { practitionerId } = await createDoctor(app, fx.main, {
+      email: 'allday@main.test',
+      fullName: 'Dr All Day',
+      linked: true,
+    });
+
+    const today = clinicDate(0);
+    const dayOfWeek = new Date(`${today}T00:00:00Z`).getUTCDay();
+
+    // Replace the 09:00–12:00 the helper gives every doctor: two overlapping
+    // schedules would emit the same slot twice and the assertion below would
+    // be reading a duplicate rather than the rule.
+    await ownerQuery(fx.main.id, 'DELETE FROM practitioner_schedule WHERE practitioner_id = $1', [
+      practitionerId,
+    ]);
+    await ownerQuery(
+      fx.main.id,
+      `INSERT INTO practitioner_schedule
+         (tenant_id, practitioner_id, location_id, day_of_week, start_time, end_time,
+          slot_minutes, capacity_per_slot, visit_types, valid_from, updated_at)
+       VALUES ($1, $2, $3, $4, '00:00', '23:45', 15, 1, '{}',
+               current_date - interval '30 days', now())`,
+      [fx.main.id, practitionerId, fx.main.locationId, dayOfWeek],
+    );
+
+    const day = await availability(frontDesk, practitionerId!, today);
+    const now = Date.now();
+
+    // The invariant, checked against every slot in the day: `past` is exactly
+    // "this slot has finished", never "this slot has started".
+    for (const slot of day.slots) {
+      expect(slot.past).toBe(new Date(slot.endAt).getTime() <= now);
+    }
+
+    const running = day.slots.find(
+      (s) => new Date(s.startAt).getTime() <= now && now < new Date(s.endAt).getTime(),
+    );
+    expect(running).toBeDefined();
+    expect(running!.past).toBe(false);
+    expect(running!.available).toBeGreaterThan(0);
   });
 });

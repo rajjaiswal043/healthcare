@@ -132,6 +132,25 @@ export const platformApi = {
 
   reactivate: (id: string) => request<Clinic>(`/clinics/${id}/reactivate`, { method: 'PATCH' }),
 
+  /**
+   * The accounts at one clinic that can manage users.
+   *
+   * Administrators only, enforced in the database function behind this, so the
+   * list can never offer somebody the reset would then refuse. Deliberately not
+   * a way to see a clinic's staff.
+   */
+  clinicAdministrators: (id: string) =>
+    request<{ administrators: Array<{ id: string; email: string; fullName: string }> }>(
+      `/clinics/${id}/administrators`,
+    ),
+
+  /** A temporary password for a locked-out administrator. Shown once. */
+  resetClinicPassword: (clinicId: string, userId: string) =>
+    request<{ id: string; email: string; fullName: string; temporaryPassword: string }>(
+      `/clinics/${clinicId}/administrators/${userId}/reset-password`,
+      { method: 'POST' },
+    ),
+
   setSeatLimits: (id: string, seatLimits: Record<string, number>) =>
     request<unknown>(`/clinics/${id}/seat-limits`, {
       method: 'PATCH',

@@ -334,6 +334,20 @@ model Patient {
 
   bloodGroup BloodGroup @default(UNKNOWN) @map("blood_group")
 
+  /// Known allergies, free text, as the patient described them.
+  ///
+  /// Read with `allergiesReviewedAt`, never alone. Null here with a review date
+  /// set means "no known allergies"; null with no review date means nobody has
+  /// asked, and a doctor about to prescribe needs to know which it is. See the
+  /// 20261007090000_patient_allergies migration for why this is text and not a
+  /// coded allergen list.
+  allergies String? @db.VarChar(500)
+
+  /// When a human last confirmed the allergies — including confirming there are
+  /// none. Set on save even when the field is left empty, because "I asked and
+  /// there are none" is a finding, not an absence of data.
+  allergiesReviewedAt DateTime? @map("allergies_reviewed_at") @db.Timestamptz(6)
+
   emergencyContactName   String? @map("emergency_contact_name") @db.VarChar(200)
   emergencyContactMobile String? @map("emergency_contact_mobile") @db.VarChar(10)
 
@@ -355,9 +369,6 @@ model Patient {
   diagnosticOrders DiagnosticOrder[]
   corrections  PatientCorrection[]
   invoices     Invoice[]
-  links            PatientLink[]
-  messages         OutboundMessage[]
-  recoveryCheckins RecoveryCheckin[]
 
   @@unique([tenantId, uhid])
   @@index([tenantId, mobile])
@@ -499,11 +510,23 @@ model User {
   failedLoginCount Int       @default(0) @map("failed_login_count")
   lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(6)
 
+  /// Which room this member of staff works in.
+  ///
+  /// For the diagnostics role: the X-ray technician is not the pathology
+  /// technician, and their worklist should open on their own department. Null
+  /// for every other role — a receptionist belongs to no department, and the
+  /// rule that diagnostics staff need one is enforced in `UsersService`, where
+  /// the roles are known.
+  departmentId String? @map("department_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull, map: "app_user_department_fkey")
+
   roles    UserRole[]
   uploadedDocuments ClinicalDocument[]
+  removedDocuments  ClinicalDocument[] @relation("DocumentRemovedBy")
   patientCorrections PatientCorrection[]
   diagnosticOrdersRaised    DiagnosticOrder[] @relation("DiagnosticOrdersRaised")
   diagnosticOrdersCompleted DiagnosticOrder[] @relation("DiagnosticOrdersCompleted")
@@ -516,6 +539,9 @@ model User {
 
   @@unique([tenantId, email])
   @@index([tenantId, isActive])
+  /// Answers "who works in this department", which is what the department
+  /// screen asks for every row it draws.
+  @@index([tenantId, departmentId], map: "app_user_department_idx")
   @@map("app_user")
 }
 
@@ -652,18 +678,20 @@ model Department {
   tenantId String @map("tenant_id") @db.Uuid
 
   name String @db.VarChar(120)
-  /// X-ray, pathology. No appointment slots, absent from booking: nobody books
-  /// an appointment with radiology, a doctor sends them there mid-visit.
-  isDiagnostic Boolean @default(false) @map("is_diagnostic")
-  /// Sort order on the booking screen â€” clinics want their busiest first.
+  /// Sort order in the pickers — clinics want their busiest first.
   displayOrder Int     @default(0) @map("display_order")
   isActive     Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  practitioners Practitioner[]
-  appointments  Appointment[]
+  /// A department is a place that does TESTS. It no longer holds doctors or
+  /// appointments — `specialty` describes a doctor, and nobody books an
+  /// appointment with radiology. See the departments_do_tests_only migration.
+  ///
+  /// It does hold the STAFF who work in it, which is a different claim: a
+  /// technician works in a room, a doctor does not.
+  staff         User[]
   diagnosticOrders DiagnosticOrder[]
   services      Service[]
 
@@ -672,7 +700,7 @@ model Department {
   @@map("department")
 }
 
-/// A doctor. FHIR: Practitioner (+ PractitionerRole for the department link).
+/// A doctor. FHIR: Practitioner.
 ///
 /// registrationNumber is not optional in spirit: the Telemedicine Guidelines and
 /// the Drugs rules both require a doctor's registration number on prescriptions
@@ -693,9 +721,10 @@ model Practitioner {
   hprId              String? @map("hpr_id") @db.VarChar(64)
 
   qualification String? @db.VarChar(200)
+  /// What this doctor does — "Orthopaedics", "Physician". THE one answer:
+  /// there used to be a `departmentId` beside it saying the same thing in a
+  /// second place, and the screens that mattered already preferred this.
   specialty     String? @db.VarChar(120)
-
-  departmentId String? @map("department_id") @db.Uuid
 
   /// Set when the doctor also signs in â€” lets "my day list" resolve without a
   /// separate mapping table. Null for doctors who never use the software.
@@ -721,7 +750,6 @@ model Practitioner {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   schedules    PractitionerSchedule[]
   exceptions   ScheduleException[]
@@ -729,7 +757,6 @@ model Practitioner {
   encounters   Encounter[]
 
   @@index([tenantId, isActive])
-  @@index([tenantId, departmentId])
   @@map("practitioner")
 }
 
@@ -892,7 +919,6 @@ model Appointment {
   patientId      String  @map("patient_id") @db.Uuid
   practitionerId String  @map("practitioner_id") @db.Uuid
   locationId     String  @map("location_id") @db.Uuid
-  departmentId   String? @map("department_id") @db.Uuid
 
   startAt DateTime @map("start_at") @db.Timestamptz(6)
   endAt   DateTime @map("end_at") @db.Timestamptz(6)
@@ -948,6 +974,21 @@ model Appointment {
   calledAt    DateTime? @map("called_at") @db.Timestamptz(6)
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
 
+  /// When somebody said this visit was over, and who.
+  ///
+  /// NOT the same fact as FULFILLED, which says the DOCTOR has finished. A
+  /// patient can be fulfilled and still in the building: waiting on a film,
+  /// waiting to pay, waiting to be sent on their way. "Done" on the board used
+  /// to mean both, and the front desk needs the second one.
+  ///
+  /// Set by a press rather than derived — Narveer's call, 22 Oct 2026 — so
+  /// every closed visit carries a person and a time rather than an inference.
+  /// Null means still open, which is what the board's "Ready to close" queue
+  /// counts. Null closer on a non-null time means the 22 Oct migration closed
+  /// it: every visit from before that day was already over.
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(6)
+  closedByUserId String?   @map("closed_by_user_id") @db.Uuid
+
   // --- lifecycle ---------------------------------------------------------
   cancelledAt       DateTime? @map("cancelled_at") @db.Timestamptz(6)
   cancelReason      String?   @map("cancel_reason") @db.VarChar(300)
@@ -961,22 +1002,11 @@ model Appointment {
   /// is wiring rather than a migration against live appointment data.
   reminderSentAt DateTime? @map("reminder_sent_at") @db.Timestamptz(6)
 
-  // --- waiting from home (docs/10) ------------------------------------------
-  /// What the patient said from their own phone. Null means they have not said.
-  /// Shown to the front desk and counted on the waiting-room screen; it moves
-  /// nobody in the queue — position is still `readyAt`.
-  arrivalIntent   ArrivalIntent? @map("arrival_intent")
-  arrivalIntentAt DateTime?      @map("arrival_intent_at") @db.Timestamptz(6)
-  /// Set once the "time to leave" message has gone. Once per visit: a patient
-  /// told twice to leave stops believing either message.
-  leaveNowSentAt  DateTime?      @map("leave_now_sent_at") @db.Timestamptz(6)
-
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
   practitioner Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Restrict)
-  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   encounter    Encounter?
   /// Tests the patient needs that this centre does not perform (decision (b)).
   ///
@@ -1003,9 +1033,9 @@ model Appointment {
   @@index([tenantId, patientId, startAt])
   @@index([tenantId, practitionerId, queueDate, status])
   @@index([tenantId, practitionerId, queueDate, prioritySetAt, readyAt], map: "appointment_queue_order_idx")
+  /// "What is still open", which the board asks on every load.
+  @@index([tenantId, closedAt], map: "appointment_open_idx")
   diagnosticOrders DiagnosticOrder[]
-  links            PatientLink[]
-  messages         OutboundMessage[]
 
   @@map("appointment")
 }
@@ -1062,10 +1092,6 @@ model Encounter {
 
   followUpDate DateTime? @map("follow_up_date") @db.Date
   followUpNote String?   @map("follow_up_note") @db.VarChar(300)
-  /// How often to ask the patient how they are, until `followUpDate`. Null is
-  /// off. Scheduled into `recovery_checkin` at signing, so the rows exist only
-  /// for a note that is final. CHECK 1–30. See docs/10.
-  checkInIntervalDays Int? @map("check_in_interval_days")
 
   startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
 
@@ -1086,9 +1112,6 @@ model Encounter {
   diagnoses     Diagnosis[]
   prescriptions Prescription[]
   addenda       EncounterAddendum[]
-  links            PatientLink[]
-  messages         OutboundMessage[]
-  recoveryCheckins RecoveryCheckin[]
 
   @@index([tenantId, patientId, startedAt])
   @@index([tenantId, practitionerId, startedAt])
@@ -1131,9 +1154,19 @@ model VitalsObservation {
 
   notes String? @db.VarChar(300)
 
+  /// The reading this one replaces, when it is a correction rather than a new
+  /// observation. A correction carries the ORIGINAL'''s `recordedAt` — the
+  /// observation happened when it happened — and its own `createdAt`, which is
+  /// when somebody noticed. See the migration for why this is a row and not an
+  /// UPDATE.
+  correctsId String? @unique @map("corrects_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  corrects    VitalsObservation?  @relation("VitalsCorrection", fields: [correctsId], references: [id], onDelete: Cascade)
+  correctedBy VitalsObservation?  @relation("VitalsCorrection")
 
   @@index([tenantId, encounterId])
   @@index([tenantId, patientId, recordedAt])
@@ -1450,8 +1483,9 @@ model Invoice {
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
   visitAppointment Appointment? @relation("InvoiceVisit", fields: [visitAppointmentId], references: [id], onDelete: Restrict, map: "invoice_visit_appointment_fkey")
 
-  lines    InvoiceLine[]
-  payments Payment[]
+  lines     InvoiceLine[]
+  payments  Payment[]
+  writeOffs InvoiceWriteOff[]
   /// The one discount currently on this bill, or none.
   ///
   /// The invariant lives here rather than as a unique index on
@@ -1515,6 +1549,64 @@ enum PaymentMode {
   OTHER
 
   @@map("payment_mode")
+}
+
+/// A charge forgiven, in whole or in part. FHIR: Account.guarantor write-off.
+///
+/// DELIBERATELY NOT A `Payment` ROW. A payment is one TENDER against an
+/// invoice, and a waiver is not a tender — no money moves, nothing reaches the
+/// drawer, and nothing has to reconcile against a bank statement.
+///
+/// The reason it lives here rather than as a third `PaymentDirection` is
+/// concrete rather than philosophical. Three places in the finance report read
+/// `direction === 'IN' ? amount : -amount`, so a third direction would be
+/// counted as money handed BACK, and every waiver would quietly reduce reported
+/// collections. There are 21 sites reading `direction`; one missed is a
+/// misreported figure rather than an error anybody sees. A separate table
+/// cannot be swept into that arithmetic by accident, and the finance report
+/// gains the figure because somebody chose to add it.
+///
+/// Rows are never updated except to void one, and never deleted: how much was
+/// given away, by whom and why is exactly the history this table exists for.
+model InvoiceWriteOff {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  invoiceId String @map("invoice_id") @db.Uuid
+
+  /// Always positive. How much of the charge was forgiven.
+  amountPaise Int @map("amount_paise")
+
+  /// Why. Required, and the point of the table — "2-3 patients a day" is only
+  /// a number worth having if each one says what it was for.
+  reason String @db.VarChar(300)
+
+  waivedByUserId String   @map("waived_by_user_id") @db.Uuid
+  waivedAt       DateTime @default(now()) @map("waived_at") @db.Timestamptz(6)
+
+  /**
+   * Undone, because it was wrong.
+   *
+   * Voided rather than deleted, and voided rather than reversed by a second
+   * row: a waiver has no counterparty and no drawer to reconcile, so the
+   * compensating-row pattern the payments use buys nothing here and costs a
+   * sum that has to net two kinds of row. `totals` ignores voided rows.
+   *
+   * Without this, a write-off on the wrong bill could only be fixed by editing
+   * the database by hand — which is the shape of dead end this codebase keeps
+   * paying for.
+   */
+  voidedAt       DateTime? @map("voided_at") @db.Timestamptz(6)
+  voidedByUserId String?   @map("voided_by_user_id") @db.Uuid
+  voidReason     String?   @map("void_reason") @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  /// The live waivers on one bill, which is what `totals` sums.
+  @@index([tenantId, invoiceId], map: "invoice_write_off_invoice_idx")
+  @@map("invoice_write_off")
 }
 
 enum PaymentDirection {
@@ -1634,14 +1726,23 @@ model ClinicalDocument {
   uploadedByUserId String   @map("uploaded_by_user_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  /// Taken back — wrong patient, wrong file. All three together or none of
+  /// them, enforced by a CHECK. The row and the object both stay: see the
+  /// migration for why this is a removal and not a delete.
+  removedAt       DateTime? @map("removed_at") @db.Timestamptz(6)
+  removedByUserId String?   @map("removed_by_user_id") @db.Uuid
+  removalReason   String?   @map("removal_reason") @db.VarChar(300)
+
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, map: "clinical_document_tenant_fkey")
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, map: "clinical_document_patient_fkey")
   uploadedBy User  @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict, map: "clinical_document_uploader_fkey")
+  removedBy  User? @relation("DocumentRemovedBy", fields: [removedByUserId], references: [id], onDelete: Restrict, map: "clinical_document_remover_fkey")
   diagnosticOrder DiagnosticOrder? @relation(fields: [diagnosticOrderId], references: [id], onDelete: Restrict, map: "clinical_document_order_fkey")
 
   @@unique([objectKey], map: "clinical_document_object_key_key")
   @@index([tenantId, patientId, createdAt(sort: Desc)], map: "clinical_document_patient_idx")
   @@index([tenantId, diagnosticOrderId], map: "clinical_document_order_idx")
+  @@index([tenantId, patientId, createdAt(sort: Desc)], map: "clinical_document_live_idx")
   @@map("clinical_document")
 }
 
@@ -1749,6 +1850,10 @@ model DiagnosticOrder {
 
   /// Typed when the result is attached. One report per order.
   resultNote        String?   @map("result_note") @db.VarChar(2000)
+  /// Why a finished test has no report attached. Null means it has one — or
+  /// that it was finished before the rule existed. See the migration
+  /// `a_finished_test_has_a_report`.
+  noFileReason      String?   @map("no_file_reason") @db.VarChar(300)
   completedAt       DateTime? @map("completed_at") @db.Timestamptz(6)
   completedByUserId String?   @map("completed_by_user_id") @db.Uuid
 
@@ -2073,166 +2178,4 @@ model ReceiptPrint {
 
   @@index([tenantId, receiptId, printedAt], map: "receipt_print_receipt_idx")
   @@map("receipt_print")
-}
-
-// =============================================================================
-// PATIENT JOURNEY — waiting from home, recovery check-ins, follow-ups
-//
-// See docs/10-patient-journey-plan.md. One rule governs everything below:
-// nothing reaches a patient without COMMUNICATIONS consent, and every attempt
-// — sent, failed or skipped for want of consent — leaves a row.
-// =============================================================================
-
-enum ArrivalIntent {
-  ON_THE_WAY
-  RUNNING_LATE
-
-  @@map("arrival_intent")
-}
-
-enum PatientLinkPurpose {
-  /// Today's visit: live token, place in line, "on my way".
-  VISIT
-  /// After a signed visit: check-ins until the review.
-  RECOVERY
-
-  @@map("patient_link_purpose")
-}
-
-enum MessageKind {
-  TOKEN_ISSUED
-  LEAVE_NOW
-  CHECKIN_REQUEST
-  REVIEW_REMINDER
-  PRESCRIPTION
-
-  @@map("message_kind")
-}
-
-enum MessageStatus {
-  SENT
-  FAILED
-  /// Not sent: the patient has not given COMMUNICATIONS consent. Recorded so
-  /// "why did they hear nothing" has an answer that is not a guess.
-  SKIPPED_NO_CONSENT
-
-  @@map("message_status")
-}
-
-/// A link a patient opens without signing in. Transport, not a FHIR resource.
-///
-/// Built like a waiting-room screen key: `<tenantId>.<256 random bits>`, only
-/// the SHA-256 stored. The tenant in the key is what lets the API set tenant
-/// context before it reads this table, which is under FORCE RLS like the rest.
-///
-/// What it grants is narrow by construction and decided in one place,
-/// `PatientLinkService`: a first name, a token, a doctor, a wait. Never a UHID,
-/// a mobile number or a diagnosis.
-model PatientLink {
-  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  tenantId String @map("tenant_id") @db.Uuid
-
-  patientId String             @map("patient_id") @db.Uuid
-  purpose   PatientLinkPurpose
-
-  /// Set for VISIT, null for RECOVERY. CHECK patient_link_target.
-  appointmentId String? @map("appointment_id") @db.Uuid
-  /// Set for RECOVERY, null for VISIT.
-  encounterId   String? @map("encounter_id") @db.Uuid
-
-  keyHash String @unique @map("key_hash") @db.VarChar(64)
-
-  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
-  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(6)
-  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
-  encounter   Encounter?   @relation(fields: [encounterId], references: [id], onDelete: Restrict)
-
-  @@index([tenantId, patientId, createdAt])
-  @@map("patient_link")
-}
-
-/// Every message the clinic sent, tried to send, or chose not to send.
-///
-/// Append-only: SELECT and INSERT are granted, nothing else. The body is kept
-/// WITHOUT the patient link in it. The link's plaintext is a credential, and
-/// this table is read by the front desk.
-model OutboundMessage {
-  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  tenantId String @map("tenant_id") @db.Uuid
-
-  patientId     String  @map("patient_id") @db.Uuid
-  appointmentId String? @map("appointment_id") @db.Uuid
-  encounterId   String? @map("encounter_id") @db.Uuid
-
-  kind    MessageKind
-  /// "whatsapp" today. A string rather than an enum: which channels exist is
-  /// configuration, and SMS arrives with DLT registration.
-  channel String        @default("whatsapp") @db.VarChar(16)
-  status  MessageStatus
-
-  toMobile    String  @map("to_mobile") @db.VarChar(10)
-  body        String  @db.Text
-  providerRef String? @map("provider_ref") @db.VarChar(120)
-  error       String? @db.VarChar(300)
-
-  /// Null when the system sent it on its own: a token, a scheduled check-in.
-  createdByUserId String? @map("created_by_user_id") @db.Uuid
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
-  encounter   Encounter?   @relation(fields: [encounterId], references: [id], onDelete: Restrict)
-
-  @@index([tenantId, patientId, createdAt])
-  @@index([tenantId, encounterId, kind])
-  @@map("outbound_message")
-}
-
-/// One "how are you today?" between visits. FHIR: QuestionnaireResponse.
-///
-/// Rows are created when the note is SIGNED, one per interval up to the review
-/// date, so the schedule is a fact rather than a calculation that changes when
-/// somebody edits the interval. Answering fills the row; it is never deleted.
-model RecoveryCheckin {
-  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  tenantId String @map("tenant_id") @db.Uuid
-
-  encounterId String @map("encounter_id") @db.Uuid
-  patientId   String @map("patient_id") @db.Uuid
-
-  /// Clinic-local date it is due to go out.
-  dueOn  DateTime  @map("due_on") @db.Date
-  sentAt DateTime? @map("sent_at") @db.Timestamptz(6)
-
-  /// Set together with `painScore`. CHECK recovery_checkin_answer_complete.
-  answeredAt    DateTime? @map("answered_at") @db.Timestamptz(6)
-  /// 0 = no pain, 10 = worst. CHECK 0–10.
-  painScore     Int?      @map("pain_score") @db.SmallInt
-  exercisesDone Boolean?  @map("exercises_done")
-  /// In the patient's own words, shown to the doctor as written.
-  note          String?   @db.VarChar(300)
-
-  /// Rising or severe pain. Somebody at the clinic calls; the software advises
-  /// nothing. Cleared by a person, with their name on it.
-  flaggedAt           DateTime? @map("flagged_at") @db.Timestamptz(6)
-  flagReason          String?   @map("flag_reason") @db.VarChar(120)
-  flagClearedAt       DateTime? @map("flag_cleared_at") @db.Timestamptz(6)
-  flagClearedByUserId String?   @map("flag_cleared_by_user_id") @db.Uuid
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Restrict)
-  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
-
-  @@unique([tenantId, encounterId, dueOn])
-  @@index([tenantId, patientId, dueOn])
-  @@index([tenantId, dueOn, sentAt])
-  @@map("recovery_checkin")
 }

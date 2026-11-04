@@ -64,6 +64,36 @@ export class FinanceReportService {
         throw new BadRequestException('The end of the range is before its start.');
       }
 
+      /*
+       * NO DAY THAT HAS NOT HAPPENED YET.
+       *
+       * The screen has carried `max={today}` on both boxes since 28 Oct 2026,
+       * and that is all it is: `max` constrains the date PICKER. A date TYPED
+       * into the field still reaches React state and still comes down the wire
+       * — reported from the clinic on 30 Oct 2026 for this report and for the
+       * collections one, which shares this method.
+       *
+       * So the rule lives here, where it cannot be got round by a keyboard, a
+       * stale tab or a hand-written URL. Refused rather than clamped: silently
+       * reporting on a different range than the one somebody asked for is how a
+       * figure ends up quoted in a meeting.
+       *
+       * Compared against the CLINIC's today, not the server's — for the five
+       * and a half hours after midnight IST the server's UTC date is still
+       * yesterday, which would refuse a perfectly ordinary request for today.
+       * The same trap as `ageFrom`.
+       */
+      const today = clinicToday(tz);
+      if (from > today || to > today) {
+        throw new BadRequestException({
+          code: 'FUTURE_RANGE',
+          message:
+            'That range includes days that have not happened yet. ' +
+            'A report can only cover today or earlier.',
+          today,
+        });
+      }
+
       // Half-open, in clinic-local time: [from 00:00, to+1 day 00:00). The
       // clinic's day is what a clinic reports on, not the server's.
       const start = localToInstant(from, '00:00', tz);
@@ -121,6 +151,24 @@ export class FinanceReportService {
       select: { direction: true, mode: true, amountPaise: true },
     });
 
+    /**
+     * WHAT THE CLINIC GAVE AWAY, counted apart from what it took.
+     *
+     * Deliberately a second query against its own table rather than another
+     * branch in the loop below. A waiver never reached the drawer, so it must
+     * never appear under a mode — "₹500 cash" that was never in the till is
+     * exactly the kind of figure that makes a day-end count impossible to
+     * reconcile, and it is why this is not a third `PaymentDirection`.
+     *
+     * Voided waivers are excluded: forgiveness that was taken back gave
+     * nothing away.
+     */
+    const writeOffs = await tx.invoiceWriteOff.findMany({
+      where: { waivedAt: { gte: start, lt: end }, voidedAt: null },
+      select: { amountPaise: true },
+    });
+    const writtenOffPaise = writeOffs.reduce((n, w) => n + w.amountPaise, 0);
+
     const byMode = new Map<string, { collectedPaise: number; refundedPaise: number }>();
     let collectedPaise = 0;
     let refundedPaise = 0;
@@ -142,6 +190,17 @@ export class FinanceReportService {
     return {
       collectedPaise,
       refundedPaise,
+      /**
+       * Charges forgiven in this range. NOT part of `netPaise`.
+       *
+       * Net is what the clinic is up by, and a waiver moves no money either
+       * way — folding it in would understate takings by the amount of a
+       * kindness. It is its own figure because "how much did we give away"
+       * is its own question, and at two or three a day it is one worth being
+       * able to answer.
+       */
+      writtenOffPaise,
+      writeOffCount: writeOffs.length,
       netPaise: collectedPaise - refundedPaise,
       transactionCount: payments.length,
       byMode: [...byMode.entries()]

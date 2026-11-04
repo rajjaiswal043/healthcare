@@ -7,6 +7,7 @@ import {
   IsEmail,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
@@ -21,6 +22,7 @@ import {
 } from '../auth/decorators.js';
 import { PERMISSIONS } from '../auth/permissions.js';
 import { UsersService, type RequestMeta } from './users.service.js';
+import { IsPersonName } from '../../common/is-person-name.decorator.js';
 
 class CreateUserDto {
   @IsEmail()
@@ -30,6 +32,7 @@ class CreateUserDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName!: string;
 
   @IsOptional()
@@ -42,6 +45,16 @@ class CreateUserDto {
   @ArrayMaxSize(5)
   @IsString({ each: true })
   roleKeys!: string[];
+
+  /**
+   * Which room they work in. Required for the diagnostics role and ignored for
+   * every other — the rule is enforced in `UsersService`, where the roles being
+   * granted are known, rather than by a validator that can only see one field
+   * at a time.
+   */
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
 }
 
 class UpdateUserDto {
@@ -49,6 +62,7 @@ class UpdateUserDto {
   @IsString()
   @MinLength(2)
   @MaxLength(200)
+  @IsPersonName()
   fullName?: string;
 
   /**
@@ -78,6 +92,18 @@ class UpdateUserDto {
   @ArrayMaxSize(5)
   @IsString({ each: true })
   roleKeys?: string[];
+
+  /**
+   * Which room a diagnostics member of staff works in.
+   *
+   * Absent leaves whatever is stored alone, which is why it can be left out of
+   * a name correction. The service refuses a diagnostics login that would end
+   * up with no room, and clears the room for somebody whose diagnostics role is
+   * being withdrawn.
+   */
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
 }
 
 class SetActiveDto {
@@ -142,6 +168,7 @@ export class UsersController {
         fullName: dto.fullName,
         ...(dto.mobile ? { mobile: dto.mobile } : {}),
         roleKeys: dto.roleKeys,
+        ...(dto.departmentId ? { departmentId: dto.departmentId } : {}),
       },
       meta(req, user),
     );
@@ -163,6 +190,7 @@ export class UsersController {
         ...(dto.fullName === undefined ? {} : { fullName: dto.fullName }),
         ...(dto.mobile === undefined ? {} : { mobile: dto.mobile }),
         ...(dto.roleKeys === undefined ? {} : { roleKeys: dto.roleKeys }),
+        ...(dto.departmentId === undefined ? {} : { departmentId: dto.departmentId }),
       },
       meta(req, user),
     );
