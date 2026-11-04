@@ -610,6 +610,48 @@ describe('closing a visit', () => {
     expect(res.json().error.details?.code).toBe('NOT_STARTED');
   });
 
+  it('offers the way BACK on a row whose visit is already closed', async () => {
+    /*
+     * FROM PRODUCTION, 4 Nov 2026: "This visit has already been closed."
+     *
+     * Closing a patient at a department succeeds and leaves the pending test
+     * alone — and that test is what keeps the row at AT_DEPARTMENT, which
+     * outranks DONE. So the row stayed in the tab with a closed visit and
+     * offered Close a second time. The button worked once and lied afterwards.
+     *
+     * Asserted POSITIVELY, not just as the absence of a refusal. The invariant
+     * suite checks that nothing offered is refused, which a branch offering
+     * NOTHING would also satisfy — and a row with no way out is the other half
+     * of this same story, reported on 30 Oct. Both halves need saying.
+     */
+    const id = await visit('ARRIVED', 0);
+    await test('PENDING', 0, id);
+    expect((await close(id)).statusCode).toBe(200);
+
+    const board1 = await board();
+    const row = board1.rows[0]!;
+
+    /*
+     * GONE FROM THE LIVE TAB — Narveer's call, 4 Nov 2026.
+     *
+     * The row used to stay under "At a department", because a PENDING order
+     * contributes that bucket and it outranks DONE in `PLACEMENT`. So a
+     * patient who had gone home sat among the ten people supposedly at a
+     * department, and pressing Close again answered "already closed" — which
+     * is what made the button look broken.
+     *
+     * The test is not cancelled and has not vanished; it stays on the
+     * department's own worklist. Only the PATIENT moves, and they have left.
+     */
+    expect(row.bucket).toBe('DONE');
+    expect(board1.counts.at_department).toBe(0);
+    expect(board1.counts.done).toBe(1);
+
+    const kinds = row.nextSteps.map((s) => s.kind);
+    expect(kinds).toContain('REOPEN_VISIT');
+    expect(kinds).not.toContain('CLOSE_VISIT');
+  });
+
   it('closes a checked-in patient who is at a department', async () => {
     /*
      * FROM PRODUCTION, 4 NOV 2026. The whole "At a department" tab was
@@ -2224,6 +2266,40 @@ describe('a step the board offers is a step the server takes', () => {
       build: async () => {
         const id = await sentOut();
         await test('COMPLETED', 0, id);
+      },
+    },
+    /*
+     * THE COMBINATION THAT GOT THROUGH on 4 Nov 2026.
+     *
+     * Closing a patient at a department succeeds and leaves the pending test
+     * alone — and that test is what keeps the row at AT_DEPARTMENT, which
+     * outranks DONE. So the row stays in the tab with its visit already closed,
+     * and the branch offered Close a second time: "This visit has already been
+     * closed."
+     *
+     * The first version of this suite listed "DONE, really closed" with no test
+     * attached and "AT_DEPARTMENT" with an open visit. Both passed. The bug
+     * lived in the pairing, which nobody had enumerated — which is the
+     * weakness of a hand-written scenario list and the reason these two exist.
+     */
+    {
+      name: 'closed visit that still has a pending test',
+      build: async () => {
+        const id = await visit('ARRIVED', 0);
+        await test('PENDING', 0, id);
+        await ownerQuery(fx.main.id, `UPDATE appointment SET closed_at = now() WHERE id = $1`, [
+          id,
+        ]);
+      },
+    },
+    {
+      name: 'closed visit whose test has come back',
+      build: async () => {
+        const id = await sentOut();
+        await test('COMPLETED', 0, id);
+        await ownerQuery(fx.main.id, `UPDATE appointment SET closed_at = now() WHERE id = $1`, [
+          id,
+        ]);
       },
     },
     {

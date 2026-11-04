@@ -17,6 +17,21 @@ import {
   instantToLocalTime,
   localToInstant,
 } from './clinic-time.js';
+/*
+ * ONE DEFINITION OF WHAT A VISIT MAY DO NEXT, shared with the day board's
+ * `stepsFor`. These guards used to live inline here, and the board decided the
+ * same questions from the bucket — so the two could disagree, and three times
+ * in six days they did. See the note at the top of that module.
+ */
+import {
+  mayBringBack,
+  mayCheckIn,
+  mayClose,
+  mayFinish,
+  mayMarkNoShow,
+  mayReopen,
+  type Refusal,
+} from './visit-transitions.js';
 
 export interface RequestMeta {
   correlationId?: string;
@@ -472,12 +487,8 @@ export class AppointmentsService {
       const appt = await tx.appointment.findUnique({ where: { id } });
       if (!appt) throw new NotFoundException('Appointment not found');
 
-      if (appt.status !== 'BOOKED') {
-        throw new ConflictException({
-          code: 'NOT_CHECKABLE',
-          message: `This appointment is ${appt.status.toLowerCase().replace('_', ' ')}, so it cannot be checked in.`,
-        });
-      }
+      const cannotCheckIn = mayCheckIn({ status: appt.status, closed: appt.closedAt !== null });
+      if (cannotCheckIn) throw new ConflictException(cannotCheckIn);
 
       /**
        * The pay-first gate (FR-BIL-04).
@@ -646,54 +657,14 @@ export class AppointmentsService {
         });
       }
 
-      /**
-       * WHICH STAGES MAY BE CLOSED — Narveer's call, 2 Nov 2026.
-       *
-       * Closing used to require FULFILLED, and that was the whole of the
-       * "cannot end the patient's journey" report. A visit abandoned halfway
-       * had no way out at all: the doctor never pressed OPD done, so the
-       * status stayed IN_PROGRESS or AWAITING_TESTS forever and every button
-       * on the row was refused.
-       *
-       * So: any stage where a visit actually started may be closed. What is
-       * refused is the three where there is nothing to close — a booking
-       * nobody kept, one already written off, and one already cancelled.
-       *
-       * ARRIVED JOINED THE LIST ON 4 NOV 2026, from production.
-       *
-       * The "At a department" tab was unclearable: every row there offered
-       * Close visit and every press answered "A visit that is arrived cannot be
-       * closed." The bucket comes from the TEST — `bucketForOrder('PENDING')`
-       * returns AT_DEPARTMENT and never looks at the appointment — and in this
-       * clinic the front desk books and takes payment for a test at
-       * registration, so the order is PENDING from the start while the visit
-       * stays ARRIVED. Nobody ever runs the send-out step that would make it
-       * AWAITING_TESTS.
-       *
-       * Those patients attended and paid. Closing is the honest verb for them,
-       * and "did not come" plainly is not.
-       *
-       * THE SERVER IS PERMISSIVE AND THE BOARD SETS POLICY — Narveer's call.
-       * A waiting room row still offers "Did not come" rather than Close visit;
-       * that choice lives in `stepsFor`, not here. Encoding it in both places
-       * is what produced the bug: the board drew a button from the bucket while
-       * this list answered from the status, and the two disagreed.
-       *
-       * THE STATUS IS NOT TOUCHED by closing. `closed_at` says the patient
-       * left; the status says how far the visit got. That is the 22 Oct split,
-       * and collapsing the two here would record that a doctor finished a
-       * consultation they actually abandoned.
+      /*
+       * The rule lives in `visit-transitions`, asked by this endpoint and by
+       * the day board's `stepsFor`. Two copies of it is what drew a Close
+       * button the server then refused, three times in six days — see the note
+       * at the top of that module.
        */
-      const CLOSEABLE = ['ARRIVED', 'IN_PROGRESS', 'AWAITING_TESTS', 'FULFILLED'];
-      if (!CLOSEABLE.includes(appt.status)) {
-        throw new ConflictException({
-          code: 'NOT_STARTED',
-          message:
-            appt.status === 'BOOKED'
-              ? 'This patient never checked in, so there is no visit to close.'
-              : `A visit that is ${appt.status.toLowerCase().replace('_', ' ')} cannot be closed.`,
-        });
-      }
+      const refusal = mayClose({ status: appt.status, closed: appt.closedAt !== null });
+      if (refusal) throw new ConflictException(refusal);
 
       /**
        * A PENDING TEST NO LONGER BLOCKS THE CLOSE.
@@ -754,12 +725,11 @@ export class AppointmentsService {
       const appt = await tx.appointment.findUnique({ where: { id } });
       if (!appt) throw new NotFoundException('Appointment not found');
 
-      if (!appt.closedAt) {
-        throw new ConflictException({
-          code: 'NOT_CLOSED',
-          message: 'This visit is already open.',
-        });
-      }
+      const cannotReopen = mayReopen({
+        status: appt.status,
+        closed: appt.closedAt !== null,
+      });
+      if (cannotReopen) throw new ConflictException(cannotReopen);
 
       const updated = await tx.appointment.update({
         where: { id },
@@ -791,12 +761,11 @@ export class AppointmentsService {
       const appt = await tx.appointment.findUnique({ where: { id } });
       if (!appt) throw new NotFoundException('Appointment not found');
 
-      if (appt.status !== 'AWAITING_TESTS') {
-        throw new ConflictException({
-          code: 'NOT_AWAY',
-          message: 'This patient was not sent for tests, so there is nothing to bring back.',
-        });
-      }
+      const cannotBringBack = mayBringBack({
+        status: appt.status,
+        closed: appt.closedAt !== null,
+      });
+      if (cannotBringBack) throw new ConflictException(cannotBringBack);
 
       const now = new Date();
 
@@ -947,6 +916,9 @@ export class AppointmentsService {
       'FULFILLED',
       { completedAt: new Date() },
       meta,
+      undefined,
+      // The board asks this same function before drawing OPD done.
+      mayFinish,
     );
   }
 
@@ -1024,6 +996,9 @@ export class AppointmentsService {
       'NO_SHOW',
       { noShowAt: new Date() },
       meta,
+      undefined,
+      // The board asks this same function before drawing "Did not come".
+      mayMarkNoShow,
     );
   }
 
@@ -1372,6 +1347,12 @@ export class AppointmentsService {
       tx: TenantClient,
       appt: { id: string; patientId: string; startAt: Date; endAt: Date },
     ) => Promise<void>,
+    /**
+     * The shared rule from `visit-transitions`, for a transition the DAY BOARD
+     * also offers. Given one, it decides instead of `from` — one definition,
+     * asked by the endpoint and by `stepsFor`.
+     */
+    rule?: (visit: { status: string; closed: boolean }) => Refusal | null,
   ): Promise<AppointmentView> {
     return this.prisma.forTenant(tenantId, async (tx) => {
       const tz = await this.timezone(tx, tenantId);
@@ -1389,14 +1370,27 @@ export class AppointmentsService {
       const appt = await tx.appointment.findUnique({ where: { id } });
       if (!appt) throw new NotFoundException('Appointment not found');
 
-      const allowedFrom = typeof from === 'string' ? [from] : from;
-      if (!allowedFrom.includes(appt.status)) {
-        throw new ConflictException({
-          code: 'INVALID_TRANSITION',
-          message: `Expected the appointment to be ${allowedFrom
-            .map((s) => s.toLowerCase())
-            .join(' or ')}, but it is ${appt.status.toLowerCase()}.`,
-        });
+      /*
+       * A SHARED RULE WINS OVER THE `from` LIST.
+       *
+       * Where one is given, it is the same function the day board asks before
+       * drawing the button — so the two cannot drift. `from` stays for the
+       * transitions the board never offers, which have only one caller and no
+       * second opinion to disagree with.
+       */
+      if (rule) {
+        const refusal = rule({ status: appt.status, closed: appt.closedAt !== null });
+        if (refusal) throw new ConflictException(refusal);
+      } else {
+        const allowedFrom = typeof from === 'string' ? [from] : from;
+        if (!allowedFrom.includes(appt.status)) {
+          throw new ConflictException({
+            code: 'INVALID_TRANSITION',
+            message: `Expected the appointment to be ${allowedFrom
+              .map((s) => s.toLowerCase())
+              .join(' or ')}, but it is ${appt.status.toLowerCase()}.`,
+          });
+        }
       }
 
       if (guard) await guard(tx, appt);

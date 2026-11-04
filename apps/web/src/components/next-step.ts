@@ -34,8 +34,10 @@ export const SENDABLE = new Set<DayBucket>([
   /* The doctor has finished and the patient is still standing there. This is
      the case the original note was written for, and the one the split broke. */
   'READY_TO_CLOSE',
-  /* Kept from before the split. A closed visit can still take a late order;
-     the row simply reopens at "At a department" until the test is done. */
+  /* Kept from before the split: a closed visit can still take a late order.
+     Since 4 Nov 2026 the row STAYS in Done while that test runs — a patient
+     who has gone home does not reappear in the tab the desk works from, and
+     the test lives on the department's own worklist instead. */
   'DONE',
 ]);
 

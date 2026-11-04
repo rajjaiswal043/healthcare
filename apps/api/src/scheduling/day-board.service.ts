@@ -8,6 +8,17 @@ import {
   type DiagnosticBillingInput,
 } from '../billing/billing.service.js';
 import { clinicToday, instantToLocalTime, localToInstant } from './clinic-time.js';
+/*
+ * The SERVER'S OWN rules about what a visit may do next, so this board cannot
+ * offer a step its endpoint would refuse. See `visit-transitions`.
+ */
+import {
+  mayBringBack,
+  mayClose,
+  mayFinish,
+  mayMarkNoShow,
+  mayReopen,
+} from './visit-transitions.js';
 import { ageFrom } from '../common/age.js';
 
 /**
@@ -1173,7 +1184,27 @@ export class DayBoardService {
           r.buckets.add('BACK_FROM_TESTS');
         }
 
-        const bucket = PLACEMENT.find((b) => r.buckets.has(b)) ?? 'DONE';
+        /**
+         * A CLOSED VISIT IS DONE, whatever its tests are still doing.
+         * Narveer's call, 4 Nov 2026.
+         *
+         * `bucketForAppointment` already answers DONE for a closed visit, but
+         * the ROW merges that with the buckets its ORDERS produce, and a
+         * PENDING order contributes AT_DEPARTMENT — which outranks DONE in
+         * `PLACEMENT`. So closing a patient who still had a film outstanding
+         * left them sitting in the tab the desk works from, counted among the
+         * ten people supposedly at a department, after they had gone home.
+         *
+         * That is also what made the button appear broken: the row did not
+         * move, so it was pressed again, and the second press answered "this
+         * visit has already been closed."
+         *
+         * The outstanding test is NOT cancelled and does not disappear — it
+         * stays on the department's own worklist, which is where that work
+         * belongs. What changes is only where the PATIENT is shown, and they
+         * have gone.
+         */
+        const bucket = r.visitClosed ? 'DONE' : (PLACEMENT.find((b) => r.buckets.has(b)) ?? 'DONE');
         const paid = paymentMethods.get(r.patient.id);
 
         return {
@@ -1344,6 +1375,60 @@ export class DayBoardService {
  * COLLECT for them. That is correct rather than convenient: they could not have
  * collected it anyway.
  */
+/**
+ * THE ENDING THIS ROW CAN ACTUALLY TAKE — closing, or the way back from one.
+ *
+ * ASKS THE SERVER'S OWN RULES, since 4 Nov 2026. `mayClose` and `mayReopen`
+ * are the same functions the endpoints throw on, so a step can no longer be
+ * offered where it would be refused — that is true by construction now, rather
+ * than because somebody remembered to check.
+ *
+ * Three branches used to push CLOSE_VISIT outright, and a row whose visit was
+ * ALREADY closed still reached two of them. Reported from production on 4 Nov
+ * 2026: "This visit has already been closed."
+ *
+ * The sequence is the part that made it baffling. Closing a patient at a
+ * department SUCCEEDS, and deliberately leaves the pending test alone — that
+ * was the call on 2 Nov, because withdrawing a test is a separate decision. But
+ * the pending order is exactly what places the row at AT_DEPARTMENT, which
+ * outranks DONE, so the row does not leave the tab. It then offered Close a
+ * second time, and the server refused it. The button worked once and lied
+ * afterwards.
+ *
+ * One helper rather than a guard repeated per branch: the bug was three copies
+ * of the same decision, two of which forgot a fact the third remembered.
+ */
+/** The two facts `visit-transitions` reads, taken off a board row. */
+function visitOf(row: { visitStatus: string | null; visitClosed: boolean }) {
+  return { status: row.visitStatus ?? '', closed: row.visitClosed };
+}
+
+/** Push a step, or nothing when the rules say there is none. */
+function pushIf(steps: NextStep[], step: NextStep | null): void {
+  if (step) steps.push(step);
+}
+
+function endOfVisitStep(row: {
+  appointmentId: string;
+  visitStatus: string | null;
+  visitClosed: boolean;
+}): NextStep | null {
+  const visit = visitOf(row);
+
+  if (mayClose(visit) === null) {
+    return { kind: 'CLOSE_VISIT', appointmentId: row.appointmentId };
+  }
+  if (mayReopen(visit) === null) {
+    return { kind: 'REOPEN_VISIT', appointmentId: row.appointmentId };
+  }
+
+  /*
+   * Neither, which is a real answer rather than an oversight — a booking
+   * nobody kept has no visit to end. The caller pushes nothing.
+   */
+  return null;
+}
+
 function stepsFor(row: {
   bucket: DayBucket;
   appointmentId: string | null;
@@ -1408,7 +1493,10 @@ function stepsFor(row: {
        * have not been seen at all rather than to the end of the queue they
        * already waited in once.
        */
-      steps.push({ kind: 'BRING_BACK', appointmentId: row.appointmentId });
+      /* Asks the endpoint's own rule, like every other step here. */
+      if (mayBringBack(visitOf(row)) === null) {
+        steps.push({ kind: 'BRING_BACK', appointmentId: row.appointmentId });
+      }
       /**
        * AND A WAY TO END IT, for the patient who took their film home.
        *
@@ -1416,8 +1504,19 @@ function stepsFor(row: {
        * But a patient whose X-ray is back and who has left is a real and
        * common ending, and until 2 Nov 2026 it had no button: the row insisted
        * on calling in somebody who was no longer in the building.
+       *
+       * Reopen rather than Close where the visit is already closed — a
+       * completed test keeps the row here after somebody has sent the patient
+       * home. See `endOfVisitStep`.
        */
-      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
+      pushIf(
+        steps,
+        endOfVisitStep({
+          appointmentId: row.appointmentId,
+          visitStatus: row.visitStatus,
+          visitClosed: row.visitClosed,
+        }),
+      );
     } else if (row.bucket === 'AT_DEPARTMENT') {
       /**
        * THE STAGE PATIENTS WALK OUT OF — and it had no exit at all.
@@ -1431,8 +1530,19 @@ function stepsFor(row: {
        * asked for is a clinical record, and the way out of the test is drawn
        * beside this one, so the desk can withdraw it explicitly if that is
        * what happened.
+       *
+       * And because the test is left pending, it keeps the row HERE after the
+       * close — so this has to offer the way back rather than the same button
+       * again. See `endOfVisitStep`.
        */
-      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
+      pushIf(
+        steps,
+        endOfVisitStep({
+          appointmentId: row.appointmentId,
+          visitStatus: row.visitStatus,
+          visitClosed: row.visitClosed,
+        }),
+      );
     } else if (row.bucket === 'DONE') {
       /**
        * The way back, for the row somebody pressed by mistake.
@@ -1497,9 +1607,22 @@ function stepsFor(row: {
        * off instead, which is what actually happened.
        */
       if (row.visitStatus === 'ARRIVED') {
-        steps.push({ kind: 'MARK_NO_SHOW', appointmentId: row.appointmentId });
+        if (mayMarkNoShow(visitOf(row)) === null) {
+          steps.push({ kind: 'MARK_NO_SHOW', appointmentId: row.appointmentId });
+        }
       } else {
-        steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
+        /* Through the helper for consistency. A closed visit buckets DONE, so
+           this cannot be reached with one — but every other branch deciding
+           this question got it wrong at least once, and none of them looked
+           reachable either. */
+        pushIf(
+          steps,
+          endOfVisitStep({
+            appointmentId: row.appointmentId,
+            visitStatus: row.visitStatus,
+            visitClosed: row.visitClosed,
+          }),
+        );
       }
     } else if (row.bucket === 'READY_TO_CLOSE') {
       /**
@@ -1510,8 +1633,18 @@ function stepsFor(row: {
        * patient away. Closing with a balance is still allowed; it is a
        * decision somebody makes in front of the patient, not one this board
        * should refuse on their behalf.
+       *
+       * Through `endOfVisitStep` like the others, so no branch is left deciding
+       * this on its own — that divergence is what produced the 4 Nov bug.
        */
-      steps.push({ kind: 'CLOSE_VISIT', appointmentId: row.appointmentId });
+      pushIf(
+        steps,
+        endOfVisitStep({
+          appointmentId: row.appointmentId,
+          visitStatus: row.visitStatus,
+          visitClosed: row.visitClosed,
+        }),
+      );
     } else if (row.bucket === 'WAITING') {
       steps.push({ kind: 'START', appointmentId: row.appointmentId });
       /**
@@ -1526,7 +1659,9 @@ function stepsFor(row: {
        * misplaced click from being written off. `NEVER_PRIMARY` keeps it in
        * the quiet slot beside Start.
        */
-      steps.push({ kind: 'MARK_NO_SHOW', appointmentId: row.appointmentId });
+      if (mayMarkNoShow(visitOf(row)) === null) {
+        steps.push({ kind: 'MARK_NO_SHOW', appointmentId: row.appointmentId });
+      }
     } else if (row.bucket === 'WITH_DOCTOR') {
       steps.push({ kind: 'RESUME', appointmentId: row.appointmentId });
       /**
@@ -1540,7 +1675,9 @@ function stepsFor(row: {
        * The server only moves IN_PROGRESS to FULFILLED, which is exactly this
        * bucket, so the step is never offered where it would be refused.
        */
-      steps.push({ kind: 'FINISH', appointmentId: row.appointmentId });
+      if (mayFinish(visitOf(row)) === null) {
+        steps.push({ kind: 'FINISH', appointmentId: row.appointmentId });
+      }
     }
   }
 
