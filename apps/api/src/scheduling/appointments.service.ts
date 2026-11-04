@@ -659,12 +659,32 @@ export class AppointmentsService {
        * refused is the three where there is nothing to close — a booking
        * nobody kept, one already written off, and one already cancelled.
        *
+       * ARRIVED JOINED THE LIST ON 4 NOV 2026, from production.
+       *
+       * The "At a department" tab was unclearable: every row there offered
+       * Close visit and every press answered "A visit that is arrived cannot be
+       * closed." The bucket comes from the TEST — `bucketForOrder('PENDING')`
+       * returns AT_DEPARTMENT and never looks at the appointment — and in this
+       * clinic the front desk books and takes payment for a test at
+       * registration, so the order is PENDING from the start while the visit
+       * stays ARRIVED. Nobody ever runs the send-out step that would make it
+       * AWAITING_TESTS.
+       *
+       * Those patients attended and paid. Closing is the honest verb for them,
+       * and "did not come" plainly is not.
+       *
+       * THE SERVER IS PERMISSIVE AND THE BOARD SETS POLICY — Narveer's call.
+       * A waiting room row still offers "Did not come" rather than Close visit;
+       * that choice lives in `stepsFor`, not here. Encoding it in both places
+       * is what produced the bug: the board drew a button from the bucket while
+       * this list answered from the status, and the two disagreed.
+       *
        * THE STATUS IS NOT TOUCHED by closing. `closed_at` says the patient
        * left; the status says how far the visit got. That is the 22 Oct split,
        * and collapsing the two here would record that a doctor finished a
        * consultation they actually abandoned.
        */
-      const CLOSEABLE = ['IN_PROGRESS', 'AWAITING_TESTS', 'FULFILLED'];
+      const CLOSEABLE = ['ARRIVED', 'IN_PROGRESS', 'AWAITING_TESTS', 'FULFILLED'];
       if (!CLOSEABLE.includes(appt.status)) {
         throw new ConflictException({
           code: 'NOT_STARTED',
