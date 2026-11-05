@@ -4,6 +4,7 @@ import io
 import json
 import os
 import subprocess
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -18,16 +19,45 @@ def git(*args):
 
 
 def request(path, binary=False):
-    req = urllib.request.Request(
-        'https://api.github.com' + path,
-        headers={
-            'Authorization': 'Bearer ' + token,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-        },
-    )
-    with urllib.request.urlopen(req, timeout=25) as response:
-        return response.read() if binary else json.load(response)
+    """Fetch GitHub API JSON or an artifact ZIP without leaking the API token.
+
+    Artifact downloads return a temporary HTTPS redirect. Do not forward
+    Authorization to the redirect destination.
+    """
+    api_url = 'https://api.github.com' + path
+    headers = {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+    }
+    if not binary:
+        with urllib.request.urlopen(
+            urllib.request.Request(api_url, headers=headers), timeout=25
+        ) as response:
+            return json.load(response)
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    opener = urllib.request.build_opener(NoRedirect)
+    try:
+        with opener.open(urllib.request.Request(api_url, headers=headers), timeout=25):
+            raise RuntimeError('Expected GitHub artifact download redirect.')
+    except urllib.error.HTTPError as exc:
+        if exc.code not in (302, 303, 307, 308):
+            raise
+        location = exc.headers.get('Location')
+        if not location:
+            raise RuntimeError('Artifact redirect has no Location header.')
+
+    parsed = urllib.parse.urlparse(location)
+    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+        raise RuntimeError('Invalid artifact download redirect.')
+
+    # A fresh request carries no GitHub API authorization header.
+    with urllib.request.urlopen(urllib.request.Request(location), timeout=25) as response:
+        return response.read()
 
 
 if len(approved) != 40 or any(c not in '0123456789abcdef' for c in approved):
