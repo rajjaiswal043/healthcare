@@ -1,0 +1,72 @@
+name: reverify-open-prs
+
+# After main advances, update open PR branches that are behind main.
+# GitHub emits pull_request.synchronize, which runs verify.yml against
+# the newly constructed simulated merge. No production deployment occurs.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: reverify-open-prs-main
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh behind PR branches and trigger fresh PR CI
+        uses: actions/github-script@v7
+        env:
+          PR_REFRESH_TOKEN_CONFIGURED: ${{ secrets.PR_REFRESH_TOKEN != '' }}
+        with:
+          # A user-owned token is required: updates made by GITHUB_TOKEN
+          # do not trigger the downstream pull_request workflow.
+          github-token: ${{ secrets.PR_REFRESH_TOKEN }}
+          script: |
+            if (process.env.PR_REFRESH_TOKEN_CONFIGURED !== "true") {
+              throw Error("Missing PR_REFRESH_TOKEN; automatic CI revalidation is disabled.");
+            }
+            const {owner, repo} = context.repo;
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', per_page: 100
+            });
+            let updated = 0, conflicts = 0, skipped = 0;
+            for (const pr of prs) {
+              // Never attempt to modify a contributor's fork.
+              if (pr.head.repo?.full_name !== `${owner}/${repo}`) {
+                core.notice(`PR #${pr.number}: fork; manual refresh required`);
+                skipped++;
+                continue;
+              }
+              try {
+                const comparison = await github.rest.repos.compareCommits({
+                  owner, repo, base: pr.head.sha, head: 'main'
+                });
+                if (!['ahead', 'diverged'].includes(comparison.data.status)) {
+                  core.info(`PR #${pr.number}: already contains current main`);
+                  skipped++;
+                  continue;
+                }
+                await github.rest.pulls.updateBranch({
+                  owner, repo, pull_number: pr.number,
+                  expected_head_sha: pr.head.sha
+                });
+                core.info(`PR #${pr.number}: update requested; fresh CI will run on synchronize`);
+                updated++;
+              } catch (error) {
+                // A conflicting or protected PR branch must never be treated
+                // as verified; report clearly and leave the branch unchanged.
+                core.warning(`PR #${pr.number}: could not update: ${error.message}`);
+                conflicts++;
+              }
+            }
+            core.summary.addHeading('Open PR refresh')
+              .addRaw(`Updated: ${updated}; skipped: ${skipped}; blocked: ${conflicts}`)
+              .write();
+            if (conflicts) core.setFailed(`${conflicts} PR(s) could not be refreshed`);

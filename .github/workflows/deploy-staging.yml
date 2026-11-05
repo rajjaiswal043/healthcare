@@ -1,0 +1,346 @@
+name: deploy-staging
+
+on:
+  workflow_call:
+    inputs:
+      verified_merge_sha:
+        description: Exact synthetic PR merge SHA that passed CI
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, X64, healthcloud-staging]
+    concurrency:
+      group: healthcloud-staging-deployment
+      cancel-in-progress: false
+
+    steps:
+      - name: Validate staging host and candidate
+        shell: bash
+        env:
+          VERIFIED_MERGE_SHA: ${{ inputs.verified_merge_sha }}
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = "ubuntu"
+          test "$(hostname)" = "healthcloud-staging"
+          [[ "$VERIFIED_MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "PASS: Staging host and candidate SHA validated."
+
+      - name: Checkout exact CI-verified candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.verified_merge_sha }}
+          fetch-depth: 2
+
+      - name: Verify candidate provenance
+        shell: bash
+        env:
+          VERIFIED_MERGE_SHA: ${{ inputs.verified_merge_sha }}
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          PARENT_COUNT="$(git rev-list --parents -n 1 HEAD | awk '{print NF-1}')"
+          test "$ACTUAL_SHA" = "$VERIFIED_MERGE_SHA"
+          test "$PARENT_COUNT" -eq 2
+          echo "PASS: Exact CI-verified synthetic merge candidate."
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: pnpm
+
+      - name: Load staging build configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_FILE=/var/www/healthcloud/.env
+          test -f "$ENV_FILE"
+          cp "$ENV_FILE" .env
+          chmod 600 .env
+          echo "PASS: Staging configuration available for build."
+
+      - name: Install candidate dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source .env
+          set +a
+          pnpm build
+          echo "PASS: Candidate build completed."
+
+      - name: Prepare immutable release
+        shell: bash
+        env:
+          VERIFIED_MERGE_SHA: ${{ inputs.verified_merge_sha }}
+        run: |
+          set -euo pipefail
+
+          ROOT=/opt/healthcloud-staging
+          RELEASE="$ROOT/releases-pm2/$VERIFIED_MERGE_SHA"
+          mkdir -p "$ROOT/releases-pm2"
+
+          if [ -e "$RELEASE" ]; then
+            echo "PASS: Existing release found for verified SHA."
+          else
+            mkdir -p "$RELEASE"
+
+            tar \
+              --exclude=.git \
+              --exclude=.env \
+              --exclude=node_modules \
+              -cf - . | tar -xf - -C "$RELEASE"
+
+            ln -s /var/www/healthcloud/.env "$RELEASE/.env"
+
+            (
+              cd "$RELEASE"
+              pnpm install --frozen-lockfile
+            )
+
+            echo "PASS: New immutable release prepared."
+          fi
+
+          echo "STAGING_RELEASE=$RELEASE" >> "$GITHUB_ENV"
+
+      - name: Validate release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RELEASE="${STAGING_RELEASE:?}"
+
+          test -f "$RELEASE/apps/api/dist/src/main.js" || {
+            echo "FAIL: Compiled API entry point is missing."
+            exit 1
+          }
+
+          test -d "$RELEASE/apps/web/.next-build" || {
+            echo "FAIL: Compiled Web application is missing."
+            exit 1
+          }
+
+          echo "PASS: Required release artifacts exist."
+
+      - name: Prepare staging database source
+        shell: bash
+        env:
+          STAGING_CONFIG: /opt/healthcloud-staging/shared/deployment.conf
+          BACKUP_BUCKET: healthcloud-prod-postgres-backup-vs
+          BACKUP_PREFIX: postgres/healthcloud/
+          AWS_PROFILE: healthcloud-staging
+          AWS_DEFAULT_REGION: ap-south-1
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = "ubuntu"
+          test "$(hostname)" = "healthcloud-staging"
+          source "$STAGING_CONFIG"
+
+          case "$STAGING_DB_SOURCE" in
+            production)
+              LATEST_KEY="$(aws s3api list-objects-v2 \
+                --bucket "$BACKUP_BUCKET" \
+                --prefix "$BACKUP_PREFIX" \
+                --query 'sort_by(Contents[?ends_with(Key, `.dump`)], &LastModified)[-1].Key' \
+                --output text)"
+
+              test -n "$LATEST_KEY"
+              test "$LATEST_KEY" != "None"
+
+              mkdir -p /opt/healthcloud-staging/backups
+              BACKUP_FILE="/opt/healthcloud-staging/backups/$(basename "$LATEST_KEY")"
+
+              aws s3 cp \
+                "s3://$BACKUP_BUCKET/$LATEST_KEY" \
+                "$BACKUP_FILE"
+
+              echo "STAGING_DB_SOURCE=production" >> "$GITHUB_ENV"
+              echo "STAGING_BACKUP_FILE=$BACKUP_FILE" >> "$GITHUB_ENV"
+              echo "STAGING_BACKUP_KEY=$LATEST_KEY" >> "$GITHUB_ENV"
+              ;;
+            seed)
+              echo "STAGING_DB_SOURCE=seed" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "STOP: Invalid database source."
+              exit 1
+              ;;
+          esac
+
+      - name: Restore staging database
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = "ubuntu"
+          test "$(hostname)" = "healthcloud-staging"
+
+          case "$STAGING_DB_SOURCE" in
+            production)
+              sudo -n /usr/local/sbin/healthcloud-staging-db restore "$STAGING_BACKUP_FILE"
+              ;;
+            seed)
+              sudo -n /usr/local/sbin/healthcloud-staging-db empty
+              ;;
+          esac
+
+      - name: Apply candidate Prisma migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source /var/www/healthcloud/.env
+          set +a
+          cd "$STAGING_RELEASE"
+          pnpm --filter @healthcloud/db migrate:deploy
+
+      - name: Seed staging database
+        if: env.STAGING_DB_SOURCE == 'seed'
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source /var/www/healthcloud/.env
+          set +a
+          cd "$STAGING_RELEASE"
+          pnpm --filter @healthcloud/db seed:demo
+
+      - name: Activate staging release and services
+        shell: bash
+        env:
+          VERIFIED_MERGE_SHA: ${{ inputs.verified_merge_sha }}
+        run: |
+          set -euo pipefail
+
+          test "$(whoami)" = "ubuntu"
+          test "$(hostname)" = "healthcloud-staging"
+
+          TARGET=/var/www/healthcloud
+          test -f "$TARGET/.env"
+          test -f "$STAGING_RELEASE/apps/api/dist/src/main.js"
+          test -d "$STAGING_RELEASE/apps/web/.next-build"
+
+          # Preserve current application files for manual rollback.
+          BACKUP="/opt/healthcloud-staging/backups/app-before-${VERIFIED_MERGE_SHA}"
+          if [ ! -d "$BACKUP" ]; then
+            mkdir -p "$BACKUP"
+            rsync -a --exclude=.env --exclude=node_modules \
+              --exclude=.git "$TARGET/" "$BACKUP/"
+          fi
+
+          # Keep the server-owned .env and existing dependencies.
+          rsync -a --delete --exclude=.env --exclude=node_modules \
+            --exclude=.git "$STAGING_RELEASE/" "$TARGET/"
+          (cd "$TARGET" && pnpm install --frozen-lockfile)
+
+          export NVM_DIR="$HOME/.nvm"
+          . "$NVM_DIR/nvm.sh"
+          nvm use 24.19.0 >/dev/null
+          set -a
+          source "$TARGET/.env"
+          set +a
+          pm2 restart healthcloud-api --update-env
+          pm2 restart healthcloud-web --update-env
+          pm2 save
+
+          echo "PASS: Staging PM2 applications restarted."
+
+      - name: Smoke test staging application
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --show-error --fail \
+              http://127.0.0.1:3001/api/v1/health/live \
+              -o /dev/null 2>/dev/null && \
+              curl --silent --show-error --fail \
+              http://127.0.0.1:3001/api/v1/health/ready \
+              2>/dev/null | node -e '
+                let data = "";
+                process.stdin.on("data", chunk => data += chunk);
+                process.stdin.on("end", () => {
+                  try {
+                    const result = JSON.parse(data);
+                    process.exit(
+                      result.status === "ok" &&
+                      result.checks?.database === "ok" ? 0 : 1
+                    );
+                  } catch {
+                    process.exit(1);
+                  }
+                });' && \
+              curl --silent --show-error --fail \
+                http://127.0.0.1:3000/ \
+                -o /dev/null 2>/dev/null; then
+
+              echo "PASS: API live, database ready, Web responding."
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "STOP: Staging smoke tests failed."
+          exit 1
+
+      - name: Record successful staging deployment
+        shell: bash
+        env:
+          VERIFIED_MERGE_SHA: ${{ inputs.verified_merge_sha }}
+        run: |
+          set -euo pipefail
+
+          ROOT=/opt/healthcloud-staging
+
+          cat > "$ROOT/shared/deployment-state.txt" <<EOF
+          candidate_sha=$VERIFIED_MERGE_SHA
+          database_source=$STAGING_DB_SOURCE
+          backup_key=${STAGING_BACKUP_KEY:-none}
+          deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          EOF
+
+          echo "PASS: HealthCloud STAGING deployment completed."
+          echo "Candidate SHA: $VERIFIED_MERGE_SHA"
+
+      - name: Deployment failure diagnostics
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "========== STAGING DEPLOYMENT DIAGNOSTICS =========="
+
+          echo
+          echo "=== SERVICE STATES ==="
+          export NVM_DIR="$HOME/.nvm"
+          . "$NVM_DIR/nvm.sh"
+          nvm use 24.19.0 >/dev/null
+          pm2 list || true
+
+          echo
+          echo "=== HTTP STATUS ==="
+
+          for endpoint in             http://127.0.0.1:3001/api/v1/health/live             http://127.0.0.1:3001/api/v1/health/ready             http://127.0.0.1:3000/; do
+
+            curl --silent --max-time 5               --output /dev/null               --write-out "HTTP %{http_code}\n"               "$endpoint" || true
+          done
+
+          echo
+          echo "=== RELEASE ARTIFACTS ==="
+
+          ROOT=/var/www/healthcloud
+
+          test -f "$ROOT/apps/api/dist/src/main.js"             && echo "PASS: API entry point"             || echo "FAIL: API entry point missing"
+
+          test -d "$ROOT/apps/web/.next-build"             && echo "PASS: Web build"             || echo "FAIL: Web build missing"
+
+          echo
+          echo "=== DIAGNOSTICS COMPLETE ==="

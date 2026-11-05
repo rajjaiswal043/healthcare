@@ -1,0 +1,98 @@
+name: approve-production
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full 40-character SHA of the current main commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: healthcloud-production-approval
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    runs-on: [self-hosted, Linux, X64, healthcloud-staging]
+    steps:
+      - name: Confirm STAGING runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = ubuntu
+          test "$(hostname)" = healthcloud-staging
+
+      - name: Record approval for the next maintenance window
+        uses: actions/github-script@v7
+        env:
+          APPROVED_SHA: ${{ inputs.commit_sha }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = process.env.APPROVED_SHA.trim().toLowerCase();
+            if (!/^[0-9a-f]{40}$/.test(sha)) {
+              core.setFailed('Provide a full 40-character commit SHA.');
+              return;
+            }
+            if (context.ref !== 'refs/heads/main') {
+              core.setFailed('Run this workflow from the main branch.');
+              return;
+            }
+            const { data: main } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            if (main.commit.sha !== sha) {
+              core.setFailed(`Only current main HEAD can be approved. Current: ${main.commit.sha}`);
+              return;
+            }
+            const prefix = '[HealthCloud PROD approval]';
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100
+            });
+            const pending = existing.filter(i => !i.pull_request && i.title.startsWith(prefix));
+            if (pending.length > 0) {
+              core.setFailed(`A production approval is already pending: #${pending[0].number}. Resolve it before approving another release.`);
+              return;
+            }
+            const now = new Date();
+            // 02:30 IST = 21:00 UTC on the preceding calendar day.
+            const target = new Date(now);
+            target.setUTCHours(21, 0, 0, 0);
+            if (target <= now) target.setUTCDate(target.getUTCDate() + 1);
+            const body = [
+              'HealthCloud production deployment approval record.',
+              '',
+              `- Commit SHA: \`${sha}\``,
+              `- Approved by: @${context.actor}`,
+              `- Approval time (UTC): ${now.toISOString()}`,
+              `- Scheduled activation (UTC): ${target.toISOString()}`,
+              `- Scheduled activation (IST): ${new Date(target.getTime() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 16)} IST`,
+              `- Approval workflow run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              '',
+              'Status: PENDING. This record does not itself deploy to production.',
+            ].join('\n');
+            const issue = await github.rest.issues.create({
+              owner, repo, title: `${prefix} ${sha.slice(0, 12)}`, body
+            });
+            core.info(`Recorded approval: ${issue.data.html_url}`);
+            // Immutable run artifact binds the approval to the workflow input,
+            // actor, maintenance window, and the issue created in this run.
+            const fs = require('fs');
+            const evidence = {
+              sha, actor: context.actor, run_id: context.runId,
+              issue_number: issue.data.number, scheduled: target.toISOString()
+            };
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/healthcloud-approval.json`, JSON.stringify(evidence));
+            core.info(`Target maintenance window: ${target.toISOString()}`);
+
+      - name: Publish immutable approval evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthcloud-prod-approval-${{ github.run_id }}
+          path: ${{ runner.temp }}/healthcloud-approval.json
+          retention-days: 30
+          if-no-files-found: error

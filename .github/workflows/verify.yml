@@ -1,0 +1,187 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: [self-hosted, Linux, X64, healthcloud-staging]
+    outputs:
+      verified_merge_sha: ${{ steps.provenance.outputs.verified_merge_sha }}
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['55432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # Validate the checked-out synthetic merge against current remote refs,
+      # not potentially stale base SHA metadata from the PR webhook event.
+      - name: Verify PR merge candidate identity
+        if: github.event_name == 'pull_request'
+        id: provenance
+        shell: bash
+        env:
+          EXPECTED_PR: ${{ github.event.pull_request.number }}
+          EXPECTED_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          EXPECTED_REF="refs/pull/${EXPECTED_PR}/merge"
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          PARENT1="$(git rev-parse HEAD^1)"
+          PARENT2="$(git rev-parse HEAD^2)"
+
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+          CURRENT_PR_HEAD="$(git ls-remote origin "refs/pull/${EXPECTED_PR}/head" | cut -f1)"
+
+          echo "PR number:        ${EXPECTED_PR}"
+          echo "PR merge ref:     ${GITHUB_REF}"
+          echo "Checked-out SHA:  ${ACTUAL_HEAD}"
+          echo "Current main:     ${CURRENT_MAIN}"
+          echo "Current PR head:  ${CURRENT_PR_HEAD}"
+          echo "Merge parent 1:   ${PARENT1}"
+          echo "Merge parent 2:   ${PARENT2}"
+
+          test "${GITHUB_EVENT_NAME}" = "pull_request"
+          test "${EXPECTED_BASE_REF}" = "main"
+          test "${GITHUB_REF}" = "${EXPECTED_REF}"
+          test "${ACTUAL_HEAD}" = "${GITHUB_SHA}"
+          test -n "${CURRENT_MAIN}"
+          test -n "${CURRENT_PR_HEAD}"
+          test "${PARENT1}" = "${CURRENT_MAIN}"
+          test "${PARENT2}" = "${CURRENT_PR_HEAD}"
+          test "${PARENT2}" = "${EXPECTED_HEAD_SHA}"
+
+          echo "PASS: CI is testing the current PR -> main merge candidate."
+          echo "VERIFIED_MERGE_SHA=${ACTUAL_HEAD}" >> "${GITHUB_ENV}"
+          echo "verified_merge_sha=${ACTUAL_HEAD}" >> "${GITHUB_OUTPUT}"
+          echo "VERIFIED_BASE_SHA=${PARENT1}" >> "${GITHUB_ENV}"
+          echo "VERIFIED_HEAD_SHA=${PARENT2}" >> "${GITHUB_ENV}"
+          echo "VERIFIED_TREE_SHA=$(git rev-parse HEAD^{tree})" >> "${GITHUB_ENV}"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Create .env
+        run: |
+          cp .env.example .env
+          sed -i 's/localhost:5432/localhost:55432/g' .env
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Bootstrap database roles
+        run: psql -f infra/local/bootstrap.sql
+        env:
+          PGHOST: localhost
+          PGPORT: '55432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+
+      - name: Apply CI database migrations
+        run: pnpm --filter @healthcloud/db migrate:deploy
+
+      - run: pnpm verify
+
+      # Production verification is based on the exact final main commit,
+      # independent of whether the PR was merged, squashed, or rebased.
+      - name: Record verified main commit identity
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test -n "${CURRENT_MAIN}"
+          test "${CURRENT_MAIN}" = "${GITHUB_SHA}"
+          mkdir -p "$RUNNER_TEMP/healthcloud-main-provenance"
+          python3 - <<'PYCODE'
+          import json, os, subprocess
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          data = {
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'event': 'push',
+              'branch': 'main',
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'verified_commit_sha': os.environ['GITHUB_SHA'],
+              'verified_tree_sha': tree,
+          }
+          with open(os.path.join(os.environ['RUNNER_TEMP'], 'healthcloud-main-provenance', 'provenance.json'), 'w') as f:
+              json.dump(data, f, sort_keys=True)
+          PYCODE
+
+      - name: Upload verified main commit identity
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthcloud-main-provenance-${{ github.run_id }}
+          path: ${{ runner.temp }}/healthcloud-main-provenance/provenance.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Record tested PR merge identity
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/healthcloud-provenance"
+          python3 - <<'PYCODE'
+          import json, os
+          keys = ('VERIFIED_MERGE_SHA','VERIFIED_BASE_SHA','VERIFIED_HEAD_SHA','VERIFIED_TREE_SHA')
+          data = {k.lower(): os.environ[k] for k in keys}
+          data.update(pr_number=int(os.environ['PR_NUMBER']), run_id=int(os.environ['GITHUB_RUN_ID']),
+                      repository=os.environ['GITHUB_REPOSITORY'], event='pull_request')
+          path = os.path.join(os.environ['RUNNER_TEMP'], 'healthcloud-provenance', 'provenance.json')
+          with open(path, 'w') as f: json.dump(data, f, sort_keys=True)
+          PYCODE
+
+      - name: Upload tested PR merge identity
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthcloud-pr-provenance-${{ github.run_id }}
+          path: ${{ runner.temp }}/healthcloud-provenance/provenance.json
+          retention-days: 30
+          if-no-files-found: error
+
+  deploy-staging:
+    if: github.event_name == 'pull_request'
+    needs: verify
+    uses: ./.github/workflows/deploy-staging.yml
+    with:
+      verified_merge_sha: ${{ needs.verify.outputs.verified_merge_sha }}
