@@ -195,11 +195,63 @@ jobs:
           node-version: '24.19.0'
           cache: pnpm
 
+      - name: Validate configured destination and application URLs
+        if: steps.approval.outputs.deploy == 'true'
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_HOSTNAME: ${{ vars.DEPLOY_HOSTNAME }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PYVALIDATE'
+          import os
+          from urllib.parse import urlsplit
+
+          def required(name):
+              value = os.environ.get(name, '').strip()
+              if not value:
+                  raise SystemExit(f'STOP: Missing GitHub Environment variable {name}')
+              return value
+
+          host = required('DEPLOY_HOST')
+          hostname = required('DEPLOY_HOSTNAME')
+          user = required('DEPLOY_USER')
+          if user != 'ubuntu' or not all(c.isalnum() or c in '.-' for c in host + hostname):
+              raise SystemExit('STOP: Invalid deployment destination configuration')
+
+          def parse(name):
+              value = required(name)
+              parsed = urlsplit(value)
+              if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+                      or parsed.username or parsed.password or parsed.query or parsed.fragment):
+                  raise SystemExit(f'STOP: Invalid URL in {name}')
+              return value.rstrip('/'), parsed
+
+          web, web_url = parse('WEB_BASE_URL')
+          api, api_url = parse('API_BASE_URL')
+          frontend, frontend_url = parse('NEXT_PUBLIC_API_BASE_URL')
+          if web_url.path not in ('', '/'):
+              raise SystemExit('STOP: WEB_BASE_URL must be an origin, without a path')
+          if api != frontend:
+              raise SystemExit('STOP: Frontend and backend API URLs disagree')
+          if (web_url.scheme, web_url.netloc) != (api_url.scheme, api_url.netloc):
+              raise SystemExit('STOP: API URL must use the configured web origin')
+          if api_url.path != '/api/v1':
+              raise SystemExit('STOP: Unexpected API path')
+          print('PASS: Deployment destination configured; frontend and API URLs consistent')
+          PYVALIDATE
+
       - name: Build production release on STAGING runner
         if: steps.approval.outputs.deploy == 'true'
         shell: bash
         env:
           NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: |
           set -euo pipefail
           test "$(hostname)" = healthcloud-staging
