@@ -3,8 +3,9 @@
 set -Eeuo pipefail
 umask 077
 [[ $(id -un) == ubuntu ]] || { echo 'STOP: expected ubuntu'; exit 1; }
-[[ $# == 3 ]] || { echo 'Usage: healthcloud-remote-deploy.sh SHA EXPECTED_HOSTNAME ARCHIVE_SHA256'; exit 1; }
+[[ $# == 6 ]] || { echo 'Usage: healthcloud-remote-deploy.sh SHA EXPECTED_HOSTNAME ARCHIVE_SHA256 WEB_BASE_URL API_BASE_URL NEXT_PUBLIC_API_BASE_URL'; exit 1; }
 SHA=$1 EXPECTED_HOSTNAME=$2 EXPECTED_DIGEST=$3
+EXPECTED_WEB_BASE_URL=$4 EXPECTED_API_BASE_URL=$5 EXPECTED_NEXT_PUBLIC_API_BASE_URL=$6
 [[ $SHA =~ ^[0-9a-f]{40}$ && $EXPECTED_HOSTNAME =~ ^[A-Za-z0-9.-]+$ && $EXPECTED_DIGEST =~ ^[0-9a-f]{64}$ ]] || exit 1
 [[ $(hostname) == "$EXPECTED_HOSTNAME" ]] || { echo 'STOP: destination hostname mismatch'; exit 1; }
 ROOT="$HOME/healthcloud-prod-deploy"; TARGET=/var/www/healthcloud
@@ -14,6 +15,17 @@ mkdir -p "$ROOT" "$ROOT/releases" "$ROOT/recovery"
 exec 9>"$ROOT/deployment.lock"; flock -n 9 || { echo 'STOP: concurrent deployment'; exit 1; }
 [[ ! -e "$ACTIVE" ]] || { echo 'STOP: unresolved recovery marker; no changes made'; exit 1; }
 [[ -f "$ARCHIVE" && -f "$TARGET/.env" ]] || { echo 'STOP: missing release or application .env'; exit 1; }
+# Verify destination runtime configuration before creating a recovery marker or stopping services.
+# Do not modify .env; do not expose credentials in logs.
+(
+  set -a
+  source "$TARGET/.env"
+  set +a
+  [[ "${WEB_BASE_URL:-}" == "$EXPECTED_WEB_BASE_URL" ]] || { echo 'STOP: Server WEB_BASE_URL differs from approved GitHub Environment'; exit 1; }
+  [[ "${API_BASE_URL:-}" == "$EXPECTED_API_BASE_URL" ]] || { echo 'STOP: Server API_BASE_URL differs from approved GitHub Environment'; exit 1; }
+  [[ "${NEXT_PUBLIC_API_BASE_URL:-}" == "$EXPECTED_NEXT_PUBLIC_API_BASE_URL" ]] || { echo 'STOP: Server NEXT_PUBLIC_API_BASE_URL differs from approved GitHub Environment'; exit 1; }
+)
+echo 'PASS: Server runtime URLs match approved GitHub Environment; .env unchanged' 
 [[ $(sha256sum "$ARCHIVE" | cut -d' ' -f1) == "$EXPECTED_DIGEST" ]] || { echo 'STOP: release digest mismatch'; exit 1; }
 command -v node >/dev/null && command -v pnpm >/dev/null && command -v pm2 >/dev/null || { echo 'STOP: Node/pnpm/PM2 missing'; exit 1; }
 [[ $(node -v) == v24.19.0 && $(pnpm -v) == 11.20.0 ]] || { echo 'STOP: unexpected runtime versions'; exit 1; }

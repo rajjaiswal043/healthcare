@@ -2,6 +2,15 @@ name: approve-production
 
 on:
   workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: 'Choose manual (valid 60 minutes) or scheduled (next 01:30 IST window)'
+        type: choice
+        required: true
+        default: scheduled
+        options:
+          - scheduled
+          - manual
 
 permissions:
   contents: read
@@ -23,9 +32,11 @@ jobs:
           test "$(whoami)" = ubuntu
           test "$(hostname)" = healthcloud-staging
 
-      - name: Record approval for the next maintenance window
+      - name: Record approval for the selected deployment mode
         id: record
         uses: actions/github-script@v7
+        env:
+          DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -84,7 +95,10 @@ jobs:
                 core.setFailed(`Malformed pending approval #${old.number}; manual review required.`);
                 return;
               }
-              if (Date.now() <= scheduled + 20 * 60000) {
+              const oldMode = old.body?.match(/^- Deployment mode: (scheduled|manual)$/m)?.[1];
+              if (!oldMode) { core.setFailed(`Malformed approval mode #${old.number}; manual review required.`); return; }
+              const expiresAfter = oldMode === 'manual' ? 60 : 150;
+              if (Date.now() <= scheduled + expiresAfter * 60000) {
                 core.setFailed(`Approval #${old.number} is still active; resolve it before approving another release.`);
                 return;
               }
@@ -101,15 +115,20 @@ jobs:
             }
 
             const now = new Date();
-            // 02:30 IST = 21:00 UTC on the preceding calendar day.
+            const mode = process.env.DEPLOYMENT_MODE;
+            if (!['scheduled','manual'].includes(mode)) throw Error('Invalid deployment mode');
+            // Scheduled approval targets 01:30 IST; manual approval is active immediately for 60 minutes.
             const target = new Date(now);
-            target.setUTCHours(21, 0, 0, 0);
-            if (target <= now) target.setUTCDate(target.getUTCDate() + 1);
+            if (mode === 'scheduled') {
+              target.setUTCHours(20, 0, 0, 0);
+              if (target <= now) target.setUTCDate(target.getUTCDate() + 1);
+            }
             const body = [
               'HealthCloud production deployment approval record.',
               '',
               `- Commit SHA: \`${sha}\``,
               `- Approved by: @${context.actor}`,
+              `- Deployment mode: ${mode}`,
               `- Approval time (UTC): ${now.toISOString()}`,
               `- Scheduled activation (UTC): ${target.toISOString()}`,
               `- Scheduled activation (IST): ${new Date(target.getTime() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 16)} IST`,
@@ -127,7 +146,7 @@ jobs:
             const fs = require('fs');
             const evidence = {
               sha, actor: context.actor, run_id: context.runId,
-              issue_number: issue.data.number, scheduled: target.toISOString()
+              issue_number: issue.data.number, scheduled: target.toISOString(), mode
             };
             fs.writeFileSync(`${process.env.RUNNER_TEMP}/healthcloud-approval.json`, JSON.stringify(evidence));
             core.info(`Target maintenance window: ${target.toISOString()}`);
