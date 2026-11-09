@@ -53,10 +53,26 @@ jobs:
 
   deploy:
     # Remains OFF until explicitly enabled after review and authorization.
-    if: github.event_name == 'schedule' && vars.PROD_DEPLOYMENT_ENABLED == 'true'
+    if: github.event_name == 'schedule'
+    environment: production
     runs-on: [self-hosted, Linux, X64, healthcloud-staging]
     timeout-minutes: 45
     steps:
+      - name: Require explicitly enabled configured deployment destination
+        shell: bash
+        env:
+          DEPLOYMENT_ENABLED: ${{ vars.DEPLOYMENT_ENABLED }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_HOSTNAME: ${{ vars.DEPLOY_HOSTNAME }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOYMENT_ENABLED" == 'true' ]] || { echo 'STOP: Deployment disabled'; exit 1; }
+          [[ "$DEPLOY_USER" == 'ubuntu' ]] || { echo 'STOP: Unexpected SSH user'; exit 1; }
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && -n "$DEPLOY_HOST" ]] || exit 1
+          [[ "$DEPLOY_HOSTNAME" =~ ^[a-zA-Z0-9.-]+$ && -n "$DEPLOY_HOSTNAME" ]] || exit 1
+          echo "Configured destination: $DEPLOY_HOST ($DEPLOY_HOSTNAME)"
+
       - name: Validate runner and maintenance window
         shell: bash
         run: |
@@ -183,7 +199,7 @@ jobs:
         if: steps.approval.outputs.deploy == 'true'
         shell: bash
         env:
-          NEXT_PUBLIC_API_BASE_URL: https://thedoctordesk.in/api/v1
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
         run: |
           set -euo pipefail
           test "$(hostname)" = healthcloud-staging
@@ -192,7 +208,7 @@ jobs:
           cp .env.example .env
           chmod 600 .env
           pnpm install --frozen-lockfile
-          export NEXT_PUBLIC_API_BASE_URL=https://thedoctordesk.in/api/v1
+          [[ "$NEXT_PUBLIC_API_BASE_URL" =~ ^https?:// ]] || { echo "STOP: missing frontend API URL"; exit 1; }
           pnpm build
           test -f apps/api/dist/src/main.js
           test -d apps/web/.next-build
@@ -204,6 +220,9 @@ jobs:
         shell: bash
         env:
           APPROVED_SHA: ${{ steps.approval.outputs.sha }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_HOSTNAME: ${{ vars.DEPLOY_HOSTNAME }}
         run: |
           set -euo pipefail
           test "$(whoami)" = ubuntu
@@ -223,65 +242,15 @@ jobs:
           KEY="$HOME/.ssh/healthcloud_github_actions"
           SSH=(ssh -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes)
           SCP=(scp -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes)
-          DEST=ubuntu@65.0.237.0
-          # PROD must have a prepared directory; no sudo, no changes elsewhere.
-          "${SSH[@]}" "$DEST" 'test "$(whoami)" = ubuntu && test "$(hostname)" = ip-172-26-0-104 && mkdir -p "$HOME/healthcloud-prod-deploy"'
+          DEST="${DEPLOY_USER}@${DEPLOY_HOST}"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$DEPLOY_HOSTNAME" =~ ^[a-zA-Z0-9.-]+$ ]] || exit 1
+          [[ "$DEPLOY_USER" == ubuntu ]] || exit 1
+          [[ "$DEPLOY_HOST" != "$(hostname -I | awk '{print $1}')" ]] || exit 1
+          DIGEST="$(sha256sum "$RUNNER_TEMP/healthcloud-prod-release.tgz" | awk '{print $1}')"
+          "${SSH[@]}" "$DEST" "test \$(id -un) = ubuntu && test \$(hostname) = $DEPLOY_HOSTNAME && mkdir -p \$HOME/healthcloud-prod-deploy"
           "${SCP[@]}" "$RUNNER_TEMP/healthcloud-prod-release.tgz" "$DEST:healthcloud-prod-deploy/release-$APPROVED_SHA.tgz"
-          "${SSH[@]}" "$DEST" "APPROVED_SHA=$APPROVED_SHA bash -s" <<'REMOTE'
-          set -euo pipefail
-          test "$(whoami)" = ubuntu
-          test "$(hostname)" = ip-172-26-0-104
-          [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]]
-          ROOT="$HOME/healthcloud-prod-deploy"
-          RELEASE="$ROOT/releases/$APPROVED_SHA"
-          TARGET=/var/www/healthcloud
-          BACKUP="$ROOT/rollback/$APPROVED_SHA"
-          test -f "$TARGET/.env"
-          mkdir -p "$RELEASE" "$ROOT/rollback"
-          tar -xzf "$ROOT/release-$APPROVED_SHA.tgz" -C "$RELEASE"
-          test -f "$RELEASE/apps/api/dist/src/main.js"
-          test -d "$RELEASE/apps/web/.next-build"
-          export NVM_DIR="$HOME/.nvm"
-          . "$NVM_DIR/nvm.sh"
-          nvm use 24.19.0 >/dev/null
-          (cd "$RELEASE" && pnpm install --frozen-lockfile)
-          mkdir -p "$BACKUP"
-          rsync -a --exclude=.env --exclude=node_modules --exclude=.git "$TARGET/" "$BACKUP/"
-          activated=0
-          rollback() {
-            if [ "$activated" -eq 1 ]; then
-              echo 'Activation failed: restoring previous application files.'
-              rsync -a --delete --exclude=.env --exclude=node_modules --exclude=.git "$BACKUP/" "$TARGET/" || true
-              (cd "$TARGET" && pnpm install --frozen-lockfile) || true
-              pm2 restart healthcloud-api --update-env || true
-              pm2 restart healthcloud-web --update-env || true
-              pm2 save || true
-            fi
-          }
-          trap rollback ERR
-          set -a
-          source "$TARGET/.env"
-          set +a
-          # Schema migrations are forward-only; app rollback does not undo them.
-          (cd "$RELEASE" && pnpm --filter @healthcloud/db migrate:deploy)
-          activated=1
-          rsync -a --delete --exclude=.env --exclude=node_modules --exclude=.git "$RELEASE/" "$TARGET/"
-          (cd "$TARGET" && pnpm install --frozen-lockfile)
-          pm2 restart healthcloud-api --update-env
-          pm2 restart healthcloud-web --update-env
-          for i in $(seq 1 30); do
-            if curl -fsS --max-time 5 http://127.0.0.1:3001/api/v1/health/live -o /dev/null && \
-               curl -fsS --max-time 5 http://127.0.0.1:3000/ -o /dev/null; then
-              pm2 save
-              trap - ERR
-              echo 'PASS: PROD deployment activated and healthy.'
-              exit 0
-            fi
-            sleep 2
-          done
-          echo 'FAIL: PROD smoke check failed.' >&2
-          false
-          REMOTE
+          "${SCP[@]}" ".github/scripts/healthcloud-remote-deploy.sh" "$DEST:healthcloud-prod-deploy/healthcloud-remote-deploy.sh"
+          "${SSH[@]}" "$DEST" "bash healthcloud-prod-deploy/healthcloud-remote-deploy.sh '$APPROVED_SHA' '$DEPLOY_HOSTNAME' '$DIGEST'"
 
       - name: Close consumed approval
         if: steps.approval.outputs.deploy == 'true' && success()

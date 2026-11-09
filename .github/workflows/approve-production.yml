@@ -24,6 +24,7 @@ jobs:
           test "$(hostname)" = healthcloud-staging
 
       - name: Record approval for the next maintenance window
+        id: record
         uses: actions/github-script@v7
         with:
           script: |
@@ -70,9 +71,26 @@ jobs:
               owner, repo, state: 'open', per_page: 100
             });
             const pending = existing.filter(i => !i.pull_request && i.title.startsWith(prefix));
-            if (pending.length > 0) {
-              core.setFailed(`A production approval is already pending: #${pending[0].number}. Resolve it before approving another release.`);
-              return;
+            // Close only genuinely expired, bot-authored approval records.
+            // Never clear malformed or untrusted records automatically.
+            for (const old of pending) {
+              if (old.user?.login !== 'github-actions[bot]') {
+                core.setFailed(`Untrusted pending approval #${old.number}; manual review required.`);
+                return;
+              }
+              const match = old.body?.match(/^- Scheduled activation \(UTC\): (\S+)$/m);
+              const scheduled = match ? Date.parse(match[1]) : NaN;
+              if (!Number.isFinite(scheduled)) {
+                core.setFailed(`Malformed pending approval #${old.number}; manual review required.`);
+                return;
+              }
+              if (Date.now() <= scheduled + 20 * 60000) {
+                core.setFailed(`Approval #${old.number} is still active; resolve it before approving another release.`);
+                return;
+              }
+              await github.rest.issues.createComment({owner,repo,issue_number:old.number,
+                body:'Approval expired without a successful deployment; automatically closed. No deployment authorized.'});
+              await github.rest.issues.update({owner,repo,issue_number:old.number,state:'closed'});
             }
 
             // Fail closed if main advanced during verification.
@@ -103,6 +121,7 @@ jobs:
               owner, repo, title: `${prefix} ${sha.slice(0, 12)}`, body
             });
             core.info(`Recorded approval: ${issue.data.html_url}`);
+            core.setOutput('issue_number', String(issue.data.number));
             // Immutable run artifact binds the approval to the selected
             // current-main commit, actor, window, and issue created here.
             const fs = require('fs');
@@ -120,3 +139,16 @@ jobs:
           path: ${{ runner.temp }}/healthcloud-approval.json
           retention-days: 30
           if-no-files-found: error
+
+      - name: Close unusable approval if artifact publishing fails
+        if: failure() && steps.record.outputs.issue_number != ''
+        uses: actions/github-script@v7
+        env:
+          APPROVAL_ISSUE: ${{ steps.record.outputs.issue_number }}
+        with:
+          script: |
+            const owner=context.repo.owner, repo=context.repo.repo;
+            const issue_number=Number(process.env.APPROVAL_ISSUE);
+            await github.rest.issues.createComment({owner,repo,issue_number,
+              body:'Approval evidence publication failed. Approval invalidated; no deployment authorized.'});
+            await github.rest.issues.update({owner,repo,issue_number,state:'closed'});
