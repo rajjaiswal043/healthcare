@@ -133,6 +133,11 @@ with tarfile.open(sys.argv[1], 'r:gz') as archive:
 PYARCHIVE
 tar -xzf "$ARCHIVE" -C "$RELEASE"
 [[ -f "$RELEASE/apps/api/dist/src/main.js" && -d "$RELEASE/apps/web/.next-build" && -f "$RELEASE/pnpm-lock.yaml" ]] || { echo 'STOP: incomplete release'; exit 1; }
+# Load server configuration before pnpm lifecycle scripts run.
+set -a
+source "$TARGET/.env"
+set +a
+
 (cd "$RELEASE" && pnpm install --frozen-lockfile --prod=false)
 node --check "$RELEASE/apps/api/dist/src/main.js"
 node --check "$RELEASE/apps/web/scripts/next-with-dist.mjs"
