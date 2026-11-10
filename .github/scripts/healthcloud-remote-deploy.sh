@@ -224,13 +224,22 @@ start_apps
 state=health
 wait_health || { echo 'STOP: health checks failed'; exit 1; }
 state=reopen
-if [[ $nginx_was_active == 1 ]]; then sudo -n systemctl start nginx; fi
-# Confirm traffic has been reopened before recording success.
-if [[ $nginx_was_active == 1 ]]; then
-  reopened=0
-  for i in $(seq 1 15); do if curl -fsS --max-time 8 http://127.0.0.1/api/v1/health/live >/dev/null; then reopened=1; break; fi; sleep 2; done
-  [[ $reopened == 1 ]] || { echo 'STOP: post-reopen API health failed'; exit 1; }
-fi
+# A successful deployment must serve both applications through Nginx,
+# even if Nginx was inactive before deployment.
+sudo -n nginx -t
+sudo -n systemctl start nginx
+sudo -n systemctl is-active --quiet nginx || { echo 'STOP: nginx inactive after start'; exit 1; }
+reopened=0
+for i in $(seq 1 15); do
+  if curl -fsS --max-time 8 http://127.0.0.1/api/v1/health/live >/dev/null &&
+     curl -fsS --max-time 8 http://127.0.0.1/ >/dev/null; then
+    reopened=1
+    break
+  fi
+  sleep 2
+done
+[[ $reopened == 1 ]] || { echo 'STOP: post-reopen API/web health failed'; exit 1; }
+sudo -n systemctl is-active --quiet nginx || { echo 'STOP: nginx became inactive'; exit 1; }
 pm2 save
 rm -f "$ACTIVE"
 trap - EXIT
