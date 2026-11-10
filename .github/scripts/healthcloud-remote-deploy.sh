@@ -33,9 +33,13 @@ sudo -n true
 mkdir -p "$RUN" "$RELEASE"
 LOG="$RUN/deploy.log"; exec > >(tee -a "$LOG") 2>&1
 state=prepare; maintenance=0; backup_complete=0; recovered=0; had_previous=0; nginx_was_active=0; db_mutated=0
-[[ -f "$TARGET/apps/api/dist/src/main.js" ]] && had_previous=1
+# An artifact alone is not evidence of a working previous release.
+# In particular, failed first installations leave artifacts behind.
 log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
 health() { curl -fsS --max-time 5 http://127.0.0.1:3001/api/v1/health/live >/dev/null && curl -fsS --max-time 5 http://127.0.0.1:3000/ >/dev/null; }
+if [[ -f "$TARGET/apps/api/dist/src/main.js" ]] && health; then
+  had_previous=1
+fi
 wait_health() {
   local i
   for i in $(seq 1 30); do if health; then return 0; fi; sleep 2; done
@@ -57,19 +61,48 @@ start_apps() {
   set -a; source "$TARGET/.env"; set +a
   if pm2 describe healthcloud-api >/dev/null 2>&1; then pm2 restart healthcloud-api --update-env
   else (cd "$TARGET/apps/api" && pm2 start dist/src/main.js --name healthcloud-api --cwd "$TARGET/apps/api"); fi
-  if pm2 describe healthcloud-web >/dev/null 2>&1; then pm2 restart healthcloud-web --update-env
-  else pm2 start "$TARGET/apps/web/scripts/next-with-dist.mjs" --name healthcloud-web --interpreter "$(command -v node)" --cwd "$TARGET/apps/web"; fi
+  # Recreate the web process so a previously broken PM2 argument list cannot persist.
+  pm2 delete healthcloud-web >/dev/null 2>&1 || true
+  pm2 start "$TARGET/apps/web/scripts/next-with-dist.mjs" --name healthcloud-web \
+    --interpreter "$(command -v node)" --cwd "$TARGET/apps/web" \
+    -- .next-build start --port 3000
 }
 stop_apps() {
   pm2 stop healthcloud-api >/dev/null 2>&1 || true
   pm2 stop healthcloud-web >/dev/null 2>&1 || true
 }
-# Restore uses the original pg_dump ACLs; never use --no-acl here.
+# Restore original ACLs and application ownership, while creating extensions as postgres.
+# The TOC is filtered only for extension creation/comments; other entries are unchanged.
 restore_db() {
-  local db=$1
-  sudo -n -u postgres dropdb --if-exists --force "$db"
-  sudo -n -u postgres createdb -O healthcloud_owner "$db"
-  sudo -n -u postgres pg_restore --exit-on-error --no-owner --role=healthcloud_owner -d "$db" < "$RUN/$db.dump"
+  local db=$1 toc_dir toc
+  # The recovery directory is private to ubuntu; postgres cannot open its files.
+  # Supply the archive via stdin, and keep the filtered TOC postgres-readable.
+  toc_dir=$(sudo -n -u postgres mktemp -d /tmp/healthcloud-restore-toc.XXXXXXXX)
+  toc="$toc_dir/restore.list"
+  if ! sudo -n -u postgres pg_restore --list < "$RUN/$db.dump" \
+       | sed -E '/^[0-9]+;.* (EXTENSION - |COMMENT - EXTENSION )/s/^/;/' \
+       | sudo -n -u postgres tee "$toc" >/dev/null; then
+    sudo -n -u postgres rm -rf -- "$toc_dir"
+    return 1
+  fi
+  # All extension creation is performed as postgres, then other archive objects
+  # are restored under healthcloud_owner with original ACL entries preserved.
+  if ! sudo -n -u postgres dropdb --if-exists --force "$db" ||
+     ! sudo -n -u postgres createdb -O healthcloud_owner "$db"; then
+    sudo -n -u postgres rm -rf -- "$toc_dir"
+    return 1
+  fi
+  if grep -Eq '^;?[0-9]+;.* EXTENSION - pg_stat_statements([[:space:]]|$)' <(sudo -n -u postgres cat "$toc"); then
+    sudo -n -u postgres psql -X -v ON_ERROR_STOP=1 -d "$db" -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;' || { sudo -n -u postgres rm -rf -- "$toc_dir"; return 1; }
+  fi
+  if grep -Eq '^;?[0-9]+;.* EXTENSION - pg_trgm([[:space:]]|$)' <(sudo -n -u postgres cat "$toc"); then
+    sudo -n -u postgres psql -X -v ON_ERROR_STOP=1 -d "$db" -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' || { sudo -n -u postgres rm -rf -- "$toc_dir"; return 1; }
+  fi
+  local result=0
+  sudo -n -u postgres pg_restore --exit-on-error --no-owner --role=healthcloud_owner \
+    --use-list="$toc" -d "$db" < "$RUN/$db.dump" || result=$?
+  sudo -n -u postgres rm -rf -- "$toc_dir"
+  return "$result"
 }
 rollback() {
   log 'ROLLBACK: keeping external traffic stopped'
@@ -133,11 +166,8 @@ with tarfile.open(sys.argv[1], 'r:gz') as archive:
 PYARCHIVE
 tar -xzf "$ARCHIVE" -C "$RELEASE"
 [[ -f "$RELEASE/apps/api/dist/src/main.js" && -d "$RELEASE/apps/web/.next-build" && -f "$RELEASE/pnpm-lock.yaml" ]] || { echo 'STOP: incomplete release'; exit 1; }
-# Load server configuration before pnpm lifecycle scripts run.
-set -a
-source "$TARGET/.env"
-set +a
-
+# Prisma may run during pnpm lifecycle scripts; load the existing server configuration first.
+set -a; source "$TARGET/.env"; set +a
 (cd "$RELEASE" && pnpm install --frozen-lockfile --prod=false)
 node --check "$RELEASE/apps/api/dist/src/main.js"
 node --check "$RELEASE/apps/web/scripts/next-with-dist.mjs"
