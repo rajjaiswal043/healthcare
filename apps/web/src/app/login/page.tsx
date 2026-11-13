@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { readTextSize, type TextSize } from '@/components/text-size-toggle';
 import Link from 'next/link';
-import { Newsreader } from 'next/font/google';
+import localFont from 'next/font/local';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, ApiRequestError, type MfaChallenge } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
@@ -29,12 +29,13 @@ type Stage = 'credentials' | 'mfa-code' | 'mfa-enrol';
  * (Bricolage) has no italic, and a sans the browser has slanted for you is one
  * of the quicker tells of a page nobody actually set.
  */
-const serif = Newsreader({
-  subsets: ['latin'],
-  style: ['italic'],
-  weight: ['400', '500'],
+const serif = localFont({
+  src: '../../fonts/newsreader-latin-italic.woff2',
+  style: 'italic',
+  weight: '400 500',
   variable: '--font-serif',
   display: 'swap',
+  adjustFontFallback: 'Times New Roman',
 });
 
 /**
