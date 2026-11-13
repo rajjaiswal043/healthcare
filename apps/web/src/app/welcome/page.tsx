@@ -15,12 +15,16 @@ import {
   IconClock,
   IconEyeOff,
   IconHome,
+  IconInfo,
   IconKey,
   IconLock,
   IconMenu,
   IconReceipt,
+  IconRefresh,
   IconSearch,
   IconShield,
+  IconStethoscope,
+  IconCallNext,
   IconUserPlus,
   IconUsers,
   IconX,
@@ -65,10 +69,8 @@ html{scroll-behavior:smooth}
 .wl-rise{animation:wl-rise .9s cubic-bezier(.2,.7,.2,1) both}
 @keyframes wl-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 .wl-float{animation:wl-float 6s ease-in-out infinite}
-@keyframes wl-blink{50%{opacity:0}}
-.wl-caret{animation:wl-blink 1s steps(1) infinite}
 @media (prefers-reduced-motion: reduce){
-  .wl-float,.wl-caret{animation:none}
+  .wl-float{animation:none}
 }
 @keyframes wl-fade{from{opacity:0}to{opacity:1}}
 .wl-fade{animation:wl-fade .25s ease-out both}
@@ -106,7 +108,7 @@ const SECTIONS = [
  *
  *   companyName   Legal name, as on invoices ("Cxvoxa Health Pvt Ltd").
  *   address       One line: city and state at least.
- *   email         Where demo requests and questions go. Turns on "Book a demo".
+ *   email         Where demo requests and questions go. Turns on "Request a demo".
  *   phone         Answered during clinic hours. Shown and tap-to-call.
  *   whatsapp      Country code + number, digits only ("919876543210").
  *   pricing       Starting price as it should read ("₹1,499"), what it covers
@@ -141,6 +143,30 @@ const BUSINESS = {
   statusUrl: '',
 };
 
+/** The four benefits shown just under the hero. */
+const BENEFITS = [
+  {
+    title: 'Register and find patients',
+    body: 'Register a new patient in moments, and find a returning one by name, mobile number or patient ID.',
+    Icon: IconUserPlus,
+  },
+  {
+    title: 'Access previous prescriptions',
+    body: 'Prescriptions and notes from earlier visits are saved with the patient, ready when the doctor needs them.',
+    Icon: IconStethoscope,
+  },
+  {
+    title: 'Manage the daily queue',
+    body: 'See who is waiting, who is with the doctor and who is next, and call the next token in one click.',
+    Icon: IconCallNext,
+  },
+  {
+    title: 'Track daily collections',
+    body: 'Every payment is recorded as it is taken, so the day’s total is always up to date.',
+    Icon: IconReceipt,
+  },
+] as const;
+
 const NAV = [
   { href: '#features', label: 'Features' },
   { href: '#workflow', label: 'How it works' },
@@ -149,7 +175,7 @@ const NAV = [
   { href: '#faq', label: 'FAQ' },
 ];
 
-/** The header's "Book a demo", with a small arrow chip. */
+/** The header's "Request a demo", with a small arrow chip. */
 const DEMO_BUTTON =
   'wl-btn group hidden h-10 items-center gap-2 whitespace-nowrap rounded-pill bg-clinical pl-4 pr-3 text-[13.5px] font-semibold text-white shadow-sm transition-all hover:bg-clinical-text hover:shadow sm:inline-flex';
 
@@ -290,22 +316,14 @@ export default function WelcomePage() {
                 {signedIn ? primary.label : 'Clinic sign-in'}
               </span>
             </Link>
-            {!signedIn &&
-              (BUSINESS.email ? (
-                <button type="button" onClick={() => setDemoOpen(true)} className={DEMO_BUTTON}>
-                  Book a demo
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                    <ArrowRight size={12} />
-                  </span>
-                </button>
-              ) : (
-                <a href="#contact" className={DEMO_BUTTON}>
-                  Book a demo
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                    <ArrowRight size={12} />
-                  </span>
-                </a>
-              ))}
+            {!signedIn && (
+              <button type="button" onClick={() => setDemoOpen(true)} className={DEMO_BUTTON}>
+                Request a demo
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                  <ArrowRight size={12} />
+                </span>
+              </button>
+            )}
             <button
               ref={menuButtonRef}
               type="button"
@@ -339,29 +357,19 @@ export default function WelcomePage() {
                 </span>
               </a>
             ))}
-            {!signedIn &&
-              (BUSINESS.email ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setDemoOpen(true);
-                  }}
-                  className="flex min-h-11 w-full items-center justify-between rounded-panel px-4 py-3 text-left text-[15px] font-semibold text-clinical-text hover:bg-clinical-tint"
-                >
-                  Book a demo
-                  <ArrowRight size={14} />
-                </button>
-              ) : (
-                <a
-                  href="#contact"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex min-h-11 items-center justify-between rounded-panel px-4 py-3 text-[15px] font-semibold text-clinical-text hover:bg-clinical-tint"
-                >
-                  Book a demo
-                  <ArrowRight size={14} />
-                </a>
-              ))}
+            {!signedIn && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setDemoOpen(true);
+                }}
+                className="flex min-h-11 w-full items-center justify-between rounded-panel px-4 py-3 text-left text-[15px] font-semibold text-clinical-text hover:bg-clinical-tint"
+              >
+                Request a demo
+                <ArrowRight size={14} />
+              </button>
+            )}
           </nav>
         )}
       </header>
@@ -378,7 +386,7 @@ export default function WelcomePage() {
             <div className="grid items-start gap-8 md:grid-cols-[1fr_0.9fr] lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
               <div>
                 <p className="wl-rise wl-label text-clinical-text">
-                  OPD software for Indian clinics
+                  OPD software for small and medium clinics in India
                 </p>
 
                 <h1
@@ -393,8 +401,8 @@ export default function WelcomePage() {
                   className="wl-rise mt-7 max-w-[540px] text-[clamp(16px,1.6vw,19px)] leading-relaxed text-ink-60"
                   style={{ animationDelay: '160ms' }}
                 >
-                  Register patients, run the queue, consult, order lab and X-ray tests, and bill,
-                  all in one browser tab.
+                  Manage patient records, access prescriptions saved from previous visits, organise
+                  your queue, and track daily collections in one place.
                 </p>
 
                 <div
@@ -410,28 +418,29 @@ export default function WelcomePage() {
                         <ArrowRight size={15} />
                       </span>
                     </Link>
-                  ) : BUSINESS.email ? (
+                  ) : (
                     <button type="button" onClick={() => setDemoOpen(true)} className={HERO_BUTTON}>
-                      Book a demo
+                      Request a demo
                       <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
                         <ArrowRight size={15} />
                       </span>
                     </button>
-                  ) : (
-                    <a href="#contact" className={HERO_BUTTON}>
-                      Book a demo
-                      <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
-                        <ArrowRight size={15} />
-                      </span>
-                    </a>
                   )}
                   <a
                     href="#workflow"
                     className="wl-btn self-center text-[16px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical sm:self-auto"
                   >
-                    See how it works
+                    Explore the product preview
                   </a>
                 </div>
+
+                <p
+                  className="wl-rise mt-5 max-w-[540px] text-[15px] leading-relaxed text-ink-60"
+                  style={{ animationDelay: '280ms' }}
+                >
+                  See how DoctorDesk brings patient records, prescriptions, and everyday clinic
+                  operations together.
+                </p>
               </div>
 
               <div className="wl-rise" style={{ animationDelay: '200ms' }}>
@@ -446,20 +455,20 @@ export default function WelcomePage() {
             >
               {[
                 {
-                  t: 'Wait from home',
-                  b: 'Token and live place in line on WhatsApp. A message when it is time to leave.',
+                  t: 'Keep patients informed',
+                  b: 'Share token details and queue updates with patients on WhatsApp.',
                 },
                 {
-                  t: 'Consult',
-                  b: 'Pain since the last visit, last medicines and X-ray on one panel.',
+                  t: 'Review previous records',
+                  b: 'Review saved visit records and previous prescriptions in one place.',
                 },
                 {
-                  t: 'Recover',
-                  b: 'A 20-second check-in every few days. Rising pain goes to a person.',
+                  t: 'Review patient updates',
+                  b: 'Collect patient check-ins between visits for your clinic team to review.',
                 },
                 {
-                  t: 'Come back',
-                  b: 'Every review due, who came back, and a one-tap nudge for the rest.',
+                  t: 'Track follow-up visits',
+                  b: 'See which patients are due for follow-up, track completed visits, and send reminders.',
                 },
               ].map((s, i) => (
                 <li key={s.t} className="flex gap-4">
@@ -492,6 +501,50 @@ export default function WelcomePage() {
           </div>
         </section>
 
+        {/* ==== Benefits =================================================== */}
+        <section
+          id="benefits"
+          className="scroll-mt-24 bg-white px-4 pt-16 sm:px-6 lg:pt-24"
+          aria-labelledby="benefits-title"
+        >
+          <div className="mx-auto max-w-6xl">
+            <Reveal>
+              <SectionHead
+                eyebrow="Benefits"
+                title={
+                  <span id="benefits-title">
+                    The everyday work of the OPD,{' '}
+                    <span className="wl-serif text-clinical">in one place.</span>
+                  </span>
+                }
+                body="Four things every clinic does dozens of times a day, made quicker for the front desk, the doctor and the owner."
+              />
+            </Reveal>
+            <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {BENEFITS.map((b, i) => (
+                <li key={b.title}>
+                  <Reveal delay={i * 80} className="h-full">
+                    <div className="group flex h-full flex-col rounded-card-lg border border-ink/8 bg-bg-soft p-6 transition-all duration-300 hover:-translate-y-1 hover:border-clinical/30 hover:bg-white hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.35)]">
+                      <div className="flex items-center justify-between">
+                        <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-clinical-tint text-clinical-text transition-colors group-hover:bg-clinical group-hover:text-white">
+                          <b.Icon size={22} />
+                        </span>
+                        <span className="font-mono text-[12px] tracking-[0.12em] text-ink-40">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <h3 className="mt-6 text-[19px] font-bold leading-snug tracking-[-0.02em] text-ink">
+                        {b.title}
+                      </h3>
+                      <p className="mt-2 text-[14.5px] leading-relaxed text-ink-60">{b.body}</p>
+                    </div>
+                  </Reveal>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
         {/* ==== Clinic tour =============================================== */}
         <section id="workflow" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto max-w-6xl">
@@ -513,23 +566,88 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ==== Features bento ============================================ */}
+        {/* ==== Features =================================================== */}
         <section
           id="features"
           className="scroll-mt-24 bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
         >
           <div className="mx-auto max-w-6xl">
             <Reveal>
-              <SectionHead
-                eyebrow="Features"
-                title={<>Built for the fortieth patient of the day.</>}
-                body="The first patient is easy. By the fortieth the queue is long, the doctor is running late and someone wants a receipt reprinted. Every screen here was drawn with that hour in mind."
-              />
+              <p className="flex items-baseline gap-3">
+                <span className="wl-label text-clinical-text">Features</span>
+                <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
+              </p>
             </Reveal>
-            <p className="mt-4 text-[13.5px] text-ink-60">
-              Interface previews use fictional patient names, health details, tokens and amounts.
+
+            <div className="mt-8 grid gap-8 lg:mt-10 lg:grid-cols-[1.15fr_1fr] lg:items-end lg:gap-16">
+              <Reveal>
+                <h2 className="wl-head text-[clamp(36px,5.6vw,68px)] font-extrabold leading-[0.98] tracking-[-0.04em]">
+                  Built for your{' '}
+                  <span className="wl-serif block text-clinical">busiest clinic days.</span>
+                </h2>
+              </Reveal>
+
+              <Reveal delay={100} className="lg:pb-2">
+                <p className="max-w-lg text-[17px] leading-relaxed text-ink-60 sm:text-[18px]">
+                  Keep registrations, patient records, queues, and billing organised as your clinic
+                  gets busy. DoctorDesk brings everyday tasks together so your team can find the
+                  information they need and keep work moving.
+                </p>
+                <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
+                  <a
+                    href="#workflow"
+                    className="wl-btn group inline-flex items-center gap-2 text-[15.5px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
+                  >
+                    Explore DoctorDesk
+                    <span className="transition-transform group-hover:translate-x-0.5">
+                      <ArrowRight size={15} />
+                    </span>
+                  </a>
+                  {!signedIn && (
+                    <button
+                      type="button"
+                      onClick={() => setDemoOpen(true)}
+                      className="text-[14.5px] text-ink-60 transition-colors hover:text-ink"
+                    >
+                      or{' '}
+                      <span className="font-semibold text-ink underline decoration-ink/20 underline-offset-4">
+                        request a demo
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </Reveal>
+            </div>
+
+            {/* The four things the paragraph names, as a quiet rule-separated row. */}
+            <Reveal delay={160}>
+              <ul className="mt-12 grid grid-cols-2 border-y border-ink/10 sm:grid-cols-4 lg:mt-16">
+                {['Registrations', 'Patient records', 'Queues', 'Billing'].map((k, i) => (
+                  <li
+                    key={k}
+                    className={`flex items-center gap-3 py-5 sm:py-6 ${
+                      i % 2 === 1 ? 'pl-4 sm:pl-6' : ''
+                    } ${i >= 2 ? 'border-t border-ink/10 sm:border-t-0' : ''} ${
+                      i > 0 ? 'sm:border-l sm:border-ink/10 sm:pl-6' : ''
+                    }`}
+                  >
+                    <span className="font-mono text-[12px] tracking-[0.12em] text-clinical-text">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink sm:text-[16px]">
+                      {k}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
+
+            <p className="mt-5 flex items-start gap-1.5 text-[13px] leading-snug text-ink-60">
+              <span className="mt-px shrink-0">
+                <IconInfo size={13} />
+              </span>
+              <em>All patient details, tokens, and amounts shown are fictional.</em>
             </p>
-            <FeatureBento />
           </div>
         </section>
 
@@ -539,84 +657,118 @@ export default function WelcomePage() {
             <Reveal>
               <SectionHead
                 eyebrow="Roles"
-                title={<>Five people share the desk PC. Each gets their own screen.</>}
-                body="Front desk, doctor, nurse, owner and admin sign in at the same place and land on what their job needs. Each role has its own colour, so anyone walking past can see whose session is open."
+                title={
+                  <>
+                    One clinic.{' '}
+                    <span className="wl-serif text-clinical">A screen for every role.</span>
+                  </>
+                }
+                body="Everyone signs in at the same place and sees exactly what their job needs. Nothing more. Pick a role to take a look."
               />
             </Reveal>
             <RolesShowcase night={false} />
+            {!signedIn && (
+              <Reveal className="mt-10 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setDemoOpen(true)}
+                  className="wl-btn group inline-flex items-center gap-2 text-[15px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
+                >
+                  See how it fits your team
+                  <span className="transition-transform group-hover:translate-x-0.5">
+                    <ArrowRight size={14} />
+                  </span>
+                </button>
+              </Reveal>
+            )}
           </div>
         </section>
 
         {/* ==== Waiting-room display ====================================== */}
-        <DisplayShowcase />
+        <DisplayShowcase onRequestDemo={signedIn ? undefined : () => setDemoOpen(true)} />
 
         {/* ==== Security =================================================== */}
         <section id="security" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
-          <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-16">
             <Reveal>
-              <SectionHead
-                align="left"
-                eyebrow="Security"
-                title={<>Your patients stay in your clinic.</>}
-                body={
-                  'Clinics on the same system can’t see each other’s records. The database itself enforces that, on every row.' +
-                  (BUSINESS.dataRegion ? ` Patient data is stored in ${BUSINESS.dataRegion}.` : '')
-                }
-              />
-              <ul className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
+              <p className="flex items-baseline gap-3">
+                <span className="wl-label text-clinical-text">Security</span>
+                <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
+              </p>
+              <h2 className="wl-head mt-7 text-[clamp(34px,5vw,60px)] font-extrabold leading-[0.98] tracking-[-0.04em]">
+                Your patients&rsquo; data{' '}
+                <span className="wl-serif block text-clinical">stays in your clinic.</span>
+              </h2>
+              <p className="mt-5 max-w-md text-[16.5px] leading-relaxed text-ink-60">
+                Private by design, so your team can focus on patients.
+                {BUSINESS.dataRegion ? ` Patient data is stored in ${BUSINESS.dataRegion}.` : ''}
+              </p>
+
+              <ul className="mt-9 grid gap-x-8 gap-y-6 sm:grid-cols-2">
                 {[
                   {
-                    icon: <IconShield size={18} />,
-                    title: 'DPDP-ready consent',
-                    body: 'Consent is captured at registration and stored with the record it covers.',
+                    icon: <IconUsers size={17} />,
+                    title: 'Private to your clinic',
+                    body: 'No other clinic can see your patients.',
                   },
                   {
-                    icon: <IconUsers size={18} />,
-                    title: 'Clinic-level isolation',
-                    body: 'Row-level security keeps each clinic’s patients invisible to every other clinic.',
+                    icon: <IconKey size={17} />,
+                    title: 'Two-step sign-in',
+                    body: 'An authenticator code for key roles.',
                   },
                   {
-                    icon: <IconKey size={18} />,
-                    title: 'Two-factor sign-in',
-                    body: 'Roles that hold the clinic’s keys confirm every sign-in with an authenticator code.',
+                    icon: <IconShield size={17} />,
+                    title: 'Consent on record',
+                    body: 'Captured at registration, kept with the record.',
                   },
                   {
-                    icon: <IconEyeOff size={18} />,
-                    title: 'Every change audited',
-                    body: 'Each write records who made it, what changed and when.',
+                    icon: <IconEyeOff size={17} />,
+                    title: 'Every change tracked',
+                    body: 'Who made it, what changed and when.',
                   },
                 ].map((f) => (
-                  <li key={f.title} className="flex gap-4">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-panel bg-clinical text-white shadow-sm">
+                  <li key={f.title} className="flex gap-3.5">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-clinical-tint text-clinical-text">
                       {f.icon}
                     </span>
                     <div>
-                      <h3 className="text-[16px] font-bold">{f.title}</h3>
-                      <p className="mt-1 text-[14px] leading-relaxed text-ink-60">{f.body}</p>
+                      <h3 className="text-[15.5px] font-bold tracking-[-0.01em]">{f.title}</h3>
+                      <p className="mt-0.5 text-[14px] leading-snug text-ink-60">{f.body}</p>
                     </div>
                   </li>
                 ))}
               </ul>
-              {(BUSINESS.privacyUrl || BUSINESS.dataUrl) && (
-                <p className="mt-9 flex flex-wrap gap-x-5 gap-y-2 text-[14px] font-semibold">
-                  {BUSINESS.dataUrl && (
-                    <a
-                      className="text-clinical-text underline underline-offset-4"
-                      href={BUSINESS.dataUrl}
-                    >
-                      How we handle patient data
-                    </a>
-                  )}
-                  {BUSINESS.privacyUrl && (
-                    <a
-                      className="text-clinical-text underline underline-offset-4"
-                      href={BUSINESS.privacyUrl}
-                    >
-                      Privacy policy
-                    </a>
-                  )}
-                </p>
-              )}
+
+              <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-3 text-[14px] font-semibold">
+                {!signedIn && (
+                  <button
+                    type="button"
+                    onClick={() => setDemoOpen(true)}
+                    className="wl-btn group inline-flex items-center gap-2 text-[15px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
+                  >
+                    Ask us about data security
+                    <span className="transition-transform group-hover:translate-x-0.5">
+                      <ArrowRight size={14} />
+                    </span>
+                  </button>
+                )}
+                {BUSINESS.dataUrl && (
+                  <a
+                    className="text-clinical-text underline underline-offset-4"
+                    href={BUSINESS.dataUrl}
+                  >
+                    How we handle patient data
+                  </a>
+                )}
+                {BUSINESS.privacyUrl && (
+                  <a
+                    className="text-clinical-text underline underline-offset-4"
+                    href={BUSINESS.privacyUrl}
+                  >
+                    Privacy policy
+                  </a>
+                )}
+              </div>
             </Reveal>
             <Reveal delay={120}>
               <AuditLog />
@@ -629,14 +781,37 @@ export default function WelcomePage() {
 
         {/* ==== FAQ ======================================================== */}
         <section id="faq" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
-          <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+          <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
             <Reveal className="lg:sticky lg:top-28 lg:self-start">
-              <SectionHead
-                align="left"
-                eyebrow="FAQ"
-                title={<>What clinic owners ask first.</>}
-                body="Staff with a sign-in question will find the answers on the sign-in page itself, under “Trouble signing in?”."
-              />
+              <p className="flex items-baseline gap-3">
+                <span className="wl-label text-clinical-text">FAQ</span>
+                <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
+              </p>
+              <h2 className="wl-head mt-7 text-[clamp(34px,4.6vw,56px)] font-extrabold leading-[0.98] tracking-[-0.04em]">
+                Questions before <span className="wl-serif block text-clinical">you decide?</span>
+              </h2>
+              <p className="mt-5 max-w-sm text-[16.5px] leading-relaxed text-ink-60">
+                Quick answers for doctors and clinic owners.
+              </p>
+
+              {!signedIn && (
+                <div className="mt-8 max-w-sm rounded-card-lg border border-clinical/15 bg-gradient-to-br from-clinical-tint to-white p-6">
+                  <p className="text-[16px] font-bold tracking-[-0.01em] text-ink">
+                    Still have a question?
+                  </p>
+                  <p className="mt-1 text-[14px] leading-snug text-ink-60">
+                    We&rsquo;ll answer it with your clinic&rsquo;s workflow in front of us.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setDemoOpen(true)}
+                    className="btn-primary mt-5 min-h-11 whitespace-nowrap"
+                  >
+                    Request a demo
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              )}
             </Reveal>
             <Reveal delay={100}>
               <FaqList />
@@ -689,59 +864,88 @@ export default function WelcomePage() {
           </section>
         )}
 
-        <section id="contact" className="scroll-mt-24 bg-clinical-tint px-4 py-14 sm:px-6 lg:py-20">
-          <div className="mx-auto grid max-w-6xl items-center gap-7 rounded-card-lg border border-ink/8 bg-white p-6 shadow-sm sm:p-9 lg:grid-cols-[1fr_auto] lg:p-12">
-            <div>
-              <p className="eyebrow">A better clinic day starts here</p>
-              <h2 className="mt-3 max-w-2xl text-[clamp(28px,4vw,44px)] font-bold leading-tight tracking-display">
-                See how DoctorDesk can fit your clinic.
-              </h2>
-              <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-60 sm:text-[16px]">
-                {BUSINESS.email || BUSINESS.phone
-                  ? 'Explore the workflow, or get in touch using the contact details below.'
-                  : 'Explore the workflow or get demo information.'}
-              </p>
-              {(BUSINESS.email || BUSINESS.phone) && (
-                <p className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[14px] font-semibold">
-                  {BUSINESS.email && (
-                    <a
-                      className="text-clinical-text underline underline-offset-4"
-                      href={`mailto:${BUSINESS.email}`}
-                    >
-                      {BUSINESS.email}
-                    </a>
-                  )}
-                  {BUSINESS.phone && (
-                    <a
-                      className="text-clinical-text underline underline-offset-4"
-                      href={`tel:${BUSINESS.phone.replace(/[^\d+]/g, '')}`}
-                    >
-                      {BUSINESS.phone}
-                    </a>
-                  )}
+        <section id="contact" className="scroll-mt-24 bg-clinical-tint px-4 py-12 sm:px-6 lg:py-16">
+          <div className="relative mx-auto max-w-6xl overflow-hidden rounded-card-lg border border-clinical/15 bg-gradient-to-br from-white via-white to-clinical-soft p-6 shadow-sm sm:p-10 lg:p-14">
+            {/* A faint mark in the corner, so the card does not read as empty. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-10 -right-10 hidden rotate-[-8deg] opacity-[0.07] sm:block"
+            >
+              <ConsoleMark size={260} />
+            </span>
+
+            <div className="relative grid items-center gap-8 lg:grid-cols-[1fr_auto] lg:gap-14">
+              <div>
+                <p className="eyebrow">A better clinic day starts here</p>
+                <h2 className="mt-3 text-[clamp(30px,4.2vw,48px)] font-bold leading-[1.05] tracking-display">
+                  Ready for a{' '}
+                  <span className="wl-serif whitespace-nowrap text-clinical">calmer OPD?</span>
+                </h2>
+                <p className="mt-4 max-w-xl text-[15.5px] leading-relaxed text-ink-60 sm:text-[16.5px]">
+                  See DoctorDesk with your own clinic&rsquo;s workflow: registration, queue,
+                  prescriptions and billing, in one short walkthrough.
                 </p>
-              )}
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-              {!signedIn &&
-                (BUSINESS.email ? (
-                  <button
-                    type="button"
-                    onClick={() => setDemoOpen(true)}
-                    className="btn-primary min-h-11 whitespace-nowrap"
-                  >
-                    Book a demo
-                    <ArrowRight size={15} />
-                  </button>
+                <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2.5 text-[14px] font-semibold text-ink">
+                  {['Runs in any browser', 'Nothing to install', 'Access by role'].map((t) => (
+                    <li key={t} className="flex items-center gap-2">
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-clinical text-white">
+                        <IconCheck size={12} />
+                      </span>
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+                {(BUSINESS.email || BUSINESS.phone) && (
+                  <p className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[14px] font-semibold">
+                    {BUSINESS.email && (
+                      <a
+                        className="text-clinical-text underline underline-offset-4"
+                        href={`mailto:${BUSINESS.email}`}
+                      >
+                        {BUSINESS.email}
+                      </a>
+                    )}
+                    {BUSINESS.phone && (
+                      <a
+                        className="text-clinical-text underline underline-offset-4"
+                        href={`tel:${BUSINESS.phone.replace(/[^\d+]/g, '')}`}
+                      >
+                        {BUSINESS.phone}
+                      </a>
+                    )}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col items-start gap-4 lg:items-center">
+                {signedIn ? (
+                  <Link href={primary.href} className={HERO_BUTTON}>
+                    Open your console
+                    <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                      <ArrowRight size={15} />
+                    </span>
+                  </Link>
                 ) : (
-                  <a href="#faq" className="btn-primary min-h-11 whitespace-nowrap">
-                    Book a demo
-                    <ArrowRight size={15} />
-                  </a>
-                ))}
-              <a href="#workflow" className="btn-secondary min-h-11 whitespace-nowrap">
-                See how it works
-              </a>
+                  <>
+                    <button type="button" onClick={() => setDemoOpen(true)} className={HERO_BUTTON}>
+                      Request a demo
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15 transition-transform group-hover:translate-x-0.5">
+                        <ArrowRight size={15} />
+                      </span>
+                    </button>
+                    <Link
+                      href="/login"
+                      onClick={openSignIn}
+                      className="text-[14px] text-ink-60 transition-colors hover:text-ink"
+                    >
+                      or{' '}
+                      <span className="font-semibold text-clinical-text underline decoration-clinical/30 underline-offset-4">
+                        sign in to your clinic
+                      </span>
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -820,7 +1024,7 @@ export default function WelcomePage() {
       </footer>
 
       {signInOpen && !signedIn && <SignInDialog onClose={closeSignIn} />}
-      {demoOpen && BUSINESS.email && <DemoDialog onClose={closeDemo} />}
+      {demoOpen && <DemoDialog onClose={closeDemo} />}
     </div>
   );
 }
@@ -864,7 +1068,7 @@ function Modal({
       }
       if (e.key !== 'Tab' || !panelRef.current) return;
       const focusable = panelRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       );
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -937,45 +1141,88 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * "Book a demo", for clinic owners. There is no server behind it: submitting
- * opens the visitor's own email app with the request already written out to
- * BUSINESS.email. The page cannot tell whether the email app opened, so
- * the confirmation says so and shows the address to use instead.
+ * "Request a demo", for clinic owners: the clinic's basic details in one form.
+ *
+ * There is no server behind it. With BUSINESS.email filled in, submitting opens
+ * the visitor's own email app with the request already written out to that
+ * address; the page cannot tell whether the email app opened, so the
+ * confirmation says so and shows the address to use instead. With no email
+ * configured there is nowhere for the request to go, and the confirmation says
+ * that plainly rather than pretending it was received.
  */
+const SPECIALITIES = [
+  'General practice',
+  'Orthopaedics',
+  'Paediatrics',
+  'Gynaecology',
+  'Dermatology',
+  'ENT',
+  'Ophthalmology',
+  'Dental',
+  'Physiotherapy',
+  'Multi-speciality',
+  'Other',
+];
+
 function DemoDialog({ onClose }: { onClose: () => void }) {
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<null | { doctor: string; summary: string }>(null);
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
     const field = (k: string) => String(data.get(k) ?? '').trim();
-    const body = [
-      `Name: ${field('demo-name')}`,
-      `Clinic: ${field('demo-clinic')}`,
-      `City: ${field('demo-city') || '-'}`,
+    const summary = [
+      `Clinic name: ${field('demo-clinic')}`,
+      `Doctor name: ${field('demo-doctor')}`,
       `Phone: ${field('demo-phone')}`,
+      `Email: ${field('demo-email') || '-'}`,
+      `City: ${field('demo-city')}`,
+      `Speciality: ${field('demo-speciality') || '-'}`,
+      `Doctors at the clinic: ${field('demo-doctors') || '-'}`,
+      `Notes: ${field('demo-notes') || '-'}`,
     ].join('\n');
-    const subject = `Demo request: ${field('demo-clinic')}`;
-    window.location.href = `mailto:${BUSINESS.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setSent(true);
+    if (BUSINESS.email) {
+      const subject = `Demo request: ${field('demo-clinic')}`;
+      window.location.href = `mailto:${BUSINESS.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(summary)}`;
+    }
+    setSent({ doctor: field('demo-doctor'), summary });
   }
 
   const input =
-    'h-11 w-full rounded-[12px] border border-ink/12 bg-white px-3.5 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-20 focus:border-clinical focus:ring-4 focus:ring-clinical/12';
+    'h-11 w-full rounded-[12px] border border-ink/12 bg-white px-3.5 text-[15px] font-normal text-ink outline-none transition-colors placeholder:text-ink-20 focus:border-clinical focus:ring-4 focus:ring-clinical/12';
+  const label = 'grid gap-1.5 text-[13px] font-semibold text-ink-60';
+  const optional = <span className="font-normal text-ink-40"> (optional)</span>;
 
   return (
-    <Modal label="Book a demo" onClose={onClose} className="max-w-[520px]">
+    <Modal label="Request a demo" onClose={onClose} className="max-w-[580px]">
       <div className="px-6 pb-8 pt-9 sm:px-9">
         {sent ? (
           <div className="pr-8">
-            <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
-              Your email should be ready to send.
-            </h2>
-            <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
-              We opened your email app with the request written out. If nothing opened, send the
-              same details to{' '}
-              <span className="select-all font-semibold text-ink">{BUSINESS.email}</span>.
-            </p>
+            {BUSINESS.email ? (
+              <>
+                <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
+                  Your email should be ready to send.
+                </h2>
+                <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
+                  We opened your email app with the request written out. If nothing opened, send the
+                  same details to{' '}
+                  <span className="select-all font-semibold text-ink">{BUSINESS.email}</span>.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
+                  Thanks{sent.doctor ? `, ${sent.doctor}` : ''}.
+                </h2>
+                <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
+                  Online demo requests are not connected yet, so these details have not been sent
+                  anywhere. Please keep a copy and share it with the DoctorDesk team.
+                </p>
+              </>
+            )}
+            <pre className="mt-5 select-all whitespace-pre-wrap rounded-[12px] border border-ink/10 bg-white p-4 font-mono text-[13px] leading-relaxed text-ink">
+              {sent.summary}
+            </pre>
             <button
               type="button"
               onClick={onClose}
@@ -988,30 +1235,15 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
           <form onSubmit={submit} className="grid gap-4">
             <div className="pr-8">
               <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
-                Book a demo.
+                Request a demo.
               </h2>
               <p className="mt-2 text-[14.5px] text-ink-60">
-                Twenty minutes, at a time that suits your OPD. We&rsquo;ll call you to fix it.
+                Tell us a little about your clinic. We&rsquo;ll call you to fix a time that suits
+                your OPD.
               </p>
             </div>
-            <label
-              className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
-              htmlFor="demo-name"
-            >
-              Your name
-              <input
-                id="demo-name"
-                name="demo-name"
-                required
-                autoComplete="name"
-                className={input}
-              />
-            </label>
-            <label
-              className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
-              htmlFor="demo-clinic"
-            >
-              Clinic
+            <label className={label} htmlFor="demo-clinic">
+              Clinic name
               <input
                 id="demo-clinic"
                 name="demo-clinic"
@@ -1020,24 +1252,20 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
                 className={input}
               />
             </label>
+            <label className={label} htmlFor="demo-doctor">
+              Doctor name
+              <input
+                id="demo-doctor"
+                name="demo-doctor"
+                required
+                autoComplete="name"
+                placeholder="Dr. "
+                className={input}
+              />
+            </label>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label
-                className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
-                htmlFor="demo-city"
-              >
-                City
-                <input
-                  id="demo-city"
-                  name="demo-city"
-                  autoComplete="address-level2"
-                  className={input}
-                />
-              </label>
-              <label
-                className="grid gap-1.5 text-[13px] font-semibold text-ink-60"
-                htmlFor="demo-phone"
-              >
-                Phone
+              <label className={label} htmlFor="demo-phone">
+                Phone number
                 <input
                   id="demo-phone"
                   name="demo-phone"
@@ -1045,15 +1273,75 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
                   required
                   autoComplete="tel"
                   inputMode="tel"
+                  pattern="[+0-9 ()-]{10,16}"
+                  title="A 10-digit mobile number, with or without +91"
+                  placeholder="98765 43210"
+                  className={input}
+                />
+              </label>
+              <label className={label} htmlFor="demo-email">
+                <span>Email{optional}</span>
+                <input
+                  id="demo-email"
+                  name="demo-email"
+                  type="email"
+                  autoComplete="email"
                   className={input}
                 />
               </label>
             </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={label} htmlFor="demo-city">
+                City
+                <input
+                  id="demo-city"
+                  name="demo-city"
+                  required
+                  autoComplete="address-level2"
+                  className={input}
+                />
+              </label>
+              <label className={label} htmlFor="demo-speciality">
+                <span>Speciality{optional}</span>
+                <select
+                  id="demo-speciality"
+                  name="demo-speciality"
+                  defaultValue=""
+                  className={input}
+                >
+                  <option value="">Choose one</option>
+                  {SPECIALITIES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className={label} htmlFor="demo-doctors">
+              <span>Doctors at the clinic{optional}</span>
+              <select id="demo-doctors" name="demo-doctors" defaultValue="" className={input}>
+                <option value="">Choose one</option>
+                <option value="1">1</option>
+                <option value="2-3">2–3</option>
+                <option value="4-10">4–10</option>
+                <option value="More than 10">More than 10</option>
+              </select>
+            </label>
+            <label className={label} htmlFor="demo-notes">
+              <span>Anything we should know{optional}</span>
+              <textarea
+                id="demo-notes"
+                name="demo-notes"
+                rows={3}
+                className={`${input} h-auto py-2.5`}
+              />
+            </label>
             <button
               type="submit"
               className="mt-2 inline-flex h-12 items-center justify-center rounded-pill bg-clinical text-[15px] font-bold text-white transition-colors hover:bg-clinical-deep"
             >
-              Write the request
+              Request a demo
             </button>
           </form>
         )}
@@ -1877,7 +2165,7 @@ function ProductWindow() {
               <ul className="mt-3 space-y-0.5 text-[12.5px]">
                 {[
                   { icon: <IconHome size={15} />, label: 'Home' },
-                  { icon: <IconClock size={15} />, label: 'Queue', active: true, count: '7' },
+                  { icon: <IconClock size={15} />, label: 'Queue', active: true, count: '3' },
                   { icon: <IconUsers size={15} />, label: 'Patients' },
                   { icon: <IconCalendar size={15} />, label: 'Appointments' },
                   { icon: <FlaskGlyph size={15} />, label: 'Diagnostics' },
@@ -1930,7 +2218,7 @@ function ProductWindow() {
 
               <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
                 <div className="text-left">
-                  <p className="mono-label">Wed, 24 Sep · OPD 2</p>
+                  <p className="mono-label">Tuesday · OPD</p>
                   <p className="mt-1 font-display text-[22px] font-bold tracking-display">
                     Today&rsquo;s queue
                   </p>
@@ -1943,10 +2231,10 @@ function ProductWindow() {
 
               <div className="mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
                 {[
-                  { k: 'Waiting', v: '07', c: 'text-amber-text', bar: 'bg-amber', w: '45%' },
+                  { k: 'Waiting', v: '03', c: 'text-amber-text', bar: 'bg-amber', w: '30%' },
                   {
                     k: 'In chamber',
-                    v: '02',
+                    v: '01',
                     c: 'text-clinical-text',
                     bar: 'bg-clinical',
                     w: '15%',
@@ -2007,7 +2295,7 @@ function ProductWindow() {
 
             {/* Right rail */}
             <aside className="hidden border-l border-ink/8 bg-bg-soft/60 p-4 text-left xl:block">
-              <p className="mono-label">In chamber · Room 2</p>
+              <p className="mono-label">In chamber · Room 1</p>
               <div className="mt-3 rounded-panel border border-ink/8 bg-white p-3.5">
                 <div className="flex items-center gap-2.5">
                   <span className="grid h-9 w-9 place-items-center rounded-full bg-clinical-soft font-display text-[12px] font-bold text-clinical-text">
@@ -2060,419 +2348,7 @@ function ProductWindow() {
           </div>
         </div>
       </div>
-
-      {/* Floating notices */}
-      <div
-        className="wl-float absolute -left-6 top-[34%] hidden items-center gap-3 rounded-panel border border-ink/8 bg-white/95 px-4 py-3 shadow-lg backdrop-blur lg:flex xl:-left-14"
-        aria-hidden="true"
-      >
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-amber-soft text-amber-text">
-          <IconUsers size={16} />
-        </span>
-        <span className="text-left">
-          <span className="block text-[13px] font-semibold leading-tight">Possible duplicate</span>
-          <span className="block font-mono text-[10.5px] text-ink-40">
-            Priya Sharma · UH-24-0192
-          </span>
-        </span>
-      </div>
-      <div
-        className="wl-float absolute -right-6 bottom-[14%] hidden items-center gap-3 rounded-panel border border-ink/8 bg-white/95 px-4 py-3 shadow-lg backdrop-blur lg:flex xl:-right-14"
-        style={{ animationDelay: '-3s' }}
-        aria-hidden="true"
-      >
-        <span className="grid h-9 w-9 place-items-center rounded-full bg-green-soft text-green-text">
-          <IconCheck size={16} />
-        </span>
-        <span className="text-left">
-          <span className="block text-[13px] font-semibold leading-tight">Payment recorded</span>
-          <span className="block font-mono text-[10.5px] text-ink-40">Receipt R-1042 · ₹850</span>
-        </span>
-      </div>
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Feature bento                                                              */
-/* -------------------------------------------------------------------------- */
-
-function FeatureBento() {
-  return (
-    <div className="mt-14 grid gap-4 lg:grid-cols-3">
-      {/* Registration */}
-      <Reveal className="lg:col-span-2">
-        <Tile
-          icon={<IconUserPlus size={18} />}
-          title="Registration that catches duplicates"
-          body="One keyboard-first screen. The duplicate check runs while you type, and the UHID is issued the moment you save."
-        >
-          <RegistrationDemo />
-        </Tile>
-      </Reveal>
-
-      {/* Search */}
-      <Reveal className="lg:row-span-2" delay={80}>
-        <Tile
-          icon={<IconSearch size={18} />}
-          title="Find anyone in one box"
-          body="Name, mobile, UHID or ABHA number. No filters, and spelling slips are forgiven."
-        >
-          <div className="mt-6 overflow-hidden rounded-[16px] border border-ink/8 bg-white shadow-sm">
-            <div className="flex items-center gap-2 border-b border-ink/8 px-3.5 py-3 text-[13px]">
-              <span className="text-ink-40">
-                <IconSearch size={15} />
-              </span>
-              <span className="flex-1 font-medium">sharma</span>
-              <kbd className="rounded-[6px] border border-ink/12 bg-bg-soft px-1.5 py-0.5 font-mono text-[10px] text-ink-40">
-                Ctrl K
-              </kbd>
-            </div>
-            <ul className="p-1.5">
-              {[
-                { n: 'Priya Sharma', m: '34 F · UH-24-0192', active: true },
-                { n: 'Rakesh Sharma', m: '58 M · UH-23-1177' },
-                { n: 'Anjali Sharma', m: '12 F · UH-24-0457' },
-                { n: 'Vivek Sharman', m: '41 M · UH-22-0913' },
-              ].map((r) => (
-                <li
-                  key={r.n}
-                  className={`flex items-center gap-3 rounded-[10px] px-2.5 py-2 ${
-                    r.active ? 'bg-clinical-tint' : ''
-                  }`}
-                >
-                  <span className="grid h-8 w-8 place-items-center rounded-full bg-bg-soft font-display text-[11px] font-bold text-ink-60">
-                    {r.n
-                      .split(' ')
-                      .map((w) => w[0])
-                      .join('')}
-                  </span>
-                  <span className="min-w-0 flex-1 leading-tight">
-                    <span className="block truncate text-[13px] font-semibold">{r.n}</span>
-                    <span className="block font-mono text-[10.5px] text-ink-40">{r.m}</span>
-                  </span>
-                  {r.active && (
-                    <span className="text-clinical">
-                      <ArrowRight size={14} />
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {['Name', 'Mobile', 'UHID', 'ABHA'].map((k) => (
-              <span key={k} className="badge-neutral">
-                {k}
-              </span>
-            ))}
-          </div>
-        </Tile>
-      </Reveal>
-
-      {/* Prescriptions */}
-      <Reveal>
-        <Tile
-          icon={<RxGlyph size={18} />}
-          title="Prescriptions on your letterhead"
-          body="Notes, vitals and Rx on one panel, printed on the way out."
-        >
-          <div className="relative mt-6 rounded-[14px] border border-ink/8 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between border-b border-dashed border-ink/12 pb-2.5">
-              <span className="h-2 w-24 rounded-full bg-ink/15" />
-              <span className="h-2 w-12 rounded-full bg-ink/10" />
-            </div>
-            <p className="mt-3 font-display text-[20px] font-bold text-clinical">℞</p>
-            <ul className="mt-1 space-y-2 text-[12px]">
-              <li className="flex justify-between gap-2">
-                <span className="font-semibold">Tab. Paracetamol 650</span>
-                <span className="font-mono text-ink-40">1-0-1 · 5d</span>
-              </li>
-              <li className="flex justify-between gap-2">
-                <span className="font-semibold">Cap. Amoxicillin 500</span>
-                <span className="font-mono text-ink-40">1-1-1 · 5d</span>
-              </li>
-            </ul>
-          </div>
-        </Tile>
-      </Reveal>
-
-      {/* Diagnostics */}
-      <Reveal delay={80}>
-        <Tile
-          icon={<FlaskGlyph size={18} />}
-          title="Diagnostics, ordered and billed"
-          body="Order tests from the consultation and attach reports to the patient’s history."
-        >
-          <div className="mt-6 space-y-2">
-            {[
-              { t: 'Complete blood count', s: 'Report ready', c: 'badge-green' },
-              { t: 'HbA1c', s: 'Sample taken', c: 'badge-amber' },
-              { t: 'X-ray chest PA', s: 'Ordered', c: 'badge-neutral' },
-            ].map((d) => (
-              <div
-                key={d.t}
-                className="flex items-center justify-between gap-3 rounded-[12px] border border-ink/8 bg-white px-3 py-2.5"
-              >
-                <span className="truncate text-[12.5px] font-semibold">{d.t}</span>
-                <span className={d.c}>{d.s}</span>
-              </div>
-            ))}
-          </div>
-        </Tile>
-      </Reveal>
-
-      {/* Billing */}
-      <Reveal>
-        <Tile
-          icon={<IconReceipt size={18} />}
-          title="Billing & receipts"
-          body="Consultation and tests on one bill. Part-payments are handled, and the receipt prints in a click."
-        >
-          <div className="mt-6 rounded-[14px] border border-ink/8 bg-white p-4 font-mono text-[12px] shadow-sm">
-            {[
-              ['Consultation', '₹500'],
-              ['Complete blood count', '₹350'],
-              ['Promotion · 10%', '−₹85'],
-            ].map(([k, v]) => (
-              <div key={k} className="flex justify-between py-1 text-ink-60">
-                <span>{k}</span>
-                <span className={v?.startsWith('−') ? 'text-green-text' : ''}>{v}</span>
-              </div>
-            ))}
-            <div className="mt-2 flex items-center justify-between border-t border-dashed border-ink/15 pt-2.5">
-              <span className="font-sans text-[13px] font-bold text-ink">Total ₹765</span>
-              <span className="badge-green">Paid</span>
-            </div>
-          </div>
-        </Tile>
-      </Reveal>
-
-      {/* Promotions */}
-      <Reveal delay={80}>
-        <Tile
-          icon={<TagGlyph size={18} />}
-          title="Promotions that apply themselves"
-          body="Set up offers once in settings. The desk sees what qualifies right at billing."
-        >
-          <div className="mt-6 flex flex-col gap-2">
-            {[
-              { k: 'Senior citizen', v: '10% off consultation', on: true },
-              { k: 'Health camp', v: 'Free BP check', on: false },
-            ].map((p) => (
-              <div
-                key={p.k}
-                className={`flex items-center justify-between gap-3 rounded-[12px] border px-3 py-2.5 ${
-                  p.on ? 'border-clinical/30 bg-clinical-tint' : 'border-ink/8 bg-white'
-                }`}
-              >
-                <span className="leading-tight">
-                  <span className="block text-[12.5px] font-semibold">{p.k}</span>
-                  <span className="block text-[11.5px] text-ink-40">{p.v}</span>
-                </span>
-                <span
-                  className={`relative h-5 w-9 rounded-full ${p.on ? 'bg-clinical' : 'bg-ink/15'}`}
-                >
-                  <span
-                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm ${
-                      p.on ? 'left-[18px]' : 'left-0.5'
-                    }`}
-                  />
-                </span>
-              </div>
-            ))}
-          </div>
-        </Tile>
-      </Reveal>
-
-      {/* Keyboard */}
-      <Reveal delay={160}>
-        <Tile
-          icon={<KeyboardGlyph size={18} />}
-          title="Keyboard-first, everywhere"
-          body="Built for the rush hour: every screen works without reaching for the mouse."
-        >
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            {['Ctrl', 'K'].map((k, i) => (
-              <span key={k} className="flex items-center gap-2">
-                {i > 0 && <span className="text-ink-20">+</span>}
-                <Kbd>{k}</Kbd>
-              </span>
-            ))}
-            <span className="ml-1 text-[12.5px] text-ink-40">search anywhere</span>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Kbd>Tab</Kbd>
-            <span className="text-ink-20">→</span>
-            <Kbd>Enter</Kbd>
-            <span className="ml-1 text-[12.5px] text-ink-40">register &amp; save</span>
-          </div>
-        </Tile>
-      </Reveal>
-    </div>
-  );
-}
-
-function Tile({
-  icon,
-  title,
-  body,
-  children,
-}: {
-  icon: ReactNode;
-  title: string;
-  body: string;
-  children?: ReactNode;
-}) {
-  return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-clinical/25 hover:shadow sm:p-7">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-clinical-soft/0 blur-2xl transition-colors duration-500 group-hover:bg-clinical-soft/70"
-      />
-      <span className="relative grid h-10 w-10 place-items-center rounded-panel bg-clinical-tint text-clinical ring-1 ring-clinical/15">
-        {icon}
-      </span>
-      <h3 className="relative mt-5 text-[19px] font-bold">{title}</h3>
-      <p className="relative mt-2 text-[14px] leading-relaxed text-ink-60">{body}</p>
-      <div className="relative mt-auto">{children}</div>
-    </article>
-  );
-}
-
-/**
- * The registration card, typing itself: "Priya Shar" goes in a key at a time
- * at an uneven, human pace, the duplicate warning slides in once the name is
- * specific enough — the way the real check fires while you type — and the
- * mobile number follows. It holds, clears and starts again.
- *
- * Only runs while the card is on screen, and not at all under reduced motion:
- * there it simply shows the finished state. The warning keeps its space while
- * hidden so the card never jumps.
- */
-const TYPED_NAME = 'Priya Shar';
-const TYPED_MOBILE = '98••• ••410';
-/** "Priya S" — the point where there is enough to match on. */
-const MATCH_AT = 7;
-
-function RegistrationDemo() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [name, setName] = useState(TYPED_NAME.length);
-  const [mobile, setMobile] = useState(TYPED_MOBILE.length);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    let timers: number[] = [];
-    let running = false;
-    const stop = () => {
-      timers.forEach((t) => window.clearTimeout(t));
-      timers = [];
-    };
-    const at = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
-
-    const play = () => {
-      stop();
-      setName(0);
-      setMobile(0);
-      let t = 500;
-      for (let i = 1; i <= TYPED_NAME.length; i++) {
-        // A space or a capital takes a beat longer, as it does for a person.
-        t += 85 + Math.random() * 120 + (/[ A-Z]/.test(TYPED_NAME[i - 1] ?? '') ? 90 : 0);
-        at(t, () => setName(i));
-      }
-      t += 450;
-      for (let i = 1; i <= TYPED_MOBILE.length; i++) {
-        t += 60 + Math.random() * 70;
-        at(t, () => setMobile(i));
-      }
-      at(t + 3400, play);
-    };
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting && !running) {
-          running = true;
-          play();
-        } else if (!entry?.isIntersecting && running) {
-          running = false;
-          stop();
-          setName(TYPED_NAME.length);
-          setMobile(TYPED_MOBILE.length);
-        }
-      },
-      { threshold: 0.35 },
-    );
-    io.observe(el);
-    return () => {
-      io.disconnect();
-      stop();
-    };
-  }, []);
-
-  const typingName = name < TYPED_NAME.length;
-  const match = name >= MATCH_AT;
-  const caret = (
-    <span className="wl-caret ml-px inline-block h-4 w-px translate-y-0.5 bg-clinical" />
-  );
-
-  return (
-    <div
-      ref={ref}
-      className="mt-6 grid gap-3 rounded-[16px] border border-ink/8 bg-bg-soft p-4 sm:grid-cols-2"
-    >
-      <MockField label="Full name">
-        {TYPED_NAME.slice(0, name)}
-        {(typingName || mobile === TYPED_MOBILE.length) && caret}
-      </MockField>
-      <MockField label="Mobile">
-        {TYPED_MOBILE.slice(0, mobile)}
-        {!typingName && mobile < TYPED_MOBILE.length && caret}
-      </MockField>
-      <div
-        className={`flex flex-col gap-3 rounded-[12px] border border-amber/40 bg-amber-soft/60 px-3.5 py-3 transition-all duration-500 ease-out sm:col-span-2 sm:flex-row sm:items-center sm:justify-between ${
-          match ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0'
-        }`}
-      >
-        <span className="flex items-center gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white font-display text-[12px] font-bold text-amber-text">
-            PS
-          </span>
-          <span className="leading-tight">
-            <span className="block text-[13px] font-semibold text-amber-text">
-              This may be an existing patient
-            </span>
-            <span className="block font-mono text-[11px] text-amber-text/80">
-              Priya Sharma · 34 F · UH-24-0192
-            </span>
-          </span>
-        </span>
-        <span className="self-start rounded-pill bg-white px-3 py-1.5 text-[12px] font-semibold text-amber-text shadow-sm sm:self-auto">
-          Open record
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function MockField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <p className="mono-label !text-[9.5px]">{label}</p>
-      <div className="mt-1 flex h-10 items-center rounded-[10px] border border-ink/10 bg-white px-3 text-[13.5px] font-medium">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Kbd({ children }: { children: ReactNode }) {
-  return (
-    <kbd className="inline-flex min-w-[34px] items-center justify-center rounded-[8px] border border-ink/15 border-b-[3px] bg-white px-2 py-1 font-mono text-[12px] font-semibold text-ink shadow-sm">
-      {children}
-    </kbd>
   );
 }
 
@@ -2495,14 +2371,13 @@ const ROLES = [
     text: '#2b3a75',
     person: 'Pooja Singh',
     headline: 'Keeps the line moving',
-    body: 'Registration, bookings, the queue and the cash counter: the whole front of house on one screen.',
+    body: 'Registration, queue and payments on one screen.',
     points: [
-      'Register a patient in under two minutes, with a live duplicate check',
-      'Patients get their token on WhatsApp and wait from home',
-      'See who is on the way, running late or told to leave',
+      'Register patients quickly, with a duplicate check',
+      'Tokens on WhatsApp, so patients wait from home',
       'Take payments and print receipts in one step',
     ],
-    only: 'The queue, the cash counter and every patient arriving',
+    only: 'The queue, payments and arriving patients',
   },
   {
     key: 'doctor',
@@ -2513,14 +2388,13 @@ const ROLES = [
     text: '#52307b',
     person: 'Dr. Kiran Rao',
     headline: 'Sees patients, not paperwork',
-    body: 'Their own queue, the patient’s history and a prescription pad that prints itself.',
+    body: 'Their queue, the patient’s history and a quick prescription pad.',
     points: [
-      'A personal queue that updates as the desk checks patients in',
-      'Pain and exercise check-ins since the last visit, as a chart',
-      'Repeat last visit’s medicines in one click, then edit',
-      'Send the signed prescription to the patient’s WhatsApp',
+      'A personal queue that updates on its own',
+      'Repeat last visit’s medicines in one click',
+      'Send the prescription to the patient’s WhatsApp',
     ],
-    only: 'Their own patients’ notes, prescriptions and recovery',
+    only: 'Their own patients’ notes and prescriptions',
   },
   {
     key: 'nurse',
@@ -2531,14 +2405,13 @@ const ROLES = [
     text: '#852c56',
     person: 'Anita Joseph',
     headline: 'Ready before the doctor is',
-    body: 'Vitals, triage and the waiting room, handled before the patient walks into the chamber.',
+    body: 'Vitals and triage done before the patient walks in.',
     points: [
       'Record vitals ahead of the consultation',
-      'Move urgent patients to the front of the queue',
-      'See whose pain is rising between visits',
-      'See at a glance who is waiting for which doctor',
+      'Move urgent patients to the front',
+      'See who is waiting for which doctor',
     ],
-    only: 'Vitals and triage. Reads notes, never writes a prescription',
+    only: 'Vitals and triage, never prescriptions',
   },
   {
     key: 'owner',
@@ -2549,14 +2422,13 @@ const ROLES = [
     text: '#5e3e22',
     person: 'Dr. Suresh Menon',
     headline: 'Knows the numbers by closing time',
-    body: 'Collections, finance and pricing: the business side of the clinic, without a spreadsheet.',
+    body: 'Collections and pricing, without a spreadsheet.',
     points: [
       'Daily collections that match the cash drawer',
-      'How many patients came back for review, week by week',
-      'The money those reviews kept, in rupees',
-      'Set prices and run promotions from settings',
+      'See how many patients come back for review',
+      'Set prices and run offers from settings',
     ],
-    only: 'The numbers. Reads everything, changes none of it',
+    only: 'The numbers, read-only',
   },
   {
     key: 'administrator',
@@ -2567,14 +2439,13 @@ const ROLES = [
     text: '#39414d',
     person: 'Rahul Kapoor',
     headline: 'Sets the clinic up once',
-    body: 'Staff accounts, roles, branding and screens. Configured in minutes and audited from then on.',
+    body: 'Staff, roles, branding and screens, configured in minutes.',
     points: [
-      'Invite staff and assign roles and permissions',
-      'Put the clinic’s own logo and name on every screen',
-      'Pair waiting-room TVs with a screen key',
-      'Choose how patient IDs are numbered',
+      'Invite staff and assign roles',
+      'Add your clinic’s name and logo',
+      'Pair waiting-room TVs in seconds',
     ],
-    only: 'Staff, roles, branding and screens. Set once, audited after',
+    only: 'Staff, roles, branding and screens',
   },
 ] as const;
 
@@ -2728,7 +2599,7 @@ function RolesShowcase({ night }: { night: boolean }) {
           className="wl-rise mt-8 grid items-stretch gap-6 lg:grid-cols-2"
           style={{ animationDuration: '.5s' }}
         >
-          <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl p-7 shadow-sm sm:p-9">
+          <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-white p-7 shadow-sm sm:p-9">
             <p className="mono-label" style={{ color: tone.text }}>
               {role.label}
             </p>
@@ -3169,158 +3040,218 @@ function AdminScreen({ tone }: { tone: RoleTone }) {
 /*  Waiting-room display                                                       */
 /* -------------------------------------------------------------------------- */
 
-function DisplayShowcase() {
+/** Sample token sequences for the two boards on the waiting-room TV. */
+const DISPLAY_BOARDS = [
+  {
+    doctor: 'Dr. Kiran Rao',
+    room: 'Room 1',
+    tokens: ['18', '19', '20', '23', '24', '26', '27'],
+  },
+  {
+    doctor: 'Dr. Leela Iyer',
+    room: 'Room 2',
+    tokens: ['06', '07', '21', '22', '25', '28', '29'],
+  },
+] as const;
+
+const DISPLAY_TICK_MS = 3200;
+
+const DISPLAY_POINTS = [
+  {
+    title: 'Pairs in seconds',
+    body: 'Any smart TV or browser. Type a key, nothing to install.',
+    icon: <IconKey size={18} />,
+  },
+  {
+    title: 'Always up to date',
+    body: 'The board moves the moment the desk calls the next patient.',
+    icon: <IconRefresh size={18} />,
+  },
+  {
+    title: 'Tokens, never names',
+    body: 'Patient privacy stays intact, even on the wall.',
+    icon: <IconEyeOff size={18} />,
+  },
+];
+
+/**
+ * The waiting-room TV, live: every few seconds one of the two doctors calls
+ * the next token and the announcement strip says so, the way the real display
+ * behaves. Holds still for visitors who prefer reduced motion.
+ */
+function DisplayShowcase({ onRequestDemo }: { onRequestDemo?: (() => void) | undefined }) {
+  // Index of the token each board is serving, and which board called last.
+  const [{ served, lastBoard }, setBoard] = useState<{
+    served: [number, number];
+    lastBoard: 0 | 1;
+  }>({ served: [1, 1], lastBoard: 0 });
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const id = window.setInterval(() => {
+      setBoard((prev) => {
+        const board = prev.lastBoard === 0 ? 1 : 0;
+        const max = DISPLAY_BOARDS[board].tokens.length - 3;
+        const next: [number, number] = [prev.served[0], prev.served[1]];
+        next[board] = prev.served[board] >= max ? 1 : prev.served[board] + 1;
+        return { served: next, lastBoard: board };
+      });
+    }, DISPLAY_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const called = DISPLAY_BOARDS[lastBoard]!;
+  const calledToken = called.tokens[served[lastBoard]]!;
+
   return (
     <section
       id="display"
-      className="relative scroll-mt-24 bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
+      className="relative scroll-mt-24 overflow-hidden bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
     >
       <div className="mx-auto max-w-6xl">
-        <Reveal className="grid items-end gap-6 lg:grid-cols-2 lg:gap-16">
-          <div>
-            <p className="flex items-baseline gap-3">
-              <span className="wl-label text-clinical-text">Waiting room</span>
-              <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
-            </p>
-            <h2 className="mt-5 text-[clamp(30px,4.6vw,52px)] font-extrabold leading-[1.04] tracking-[-0.03em] text-ink">
-              The token screen in the{' '}
-              <span className="wl-serif font-normal text-clinical-text">waiting room.</span>
-            </h2>
-          </div>
-          <p className="max-w-md text-[16px] leading-relaxed text-ink-60">
-            Pair any TV with a key from settings. It shows who each doctor is seeing and who&rsquo;s
-            next, and updates on its own.
-          </p>
+        <Reveal>
+          <SectionHead
+            eyebrow="Waiting room"
+            title={
+              <>
+                No more &ldquo;Is it my turn?&rdquo;{' '}
+                <span className="wl-serif text-clinical">Just a glance at the screen.</span>
+              </>
+            }
+            body="Turn any TV into a live token board. Patients know where they stand, and the front desk gets a quieter day."
+          />
         </Reveal>
 
-        {/* Bento: the TV gets the big tile, and each promise gets a small tile
-            that shows it rather than just saying it. */}
-        <div className="mt-10 grid gap-4 lg:grid-cols-[1.6fr_1fr] lg:grid-rows-3">
-          <Reveal
-            delay={120}
-            className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-gradient-to-br from-clinical-tint to-white to-65% p-4 sm:p-8 lg:row-span-3"
-          >
-            <div className="relative rounded-[26px] border border-black/40 bg-gradient-to-b from-[#24272c] to-[#0b0c0e] p-2.5 shadow-[0_50px_90px_-45px_rgba(22,24,28,0.55),0_0_0_1px_rgba(255,255,255,0.04)_inset] sm:p-3.5">
-              {/* Camera dot on the bezel */}
-              <span
-                aria-hidden="true"
-                className="absolute left-1/2 top-[5px] h-1 w-1 -translate-x-1/2 rounded-full bg-white/20 sm:top-[7px]"
-              />
-              <div className="overflow-hidden rounded-[16px] bg-bg p-4 text-ink sm:p-6">
-                <div className="flex items-center justify-between gap-3 border-b border-ink/10 pb-4">
-                  <span className="flex items-center gap-3">
-                    <span className="grid h-10 w-10 place-items-center rounded-panel bg-clinical font-display text-[13px] font-bold text-white">
-                      SC
-                    </span>
-                    <span>
-                      <span className="eyebrow">Sample display · now serving</span>
-                      <span className="block font-display text-[clamp(18px,2.4vw,26px)] font-bold leading-tight tracking-display">
+        <div className="mt-12 grid items-center gap-10 lg:mt-16 lg:grid-cols-[1.45fr_1fr] lg:gap-14">
+          {/* The TV */}
+          <Reveal delay={100}>
+            <figure className="mx-auto w-full max-w-[680px]">
+              <div className="rounded-[22px] bg-gradient-to-b from-[#2a2d33] to-[#101113] p-2 shadow-[0_40px_80px_-40px_rgba(16,17,19,0.6)] sm:p-2.5">
+                <div className="overflow-hidden rounded-[15px] bg-white">
+                  {/* Top bar */}
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-clinical font-display text-[11px] font-bold text-white">
+                        SC
+                      </span>
+                      <span className="truncate font-display text-[15px] font-bold tracking-[-0.01em] sm:text-[17px]">
                         Sunrise Clinic
                       </span>
                     </span>
-                  </span>
-                  <span className="flex items-center gap-2 rounded-pill bg-white px-3 py-1.5 font-mono text-[11px] text-ink-60 shadow-sm">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green/60" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+                    <span className="flex shrink-0 items-center gap-2 font-mono text-[11px] text-ink-40">
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green/60 motion-reduce:hidden" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+                      </span>
+                      LIVE · 10:42 AM
                     </span>
-                    10:42 AM
-                  </span>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {[
-                    {
-                      d: 'Dr. Kiran Rao',
-                      s: 'General Medicine',
-                      now: '19',
-                      next: ['20', '23', '24'],
-                    },
-                    { d: 'Dr. Leela Iyer', s: 'Paediatrics', now: '07', next: ['21', '22'] },
-                  ].map((b) => (
-                    <div
-                      key={b.d}
-                      className="overflow-hidden rounded-panel border border-ink/8 bg-card shadow-sm"
-                    >
-                      <div className="flex items-baseline justify-between gap-2 border-b border-ink/8 bg-bg-soft px-4 py-2.5">
-                        <span className="font-display text-[15px] font-bold">{b.d}</span>
-                        <span className="truncate text-[11px] text-ink-40">{b.s}</span>
-                      </div>
-                      <div className="px-4 py-3">
-                        <p className="mono-label">Now serving</p>
-                        <p className="font-mono text-[46px] font-bold leading-none text-clinical sm:text-[54px]">
-                          {b.now}
-                        </p>
-                        <div className="mt-3 border-t border-ink/8 pt-3">
-                          <p className="mono-label">Next</p>
-                          <div className="mt-1.5 flex gap-1.5">
-                            {b.next.map((t) => (
+                  </div>
+
+                  {/* Boards */}
+                  <div className="grid grid-cols-2 border-t border-ink/8">
+                    {DISPLAY_BOARDS.map((b, i) => {
+                      const at = served[i as 0 | 1];
+                      const isLast = lastBoard === i;
+                      return (
+                        <div
+                          key={b.doctor}
+                          className={`px-4 py-5 sm:px-6 sm:py-7 ${i === 0 ? 'border-r border-ink/8' : ''}`}
+                        >
+                          <p className="truncate text-[12px] font-semibold text-ink sm:text-[14px]">
+                            {b.doctor}
+                          </p>
+                          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-40 sm:text-[11px]">
+                            {b.room}
+                          </p>
+                          <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-40 sm:mt-5 sm:text-[11px]">
+                            Now serving
+                          </p>
+                          <p
+                            key={b.tokens[at]}
+                            className={`wl-rise font-mono text-[52px] font-bold leading-none tracking-[-0.04em] sm:text-[76px] ${
+                              isLast ? 'text-clinical' : 'text-ink'
+                            }`}
+                          >
+                            {b.tokens[at]}
+                          </p>
+                          <div className="mt-4 flex flex-wrap items-center gap-1.5 sm:mt-5">
+                            <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-40 sm:text-[11px]">
+                              Next
+                            </span>
+                            {b.tokens.slice(at + 1, at + 3).map((t) => (
                               <span
                                 key={t}
-                                className="rounded-[8px] bg-clinical-soft px-2.5 py-1 font-mono text-[15px] font-bold text-clinical-text"
+                                className="rounded-[7px] bg-bg-soft px-2 py-0.5 font-mono text-[13px] font-bold text-ink-60 sm:text-[15px]"
                               >
                                 {t}
                               </span>
                             ))}
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
+
+                  {/* Announcement strip */}
+                  <div
+                    className="flex items-center gap-3 bg-clinical px-4 py-3 text-white sm:px-6"
+                    aria-live="off"
+                  >
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15">
+                      <IconBell size={14} />
+                    </span>
+                    <p
+                      key={`${lastBoard}-${calledToken}`}
+                      className="wl-rise truncate text-[13px] font-semibold sm:text-[15px]"
+                    >
+                      Token {calledToken}, please go to {called.room}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Reveal>
-
-          <Reveal delay={180} className="rounded-card-lg border border-ink/8 bg-white p-5">
-            <p className="mono-label">Pair in seconds</p>
-            <div aria-hidden="true" className="mt-3 flex gap-1.5">
-              {'K7P42Q'.split('').map((c, i) => (
-                <span
-                  key={i}
-                  className="grid h-10 w-8 place-items-center rounded-[9px] border border-ink/10 bg-bg-soft font-mono text-[17px] font-bold"
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-            <h3 className="mt-3 font-display text-[17px] font-bold tracking-[-0.015em]">
-              Any smart TV or browser
-            </h3>
-            <p className="mt-1 text-[13.5px] leading-snug text-ink-60">
-              Type the key from settings. Nothing to install.
-            </p>
-          </Reveal>
-
-          <Reveal delay={240} className="rounded-card-lg border border-ink/8 bg-white p-5">
-            <span className="flex items-center gap-2 font-mono text-[12px] text-clinical-text">
-              <span
+              {/* Stand */}
+              <div
                 aria-hidden="true"
-                className="h-2 w-2 rounded-full bg-clinical shadow-[0_0_0_5px_rgba(15,118,110,0.15)]"
+                className="mx-auto h-5 w-16 bg-gradient-to-b from-[#1b1d20] to-[#2a2d33]"
               />
-              Updated 2s ago
-            </span>
-            <h3 className="mt-3 font-display text-[17px] font-bold tracking-[-0.015em]">
-              One board per doctor
-            </h3>
-            <p className="mt-1 text-[13.5px] leading-snug text-ink-60">
-              Moves on its own as the desk calls patients in.
-            </p>
+              <div aria-hidden="true" className="mx-auto h-1.5 w-44 rounded-full bg-[#2a2d33]" />
+              <figcaption className="mt-4 text-center text-[12.5px] text-ink-40">
+                Sample display with fictional tokens.
+              </figcaption>
+            </figure>
           </Reveal>
 
-          <Reveal delay={300} className="rounded-card-lg border border-ink/8 bg-white p-5">
-            <div aria-hidden="true" className="flex items-center gap-2.5">
-              <span className="text-[13px] text-ink-20 line-through">Meera Pillai</span>
-              <ArrowRight size={12} />
-              <span className="rounded-[8px] bg-clinical-soft px-2.5 py-0.5 font-mono text-[19px] font-bold text-clinical">
-                20
-              </span>
-            </div>
-            <h3 className="mt-3 font-display text-[17px] font-bold tracking-[-0.015em]">
-              Tokens only
-            </h3>
-            <p className="mt-1 text-[13.5px] leading-snug text-ink-60">
-              Patients&rsquo; names never go on the wall.
-            </p>
+          {/* The three promises */}
+          <Reveal delay={180}>
+            <ul className="divide-y divide-ink/8 rounded-card-lg border border-ink/8 bg-white">
+              {DISPLAY_POINTS.map((p) => (
+                <li key={p.title} className="flex gap-4 p-5 sm:p-6">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-clinical-tint text-clinical-text">
+                    {p.icon}
+                  </span>
+                  <span>
+                    <span className="block text-[16px] font-bold tracking-[-0.01em] text-ink">
+                      {p.title}
+                    </span>
+                    <span className="mt-1 block text-[14px] leading-snug text-ink-60">
+                      {p.body}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {onRequestDemo && (
+              <button
+                type="button"
+                onClick={onRequestDemo}
+                className="wl-btn group mt-6 inline-flex items-center gap-2 text-[15px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
+              >
+                See it on your clinic&rsquo;s TV
+                <span className="transition-transform group-hover:translate-x-0.5">
+                  <ArrowRight size={14} />
+                </span>
+              </button>
+            )}
           </Reveal>
         </div>
       </div>
@@ -3332,69 +3263,59 @@ function DisplayShowcase() {
 /*  Audit log                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A day's activity in plain words: the audit trail as a clinic owner would
+ * read it. Sample names and times only.
+ */
 function AuditLog() {
   const rows = [
-    {
-      t: '09:31:08',
-      who: 'Dr. K. Rao',
-      what: 'prescription.create',
-      ref: 'UH-24-0871',
-      c: '#6b3fa0',
-    },
-    { t: '09:33:41', who: 'P. Singh', what: 'payment.record', ref: 'R-1042', c: '#3a4e9b' },
-    { t: '09:34:02', who: 'P. Singh', what: 'receipt.print', ref: 'R-1042', c: '#3a4e9b' },
-    { t: '09:40:15', who: 'A. Joseph', what: 'vitals.update', ref: 'UH-24-0873', c: '#a83a6e' },
-    { t: '10:02:57', who: 'R. Kapoor', what: 'user.role.update', ref: 'staff/14', c: '#4c5563' },
-    { t: '10:05:12', who: 'S. Menon', what: 'price.update', ref: 'consult/gp', c: '#7a5230' },
+    { t: '09:31', who: 'Dr. K. Rao', initials: 'KR', what: 'wrote a prescription', c: '#6b3fa0' },
+    { t: '09:33', who: 'P. Singh', initials: 'PS', what: 'recorded a payment', c: '#3a4e9b' },
+    { t: '09:40', who: 'A. Joseph', initials: 'AJ', what: 'updated vitals', c: '#a83a6e' },
+    { t: '10:05', who: 'S. Menon', initials: 'SM', what: 'changed a price', c: '#7a5230' },
   ];
 
   return (
-    <div className="relative">
+    <div className="relative mx-auto w-full max-w-[520px]">
       <div
         aria-hidden="true"
-        className="absolute -inset-4 -z-10 rounded-[36px] bg-gradient-to-br from-clinical-soft/70 via-transparent to-amber-soft/60 blur-xl"
+        className="absolute -inset-4 -z-10 rounded-[36px] bg-gradient-to-br from-clinical-soft/70 via-transparent to-amber-soft/50 blur-xl"
       />
-      <div className="overflow-hidden rounded-card-lg border border-ink/10 bg-white/75 backdrop-blur-xl shadow-lg">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/8 px-5 py-4">
-          <span>
-            <span className="mono-label block">Audit trail</span>
-            <span className="mt-0.5 block text-[16px] font-bold">Today, every write</span>
-          </span>
-          <span className="flex gap-1.5">
-            <span className="badge-clinical">All staff</span>
-            <span className="badge-neutral">Live</span>
+      <div className="overflow-hidden rounded-card-lg border border-ink/10 bg-white shadow-lg">
+        <div className="flex items-center justify-between gap-3 border-b border-ink/8 px-5 py-4 sm:px-6">
+          <span className="text-[16px] font-bold tracking-[-0.01em]">Today&rsquo;s activity</span>
+          <span className="flex items-center gap-2 font-mono text-[11px] text-ink-40">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green/60 motion-reduce:hidden" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+            </span>
+            LIVE
           </span>
         </div>
         <ul className="divide-y divide-ink/6">
-          {rows.map((r, i) => (
-            <li
-              key={r.t}
-              className={`grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1 px-5 py-3 sm:grid-cols-[76px_120px_1fr_auto] ${
-                i === 0 ? 'bg-clinical-tint/60' : ''
-              }`}
-            >
-              <span className="font-mono text-[11.5px] text-ink-40">{r.t}</span>
-              <span className="flex items-center gap-2 text-[13px] font-semibold">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: r.c }} />
-                {r.who}
+          {rows.map((r) => (
+            <li key={r.t} className="flex items-center gap-3.5 px-5 py-3.5 sm:px-6">
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white"
+                style={{ backgroundColor: r.c }}
+              >
+                {r.initials}
               </span>
-              <span className="col-span-2 font-mono text-[12px] text-clinical-text sm:col-span-1">
-                {r.what}
+              <span className="min-w-0 flex-1 truncate text-[14px] text-ink-60">
+                <span className="font-semibold text-ink">{r.who}</span> {r.what}
               </span>
-              <span className="col-span-2 font-mono text-[11.5px] text-ink-40 sm:col-span-1 sm:text-right">
-                {r.ref}
-              </span>
+              <span className="shrink-0 font-mono text-[11.5px] text-ink-40">{r.t}</span>
             </li>
           ))}
         </ul>
-        <div className="flex items-center justify-between border-t border-ink/8 bg-bg-soft px-5 py-3">
-          <span className="flex items-center gap-2 text-[12px] text-ink-60">
-            <IconLock size={13} />
-            Append-only · Encrypted at rest
-          </span>
-          <span className="font-mono text-[11px] text-ink-40">6 of 1,284</span>
+        <div className="flex items-center gap-2 border-t border-ink/8 bg-bg-soft px-5 py-3 text-[12.5px] text-ink-60 sm:px-6">
+          <IconLock size={13} />
+          Every change is recorded with who made it and when.
         </div>
       </div>
+      <p className="mt-4 text-center text-[12.5px] text-ink-40">
+        Sample activity, fictional staff.
+      </p>
     </div>
   );
 }
@@ -3404,39 +3325,33 @@ function AuditLog() {
 /* -------------------------------------------------------------------------- */
 
 /*
- * Questions a clinic owner asks before choosing, answered only with what the
- * product does today. Staff sign-in help (accounts, the clinic field,
- * authenticator codes, forgotten passwords) lives on the sign-in page, where
- * the people who need it already are.
+ * The questions a doctor or clinic owner asks before choosing, answered
+ * briefly and only with what the product does today. Staff sign-in help
+ * (accounts, the clinic field, authenticator codes, forgotten passwords) lives
+ * on the sign-in page, where the people who need it already are.
  */
 const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   {
-    q: 'How can I book a demo?',
-    a: BUSINESS.email
-      ? `Use any “Book a demo” button to prepare a request for ${BUSINESS.email}.`
-      : 'Demo contact details have not been configured on this page yet. Once an email or phone number is added, you can use the contact links here to arrange a demo.',
-  },
-  {
     q: 'Do we need to install anything?',
-    a: 'No. It runs in any modern browser (Chrome, Edge, Firefox or Safari) on the desk PCs, laptops or tablets you already have. A waiting-room TV only needs a browser too.',
+    a: 'No. DoctorDesk runs in any modern browser on the PCs, laptops or tablets you already have. A waiting-room TV only needs a browser too.',
   },
   {
-    q: 'Can other clinics see our patients?',
-    a: 'No. Each clinic’s records are kept apart by the database itself, row by row, and every change is logged with who made it and when.',
+    q: 'Is our patient data private?',
+    a: 'Yes. Each clinic’s records are kept completely separate, and every change is recorded with who made it and when.',
+  },
+  {
+    q: 'Can each staff member have their own login?',
+    a: 'Yes. Front desk, doctors, nurses, owners and administrators each sign in with their own account and see only what their role needs.',
+  },
+  {
+    q: 'Will it carry our clinic’s name?',
+    a: 'Yes. Your clinic’s name and logo appear on the screens your staff use and on printed prescriptions.',
   },
   {
     q: 'Does it work with ABHA?',
     a:
-      'You can record a patient’s ABHA number and ABHA address, and find a patient by their ABHA number from the same search box as name, mobile and UHID.' +
+      'You can record a patient’s ABHA number and address, and find patients by ABHA number from the main search.' +
       (BUSINESS.abdm ? ' ' + BUSINESS.abdm + '.' : ''),
-  },
-  {
-    q: 'Will it look like our clinic, or like your software?',
-    a: 'Like your clinic. Your name and logo go on the sign-in page, every screen and the printed prescription, and staff never see our name.',
-  },
-  {
-    q: 'Who can see what?',
-    a: 'Each person signs in with their own account and role: front desk, doctor, nurse, owner or administrator. Each role sees only what it needs, and the roles that can change settings must use two-factor sign-in.',
   },
   ...(BUSINESS.pricing.from
     ? [
@@ -3448,20 +3363,26 @@ const FAQ: ReadonlyArray<{ q: string; a: string }> = [
         },
       ]
     : []),
+  {
+    q: 'How do I get a demo?',
+    a: 'Use any “Request a demo” button and share a few details about your clinic. We’ll arrange a walkthrough at a time that suits your OPD.',
+  },
 ];
 
 function FaqList() {
   return (
-    <div className="divide-y divide-ink/8 rounded-card-lg border border-ink/8 bg-white/65 backdrop-blur-xl shadow-sm">
+    <div className="divide-y divide-ink/8 rounded-card-lg border border-ink/8 bg-white shadow-sm">
       {FAQ.map((f, i) => (
-        <details key={f.q} className="group px-6" open={i === 0}>
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-[15.5px] font-semibold [&::-webkit-details-marker]:hidden">
+        <details key={f.q} className="group px-5 sm:px-7" open={i === 0}>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-[15.5px] font-semibold text-ink transition-colors hover:text-clinical-text sm:text-[16px] [&::-webkit-details-marker]:hidden">
             {f.q}
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-ink/10 text-ink-40 transition-all duration-300 group-open:rotate-180 group-open:border-clinical/30 group-open:bg-clinical-tint group-open:text-clinical">
               <IconChevronDown size={15} />
             </span>
           </summary>
-          <p className="-mt-1 pb-5 pr-12 text-[14.5px] leading-relaxed text-ink-60">{f.a}</p>
+          <p className="-mt-1 pb-5 pr-10 text-[14.5px] leading-relaxed text-ink-60 sm:pr-12">
+            {f.a}
+          </p>
         </details>
       ))}
     </div>
@@ -3532,26 +3453,6 @@ const FlaskGlyph = ({ size }: { size?: number }) => (
   <Glyph size={size}>
     <path d="M9 3h6M10 3v6.5L4.8 18.2A2 2 0 006.5 21h11a2 2 0 001.7-2.8L14 9.5V3" />
     <path d="M7.5 15h9" />
-  </Glyph>
-);
-
-const RxGlyph = ({ size }: { size?: number }) => (
-  <Glyph size={size}>
-    <path d="M6 20V4h5a4 4 0 010 8H6M10 12l8 8M18 13l-5 6" />
-  </Glyph>
-);
-
-const TagGlyph = ({ size }: { size?: number }) => (
-  <Glyph size={size}>
-    <path d="M3 12V4a1 1 0 011-1h8l9 9-9 9-9-9z" />
-    <circle cx="8" cy="8" r="1.5" />
-  </Glyph>
-);
-
-const KeyboardGlyph = ({ size }: { size?: number }) => (
-  <Glyph size={size}>
-    <rect x="2" y="6" width="20" height="12" rx="2" />
-    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
   </Glyph>
 );
 

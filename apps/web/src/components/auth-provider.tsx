@@ -30,7 +30,7 @@ const AuthContext = createContext<AuthState | null>(null);
  * `/home` and put that into every URL. The clean way to have both is a
  * separate host for the app rather than a second path on this one.
  */
-const PUBLIC_PATHS = ['/login'];
+const PUBLIC_PATHS = ['/login', '/welcome'];
 
 /**
  * Routes this provider has no business redirecting.
@@ -128,7 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       !PUBLIC_PATHS.includes(pathname) &&
       governedByThisProvider(pathname)
     ) {
-      router.replace('/login');
+      // The bare domain is the front door: a signed-out visitor there gets the
+      // welcome page. Every other console route goes straight to sign-in.
+      router.replace(pathname === '/' ? '/welcome' : '/login');
     }
   }, [loading, session, pathname, router]);
 
