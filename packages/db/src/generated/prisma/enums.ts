@@ -229,3 +229,39 @@ export const PromotionReversalKind = {
 } as const
 
 export type PromotionReversalKind = (typeof PromotionReversalKind)[keyof typeof PromotionReversalKind]
+
+
+export const ArrivalIntent = {
+  ON_THE_WAY: 'ON_THE_WAY',
+  RUNNING_LATE: 'RUNNING_LATE'
+} as const
+
+export type ArrivalIntent = (typeof ArrivalIntent)[keyof typeof ArrivalIntent]
+
+
+export const PatientLinkPurpose = {
+  VISIT: 'VISIT',
+  RECOVERY: 'RECOVERY'
+} as const
+
+export type PatientLinkPurpose = (typeof PatientLinkPurpose)[keyof typeof PatientLinkPurpose]
+
+
+export const MessageKind = {
+  TOKEN_ISSUED: 'TOKEN_ISSUED',
+  LEAVE_NOW: 'LEAVE_NOW',
+  CHECKIN_REQUEST: 'CHECKIN_REQUEST',
+  REVIEW_REMINDER: 'REVIEW_REMINDER',
+  PRESCRIPTION: 'PRESCRIPTION'
+} as const
+
+export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind]
+
+
+export const MessageStatus = {
+  SENT: 'SENT',
+  FAILED: 'FAILED',
+  SKIPPED_NO_CONSENT: 'SKIPPED_NO_CONSENT'
+} as const
+
+export type MessageStatus = (typeof MessageStatus)[keyof typeof MessageStatus]

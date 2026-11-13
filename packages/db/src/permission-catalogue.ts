@@ -195,6 +195,16 @@ export const PERMISSION_CATALOGUE: Record<Permission, PermissionInfo> = {
     description: "See the day's collections and how they were taken",
     category: 'Reports',
   },
+  [PERMISSIONS.FOLLOWUP_READ]: {
+    name: PERMISSIONS.FOLLOWUP_READ,
+    description: 'See who is due back for review, who came back, and how recovery is going',
+    category: 'Appointments and queue',
+  },
+  [PERMISSIONS.FOLLOWUP_MANAGE]: {
+    name: PERMISSIONS.FOLLOWUP_MANAGE,
+    description: 'Send patients reminders and check-ins, and clear a rising-pain flag',
+    category: 'Appointments and queue',
+  },
   [PERMISSIONS.AUDIT_READ]: {
     name: PERMISSIONS.AUDIT_READ,
     description: 'See who did what, and what a record used to say',

@@ -99,6 +99,12 @@ process.env.MFA_ENABLED = 'true';
  */
 process.env.CLINICAL_STORAGE_DRIVER = 'memory';
 
+/**
+ * No messaging timer. Tests that need a sweep call it; a timer firing halfway
+ * through an assertion would make those tests pass or fail by the clock.
+ */
+process.env.ENGAGEMENT_SWEEP_SECONDS = '0';
+
 // The app refuses to start without these; a developer whose .env predates auth
 // should get that message from here rather than a stack trace inside Nest.
 for (const key of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET']) {
