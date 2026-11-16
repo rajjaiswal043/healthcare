@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth-provider';
+import { api, ApiRequestError } from '@/lib/api';
 import { ConsoleMark } from '@/components/console-mark';
 import { HANDMADE_CSS, HandArrow, HandNote } from '@/components/handmade';
 import { SectionRail } from '@/components/scroll-scene';
@@ -143,26 +144,22 @@ const BUSINESS = {
   statusUrl: '',
 };
 
-/** The four benefits shown just under the hero. */
+/** The four benefits, shown as the tiles in the Features section. */
 const BENEFITS = [
   {
     title: 'Register and find patients',
-    body: 'Register a new patient in moments, and find a returning one by name, mobile number or patient ID.',
     Icon: IconUserPlus,
   },
   {
     title: 'Access previous prescriptions',
-    body: 'Prescriptions and notes from earlier visits are saved with the patient, ready when the doctor needs them.',
     Icon: IconStethoscope,
   },
   {
     title: 'Manage the daily queue',
-    body: 'See who is waiting, who is with the doctor and who is next, and call the next token in one click.',
     Icon: IconCallNext,
   },
   {
     title: 'Track daily collections',
-    body: 'Every payment is recorded as it is taken, so the day’s total is always up to date.',
     Icon: IconReceipt,
   },
 ] as const;
@@ -213,7 +210,12 @@ export default function WelcomePage() {
   const closeSignIn = useCallback(() => setSignInOpen(false), []);
 
   const [demoOpen, setDemoOpen] = useState(false);
-  const closeDemo = useCallback(() => setDemoOpen(false), []);
+  /** Which enquiry the shared form is for: a product demo or a clinic website. */
+  const [enquiry, setEnquiry] = useState<Enquiry>('demo');
+  const closeDemo = useCallback(() => {
+    setDemoOpen(false);
+    setEnquiry('demo');
+  }, []);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -426,21 +428,26 @@ export default function WelcomePage() {
                       </span>
                     </button>
                   )}
-                  <a
-                    href="#workflow"
-                    className="wl-btn self-center text-[16px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical sm:self-auto"
-                  >
-                    Explore the product preview
-                  </a>
                 </div>
 
-                <p
-                  className="wl-rise mt-5 max-w-[540px] text-[15px] leading-relaxed text-ink-60"
+                <div
+                  className="wl-rise mt-7 max-w-[540px] border-l-2 border-clinical/40 pl-4"
                   style={{ animationDelay: '280ms' }}
                 >
-                  See how DoctorDesk brings patient records, prescriptions, and everyday clinic
-                  operations together.
-                </p>
+                  <p className="text-[15px] leading-relaxed text-ink-60">
+                    See how DoctorDesk brings patient records, prescriptions, and everyday clinic
+                    operations together.
+                  </p>
+                  <a
+                    href="#workflow"
+                    className="wl-btn group mt-2 inline-flex items-center gap-2 text-[15.5px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
+                  >
+                    Explore the product preview
+                    <span className="transition-transform group-hover:translate-x-0.5">
+                      <ArrowRight size={15} />
+                    </span>
+                  </a>
+                </div>
               </div>
 
               <div className="wl-rise" style={{ animationDelay: '200ms' }}>
@@ -448,42 +455,23 @@ export default function WelcomePage() {
               </div>
             </div>
 
-            {/* The four beats of a visit, numbered along the foot of the hero. */}
-            <ol
-              className="wl-rise mt-14 grid gap-x-8 gap-y-6 border-t border-ink/12 pt-7 sm:grid-cols-2 lg:grid-cols-4"
+            {/* What it covers, as one quiet ruled row. */}
+            <ul
+              className="wl-rise mt-14 grid grid-cols-2 gap-y-4 border-t border-ink/12 pt-7 text-[14.5px] font-semibold text-ink sm:grid-cols-4"
               style={{ animationDelay: '380ms' }}
             >
               {[
-                {
-                  t: 'Keep patients informed',
-                  b: 'Share token details and queue updates with patients on WhatsApp.',
-                },
-                {
-                  t: 'Review previous records',
-                  b: 'Review saved visit records and previous prescriptions in one place.',
-                },
-                {
-                  t: 'Review patient updates',
-                  b: 'Collect patient check-ins between visits for your clinic team to review.',
-                },
-                {
-                  t: 'Track follow-up visits',
-                  b: 'See which patients are due for follow-up, track completed visits, and send reminders.',
-                },
-              ].map((s, i) => (
-                <li key={s.t} className="flex gap-4">
-                  <span className="wl-serif text-[44px] leading-[0.8] text-ink-20">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <span>
-                    <span className="block text-[16px] font-bold text-ink">{s.t}</span>
-                    <span className="mt-1.5 block text-[13.5px] leading-snug text-ink-60">
-                      {s.b}
-                    </span>
-                  </span>
+                'Live token queue',
+                'Past prescriptions',
+                'Follow-up reminders',
+                'Daily collections',
+              ].map((x) => (
+                <li key={x} className="flex items-center gap-2.5">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-clinical" />
+                  {x}
                 </li>
               ))}
-            </ol>
+            </ul>
           </div>
 
           <div
@@ -501,47 +489,85 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* ==== Benefits =================================================== */}
+        {/* ==== Features =================================================== */}
         <section
-          id="benefits"
-          className="scroll-mt-24 bg-white px-4 pt-16 sm:px-6 lg:pt-24"
-          aria-labelledby="benefits-title"
+          id="features"
+          className="scroll-mt-24 bg-white px-4 py-16 text-ink sm:px-6 lg:py-24"
         >
-          <div className="mx-auto max-w-6xl">
-            <Reveal>
-              <SectionHead
-                eyebrow="Benefits"
-                title={
-                  <span id="benefits-title">
-                    The everyday work of the OPD,{' '}
-                    <span className="wl-serif text-clinical">in one place.</span>
-                  </span>
-                }
-                body="Four things every clinic does dozens of times a day, made quicker for the front desk, the doctor and the owner."
-              />
-            </Reveal>
-            <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {BENEFITS.map((b, i) => (
-                <li key={b.title}>
-                  <Reveal delay={i * 80} className="h-full">
-                    <div className="group flex h-full flex-col rounded-card-lg border border-ink/8 bg-bg-soft p-6 transition-all duration-300 hover:-translate-y-1 hover:border-clinical/30 hover:bg-white hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.35)]">
+          <div className="relative mx-auto max-w-6xl overflow-hidden rounded-card-lg bg-clinical-tint px-6 py-10 sm:px-10 sm:py-14 lg:px-14">
+            <div className="grid gap-10 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-16">
+              <Reveal>
+                <p className="flex items-baseline gap-3">
+                  <span className="wl-label text-clinical-text">Features</span>
+                  <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
+                </p>
+                <h2 className="wl-head mt-6 text-[clamp(34px,5vw,60px)] font-extrabold leading-[0.98] tracking-[-0.04em]">
+                  Built for your{' '}
+                  <span className="wl-serif block text-clinical">busiest clinic days.</span>
+                </h2>
+                <p className="mt-6 max-w-lg text-[17px] leading-relaxed text-ink-60">
+                  Keep registrations, patient records, queues, and billing organised as your clinic
+                  gets busy. DoctorDesk brings everyday tasks together so your team can find the
+                  information they need and keep work moving.
+                </p>
+                <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+                  {signedIn ? (
+                    <Link href={primary.href} className="btn-primary min-h-11 whitespace-nowrap">
+                      Open your console
+                      <ArrowRight size={15} />
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setDemoOpen(true)}
+                      className="btn-primary min-h-11 whitespace-nowrap"
+                    >
+                      Request a demo
+                      <ArrowRight size={15} />
+                    </button>
+                  )}
+                  <a
+                    href="#workflow"
+                    className="text-[15px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
+                  >
+                    Explore the product preview
+                  </a>
+                </div>
+              </Reveal>
+
+              <Reveal delay={120}>
+                <h3 id="benefits" className="wl-label mb-4 scroll-mt-28 text-clinical-text">
+                  Benefits of using DoctorDesk
+                </h3>
+                <ul className="grid grid-cols-2 gap-3 sm:gap-4">
+                  {BENEFITS.map(({ title: k, Icon }, i) => (
+                    <li
+                      key={k}
+                      className="group flex flex-col justify-between gap-8 rounded-[20px] border border-white bg-white/80 p-5 shadow-[0_12px_30px_-22px_rgba(0,0,0,0.35)] transition-all duration-300 hover:-translate-y-1 hover:bg-white sm:p-6"
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-clinical-tint text-clinical-text transition-colors group-hover:bg-clinical group-hover:text-white">
-                          <b.Icon size={22} />
+                        <span className="grid h-11 w-11 place-items-center rounded-[13px] bg-clinical-tint text-clinical-text transition-colors group-hover:bg-clinical group-hover:text-white">
+                          <Icon size={20} />
                         </span>
                         <span className="font-mono text-[12px] tracking-[0.12em] text-ink-40">
                           {String(i + 1).padStart(2, '0')}
                         </span>
                       </div>
-                      <h3 className="mt-6 text-[19px] font-bold leading-snug tracking-[-0.02em] text-ink">
-                        {b.title}
-                      </h3>
-                      <p className="mt-2 text-[14.5px] leading-relaxed text-ink-60">{b.body}</p>
-                    </div>
-                  </Reveal>
-                </li>
-              ))}
-            </ul>
+                      <span className="text-[16px] font-bold tracking-[-0.01em] text-ink sm:text-[17px]">
+                        {k}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Reveal>
+            </div>
+
+            <p className="mt-10 flex items-start gap-1.5 text-[13px] leading-snug text-ink-60">
+              <span className="mt-px shrink-0">
+                <IconInfo size={13} />
+              </span>
+              <em>All patient details, tokens, and amounts shown are fictional.</em>
+            </p>
           </div>
         </section>
 
@@ -557,97 +583,12 @@ export default function WelcomePage() {
                     <span className="wl-serif text-clinical">through the clinic.</span>
                   </>
                 }
-                body="The screens reception, the doctor and billing use. Choose a stop to open one."
+                body="One patient, from front desk to doctor to bill. Pick a stop to see the screen."
               />
             </Reveal>
             <Reveal delay={100}>
               <ClinicTour />
             </Reveal>
-          </div>
-        </section>
-
-        {/* ==== Features =================================================== */}
-        <section
-          id="features"
-          className="scroll-mt-24 bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
-        >
-          <div className="mx-auto max-w-6xl">
-            <Reveal>
-              <p className="flex items-baseline gap-3">
-                <span className="wl-label text-clinical-text">Features</span>
-                <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
-              </p>
-            </Reveal>
-
-            <div className="mt-8 grid gap-8 lg:mt-10 lg:grid-cols-[1.15fr_1fr] lg:items-end lg:gap-16">
-              <Reveal>
-                <h2 className="wl-head text-[clamp(36px,5.6vw,68px)] font-extrabold leading-[0.98] tracking-[-0.04em]">
-                  Built for your{' '}
-                  <span className="wl-serif block text-clinical">busiest clinic days.</span>
-                </h2>
-              </Reveal>
-
-              <Reveal delay={100} className="lg:pb-2">
-                <p className="max-w-lg text-[17px] leading-relaxed text-ink-60 sm:text-[18px]">
-                  Keep registrations, patient records, queues, and billing organised as your clinic
-                  gets busy. DoctorDesk brings everyday tasks together so your team can find the
-                  information they need and keep work moving.
-                </p>
-                <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
-                  <a
-                    href="#workflow"
-                    className="wl-btn group inline-flex items-center gap-2 text-[15.5px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
-                  >
-                    Explore DoctorDesk
-                    <span className="transition-transform group-hover:translate-x-0.5">
-                      <ArrowRight size={15} />
-                    </span>
-                  </a>
-                  {!signedIn && (
-                    <button
-                      type="button"
-                      onClick={() => setDemoOpen(true)}
-                      className="text-[14.5px] text-ink-60 transition-colors hover:text-ink"
-                    >
-                      or{' '}
-                      <span className="font-semibold text-ink underline decoration-ink/20 underline-offset-4">
-                        request a demo
-                      </span>
-                    </button>
-                  )}
-                </div>
-              </Reveal>
-            </div>
-
-            {/* The four things the paragraph names, as a quiet rule-separated row. */}
-            <Reveal delay={160}>
-              <ul className="mt-12 grid grid-cols-2 border-y border-ink/10 sm:grid-cols-4 lg:mt-16">
-                {['Registrations', 'Patient records', 'Queues', 'Billing'].map((k, i) => (
-                  <li
-                    key={k}
-                    className={`flex items-center gap-3 py-5 sm:py-6 ${
-                      i % 2 === 1 ? 'pl-4 sm:pl-6' : ''
-                    } ${i >= 2 ? 'border-t border-ink/10 sm:border-t-0' : ''} ${
-                      i > 0 ? 'sm:border-l sm:border-ink/10 sm:pl-6' : ''
-                    }`}
-                  >
-                    <span className="font-mono text-[12px] tracking-[0.12em] text-clinical-text">
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink sm:text-[16px]">
-                      {k}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Reveal>
-
-            <p className="mt-5 flex items-start gap-1.5 text-[13px] leading-snug text-ink-60">
-              <span className="mt-px shrink-0">
-                <IconInfo size={13} />
-              </span>
-              <em>All patient details, tokens, and amounts shown are fictional.</em>
-            </p>
           </div>
         </section>
 
@@ -663,24 +604,13 @@ export default function WelcomePage() {
                     <span className="wl-serif text-clinical">A screen for every role.</span>
                   </>
                 }
-                body="Everyone signs in at the same place and sees exactly what their job needs. Nothing more. Pick a role to take a look."
+                body="Tap a role. See what their day looks like."
               />
             </Reveal>
-            <RolesShowcase night={false} />
-            {!signedIn && (
-              <Reveal className="mt-10 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setDemoOpen(true)}
-                  className="wl-btn group inline-flex items-center gap-2 text-[15px] font-bold text-clinical-text underline decoration-clinical/30 decoration-2 underline-offset-[6px] transition-colors hover:decoration-clinical"
-                >
-                  See how it fits your team
-                  <span className="transition-transform group-hover:translate-x-0.5">
-                    <ArrowRight size={14} />
-                  </span>
-                </button>
-              </Reveal>
-            )}
+            <RolesShowcase
+              night={false}
+              onRequestDemo={signedIn ? undefined : () => setDemoOpen(true)}
+            />
           </div>
         </section>
 
@@ -689,7 +619,7 @@ export default function WelcomePage() {
 
         {/* ==== Security =================================================== */}
         <section id="security" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
-          <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-16">
+          <div className="mx-auto max-w-6xl">
             <Reveal>
               <p className="flex items-baseline gap-3">
                 <span className="wl-label text-clinical-text">Security</span>
@@ -704,7 +634,7 @@ export default function WelcomePage() {
                 {BUSINESS.dataRegion ? ` Patient data is stored in ${BUSINESS.dataRegion}.` : ''}
               </p>
 
-              <ul className="mt-9 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+              <ul className="mt-10 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   {
                     icon: <IconUsers size={17} />,
@@ -770,14 +700,66 @@ export default function WelcomePage() {
                 )}
               </div>
             </Reveal>
-            <Reveal delay={120}>
-              <AuditLog />
-            </Reveal>
           </div>
         </section>
 
-        {/* ==== Logo preview ============================================== */}
-        <LogoStrip />
+        {/* ==== Clinic website ============================================= */}
+        <section
+          id="clinic-website"
+          className="scroll-mt-24 bg-bg-soft px-4 py-16 sm:px-6 lg:py-24"
+          aria-labelledby="clinic-website-title"
+        >
+          <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center lg:gap-16">
+            <Reveal>
+              <p className="flex items-baseline gap-3">
+                <span className="wl-label text-clinical-text">More value with DoctorDesk</span>
+                <span aria-hidden="true" className="h-px flex-1 self-center bg-ink/12" />
+              </p>
+              <h2
+                id="clinic-website-title"
+                className="wl-head mt-7 text-[clamp(32px,4.4vw,52px)] font-extrabold leading-[1.02] tracking-[-0.04em]"
+              >
+                Give your clinic the{' '}
+                <span className="wl-serif text-clinical">online presence it deserves.</span>
+              </h2>
+              <p className="mt-5 text-[18px] font-bold tracking-[-0.01em] text-ink">
+                Your Clinic. Your Brand. Your Website.
+              </p>
+              <p className="mt-3 max-w-lg text-[16.5px] leading-relaxed text-ink-60">
+                Make it easier for patients to discover your clinic, explore your services, and get
+                in touch. Get a professional clinic website designed around your brand and
+                seamlessly aligned with DoctorDesk.
+              </p>
+              <ul className="mt-8 grid gap-3.5">
+                {CLINIC_WEBSITE_POINTS.map(([lead, rest]) => (
+                  <li key={lead} className="flex items-start gap-3 text-[15px] text-ink-60">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[9px] bg-clinical-tint text-clinical-text">
+                      <IconCheck size={14} />
+                    </span>
+                    <span className="pt-[3px] leading-snug">
+                      <strong className="font-semibold text-ink">{lead}</strong> {rest}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => {
+                  setEnquiry('website');
+                  setDemoOpen(true);
+                }}
+                className="btn-primary mt-9 min-h-11 whitespace-nowrap"
+              >
+                Request Your Clinic Website
+                <ArrowRight size={15} />
+              </button>
+            </Reveal>
+
+            <Reveal delay={120}>
+              <ClinicSiteMockup />
+            </Reveal>
+          </div>
+        </section>
 
         {/* ==== FAQ ======================================================== */}
         <section id="faq" className="scroll-mt-24 bg-white px-4 py-16 sm:px-6 lg:py-24">
@@ -1024,7 +1006,7 @@ export default function WelcomePage() {
       </footer>
 
       {signInOpen && !signedIn && <SignInDialog onClose={closeSignIn} />}
-      {demoOpen && <DemoDialog onClose={closeDemo} />}
+      {demoOpen && <DemoDialog topic={enquiry} onClose={closeDemo} />}
     </div>
   );
 }
@@ -1150,79 +1132,80 @@ function SignInDialog({ onClose }: { onClose: () => void }) {
  * configured there is nowhere for the request to go, and the confirmation says
  * that plainly rather than pretending it was received.
  */
-const SPECIALITIES = [
-  'General practice',
-  'Orthopaedics',
-  'Paediatrics',
-  'Gynaecology',
-  'Dermatology',
-  'ENT',
-  'Ophthalmology',
-  'Dental',
-  'Physiotherapy',
-  'Multi-speciality',
-  'Other',
-];
+type Enquiry = 'demo' | 'website';
 
-function DemoDialog({ onClose }: { onClose: () => void }) {
-  const [sent, setSent] = useState<null | { doctor: string; summary: string }>(null);
+/** What changes in the shared enquiry form for each kind of request. */
+const ENQUIRY_COPY: Record<Enquiry, { title: string; intro: string }> = {
+  demo: {
+    title: 'Request a demo',
+    intro: 'A few quick details. We’ll call you to fix a time that suits your OPD.',
+  },
+  website: {
+    title: 'Request a website',
+    intro: 'A few quick details. We’ll call you to talk through your clinic’s website.',
+  },
+};
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
+function DemoDialog({ topic = 'demo', onClose }: { topic?: Enquiry; onClose: () => void }) {
+  const copy = ENQUIRY_COPY[topic];
+  const [sent, setSent] = useState<null | { doctor: string }>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (sending) return;
     const data = new FormData(e.currentTarget);
     const field = (k: string) => String(data.get(k) ?? '').trim();
-    const summary = [
-      `Clinic name: ${field('demo-clinic')}`,
-      `Doctor name: ${field('demo-doctor')}`,
-      `Phone: ${field('demo-phone')}`,
-      `Email: ${field('demo-email') || '-'}`,
-      `City: ${field('demo-city')}`,
-      `Speciality: ${field('demo-speciality') || '-'}`,
-      `Doctors at the clinic: ${field('demo-doctors') || '-'}`,
-      `Notes: ${field('demo-notes') || '-'}`,
-    ].join('\n');
-    if (BUSINESS.email) {
-      const subject = `Demo request: ${field('demo-clinic')}`;
-      window.location.href = `mailto:${BUSINESS.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(summary)}`;
+    const notes = field('demo-notes');
+    setSending(true);
+    setError(null);
+    try {
+      await api.submitLead({
+        topic,
+        name: field('demo-doctor'),
+        clinic: field('demo-clinic'),
+        phone: field('demo-phone'),
+        email: field('demo-email'),
+        city: field('demo-city'),
+        ...(notes ? { notes } : {}),
+        website: field('demo-website'),
+      });
+      setSent({ doctor: field('demo-doctor') });
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError && err.status !== 400
+          ? err.message
+          : err instanceof ApiRequestError
+            ? 'Please check your details and try again.'
+            : 'We couldn’t reach our server. Please check your connection and try again.',
+      );
+    } finally {
+      setSending(false);
     }
-    setSent({ doctor: field('demo-doctor'), summary });
   }
 
   const input =
     'h-11 w-full rounded-[12px] border border-ink/12 bg-white px-3.5 text-[15px] font-normal text-ink outline-none transition-colors placeholder:text-ink-20 focus:border-clinical focus:ring-4 focus:ring-clinical/12';
   const label = 'grid gap-1.5 text-[13px] font-semibold text-ink-60';
-  const optional = <span className="font-normal text-ink-40"> (optional)</span>;
 
   return (
-    <Modal label="Request a demo" onClose={onClose} className="max-w-[580px]">
+    <Modal label={copy.title} onClose={onClose} className="max-w-[580px]">
       <div className="px-6 pb-8 pt-9 sm:px-9">
         {sent ? (
           <div className="pr-8">
-            {BUSINESS.email ? (
-              <>
-                <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
-                  Your email should be ready to send.
-                </h2>
-                <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
-                  We opened your email app with the request written out. If nothing opened, send the
-                  same details to{' '}
-                  <span className="select-all font-semibold text-ink">{BUSINESS.email}</span>.
-                </p>
-              </>
-            ) : (
-              <>
-                <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
-                  Thanks{sent.doctor ? `, ${sent.doctor}` : ''}.
-                </h2>
-                <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
-                  Online demo requests are not connected yet, so these details have not been sent
-                  anywhere. Please keep a copy and share it with the DoctorDesk team.
-                </p>
-              </>
-            )}
-            <pre className="mt-5 select-all whitespace-pre-wrap rounded-[12px] border border-ink/10 bg-white p-4 font-mono text-[13px] leading-relaxed text-ink">
-              {sent.summary}
-            </pre>
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-clinical-tint text-clinical-text">
+              <IconCheck size={22} />
+            </span>
+            <h2 className="mt-5 text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
+              Thanks{sent.doctor ? `, ${sent.doctor}` : ''}. We&rsquo;ve got your request.
+            </h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-60">
+              Our team will call you shortly
+              {topic === 'website'
+                ? ' to talk through your clinic’s website.'
+                : ' to fix a time for your demo.'}
+            </p>
             <button
               type="button"
               onClick={onClose}
@@ -1232,37 +1215,36 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         ) : (
-          <form onSubmit={submit} className="grid gap-4">
+          <form onSubmit={(e) => void submit(e)} className="relative grid gap-4">
             <div className="pr-8">
               <h2 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">
-                Request a demo.
+                {copy.title}.
               </h2>
-              <p className="mt-2 text-[14.5px] text-ink-60">
-                Tell us a little about your clinic. We&rsquo;ll call you to fix a time that suits
-                your OPD.
-              </p>
+              <p className="mt-2 text-[14.5px] text-ink-60">{copy.intro}</p>
             </div>
-            <label className={label} htmlFor="demo-clinic">
-              Clinic name
-              <input
-                id="demo-clinic"
-                name="demo-clinic"
-                required
-                autoComplete="organization"
-                className={input}
-              />
-            </label>
-            <label className={label} htmlFor="demo-doctor">
-              Doctor name
-              <input
-                id="demo-doctor"
-                name="demo-doctor"
-                required
-                autoComplete="name"
-                placeholder="Dr. "
-                className={input}
-              />
-            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={label} htmlFor="demo-doctor">
+                Your name
+                <input
+                  id="demo-doctor"
+                  name="demo-doctor"
+                  required
+                  autoComplete="name"
+                  placeholder="Dr. "
+                  className={input}
+                />
+              </label>
+              <label className={label} htmlFor="demo-clinic">
+                Clinic name
+                <input
+                  id="demo-clinic"
+                  name="demo-clinic"
+                  required
+                  autoComplete="organization"
+                  className={input}
+                />
+              </label>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={label} htmlFor="demo-phone">
                 Phone number
@@ -1280,12 +1262,14 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
                 />
               </label>
               <label className={label} htmlFor="demo-email">
-                <span>Email{optional}</span>
+                Email
                 <input
                   id="demo-email"
                   name="demo-email"
                   type="email"
+                  required
                   autoComplete="email"
+                  placeholder="you@clinic.com"
                   className={input}
                 />
               </label>
@@ -1301,47 +1285,38 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
                   className={input}
                 />
               </label>
-              <label className={label} htmlFor="demo-speciality">
-                <span>Speciality{optional}</span>
-                <select
-                  id="demo-speciality"
-                  name="demo-speciality"
-                  defaultValue=""
-                  className={input}
-                >
-                  <option value="">Choose one</option>
-                  {SPECIALITIES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+              <label className={label} htmlFor="demo-notes">
+                <span>
+                  Anything we should know
+                  <span className="font-normal text-ink-40"> (optional)</span>
+                </span>
+                <input id="demo-notes" name="demo-notes" className={input} />
               </label>
             </div>
-            <label className={label} htmlFor="demo-doctors">
-              <span>Doctors at the clinic{optional}</span>
-              <select id="demo-doctors" name="demo-doctors" defaultValue="" className={input}>
-                <option value="">Choose one</option>
-                <option value="1">1</option>
-                <option value="2-3">2–3</option>
-                <option value="4-10">4–10</option>
-                <option value="More than 10">More than 10</option>
-              </select>
-            </label>
-            <label className={label} htmlFor="demo-notes">
-              <span>Anything we should know{optional}</span>
-              <textarea
-                id="demo-notes"
-                name="demo-notes"
-                rows={3}
-                className={`${input} h-auto py-2.5`}
-              />
-            </label>
+            {/* Honeypot: hidden from people, filled in by bots. */}
+            <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+              <label htmlFor="demo-website">
+                Leave this empty
+                <input id="demo-website" name="demo-website" tabIndex={-1} autoComplete="off" />
+              </label>
+            </div>
+            {error && (
+              <p
+                role="alert"
+                className="flex items-start gap-2 rounded-[12px] bg-coral/10 px-3.5 py-2.5 text-[14px] text-coral-text"
+              >
+                <span className="mt-0.5 shrink-0">
+                  <IconInfo size={14} />
+                </span>
+                {error}
+              </p>
+            )}
             <button
               type="submit"
-              className="mt-2 inline-flex h-12 items-center justify-center rounded-pill bg-clinical text-[15px] font-bold text-white transition-colors hover:bg-clinical-deep"
+              disabled={sending}
+              className="mt-2 inline-flex h-12 items-center justify-center rounded-pill bg-clinical text-[15px] font-bold text-white transition-colors hover:bg-clinical-deep disabled:cursor-wait disabled:opacity-70"
             >
-              Request a demo
+              {sending ? 'Sending…' : copy.title}
             </button>
           </form>
         )}
@@ -1620,7 +1595,7 @@ const TOUR_STEPS: {
     points: [
       'Name, mobile number and age are enough to register.',
       'A UHID and a token for the chosen doctor are issued together.',
-      'Phone bookings arrive with their token already assigned.',
+      'Patients can also register themselves on WhatsApp or your clinic’s website.',
     ],
     card: (
       <TourCard title="Register patient">
@@ -1855,172 +1830,6 @@ function ClinicTour() {
         </button>
       </div>
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Logo preview                                                               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Six made-up clinics, to show how a row of clinic marks will sit on the page.
- * None of them is a client, and the heading says so: no invented customers.
- * Swap in real logos, with permission, once there are some.
- */
-const PREVIEW_CLINICS: {
-  name: string;
-  kind: string;
-  mark: ReactNode;
-}[] = [
-  {
-    name: 'Neemgrove',
-    kind: 'Clinic',
-    mark: (
-      <>
-        <path d="M6 26C6 13 15 6 28 6c0 13-7 22-20 22Z" fill="currentColor" />
-        <path d="M9 24 22 11" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
-      </>
-    ),
-  },
-  {
-    name: 'Tulsivan',
-    kind: 'Children’s care',
-    mark: (
-      <>
-        <path d="M17 8c4 6 7 10 7 14a7 7 0 0 1-14 0c0-4 3-8 7-14Z" fill="currentColor" />
-        <path
-          d="M14 23a3 3 0 0 0 3 3"
-          stroke="#fff"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          fill="none"
-        />
-      </>
-    ),
-  },
-  {
-    name: 'Saffron Hill',
-    kind: 'Eye centre',
-    mark: (
-      <>
-        <circle cx="17" cy="17" r="5.5" fill="currentColor" />
-        <path
-          d="M17 3v5M17 26v5M3 17h5M26 17h5M7 7l3.5 3.5M23.5 23.5 27 27M7 27l3.5-3.5M23.5 10.5 27 7"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-        />
-      </>
-    ),
-  },
-  {
-    name: 'Ridgeway',
-    kind: 'Family health',
-    mark: (
-      <path
-        d="M3 27 12 13l5 7 5-9 9 16Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.6"
-        strokeLinejoin="round"
-      />
-    ),
-  },
-  {
-    name: 'Monsoon Street',
-    kind: 'Diagnostics',
-    mark: (
-      <>
-        <path
-          d="M10 19a5 5 0 0 1 1-9.9A7 7 0 0 1 24.5 10 4.5 4.5 0 0 1 24 19Z"
-          fill="currentColor"
-        />
-        <path
-          d="M12 23l-1.5 4M18 23l-1.5 4M24 23l-1.5 4"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-        />
-      </>
-    ),
-  },
-  {
-    name: 'Pebble Bay',
-    kind: 'Dental',
-    mark: (
-      <path
-        d="M11 6c-4 0-6 3-6 7 0 5 2 7 3 13 .4 2.5 3.4 2.5 4 0l1.6-6c.5-2 3.3-2 3.8 0l1.6 6c.6 2.5 3.6 2.5 4 0 1-6 3-8 3-13 0-4-2-7-6-7-2.5 0-3.5 1.5-4.5 1.5S13.5 6 11 6Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinejoin="round"
-      />
-    ),
-  },
-];
-
-/** The clinic marks, drifting sideways and fading out at both edges. */
-function LogoStrip() {
-  const row = (hidden: boolean) => (
-    <ul className="flex shrink-0" aria-hidden={hidden || undefined}>
-      {PREVIEW_CLINICS.map((c) => (
-        <li
-          key={c.name}
-          className="flex w-[220px] shrink-0 flex-col items-center text-center sm:w-[280px]"
-        >
-          <svg
-            viewBox="0 0 34 34"
-            width="44"
-            height="44"
-            className="text-clinical"
-            aria-hidden="true"
-          >
-            {c.mark}
-          </svg>
-          <span className="mt-5 font-display text-[19px] font-extrabold tracking-[-0.02em] text-ink">
-            {c.name}
-          </span>
-          <span className="mt-1.5 font-mono text-[11.5px] uppercase tracking-label text-ink-60">
-            {c.kind}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-
-  return (
-    <section
-      aria-labelledby="logo-preview"
-      className="bg-clinical-tint px-4 py-16 text-ink sm:px-6 lg:py-24"
-    >
-      <div className="mx-auto max-w-6xl text-center">
-        <p className="flex items-center justify-center gap-5">
-          <span aria-hidden="true" className="h-px w-12 bg-ink/15 sm:w-20" />
-          <span id="logo-preview" className="wl-label text-clinical-text">
-            Illustrative clinic logo preview
-          </span>
-          <span aria-hidden="true" className="h-px w-12 bg-ink/15 sm:w-20" />
-        </p>
-        <p className="mt-3 text-[15.5px] text-ink-60">
-          Fictional clinics, shown for design only, not our clients. Client logos coming soon.
-        </p>
-      </div>
-
-      <div
-        className="mx-auto mt-14 max-w-6xl overflow-hidden"
-        style={{
-          maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
-          WebkitMaskImage:
-            'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
-        }}
-      >
-        {/* Two copies back to back; sliding by half loops without a seam. */}
-        <div className="wl-marquee flex w-max">
-          {row(false)}
-          {row(true)}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -2370,14 +2179,8 @@ const ROLES = [
     soft: '#e2e6f6',
     text: '#2b3a75',
     person: 'Pooja Singh',
-    headline: 'Keeps the line moving',
-    body: 'Registration, queue and payments on one screen.',
-    points: [
-      'Register patients quickly, with a duplicate check',
-      'Tokens on WhatsApp, so patients wait from home',
-      'Take payments and print receipts in one step',
-    ],
-    only: 'The queue, payments and arriving patients',
+    headline: 'A calm front desk, even on Monday mornings',
+    points: ['Patients walk in only when it’s their turn', 'Bill and receipt in one tap'],
   },
   {
     key: 'doctor',
@@ -2388,13 +2191,10 @@ const ROLES = [
     text: '#52307b',
     person: 'Dr. Kiran Rao',
     headline: 'Sees patients, not paperwork',
-    body: 'Their queue, the patient’s history and a quick prescription pad.',
     points: [
-      'A personal queue that updates on its own',
       'Repeat last visit’s medicines in one click',
-      'Send the prescription to the patient’s WhatsApp',
+      'Prescription printed before the patient stands up',
     ],
-    only: 'Their own patients’ notes and prescriptions',
   },
   {
     key: 'nurse',
@@ -2405,13 +2205,11 @@ const ROLES = [
     text: '#852c56',
     person: 'Anita Joseph',
     headline: 'Ready before the doctor is',
-    body: 'Vitals and triage done before the patient walks in.',
     points: [
       'Record vitals ahead of the consultation',
       'Move urgent patients to the front',
       'See who is waiting for which doctor',
     ],
-    only: 'Vitals and triage, never prescriptions',
   },
   {
     key: 'owner',
@@ -2422,13 +2220,7 @@ const ROLES = [
     text: '#5e3e22',
     person: 'Dr. Suresh Menon',
     headline: 'Knows the numbers by closing time',
-    body: 'Collections and pricing, without a spreadsheet.',
-    points: [
-      'Daily collections that match the cash drawer',
-      'See how many patients come back for review',
-      'Set prices and run offers from settings',
-    ],
-    only: 'The numbers, read-only',
+    points: ['Collections that match the cash drawer', 'See who comes back, and who doesn’t'],
   },
   {
     key: 'administrator',
@@ -2439,23 +2231,30 @@ const ROLES = [
     text: '#39414d',
     person: 'Rahul Kapoor',
     headline: 'Sets the clinic up once',
-    body: 'Staff, roles, branding and screens, configured in minutes.',
     points: [
       'Invite staff and assign roles',
       'Add your clinic’s name and logo',
       'Pair waiting-room TVs in seconds',
     ],
-    only: 'Staff, roles, branding and screens',
   },
 ] as const;
+
+/** The roles shown on the page: the three a clinic owner decides for. */
+const SHOWN_ROLES = ROLES.filter((r) => ['front_desk', 'doctor', 'owner'].includes(r.key));
 
 /** How long each role stays on screen before the next one comes up. */
 const ROLE_ROTATE_MS = 3500;
 
-function RolesShowcase({ night }: { night: boolean }) {
+function RolesShowcase({
+  night,
+  onRequestDemo,
+}: {
+  night: boolean;
+  onRequestDemo?: (() => void) | undefined;
+}) {
   const [active, setActive] = useState(0);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
-  const role = ROLES[active] ?? ROLES[0];
+  const role = SHOWN_ROLES[active] ?? ROLES[0];
 
   /*
    * The roles take turns on their own, so a visitor sees what each one gets
@@ -2496,7 +2295,7 @@ function RolesShowcase({ night }: { night: boolean }) {
 
   useEffect(() => {
     if (!rotating) return;
-    const t = setTimeout(() => setActive((a) => (a + 1) % ROLES.length), ROLE_ROTATE_MS);
+    const t = setTimeout(() => setActive((a) => (a + 1) % SHOWN_ROLES.length), ROLE_ROTATE_MS);
     return () => clearTimeout(t);
   }, [active, rotating]);
 
@@ -2524,7 +2323,8 @@ function RolesShowcase({ night }: { night: boolean }) {
   function onKey(e: React.KeyboardEvent) {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     e.preventDefault();
-    const next = (active + (e.key === 'ArrowRight' ? 1 : -1) + ROLES.length) % ROLES.length;
+    const next =
+      (active + (e.key === 'ArrowRight' ? 1 : -1) + SHOWN_ROLES.length) % SHOWN_ROLES.length;
     setActive(next);
     tabs.current[next]?.focus();
   }
@@ -2546,7 +2346,7 @@ function RolesShowcase({ night }: { night: boolean }) {
           onKeyDown={onKey}
           className="mx-auto flex w-full max-w-3xl flex-wrap justify-center gap-1 rounded-[22px] border border-ink/10 bg-white p-1.5 shadow-sm sm:flex-nowrap sm:rounded-pill"
         >
-          {ROLES.map((r, i) => {
+          {SHOWN_ROLES.map((r, i) => {
             const on = i === active;
             return (
               <button
@@ -2600,14 +2400,10 @@ function RolesShowcase({ night }: { night: boolean }) {
           style={{ animationDuration: '.5s' }}
         >
           <div className="flex flex-col justify-center rounded-card-lg border border-ink/8 bg-white p-7 shadow-sm sm:p-9">
-            <p className="mono-label" style={{ color: tone.text }}>
-              {role.label}
-            </p>
-            <h3 className="mt-3 text-[clamp(24px,3vw,32px)] font-extrabold tracking-[-0.02em]">
+            <h3 className="text-[clamp(24px,3vw,32px)] font-extrabold tracking-[-0.02em]">
               {role.headline}
             </h3>
-            <p className="mt-3 text-[15px] leading-relaxed text-ink-60">{role.body}</p>
-            <ul className="mt-7 space-y-3.5">
+            <ul className="mt-6 space-y-3.5">
               {role.points.map((p) => (
                 <li key={p} className="flex items-start gap-3 text-[14.5px] text-ink">
                   <span
@@ -2620,12 +2416,19 @@ function RolesShowcase({ night }: { night: boolean }) {
                 </li>
               ))}
             </ul>
-            <p
-              className="mt-7 rounded-panel px-3.5 py-2.5 text-[13px] font-medium"
-              style={{ backgroundColor: tone.soft, color: tone.text }}
-            >
-              Sees: {role.only}
-            </p>
+            {onRequestDemo && (
+              <button
+                type="button"
+                onClick={onRequestDemo}
+                className="wl-btn group mt-8 inline-flex items-center gap-2 self-start rounded-pill px-5 py-2.5 text-[14px] font-bold shadow-sm transition-transform hover:-translate-y-0.5"
+                style={{ backgroundColor: tone.color, color: tone.on }}
+              >
+                See the {role.label.toLowerCase()} screen live
+                <span className="transition-transform group-hover:translate-x-0.5">
+                  <ArrowRight size={14} />
+                </span>
+              </button>
+            )}
           </div>
 
           {/* A sketch of that role's console */}
@@ -2804,7 +2607,7 @@ function FrontDeskScreen({ tone }: { tone: RoleTone }) {
         }}
       >
         <span aria-hidden="true">●</span>
-        Token 18 sent to Meera on WhatsApp, with her live place in line
+        Token 18 issued to Meera, 4th in line
       </p>
     </div>
   );
@@ -2987,7 +2790,7 @@ function AdminScreen({ tone }: { tone: RoleTone }) {
   ];
   const switches = [
     ['Two-factor for admins', true],
-    ['WhatsApp consent at registration', true],
+    ['Consent recorded at registration', true],
     ['Patient names on the TV', false],
   ] as const;
   return (
@@ -3114,7 +2917,7 @@ function DisplayShowcase({ onRequestDemo }: { onRequestDemo?: (() => void) | und
             eyebrow="Waiting room"
             title={
               <>
-                No more &ldquo;Is it my turn?&rdquo;{' '}
+                No more &ldquo;When is my turn?&rdquo;{' '}
                 <span className="wl-serif text-clinical">Just a glance at the screen.</span>
               </>
             }
@@ -3260,67 +3063,6 @@ function DisplayShowcase({ onRequestDemo }: { onRequestDemo?: (() => void) | und
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Audit log                                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * A day's activity in plain words: the audit trail as a clinic owner would
- * read it. Sample names and times only.
- */
-function AuditLog() {
-  const rows = [
-    { t: '09:31', who: 'Dr. K. Rao', initials: 'KR', what: 'wrote a prescription', c: '#6b3fa0' },
-    { t: '09:33', who: 'P. Singh', initials: 'PS', what: 'recorded a payment', c: '#3a4e9b' },
-    { t: '09:40', who: 'A. Joseph', initials: 'AJ', what: 'updated vitals', c: '#a83a6e' },
-    { t: '10:05', who: 'S. Menon', initials: 'SM', what: 'changed a price', c: '#7a5230' },
-  ];
-
-  return (
-    <div className="relative mx-auto w-full max-w-[520px]">
-      <div
-        aria-hidden="true"
-        className="absolute -inset-4 -z-10 rounded-[36px] bg-gradient-to-br from-clinical-soft/70 via-transparent to-amber-soft/50 blur-xl"
-      />
-      <div className="overflow-hidden rounded-card-lg border border-ink/10 bg-white shadow-lg">
-        <div className="flex items-center justify-between gap-3 border-b border-ink/8 px-5 py-4 sm:px-6">
-          <span className="text-[16px] font-bold tracking-[-0.01em]">Today&rsquo;s activity</span>
-          <span className="flex items-center gap-2 font-mono text-[11px] text-ink-40">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green/60 motion-reduce:hidden" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
-            </span>
-            LIVE
-          </span>
-        </div>
-        <ul className="divide-y divide-ink/6">
-          {rows.map((r) => (
-            <li key={r.t} className="flex items-center gap-3.5 px-5 py-3.5 sm:px-6">
-              <span
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white"
-                style={{ backgroundColor: r.c }}
-              >
-                {r.initials}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[14px] text-ink-60">
-                <span className="font-semibold text-ink">{r.who}</span> {r.what}
-              </span>
-              <span className="shrink-0 font-mono text-[11.5px] text-ink-40">{r.t}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="flex items-center gap-2 border-t border-ink/8 bg-bg-soft px-5 py-3 text-[12.5px] text-ink-60 sm:px-6">
-          <IconLock size={13} />
-          Every change is recorded with who made it and when.
-        </div>
-      </div>
-      <p className="mt-4 text-center text-[12.5px] text-ink-40">
-        Sample activity, fictional staff.
-      </p>
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*  FAQ                                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -3341,17 +3083,7 @@ const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   },
   {
     q: 'Can each staff member have their own login?',
-    a: 'Yes. Front desk, doctors, nurses, owners and administrators each sign in with their own account and see only what their role needs.',
-  },
-  {
-    q: 'Will it carry our clinic’s name?',
-    a: 'Yes. Your clinic’s name and logo appear on the screens your staff use and on printed prescriptions.',
-  },
-  {
-    q: 'Does it work with ABHA?',
-    a:
-      'You can record a patient’s ABHA number and address, and find patients by ABHA number from the main search.' +
-      (BUSINESS.abdm ? ' ' + BUSINESS.abdm + '.' : ''),
+    a: 'Yes. Every staff member signs in with their own account and sees only what their role needs. Your clinic’s name and logo appear on screens and printed prescriptions.',
   },
   ...(BUSINESS.pricing.from
     ? [
@@ -3368,6 +3100,130 @@ const FAQ: ReadonlyArray<{ q: string; a: string }> = [
     a: 'Use any “Request a demo” button and share a few details about your clinic. We’ll arrange a walkthrough at a time that suits your OPD.',
   },
 ];
+
+/** What a clinic website from DoctorDesk includes. */
+const CLINIC_WEBSITE_POINTS = [
+  ['Professional, customised website', 'with your clinic’s branding and information'],
+  ['Online bookings', 'that go straight into your DoctorDesk queue'],
+  ['WhatsApp integration', 'to help patients connect with your clinic'],
+  ['Doctor profiles and services', 'to showcase your expertise'],
+  ['Ready within 7–14 days', 'with customisation tailored to your clinic'],
+] as const;
+
+/**
+ * A sample clinic website, drawn as a desktop browser with a phone in front,
+ * so a doctor can picture their own. Fictional clinic, decorative only.
+ */
+function ClinicSiteMockup() {
+  const services = ['Joint pain', 'Sports injury', 'Physiotherapy'];
+  return (
+    <div aria-hidden="true" className="relative pb-10 sm:pb-12 sm:pr-10">
+      {/* Desktop */}
+      <div className="overflow-hidden rounded-[18px] border border-ink/10 bg-white shadow-[0_24px_60px_-34px_rgba(0,0,0,0.4)]">
+        <div className="flex items-center gap-2 border-b border-ink/8 bg-bg-soft px-4 py-2.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
+          <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
+          <span className="h-2.5 w-2.5 rounded-full bg-ink/10" />
+          <span className="ml-3 flex-1 truncate rounded-pill bg-white px-3 py-1 font-mono text-[10.5px] text-ink-40">
+            sunriseclinic.in
+          </span>
+        </div>
+        <div className="flex items-center justify-between px-5 py-3.5">
+          <span className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-[8px] bg-clinical text-[11px] font-bold text-white">
+              SC
+            </span>
+            <span className="text-[13px] font-bold text-ink">Sunrise Clinic</span>
+          </span>
+          <span className="hidden gap-4 text-[11.5px] font-medium text-ink-60 sm:flex">
+            <span>Doctors</span>
+            <span>Services</span>
+            <span>Contact</span>
+          </span>
+        </div>
+        <div className="grid gap-5 bg-clinical-tint px-5 py-6 sm:grid-cols-[1.3fr_1fr] sm:items-center">
+          <div>
+            <p className="text-[19px] font-extrabold leading-tight tracking-[-0.02em] text-ink">
+              Expert bone &amp; joint care in your city.
+            </p>
+            <p className="mt-2 text-[11.5px] leading-relaxed text-ink-60">
+              Mon–Sat · 9 a.m. to 8 p.m.
+            </p>
+            <span className="mt-4 inline-flex rounded-pill bg-clinical px-3.5 py-1.5 text-[11px] font-bold text-white">
+              Book appointment
+            </span>
+          </div>
+          <div className="hidden rounded-[14px] bg-white p-3.5 shadow-sm sm:block">
+            <span className="flex items-center gap-2.5">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-clinical-soft text-clinical-text">
+                <IconStethoscope size={16} />
+              </span>
+              <span className="leading-tight">
+                <span className="block text-[12px] font-bold text-ink">Dr. A. Kulkarni</span>
+                <span className="block text-[10.5px] text-ink-60">Orthopaedics · 15 yrs</span>
+              </span>
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2.5 px-5 py-4">
+          {services.map((x) => (
+            <span
+              key={x}
+              className="rounded-[10px] border border-ink/8 px-2.5 py-2 text-center text-[10.5px] font-semibold text-ink-60"
+            >
+              {x}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* A booking from the website, landing in the clinic's DoctorDesk queue */}
+      <div className="absolute bottom-0 left-0 z-10 flex max-w-[60%] items-center gap-2.5 rounded-[14px] border border-ink/8 bg-white px-3 py-2.5 shadow-[0_18px_40px_-22px_rgba(0,0,0,0.45)] sm:left-6">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-clinical text-white">
+          <IconCheck size={15} />
+        </span>
+        <span className="min-w-0 leading-tight">
+          <span className="block text-[12px] font-bold text-ink">Token A-14 booked online</span>
+          <span className="block truncate text-[10.5px] text-ink-60">
+            Added to Dr. Kulkarni&rsquo;s queue
+          </span>
+        </span>
+      </div>
+
+      {/* Phone */}
+      <div className="absolute bottom-0 right-0 w-[34%] min-w-[118px] max-w-[160px] overflow-hidden rounded-[22px] border-[5px] border-ink bg-white shadow-[0_24px_50px_-24px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center gap-1.5 px-2.5 py-2">
+          <span className="grid h-5 w-5 place-items-center rounded-[6px] bg-clinical text-[8px] font-bold text-white">
+            SC
+          </span>
+          <span className="text-[9.5px] font-bold text-ink">Sunrise Clinic</span>
+        </div>
+        <div className="bg-clinical-tint px-2.5 py-3">
+          <p className="text-[11px] font-extrabold leading-tight text-ink">
+            Expert bone &amp; joint care.
+          </p>
+          <span className="mt-2 inline-flex rounded-pill bg-clinical px-2.5 py-1 text-[8.5px] font-bold text-white">
+            Book appointment
+          </span>
+          <span className="mt-1.5 flex w-fit items-center gap-1 rounded-pill border border-[#25D366]/40 bg-white px-2 py-1 text-[8.5px] font-bold text-[#128C4B]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#25D366]" />
+            Chat on WhatsApp
+          </span>
+        </div>
+        <div className="grid gap-1.5 px-2.5 py-2.5">
+          {services.map((x) => (
+            <span
+              key={x}
+              className="rounded-[7px] border border-ink/8 px-2 py-1 text-[8.5px] font-semibold text-ink-60"
+            >
+              {x}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function FaqList() {
   return (

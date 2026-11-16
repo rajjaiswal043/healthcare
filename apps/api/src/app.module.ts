@@ -10,6 +10,7 @@ import { UsersModule } from './platform/users/users.module.js';
 import { RolesModule } from './platform/roles/roles.module.js';
 import { PlatformModule } from './platform/tier/platform.module.js';
 import { BrandingModule } from './platform/branding/branding.module.js';
+import { LeadsModule } from './platform/leads/leads.module.js';
 import { PatientsModule } from './clinical/patients/patients.module.js';
 import { DocumentsModule } from './clinical/documents/documents.module.js';
 import { DiagnosticsModule } from './clinical/diagnostics/diagnostics.module.js';
@@ -58,6 +59,7 @@ const env = loadEnv();
     RolesModule,
     PlatformModule,
     BrandingModule,
+    LeadsModule,
     PatientsModule,
     DocumentsModule,
     DiagnosticsModule,

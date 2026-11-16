@@ -93,6 +93,31 @@ const EnvSchema = z.object({
     .string()
     .optional()
     .transform((v) => /^(1|true|yes)$/i.test(v ?? '')),
+
+  /**
+   * Outgoing email, used by the public "Request a demo" / "Request a website"
+   * form on the marketing page to deliver each request to the company inbox.
+   *
+   * `console` prints the email to the API log instead of sending it, so the
+   * form works on a laptop with no SMTP account. `smtp` sends for real and
+   * needs MAIL_HOST plus, for any hosted provider, MAIL_USER and
+   * MAIL_PASSWORD (for Gmail / Google Workspace that is an App Password, not
+   * the account password).
+   */
+  MAIL_DRIVER: z.enum(['smtp', 'console']).default('console'),
+  MAIL_HOST: z.string().optional(),
+  MAIL_PORT: z.coerce.number().int().positive().default(587),
+  /** true for port 465 (implicit TLS); false for 587 / 25, which upgrade with STARTTLS. */
+  MAIL_SECURE: z
+    .string()
+    .optional()
+    .transform((v) => /^(1|true|yes)$/i.test(v ?? '')),
+  MAIL_USER: z.string().optional(),
+  MAIL_PASSWORD: z.string().optional(),
+  /** The From address. Most providers only accept the authenticated account here. */
+  MAIL_FROM: z.string().optional(),
+  /** The company inbox that receives demo and website requests. */
+  LEADS_EMAIL_TO: z.string().email().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

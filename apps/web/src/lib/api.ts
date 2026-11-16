@@ -1534,7 +1534,24 @@ export interface OutstandingInvoice {
   doctor: string | null;
 }
 
+/** A demo or website request from the public marketing page. */
+export interface LeadInput {
+  topic: 'demo' | 'website';
+  name: string;
+  clinic: string;
+  phone: string;
+  email: string;
+  city: string;
+  notes?: string;
+  /** Honeypot: always empty for a real visitor. */
+  website?: string;
+}
+
 export const api = {
+  /** Public: emails a demo / website request to the company inbox. */
+  submitLead: (input: LeadInput) =>
+    request<{ status: 'received' }>('/leads', { method: 'POST', body: JSON.stringify(input) }),
+
   /**
    * Every department, retired ones included — the settings screen's list.
    *
