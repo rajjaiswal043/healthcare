@@ -1,3 +1,22 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+
+/**
+ * The welcome page's lead form (src/app/api/leads) sends email with the MAIL_*
+ * and LEADS_EMAIL_TO settings. On Netlify they are site environment variables.
+ * Locally they live in the repo-root .env, which Next does not read (it only
+ * reads apps/web/.env*), so copy just those keys across; nothing else from the
+ * root file reaches the web server.
+ */
+const rootEnv = new URL('../../.env', import.meta.url);
+if (existsSync(rootEnv)) {
+  for (const [key, value] of Object.entries(parseEnv(readFileSync(rootEnv, 'utf8')))) {
+    if (/^(MAIL_[A-Z_]+|LEADS_EMAIL_TO)$/.test(key) && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,

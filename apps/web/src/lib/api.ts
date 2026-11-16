@@ -1644,9 +1644,31 @@ export interface FollowUpBoard {
 }
 
 export const api = {
-  /** Public: emails a demo / website request to the company inbox. */
-  submitLead: (input: LeadInput) =>
-    request<{ status: 'received' }>('/leads', { method: 'POST', body: JSON.stringify(input) }),
+  /**
+   * Public: emails a demo / website request to the company inbox.
+   *
+   * Goes to the web app's own route (src/app/api/leads), not the NestJS API, so
+   * the marketing page works on Netlify without the API being deployed.
+   */
+  submitLead: async (input: LeadInput) => {
+    const res = await fetch('/api/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: ApiError } | null;
+      throw new ApiRequestError(
+        res.status,
+        body?.error ?? {
+          code: 'UNKNOWN',
+          message: `Request failed (${res.status})`,
+          correlationId: 'unknown',
+        },
+      );
+    }
+    return (await res.json()) as { status: 'received' };
+  },
 
   /**
    * Every department, retired ones included — the settings screen's list.
