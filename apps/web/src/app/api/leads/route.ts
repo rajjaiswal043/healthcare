@@ -109,7 +109,11 @@ export async function POST(req: Request): Promise<Response> {
   ].join('\n');
 
   const env = process.env;
-  if ((env.MAIL_DRIVER ?? 'console') === 'console') {
+  // Console mode only when asked for, or by default in local development. On a
+  // deployed site a missing MAIL_DRIVER must not thank the visitor and then drop
+  // their request: it falls through to the "not configured" error below.
+  const driver = env.MAIL_DRIVER ?? (env.NODE_ENV === 'production' ? 'smtp' : 'console');
+  if (driver === 'console') {
     console.info(`[leads] MAIL_DRIVER=console, not sent.\nSubject: ${subject}\n${text}`);
     return Response.json({ status: 'received' }, { status: 202 });
   }
