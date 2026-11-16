@@ -122,7 +122,14 @@ afterAll(async () => {
   await closeTestApp(app);
 });
 
-afterEach(async () => {
+/**
+ * Everything this file writes for today, removed.
+ *
+ * Extracted from `afterEach` so a single test can also rebuild a scenario from
+ * scratch between steps — see "a step the board offers is a step the server
+ * takes", which has to exercise each offered step from the SAME starting state.
+ */
+async function clearToday(): Promise<void> {
   // This file writes rows for TODAY, which is the one day every other test
   // avoids. Cleaning up after each test keeps the counts below exact rather
   // than "at least", and an exact count is the only kind that catches a patient
@@ -161,7 +168,9 @@ afterEach(async () => {
     `DELETE FROM appointment WHERE tenant_id = $1 AND start_at >= date_trunc('day', now())`,
     [fx.main.id],
   );
-});
+}
+
+afterEach(clearToday);
 
 async function board(session: Session = frontDesk): Promise<Board> {
   const res = await app.inject({
@@ -599,6 +608,97 @@ describe('closing a visit', () => {
     const res = await close(id);
     expect(res.statusCode).toBe(409);
     expect(res.json().error.details?.code).toBe('NOT_STARTED');
+  });
+
+  it('offers the way BACK on a row whose visit is already closed', async () => {
+    /*
+     * FROM PRODUCTION, 4 Nov 2026: "This visit has already been closed."
+     *
+     * Closing a patient at a department succeeds and leaves the pending test
+     * alone — and that test is what keeps the row at AT_DEPARTMENT, which
+     * outranks DONE. So the row stayed in the tab with a closed visit and
+     * offered Close a second time. The button worked once and lied afterwards.
+     *
+     * Asserted POSITIVELY, not just as the absence of a refusal. The invariant
+     * suite checks that nothing offered is refused, which a branch offering
+     * NOTHING would also satisfy — and a row with no way out is the other half
+     * of this same story, reported on 30 Oct. Both halves need saying.
+     */
+    const id = await visit('ARRIVED', 0);
+    await test('PENDING', 0, id);
+    expect((await close(id)).statusCode).toBe(200);
+
+    const board1 = await board();
+    const row = board1.rows[0]!;
+
+    /*
+     * GONE FROM THE LIVE TAB — Narveer's call, 4 Nov 2026.
+     *
+     * The row used to stay under "At a department", because a PENDING order
+     * contributes that bucket and it outranks DONE in `PLACEMENT`. So a
+     * patient who had gone home sat among the ten people supposedly at a
+     * department, and pressing Close again answered "already closed" — which
+     * is what made the button look broken.
+     *
+     * The test is not cancelled and has not vanished; it stays on the
+     * department's own worklist. Only the PATIENT moves, and they have left.
+     */
+    expect(row.bucket).toBe('DONE');
+    expect(board1.counts.at_department).toBe(0);
+    expect(board1.counts.done).toBe(1);
+
+    const kinds = row.nextSteps.map((s) => s.kind);
+    expect(kinds).toContain('REOPEN_VISIT');
+    expect(kinds).not.toContain('CLOSE_VISIT');
+  });
+
+  it('closes a checked-in patient who is at a department', async () => {
+    /*
+     * FROM PRODUCTION, 4 NOV 2026. The whole "At a department" tab was
+     * unclearable: every row offered Close visit and every press answered
+     * "A visit that is arrived cannot be closed."
+     *
+     * The bucket comes from the TEST — `bucketForOrder('PENDING')` returns
+     * AT_DEPARTMENT and never looks at the appointment — and this clinic books
+     * and takes payment for tests at registration, so the order is PENDING from
+     * the start while the visit stays ARRIVED. Nobody runs the send-out step
+     * that would make it AWAITING_TESTS.
+     *
+     * The board read the bucket, the server read the status, and the two
+     * disagreed. This asserts BOTH halves together, which is the only way to
+     * catch that: the row offers it AND the endpoint takes it.
+     */
+    const id = await visit('ARRIVED', 0);
+    await test('PENDING', 0, id);
+
+    const row = (await board()).rows[0]!;
+    expect(row.bucket).toBe('AT_DEPARTMENT');
+    expect(row.nextSteps.map((s) => s.kind)).toContain('CLOSE_VISIT');
+
+    expect((await close(id)).statusCode).toBe(200);
+
+    const [after] = await ownerQuery<{ status: string; closed_at: string | null }>(
+      fx.main.id,
+      `SELECT status, closed_at FROM appointment WHERE id = $1`,
+      [id],
+    );
+
+    // Closed, and still ARRIVED: `closed_at` says they left, the status says
+    // how far the visit got. Collapsing the two would claim a consultation.
+    expect(after?.closed_at).not.toBeNull();
+    expect(after?.status).toBe('ARRIVED');
+  });
+
+  it('still writes off a waiting patient rather than closing them', async () => {
+    // The line the server no longer draws, so the board has to: a patient who
+    // is merely waiting gets "Did not come", not Close visit. Narveer's call on
+    // 2 Nov, unchanged by the server becoming permissive on 4 Nov.
+    await visit('ARRIVED', 0);
+
+    const row = (await board()).rows[0]!;
+
+    expect(row.bucket).toBe('WAITING');
+    expect(row.nextSteps.map((s) => s.kind)).toEqual(['START', 'MARK_NO_SHOW']);
   });
 
   it('closes a visit with a test still out, and leaves the test alone', async () => {
@@ -2068,4 +2168,210 @@ describe('a patient seeing more than one doctor', () => {
     expect(r.doctorCount).toBe(1);
     expect(r.withWhom).toBe(firstName);
   });
+});
+
+/**
+ * A STEP THE BOARD OFFERS IS A STEP THE SERVER TAKES.
+ *
+ * The invariant that should have existed before any of this. It was step 5 of
+ * the 2 Nov 2026 plan, was never built, and its absence has now cost two
+ * production bugs of the identical shape:
+ *
+ *   30 Oct — a past-day row offered Close visit; `closeVisit` refused anything
+ *            that was not FULFILLED, so the one button on the row errored.
+ *   2 Nov  — the whole "At a department" tab offered Close visit; those visits
+ *            are ARRIVED, because the bucket comes from the TEST while the
+ *            guard reads the APPOINTMENT. Found in production on 4 Nov.
+ *
+ * Both were invisible to every existing test, because the board's tests assert
+ * what is OFFERED and the endpoint's tests assert what is ACCEPTED, and nothing
+ * compared the two. A button drawn for a state the server refuses is the worst
+ * failure this board has: somebody presses it in front of a patient.
+ *
+ * WHAT THIS ASSERTS: for each scenario, every step the row offers is called
+ * against its real endpoint from the SAME starting state, and must not come
+ * back as a state refusal — 400 or 409. A permission refusal would be a
+ * different bug and is excluded by acting as the administrator, who holds
+ * everything.
+ *
+ * Steps with no state machine behind them are not listed in `ENDPOINTS`:
+ * RESUME and START open a screen, RECEIPT prints, COLLECT needs an amount and
+ * is covered by the billing suite. Everything that moves an appointment or an
+ * order through its states is here, which is all of both bugs.
+ */
+describe('a step the board offers is a step the server takes', () => {
+  /** How to perform each step, exactly as the browser performs it. */
+  const ENDPOINTS: Record<
+    string,
+    { method: 'PATCH' | 'POST'; url: (step: Record<string, string>) => string; body?: unknown }
+  > = {
+    CHECK_IN: { method: 'PATCH', url: (s) => `/api/v1/appointments/${s.appointmentId}/check-in` },
+    MARK_NO_SHOW: {
+      method: 'PATCH',
+      url: (s) => `/api/v1/appointments/${s.appointmentId}/no-show`,
+    },
+    /*
+     * The one step here that takes a body. `ReturnFromTestsDto` requires
+     * `seeNext` — where the patient lands in the queue is a decision somebody
+     * makes, not a default — so an empty payload is a validation 400 and reads
+     * exactly like the state refusal this test hunts for. Sending what the
+     * browser sends is the point: a table that does not match the real call
+     * would cry wolf, and a test that cries wolf gets ignored.
+     */
+    BRING_BACK: {
+      method: 'PATCH',
+      url: (s) => `/api/v1/appointments/${s.appointmentId}/return`,
+      body: { seeNext: false },
+    },
+    FINISH: { method: 'PATCH', url: (s) => `/api/v1/appointments/${s.appointmentId}/complete` },
+    CLOSE_VISIT: { method: 'PATCH', url: (s) => `/api/v1/appointments/${s.appointmentId}/close` },
+    REOPEN_VISIT: { method: 'PATCH', url: (s) => `/api/v1/appointments/${s.appointmentId}/reopen` },
+    DECLINE_TEST: { method: 'POST', url: (s) => `/api/v1/diagnostics/orders/${s.orderId}/decline` },
+    CANCEL_TEST: { method: 'PATCH', url: (s) => `/api/v1/diagnostics/orders/${s.orderId}/cancel` },
+    RECORD_RESULT: {
+      method: 'PATCH',
+      url: (s) => `/api/v1/diagnostics/orders/${s.orderId}/complete`,
+      body: { resultNote: 'Nothing abnormal.' },
+    },
+  };
+
+  /**
+   * Every shape a row can take that this file can build.
+   *
+   * `AT_DEPARTMENT, checked in` is the 4 Nov bug, written as a scenario rather
+   * than as a one-off regression test so the next stage added here is covered
+   * by construction.
+   */
+  const SCENARIOS: Array<{ name: string; build: () => Promise<void> }> = [
+    { name: 'EXPECTED', build: async () => void (await visit('BOOKED', 0)) },
+    { name: 'WAITING', build: async () => void (await visit('ARRIVED', 0)) },
+    { name: 'WITH_DOCTOR', build: async () => void (await visit('IN_PROGRESS', 0)) },
+    { name: 'READY_TO_CLOSE', build: async () => void (await visit('FULFILLED', 0)) },
+    {
+      name: 'AT_DEPARTMENT, sent out',
+      build: async () => {
+        const id = await sentOut();
+        await test('PENDING', 0, id);
+      },
+    },
+    {
+      name: 'AT_DEPARTMENT, checked in but never sent out',
+      build: async () => {
+        const id = await visit('ARRIVED', 0);
+        await test('PENDING', 0, id);
+      },
+    },
+    {
+      name: 'BACK_FROM_TESTS',
+      build: async () => {
+        const id = await sentOut();
+        await test('COMPLETED', 0, id);
+      },
+    },
+    /*
+     * THE COMBINATION THAT GOT THROUGH on 4 Nov 2026.
+     *
+     * Closing a patient at a department succeeds and leaves the pending test
+     * alone — and that test is what keeps the row at AT_DEPARTMENT, which
+     * outranks DONE. So the row stays in the tab with its visit already closed,
+     * and the branch offered Close a second time: "This visit has already been
+     * closed."
+     *
+     * The first version of this suite listed "DONE, really closed" with no test
+     * attached and "AT_DEPARTMENT" with an open visit. Both passed. The bug
+     * lived in the pairing, which nobody had enumerated — which is the
+     * weakness of a hand-written scenario list and the reason these two exist.
+     */
+    {
+      name: 'closed visit that still has a pending test',
+      build: async () => {
+        const id = await visit('ARRIVED', 0);
+        await test('PENDING', 0, id);
+        await ownerQuery(fx.main.id, `UPDATE appointment SET closed_at = now() WHERE id = $1`, [
+          id,
+        ]);
+      },
+    },
+    {
+      name: 'closed visit whose test has come back',
+      build: async () => {
+        const id = await sentOut();
+        await test('COMPLETED', 0, id);
+        await ownerQuery(fx.main.id, `UPDATE appointment SET closed_at = now() WHERE id = $1`, [
+          id,
+        ]);
+      },
+    },
+    {
+      name: 'DONE, really closed',
+      build: async () => {
+        const id = await visit('FULFILLED', 0);
+        await ownerQuery(fx.main.id, `UPDATE appointment SET closed_at = now() WHERE id = $1`, [
+          id,
+        ]);
+      },
+    },
+  ];
+
+  /**
+   * A visit at a department, WITH the departure recorded.
+   *
+   * `visit('AWAITING_TESTS')` alone writes a state production cannot reach:
+   * `appointment_return_needs_a_departure` refuses a return with no `sent_out_at`,
+   * and `appointment_send_out_is_explained` refuses a departure with no reason —
+   * `sendForTests` always sets both. Without this the Bring-back step fails with
+   * a constraint violation that looks exactly like a product bug and is not one.
+   */
+  async function sentOut(): Promise<string> {
+    const id = await visit('AWAITING_TESTS', 0);
+    await ownerQuery(
+      fx.main.id,
+      `UPDATE appointment
+          SET sent_out_at = now(), sent_out_reason = 'X-ray — right knee'
+        WHERE id = $1`,
+      [id],
+    );
+    return id;
+  }
+
+  for (const scenario of SCENARIOS) {
+    it(`offers nothing the server refuses on ${scenario.name}`, async () => {
+      await scenario.build();
+
+      const row = (await board(admin)).rows[0];
+      expect(row, `${scenario.name} produced no row`).toBeDefined();
+
+      const steps = row!.nextSteps.filter((s) => ENDPOINTS[s.kind]);
+
+      for (const step of steps) {
+        /*
+         * Rebuilt before EACH step, because performing one changes the state
+         * the next would be judged from. Every step has to be tried against
+         * the state the board actually offered it in.
+         */
+        await clearToday();
+        await scenario.build();
+
+        const fresh = (await board(admin)).rows[0]!;
+        const again = fresh.nextSteps.find((s) => s.kind === step.kind);
+        expect(again, `${step.kind} was not offered on the rebuild`).toBeDefined();
+
+        const plan = ENDPOINTS[step.kind]!;
+        const res = await app.inject({
+          method: plan.method,
+          url: plan.url(again as unknown as Record<string, string>),
+          headers: { cookie: admin.cookie },
+          // Fastify refuses a PATCH that declares JSON and sends no body, so
+          // every call carries one — see the note in bootstrap.ts.
+          payload: plan.body ?? {},
+        });
+
+        expect(
+          res.statusCode,
+          `${scenario.name} offered ${step.kind}, and the server answered ` +
+            `${res.statusCode} ${JSON.stringify(res.json()?.error?.details?.code ?? '')}`,
+        ).toBeLessThan(400);
+      }
+    });
+  }
 });

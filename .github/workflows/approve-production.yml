@@ -1,0 +1,173 @@
+name: approve-production
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: 'Choose manual (valid 60 minutes) or scheduled (next 01:30 IST window)'
+        type: choice
+        required: true
+        default: scheduled
+        options:
+          - scheduled
+          - manual
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: healthcloud-production-approval
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    runs-on: [self-hosted, Linux, X64, healthcloud-staging]
+    steps:
+      - name: Confirm STAGING runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = ubuntu
+          test "$(hostname)" = healthcloud-staging
+
+      - name: Record approval for the selected deployment mode
+        id: record
+        uses: actions/github-script@v7
+        env:
+          DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            if (context.ref !== 'refs/heads/main') {
+              core.setFailed('Run this workflow from the main branch.');
+              return;
+            }
+            const { data: main } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const sha = main.commit.sha;
+            core.info(`Selected current main commit: ${sha}`);
+
+            // Approval is permitted only for a successful final-main CI run
+            // with the provenance artifact required by the deployment gate.
+            const { data: runPage } = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: 'verify.yml', branch: 'main',
+              event: 'push', status: 'success', per_page: 100
+            });
+            const candidates = runPage.workflow_runs.filter(r =>
+              r.head_sha === sha && r.head_branch === 'main' &&
+              r.event === 'push' && r.conclusion === 'success'
+            );
+            let verified = false;
+            for (const run of candidates) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner, repo, run_id: run.id, per_page: 100
+              });
+              if (artifacts.some(a =>
+                a.name === `healthcloud-main-provenance-${run.id}` && !a.expired
+              )) {
+                verified = true;
+                core.info(`Main CI verification run: ${run.id}`);
+                break;
+              }
+            }
+            if (!verified) {
+              core.setFailed(`Current main ${sha} has no successful main CI run with a provenance artifact.`);
+              return;
+            }
+
+            const prefix = '[HealthCloud PROD approval]';
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100
+            });
+            const pending = existing.filter(i => !i.pull_request && i.title.startsWith(prefix));
+            // Close only genuinely expired, bot-authored approval records.
+            // Never clear malformed or untrusted records automatically.
+            for (const old of pending) {
+              if (old.user?.login !== 'github-actions[bot]') {
+                core.setFailed(`Untrusted pending approval #${old.number}; manual review required.`);
+                return;
+              }
+              const match = old.body?.match(/^- Scheduled activation \(UTC\): (\S+)$/m);
+              const scheduled = match ? Date.parse(match[1]) : NaN;
+              if (!Number.isFinite(scheduled)) {
+                core.setFailed(`Malformed pending approval #${old.number}; manual review required.`);
+                return;
+              }
+              const oldMode = old.body?.match(/^- Deployment mode: (scheduled|manual)$/m)?.[1];
+              if (!oldMode) { core.setFailed(`Malformed approval mode #${old.number}; manual review required.`); return; }
+              const expiresAfter = oldMode === 'manual' ? 60 : 150;
+              if (Date.now() <= scheduled + expiresAfter * 60000) {
+                core.setFailed(`Approval #${old.number} is still active; resolve it before approving another release.`);
+                return;
+              }
+              await github.rest.issues.createComment({owner,repo,issue_number:old.number,
+                body:'Approval expired without a successful deployment; automatically closed. No deployment authorized.'});
+              await github.rest.issues.update({owner,repo,issue_number:old.number,state:'closed'});
+            }
+
+            // Fail closed if main advanced during verification.
+            const { data: latest } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            if (latest.commit.sha !== sha) {
+              core.setFailed('Main advanced during approval verification. Run approval again.');
+              return;
+            }
+
+            const now = new Date();
+            const mode = process.env.DEPLOYMENT_MODE;
+            if (!['scheduled','manual'].includes(mode)) throw Error('Invalid deployment mode');
+            // Scheduled approval targets 01:30 IST; manual approval is active immediately for 60 minutes.
+            const target = new Date(now);
+            if (mode === 'scheduled') {
+              target.setUTCHours(20, 0, 0, 0);
+              if (target <= now) target.setUTCDate(target.getUTCDate() + 1);
+            }
+            const body = [
+              'HealthCloud production deployment approval record.',
+              '',
+              `- Commit SHA: \`${sha}\``,
+              `- Approved by: @${context.actor}`,
+              `- Deployment mode: ${mode}`,
+              `- Approval time (UTC): ${now.toISOString()}`,
+              `- Scheduled activation (UTC): ${target.toISOString()}`,
+              `- Scheduled activation (IST): ${new Date(target.getTime() + 330 * 60000).toISOString().replace('T', ' ').slice(0, 16)} IST`,
+              `- Approval workflow run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              '',
+              'Status: PENDING. This record does not itself deploy to production.',
+            ].join('\n');
+            const issue = await github.rest.issues.create({
+              owner, repo, title: `${prefix} ${sha.slice(0, 12)}`, body
+            });
+            core.info(`Recorded approval: ${issue.data.html_url}`);
+            core.setOutput('issue_number', String(issue.data.number));
+            // Immutable run artifact binds the approval to the selected
+            // current-main commit, actor, window, and issue created here.
+            const fs = require('fs');
+            const evidence = {
+              sha, actor: context.actor, run_id: context.runId,
+              issue_number: issue.data.number, scheduled: target.toISOString(), mode
+            };
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/healthcloud-approval.json`, JSON.stringify(evidence));
+            core.info(`Target maintenance window: ${target.toISOString()}`);
+
+      - name: Publish immutable approval evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthcloud-prod-approval-${{ github.run_id }}
+          path: ${{ runner.temp }}/healthcloud-approval.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Close unusable approval if artifact publishing fails
+        if: failure() && steps.record.outputs.issue_number != ''
+        uses: actions/github-script@v7
+        env:
+          APPROVAL_ISSUE: ${{ steps.record.outputs.issue_number }}
+        with:
+          script: |
+            const owner=context.repo.owner, repo=context.repo.repo;
+            const issue_number=Number(process.env.APPROVAL_ISSUE);
+            await github.rest.issues.createComment({owner,repo,issue_number,
+              body:'Approval evidence publication failed. Approval invalidated; no deployment authorized.'});
+            await github.rest.issues.update({owner,repo,issue_number,state:'closed'});

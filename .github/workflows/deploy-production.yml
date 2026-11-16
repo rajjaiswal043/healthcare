@@ -1,0 +1,359 @@
+name: deploy-production
+
+on:
+  workflow_dispatch:
+    inputs:
+      validation_only:
+        description: 'Run provenance gate only; never deploy'
+        type: boolean
+        required: true
+        default: true
+      confirm_deployment:
+        description: 'For deployment only: enter DEPLOY to confirm the configured destination'
+        type: string
+        required: false
+        default: ''
+  schedule:
+    - cron: '0 20 * * *' # 01:30 IST, following calendar day
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+  issues: write
+
+concurrency:
+  group: healthcloud-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  validate-only:
+    # Manual dispatch is strictly read-only; no SSH, migrations, PM2, or deployment.
+    if: github.event_name == 'workflow_dispatch' && inputs.validation_only == true
+    runs-on: [self-hosted, Linux, X64, healthcloud-staging]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout current main candidate
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Evaluate production provenance gate (no deployment)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = ubuntu
+          test "$(hostname)" = healthcloud-staging
+          APPROVED_SHA="$(git rev-parse HEAD)"
+          export APPROVED_SHA
+          echo "Candidate main commit: $APPROVED_SHA"
+          echo 'Validation-only: no approval consumption, build, SSH, or PROD operations.'
+          python3 .github/scripts/verify-production-provenance.py
+
+  deploy:
+    # Scheduled or explicitly confirmed manual deployment; both require approval evidence.
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.validation_only == false)
+    environment: production
+    runs-on: [self-hosted, Linux, X64, healthcloud-staging]
+    timeout-minutes: 45
+    steps:
+      - name: Require explicitly enabled configured deployment destination
+        shell: bash
+        env:
+          DEPLOYMENT_ENABLED: ${{ vars.DEPLOYMENT_ENABLED }}
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_CONFIRMATION: ${{ inputs.confirm_deployment }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_HOSTNAME: ${{ vars.DEPLOY_HOSTNAME }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOYMENT_ENABLED" == 'true' ]] || { echo 'STOP: Deployment disabled'; exit 1; }
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            [[ "$MANUAL_CONFIRMATION" == 'DEPLOY' ]] || { echo 'STOP: Manual deployment not confirmed'; exit 1; }
+          fi
+          [[ "$DEPLOY_USER" == 'ubuntu' ]] || { echo 'STOP: Unexpected SSH user'; exit 1; }
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && -n "$DEPLOY_HOST" ]] || exit 1
+          [[ "$DEPLOY_HOSTNAME" =~ ^[a-zA-Z0-9.-]+$ && -n "$DEPLOY_HOSTNAME" ]] || exit 1
+          echo "Configured destination: $DEPLOY_HOST ($DEPLOY_HOSTNAME)"
+          echo 'Confirm the GitHub Environment production host and URL variables before enabling deployment.'
+
+      - name: Validate runner and scheduled maintenance window
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = ubuntu
+          test "$(hostname)" = healthcloud-staging
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            echo 'Manual deployment: scheduled maintenance window does not apply.'
+            exit 0
+          fi
+          # Allow bounded GitHub scheduler delay; never start an unbounded late deployment.
+          now="$(date -u +%H%M)"
+          if (( 10#$now < 2000 || 10#$now > 2230 )); then
+            echo 'STOP: Outside 01:30–04:00 IST start window.'
+            exit 1
+          fi
+
+      - name: Validate pending approval and exact verified release
+        id: approval
+        uses: actions/github-script@v7
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        with:
+          script: |
+            const owner = context.repo.owner, repo = context.repo.repo;
+            if (context.ref !== 'refs/heads/main') throw Error('Expected main branch');
+            const prefix = '[HealthCloud PROD approval]';
+            const all = await github.paginate(github.rest.issues.listForRepo,
+              {owner,repo,state:'open',per_page:100});
+            const pending = all.filter(x => !x.pull_request && x.title.startsWith(prefix));
+            if (!pending.length) throw Error('STOP: No pending deployment approval; nothing deployed');
+            if (pending.length !== 1) throw Error('Multiple pending approvals');
+            const issue = pending[0];
+            if (issue.user?.login !== 'github-actions[bot]') throw Error('Untrusted approval author');
+            const sha = issue.body?.match(/^- Commit SHA: `([0-9a-f]{40})`$/m)?.[1];
+            const scheduled = issue.body?.match(/^- Scheduled activation \(UTC\): (\S+)$/m)?.[1];
+            const mode = issue.body?.match(/^- Deployment mode: (scheduled|manual)$/m)?.[1];
+            const url = issue.body?.match(/^- Approval workflow run: (\S+)$/m)?.[1];
+            if (!sha || !scheduled || !url || !mode) throw Error('Malformed approval');
+            const expectedMode = process.env.EVENT_NAME === 'schedule' ? 'scheduled' : 'manual';
+            if (mode !== expectedMode) throw Error('Approval mode does not match deployment trigger');
+            const prefixUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/`;
+            if (!url.startsWith(prefixUrl)) throw Error('Unexpected approval run URL');
+            const runId = Number(url.slice(prefixUrl.length));
+            if (!Number.isSafeInteger(runId)) throw Error('Invalid run ID');
+            const {data: run} = await github.rest.actions.getWorkflowRun({owner,repo,run_id:runId});
+            if (run.name !== 'approve-production' || run.conclusion !== 'success' ||
+                run.head_branch !== 'main' ||
+                !issue.body.includes(`- Approved by: @${run.actor?.login}`))
+              throw Error('Approval run identity or status invalid');
+            const target = Date.parse(scheduled);
+            if (!Number.isFinite(target)) throw Error('Invalid approval activation time');
+            if (mode === 'scheduled' && (Date.now() < target || Date.now() > target + 150*60000))
+              throw Error('Approval not valid for this maintenance window');
+            if (mode === 'manual' && (Date.now() < target || Date.now() > target + 60*60000))
+              throw Error('Manual approval expired or is not active');
+            const {data: main} = await github.rest.repos.getBranch({owner,repo,branch:'main'});
+            if (main.commit.sha !== sha) throw Error('Approved commit is no longer main HEAD');
+            // The next step requires successful CI evidence for this exact main commit.
+            core.setOutput('deploy','true');
+            core.setOutput('sha',sha);
+            core.setOutput('issue',String(issue.number));
+            core.setOutput('approval_run_id',String(runId));
+            core.setOutput('scheduled',scheduled);
+            core.setOutput('actor',run.actor?.login || '');
+            core.setOutput('mode',mode);
+
+      - name: Download immutable approval evidence
+        if: steps.approval.outputs.deploy == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: healthcloud-prod-approval-${{ steps.approval.outputs.approval_run_id }}
+          run-id: ${{ steps.approval.outputs.approval_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/healthcloud-approval
+
+      - name: Bind approval to immutable workflow evidence
+        if: steps.approval.outputs.deploy == 'true'
+        shell: bash
+        env:
+          APPROVED_SHA: ${{ steps.approval.outputs.sha }}
+          APPROVAL_RUN_ID: ${{ steps.approval.outputs.approval_run_id }}
+          APPROVAL_ISSUE: ${{ steps.approval.outputs.issue }}
+          APPROVAL_ACTOR: ${{ steps.approval.outputs.actor }}
+          APPROVAL_SCHEDULED: ${{ steps.approval.outputs.scheduled }}
+          APPROVAL_MODE: ${{ steps.approval.outputs.mode }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          import json, os
+          from pathlib import Path
+          data = json.loads((Path(os.environ['RUNNER_TEMP']) / 'healthcloud-approval' / 'healthcloud-approval.json').read_text())
+          expected = {
+              'sha': os.environ['APPROVED_SHA'],
+              'run_id': int(os.environ['APPROVAL_RUN_ID']),
+              'issue_number': int(os.environ['APPROVAL_ISSUE']),
+              'actor': os.environ['APPROVAL_ACTOR'],
+              'scheduled': os.environ['APPROVAL_SCHEDULED'],
+              'mode': os.environ['APPROVAL_MODE'],
+          }
+          if data != expected:
+              raise SystemExit('STOP: Editable approval issue differs from original approval evidence.')
+          print('PASS: Approval matches original successful workflow run evidence.')
+          PYCODE
+
+      - name: Checkout approved main commit
+        if: steps.approval.outputs.deploy == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.approval.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact approved main commit against successful CI artifact
+        if: steps.approval.outputs.deploy == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_SHA: ${{ steps.approval.outputs.sha }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APPROVED_SHA"
+          python3 .github/scripts/verify-production-provenance.py
+
+      - name: Install build tooling
+        if: steps.approval.outputs.deploy == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
+      - name: Set up Node.js
+        if: steps.approval.outputs.deploy == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: pnpm
+
+      - name: Validate configured destination and application URLs
+        if: steps.approval.outputs.deploy == 'true'
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_HOSTNAME: ${{ vars.DEPLOY_HOSTNAME }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PYVALIDATE'
+          import os
+          from urllib.parse import urlsplit
+
+          def required(name):
+              value = os.environ.get(name, '').strip()
+              if not value:
+                  raise SystemExit(f'STOP: Missing GitHub Environment variable {name}')
+              return value
+
+          host = required('DEPLOY_HOST')
+          hostname = required('DEPLOY_HOSTNAME')
+          user = required('DEPLOY_USER')
+          if user != 'ubuntu' or not all(c.isalnum() or c in '.-' for c in host + hostname):
+              raise SystemExit('STOP: Invalid deployment destination configuration')
+
+          def parse(name):
+              value = required(name)
+              parsed = urlsplit(value)
+              if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+                      or parsed.username or parsed.password or parsed.query or parsed.fragment):
+                  raise SystemExit(f'STOP: Invalid URL in {name}')
+              return value.rstrip('/'), parsed
+
+          web, web_url = parse('WEB_BASE_URL')
+          api, api_url = parse('API_BASE_URL')
+          frontend, frontend_url = parse('NEXT_PUBLIC_API_BASE_URL')
+          if web_url.path not in ('', '/'):
+              raise SystemExit('STOP: WEB_BASE_URL must be an origin, without a path')
+          if api != frontend:
+              raise SystemExit('STOP: Frontend and backend API URLs disagree')
+          if (web_url.scheme, web_url.netloc) != (api_url.scheme, api_url.netloc):
+              raise SystemExit('STOP: API URL must use the configured web origin')
+          if api_url.path != '/api/v1':
+              raise SystemExit('STOP: Unexpected API path')
+          print(f'Deployment destination: {host} ({hostname})')
+          print(f'Web URL: {web}')
+          print(f'API URL: {api}')
+          print(f'Frontend API URL: {frontend}')
+          print('PASS: Deployment destination configured; frontend and API URLs consistent')
+          PYVALIDATE
+
+      - name: Build production release on STAGING runner
+        if: steps.approval.outputs.deploy == 'true'
+        shell: bash
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test "$(hostname)" = healthcloud-staging
+          # Do not load STAGING or PROD secrets into the production build.
+          # The committed example supplies only build-time placeholders.
+          cp .env.example .env
+          chmod 600 .env
+          pnpm install --frozen-lockfile
+          [[ "$NEXT_PUBLIC_API_BASE_URL" =~ ^https?:// ]] || { echo "STOP: missing frontend API URL"; exit 1; }
+          pnpm build
+          test -f apps/api/dist/src/main.js
+          test -d apps/web/.next-build
+          tar --exclude=.git --exclude=.env --exclude=node_modules \
+              -czf "$RUNNER_TEMP/healthcloud-prod-release.tgz" .
+
+      - name: Transfer and activate approved release
+        if: steps.approval.outputs.deploy == 'true'
+        shell: bash
+        env:
+          APPROVED_SHA: ${{ steps.approval.outputs.sha }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_HOSTNAME: ${{ vars.DEPLOY_HOSTNAME }}
+          EVENT_NAME: ${{ github.event_name }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          test "$(whoami)" = ubuntu
+          test "$(hostname)" = healthcloud-staging
+          # A delayed build must not start production operations outside window.
+          now="$(date -u +%H%M)"
+          if [[ "$EVENT_NAME" == 'schedule' ]] && (( 10#$now < 2000 || 10#$now > 2230 )); then
+            echo 'STOP: Release preparation exceeded 01:30–04:00 IST cutover window.'
+            exit 1
+          fi
+          # Final authoritative check immediately before any PROD SSH/SCP operation.
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ "$remote_main" != "$APPROVED_SHA" ]]; then
+            echo 'STOP: main advanced after verification; no PROD access.'
+            exit 1
+          fi
+          KEY="$HOME/.ssh/healthcloud_github_actions"
+          SSH=(ssh -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          DEST="${DEPLOY_USER}@${DEPLOY_HOST}"
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$DEPLOY_HOSTNAME" =~ ^[a-zA-Z0-9.-]+$ ]] || exit 1
+          [[ "$DEPLOY_USER" == ubuntu ]] || exit 1
+          [[ "$DEPLOY_HOST" != "$(hostname -I | awk '{print $1}')" ]] || exit 1
+          DIGEST="$(sha256sum "$RUNNER_TEMP/healthcloud-prod-release.tgz" | awk '{print $1}')"
+          "${SSH[@]}" "$DEST" "test \$(id -un) = ubuntu && test \$(hostname) = $DEPLOY_HOSTNAME && mkdir -p \$HOME/healthcloud-prod-deploy"
+          "${SCP[@]}" "$RUNNER_TEMP/healthcloud-prod-release.tgz" "$DEST:healthcloud-prod-deploy/release-$APPROVED_SHA.tgz"
+          "${SCP[@]}" ".github/scripts/healthcloud-remote-deploy.sh" "$DEST:healthcloud-prod-deploy/healthcloud-remote-deploy.sh"
+          # Quote all values as shell arguments, never interpolate untrusted URLs into remote shell code.
+          printf -v REMOTE_CMD '%q ' bash healthcloud-prod-deploy/healthcloud-remote-deploy.sh \
+            "$APPROVED_SHA" "$DEPLOY_HOSTNAME" "$DIGEST" \
+            "$WEB_BASE_URL" "$API_BASE_URL" "$NEXT_PUBLIC_API_BASE_URL"
+          "${SSH[@]}" "$DEST" "$REMOTE_CMD"
+
+      - name: Close consumed approval
+        if: steps.approval.outputs.deploy == 'true' && success()
+        uses: actions/github-script@v7
+        env:
+          APPROVAL_ISSUE: ${{ steps.approval.outputs.issue }}
+          APPROVED_SHA: ${{ steps.approval.outputs.sha }}
+        with:
+          script: |
+            const owner=context.repo.owner,repo=context.repo.repo;
+            const issue_number=Number(process.env.APPROVAL_ISSUE);
+            await github.rest.issues.createComment({owner,repo,issue_number,
+              body:`Production deployment succeeded for ${process.env.APPROVED_SHA}. Run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`});
+            await github.rest.issues.update({owner,repo,issue_number,state:'closed'});

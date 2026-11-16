@@ -15,7 +15,10 @@ import { loadEnv } from './config/env.js';
  */
 async function bootstrap(): Promise<void> {
   const app = await createApiApp();
-  await app.listen({ port: loadEnv().API_PORT, host: '0.0.0.0' });
+  await app.listen({
+    port: loadEnv().API_PORT,
+    host: process.env.API_HOST ?? '0.0.0.0',
+  });
 }
 
 void bootstrap();
