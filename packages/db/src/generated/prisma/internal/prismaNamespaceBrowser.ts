@@ -89,7 +89,10 @@ export const ModelName = {
   PromotionApplication: 'PromotionApplication',
   ReceiptCounter: 'ReceiptCounter',
   Receipt: 'Receipt',
-  ReceiptPrint: 'ReceiptPrint'
+  ReceiptPrint: 'ReceiptPrint',
+  PatientLink: 'PatientLink',
+  OutboundMessage: 'OutboundMessage',
+  RecoveryCheckin: 'RecoveryCheckin'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -456,6 +459,9 @@ export const AppointmentScalarFieldEnum = {
   noShowAt: 'noShowAt',
   bookedByUserId: 'bookedByUserId',
   reminderSentAt: 'reminderSentAt',
+  arrivalIntent: 'arrivalIntent',
+  arrivalIntentAt: 'arrivalIntentAt',
+  leaveNowSentAt: 'leaveNowSentAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   externalTestNote: 'externalTestNote'
@@ -478,6 +484,7 @@ export const EncounterScalarFieldEnum = {
   prescriptionNote: 'prescriptionNote',
   followUpDate: 'followUpDate',
   followUpNote: 'followUpNote',
+  checkInIntervalDays: 'checkInIntervalDays',
   startedAt: 'startedAt',
   signedAt: 'signedAt',
   signedByUserId: 'signedByUserId',
@@ -830,6 +837,65 @@ export const ReceiptPrintScalarFieldEnum = {
 } as const
 
 export type ReceiptPrintScalarFieldEnum = (typeof ReceiptPrintScalarFieldEnum)[keyof typeof ReceiptPrintScalarFieldEnum]
+
+
+export const PatientLinkScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  patientId: 'patientId',
+  purpose: 'purpose',
+  appointmentId: 'appointmentId',
+  encounterId: 'encounterId',
+  keyHash: 'keyHash',
+  expiresAt: 'expiresAt',
+  lastSeenAt: 'lastSeenAt',
+  revokedAt: 'revokedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type PatientLinkScalarFieldEnum = (typeof PatientLinkScalarFieldEnum)[keyof typeof PatientLinkScalarFieldEnum]
+
+
+export const OutboundMessageScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  patientId: 'patientId',
+  appointmentId: 'appointmentId',
+  encounterId: 'encounterId',
+  kind: 'kind',
+  channel: 'channel',
+  status: 'status',
+  toMobile: 'toMobile',
+  body: 'body',
+  providerRef: 'providerRef',
+  error: 'error',
+  createdByUserId: 'createdByUserId',
+  createdAt: 'createdAt'
+} as const
+
+export type OutboundMessageScalarFieldEnum = (typeof OutboundMessageScalarFieldEnum)[keyof typeof OutboundMessageScalarFieldEnum]
+
+
+export const RecoveryCheckinScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  encounterId: 'encounterId',
+  patientId: 'patientId',
+  dueOn: 'dueOn',
+  sentAt: 'sentAt',
+  answeredAt: 'answeredAt',
+  painScore: 'painScore',
+  exercisesDone: 'exercisesDone',
+  note: 'note',
+  flaggedAt: 'flaggedAt',
+  flagReason: 'flagReason',
+  flagClearedAt: 'flagClearedAt',
+  flagClearedByUserId: 'flagClearedByUserId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type RecoveryCheckinScalarFieldEnum = (typeof RecoveryCheckinScalarFieldEnum)[keyof typeof RecoveryCheckinScalarFieldEnum]
 
 
 export const SortOrder = {

@@ -41,7 +41,13 @@ const fromCode = (key: string) => SYSTEM_ROLES.find((r) => r.key === key)!.permi
  * weeks before the permission existed, the migration's exact-match test finds
  * nothing, and all three cases below fail.
  */
-const GRANTED_SINCE: string[] = ['promotion:apply', 'invoice:waive'];
+const GRANTED_SINCE: string[] = [
+  'promotion:apply',
+  'invoice:waive',
+  // 20260929090000 — the follow-up board.
+  'followup:read',
+  'followup:manage',
+];
 const OLD_FRONT_DESK = fromCode('front_desk').filter((p) => !GRANTED_SINCE.includes(p));
 
 let owner: pg.Client;

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Bricolage_Grotesque, Instrument_Sans, Spline_Sans_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { AuthProvider } from '@/components/auth-provider';
 
@@ -12,26 +12,38 @@ import { AuthProvider } from '@/components/auth-provider';
  *   mono    — UHIDs, mobile numbers, labels. Anything that must align in a
  *             column or be read digit by digit.
  *
- * next/font self-hosts these at build time, so there is no request to Google at
- * runtime — which keeps the content-security posture simple and means the app
- * renders correctly on a clinic's flaky connection.
+ * The files live in src/fonts and are served from our own origin, so there is
+ * no request to Google at runtime — which keeps the content-security posture
+ * simple and means the app renders correctly on a clinic's flaky connection.
+ *
+ * Committed rather than fetched by next/font/google at BUILD time, since
+ * 13 Nov 2026: Google served Netlify's US builders an extensionless font URL
+ * for one family, next/font crashed parsing it, and the deploy failed. The
+ * same build passed from India. A build should not depend on what a third
+ * party decides to serve that day. Latin subset, variable weight axis — the
+ * same files the google loader was downloading.
  */
-const display = Bricolage_Grotesque({
-  subsets: ['latin'],
+const display = localFont({
+  src: '../fonts/bricolage-grotesque-latin.woff2',
+  weight: '200 800',
   variable: '--font-display',
   display: 'swap',
 });
 
-const sans = Instrument_Sans({
-  subsets: ['latin'],
+const sans = localFont({
+  src: '../fonts/instrument-sans-latin.woff2',
+  weight: '400 700',
   variable: '--font-sans',
   display: 'swap',
 });
 
-const mono = Spline_Sans_Mono({
-  subsets: ['latin'],
+const mono = localFont({
+  src: '../fonts/spline-sans-mono-latin.woff2',
+  weight: '300 700',
   variable: '--font-mono',
   display: 'swap',
+  fallback: ['ui-monospace', 'monospace'],
+  adjustFontFallback: false,
 });
 
 /**

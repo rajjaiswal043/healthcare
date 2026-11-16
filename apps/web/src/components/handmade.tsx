@@ -1,4 +1,4 @@
-import { Caveat } from 'next/font/google';
+import localFont from 'next/font/local';
 import type { CSSProperties, ReactNode } from 'react';
 
 /**
@@ -18,7 +18,14 @@ import type { CSSProperties, ReactNode } from 'react';
  *   - everything decorative is aria-hidden.
  */
 
-const hand = Caveat({ subsets: ['latin'], weight: ['500', '700'], display: 'swap' });
+// Self-hosted, like the console's own faces — see src/app/layout.tsx for why.
+const hand = localFont({
+  src: '../fonts/caveat-latin.woff2',
+  weight: '500 700',
+  display: 'swap',
+  fallback: ['cursive'],
+  adjustFontFallback: false,
+});
 
 /** A margin note in handwriting. Decorative; keep the words short. */
 export function HandNote({

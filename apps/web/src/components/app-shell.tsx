@@ -20,6 +20,7 @@ import {
   IconLogout,
   IconMenu,
   IconPanelLeft,
+  IconPulse,
   IconReceipt,
   IconSearch,
   IconShield,
@@ -67,6 +68,14 @@ const SECTIONS: NavSection[] = [
         href: '/appointments/new',
         icon: <IconCalendar size={16} />,
         permission: 'appointment:write',
+      },
+      {
+        // docs/10. Who is due back, who came back, whose pain is rising.
+        key: 'follow-ups',
+        label: 'Follow-ups',
+        href: '/follow-ups',
+        icon: <IconPulse size={16} />,
+        permission: 'followup:read',
       },
     ],
   },

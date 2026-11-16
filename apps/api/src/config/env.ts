@@ -118,6 +118,14 @@ const EnvSchema = z.object({
   MAIL_FROM: z.string().optional(),
   /** The company inbox that receives demo and website requests. */
   LEADS_EMAIL_TO: z.string().email().optional(),
+
+  /**
+   * How often the API sends due recovery check-ins and late "time to leave"
+   * messages — docs/10. `0` turns the timer off; the integration suite does, so
+   * no test races it. Every pass is idempotent, so a short interval costs
+   * queries, never duplicate messages.
+   */
+  ENGAGEMENT_SWEEP_SECONDS: z.coerce.number().int().min(0).default(120),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
